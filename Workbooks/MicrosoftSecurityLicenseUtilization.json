@@ -1,0 +1,437 @@
+{
+ "version": "Notebook/1.0",
+ "fromTemplateId": "sentinel-MicrosoftSecurityLicenseUtilization",
+ "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+ "items": [
+  {
+   "type": 11,
+   "content": {
+    "version": "LinkItem/1.0",
+    "style": "tabs",
+    "links": [
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Overview",
+      "subTarget": "overview",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Identity",
+      "subTarget": "identity",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Endpoint / XDR",
+      "subTarget": "endpoint",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Email & Collaboration",
+      "subTarget": "email",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Data Protection",
+      "subTarget": "dataprotection",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Defender for Cloud",
+      "subTarget": "mdc",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Sentinel Utilization",
+      "subTarget": "sentinel",
+      "style": "link"
+     }
+    ]
+   },
+   "name": "linksTabs"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Microsoft Security License & Feature Utilization\n\nThis workbook correlates the Microsoft security products your tenant licenses with the signals that are actually flowing into this Microsoft Sentinel workspace. It is designed to surface **\"licensed but minimally configured\"** gaps: paid capabilities whose data never arrives, or that are enabled yet unmonitored.\n\nEach tab checks one product family. Empty or missing tiles mean the corresponding connector is not collecting data - a candidate to onboard. The workbook reads only the current workspace; no data is modified.",
+       "style": "markdown"
+      },
+      "name": "text - overview"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    SigninLogs, AuditLogs, OfficeActivity, DeviceInfo, DeviceEvents,\n    DeviceTvmSecureConfigurationAssessment, SecurityNestedRecommendation,\n    InformationProtectionLogs_CL, SecurityAlert, DnsEvents, CommonSecurityLog, Syslog\n| where TimeGenerated > ago(30d)\n| summarize Rows = count(), LastSeen = max(TimeGenerated) by Source = Type\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"Stale / Stopped\")\n| project Source, Status, Rows, LastSeen\n| order by Source asc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 60
+       }
+      },
+      "name": "query - signal sources"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Sources = union isfuzzy=true\n    SigninLogs, AuditLogs, OfficeActivity, DeviceInfo, DeviceEvents,\n    DeviceTvmSecureConfigurationAssessment, SecurityNestedRecommendation,\n    InformationProtectionLogs_CL, SecurityAlert\n| where TimeGenerated > ago(30d)\n| summarize Rows = count() by Source = Type;\nlet Products = datatable(ProductName:string, SignalSource:string)[\n    \"Microsoft Entra ID\", \"SigninLogs\",\n    \"Microsoft Entra ID\", \"AuditLogs\",\n    \"Microsoft 365 Defender - Email (MDO)\", \"OfficeActivity\",\n    \"Defender for Endpoint\", \"DeviceInfo\",\n    \"Defender for Cloud\", \"SecurityNestedRecommendation\",\n    \"Microsoft Purview\", \"InformationProtectionLogs_CL\"\n];\nProducts\n| join kind=leftouter Sources on $left.SignalSource == $right.Source\n| extend HasData = iff(isnotempty(Rows), \"Data Flowing\", \"No Data Collected\")\n| project ProductName, SignalSource, HasData, Rows\n| order by ProductName asc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 40
+       }
+      },
+      "name": "query - licensed products"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "overview"
+   },
+   "name": "groupOverview"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Identity: Conditional Access, MFA and privileged access\n\nEntra ID P2 licenses the Conditional Access and PIM engines. If data below is empty or shows large 'not applied' populations, identity controls you already pay for are not protecting the environment.",
+       "style": "markdown"
+      },
+      "name": "text - identity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "SigninLogs\n| where TimeGenerated > ago(30d)\n| where ResultType == \"0\"\n| extend Status = case(\n        ConditionalAccessStatus =~ \"success\", \"CA Applied\",\n        ConditionalAccessStatus =~ \"notApplied\", \"CA Not Applied\",\n        ConditionalAccessStatus =~ \"failure\", \"CA Failure\",\n        ConditionalAccessStatus =~ \"notEnabled\", \"CA Not Enabled\",\n        ConditionalAccessStatus =~ \"reportOnlySuccess\", \"Report Only: Success\",\n        ConditionalAccessStatus =~ \"reportOnlyFailure\", \"Report Only: Failure\",\n        \"Unknown\")\n| summarize Users = dcount(UserPrincipalName), SignIns = count() by Status\n| order by SignIns desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - ca coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Privileged = union isfuzzy=true\n    (IdentityInfo\n        | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)\n        | project AccountObjectId = tostring(AccountObjectId), AccountUpn = tostring(AccountUpn)),\n    (datatable(AccountObjectId:string, AccountUpn:string)[]);\nPrivileged\n| join kind=leftanti (\n    SigninLogs\n    | where TimeGenerated > ago(90d)\n    | where ResultType == \"0\"\n    | project AccountObjectId = tostring(UserId)\n) on AccountObjectId\n| summarize DormantPrivilegedAccounts = dcount(AccountUpn)",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - dormant privileged"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Privileged = union isfuzzy=true\n    (IdentityInfo\n        | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)\n        | project AccountObjectId = tostring(AccountObjectId), AccountUpn = tostring(AccountUpn)),\n    (datatable(AccountObjectId:string, AccountUpn:string)[]);\nSigninLogs\n| where TimeGenerated > ago(30d)\n| where ResultType == \"0\"\n| where ClientAppUsed has_any (dynamic([\"IMAP\",\"POP\",\"SMTP\",\"ActiveSync\",\"ExchangeWebServices\"]))\n| join kind=inner Privileged on $left.UserId == $right.AccountObjectId\n| summarize SignIns = count(), LastSeen = max(TimeGenerated) by AccountUpn, ClientAppUsed\n| order by SignIns desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - legacy auth privileged"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "identity"
+   },
+   "name": "groupIdentity"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Endpoint / XDR: Defender for Endpoint coverage\n\nHealthy, reporting devices are the baseline for EDR value. Devices in 'Silent' states or non-compliant configurations indicate endpoints are licensed but not actively protected.",
+       "style": "markdown"
+      },
+      "name": "text - endpoint"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let D = union isfuzzy=true\n    (DeviceInfo\n        | where TimeGenerated > ago(30d)\n        | summarize arg_max(TimeGenerated, *) by DeviceId),\n    (datatable(DeviceId:string, DeviceHealthStatus:string, DeviceName:string, OSPlatform:string)[]);\nD\n| where isnotempty(DeviceId)\n| extend Health = iff(isnotempty(DeviceHealthStatus), DeviceHealthStatus, \"Unknown\")\n| summarize Devices = dcount(DeviceId) by Health",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - device health"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Devices = union isfuzzy=true\n    (DeviceInfo\n        | where TimeGenerated > ago(7d)\n        | project DeviceId, DeviceName = tostring(DeviceName), DeviceHealthStatus = tostring(DeviceHealthStatus)),\n    (datatable(DeviceId:string, DeviceName:string, DeviceHealthStatus:string)[]);\nlet Active = union isfuzzy=true\n    (DeviceEvents | where TimeGenerated > ago(7d) | project DeviceId),\n    (datatable(DeviceId:string)[]);\nDevices\n| where isnotempty(DeviceId)\n| join kind=leftanti Active on DeviceId\n| summarize SilentDevices = dcount(DeviceId)",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - silent devices"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let TVM = union isfuzzy=true\n    (DeviceTvmSecureConfigurationAssessment\n        | where TimeGenerated > ago(30d)\n        | where IsCompliant == false),\n    (datatable(DeviceId:string, ConfigurationId:string, ConfigurationName:string, IsCompliant:bool)[]);\nTVM\n| where isnotempty(ConfigurationId)\n| summarize NonCompliantDevices = dcount(DeviceId) by ConfigurationName\n| top 20 by NonCompliantDevices desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 20
+       }
+      },
+      "name": "query - tvm gaps"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "endpoint"
+   },
+   "name": "groupEndpoint"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Email & Collaboration: Defender for Office 365 and Purview\n\nMailbox and transport rule changes, plus DLP signal availability, indicate whether email protection licenses are actually producing telemetry.",
+       "style": "markdown"
+      },
+      "name": "text - email"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "OfficeActivity\n| where TimeGenerated > ago(30d)\n| where Operation in~ (\"New-InboxRule\", \"Set-Mailbox\", \"Set-MailboxAutoReplyConfiguration\", \"Set-TransportRule\")\n| summarize Operations = count() by Operation, UserId\n| order by Operations desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - mail rule activity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    InformationProtectionLogs_CL, MicrosoftPurviewInformationProtection\n| where TimeGenerated > ago(30d)\n| summarize Events = count(), LastSeen = max(TimeGenerated) by Source = Type\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"No Recent Data\")",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - dlp signals"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "email"
+   },
+   "name": "groupEmail"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Data Protection: sensitivity and information protection\n\nIf these tiles are empty, Purview / Information Protection labels are not generating events in Sentinel, even when licensed.",
+       "style": "markdown"
+      },
+      "name": "text - dp"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    InformationProtectionLogs_CL, MicrosoftPurviewInformationProtection\n| where TimeGenerated > ago(30d)\n| summarize Events = count(), LastSeen = max(TimeGenerated) by Source = Type\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"No Recent Data\")",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - protection events"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "dataprotection"
+   },
+   "name": "groupDataProtection"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Defender for Cloud: recommendations and coverage\n\nNested recommendation data is only present when Defender for Cloud is enabled and exporting. Unhealthy findings that persist indicate the plan is licensed but not operationalized.",
+       "style": "markdown"
+      },
+      "name": "text - mdc"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "SecurityNestedRecommendation\n| where TimeGenerated > ago(30d)\n| where RecommendationState == \"UnHealthy\"\n| summarize Findings = count(), Resources = dcount(AssessedResourceId) by RecommendationSeverity\n| order by Findings desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 15
+       }
+      },
+      "name": "query - findings by severity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "SecurityNestedRecommendation\n| where TimeGenerated > ago(30d)\n| where RecommendationState == \"UnHealthy\"\n| summarize Findings = count() by Category\n| top 15 by Findings desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 15
+       }
+      },
+      "name": "query - findings by category"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "mdc"
+   },
+   "name": "groupMDC"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Sentinel Utilization: coverage and operational health\n\nThe data sources below are the pipelines your detection content depends on. 'Stale / Stopped' rows point at connectors that have been onboarded but are no longer producing data.",
+       "style": "markdown"
+      },
+      "name": "text - sentinel"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    SigninLogs, AuditLogs, AADNonInteractiveUserSignInLogs, OfficeActivity, DeviceInfo,\n    DeviceEvents, DeviceTvmSecureConfigurationAssessment, SecurityNestedRecommendation,\n    SecurityAlert, DnsEvents, CommonSecurityLog, Syslog, Heartbeat\n| where TimeGenerated > ago(30d)\n| summarize Rows = count(), LastSeen = max(TimeGenerated) by Source = Type\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"Stale / Stopped\")\n| order by Source asc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 40
+       }
+      },
+      "name": "query - data source coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "SecurityAlert\n| where TimeGenerated > ago(30d)\n| summarize Alerts = count(), LastAlert = max(TimeGenerated) by ProductName\n| order by Alerts desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - alert volume"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "sentinel"
+   },
+   "name": "groupSentinel"
+  }
+ ]
+}
