@@ -149,9 +149,6 @@ This connector is used by other playbooks in this solution to communicate with R
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
 | **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-1-0"). |
 |**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```|
 </details>
@@ -189,9 +186,6 @@ Expand Playbook Workflow
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
 | **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-add-EntraID-security-group-user"). |
 </details>
 <hr/>
@@ -232,9 +226,6 @@ Expand Playbook Workflow
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
 | **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-confirm-EntraID-risky-user"). |
 </details>
 <hr/>
@@ -268,6 +259,7 @@ Expand Playbook Workflow
 | Parameter | Description |
 |-|-|
 | **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-lookup-and-save-user`). |
+| **IdentityCustomConnectorName** | Name of the `RFI-CustomConnector` deployed in step 2 (default: `RFI-CustomConnector-0-1-0`). |
 | **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
 
 </details>
@@ -305,6 +297,7 @@ External search playbook - will get data from Recorded Future on your clients le
 | Parameter | Description |
 |-|-|
 | **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-search-workforce-user`). |
+| **workspace_name** | Name of your Log Analytics Workspace. Used to resolve the DCE and DCRs deployed in step 1. |
 | **Playbook-Name-add-EntraID-security-group-user** | Name of the `RFI-add-EntraID-security-group-user` playbook. |
 | **Playbook-Name-confirm-EntraID-risky-user** | Name of the `RFI-confirm-EntraID-risky-user` playbook. |
 | **Playbook-Name-lookup-and-save-user** | Name of the `RFI-lookup-and-save-user` playbook. |
@@ -325,6 +318,7 @@ External search playbook - will get data from Recorded Future on your clients le
 | Parameter | Description |
 |-|-|
 | **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-search-external-user`). |
+| **workspace_name** | Name of your Log Analytics Workspace. Used to resolve the DCE and DCR deployed in step 1. |
 | **Playbook-Name-add-EntraID-security-group-user** | Name of the `RFI-add-EntraID-security-group-user` playbook. |
 | **Playbook-Name-confirm-EntraID-risky-user** | Name of the `RFI-confirm-EntraID-risky-user` playbook. |
 | **Playbook-Name-lookup-and-save-user** | Name of the `RFI-lookup-and-save-user` playbook. |
@@ -335,6 +329,7 @@ External search playbook - will get data from Recorded Future on your clients le
 
 ## Configuration
 
+<a id="find_playbooks_after_deployment"></a>
 ### How to find the playbooks (Logic Apps) after deployment
 
 To find installed Playbooks (Logic Apps) after deployment - you can search for `Logic Apps` from the [Azure Portal](https://portal.azure.com/) page and find deployed Logic Apps there.
@@ -357,6 +352,7 @@ The Recorded Future identity solution uses the following connectors. Information
 | **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> Same API token as the recordedfutureidenti connector. |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
+| **/azuremonitorlogs** | [Azure Monitor Logs](https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/). Used by the search playbooks to query previously seen exposures (dedup). Authorize via **OAuth** (sign in with a user account), or use **system-assigned managed identity** — in which case the Logic App's managed identity must be assigned the [Log Analytics Reader](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#log-analytics-reader) role on the Log Analytics workspace. |
 
 <a id="how_to_obtain_Recorded_Future_API_token"></a>
 ### How to obtain Recorded Future API token
@@ -456,4 +452,4 @@ Permissions / Roles:
 
 If you are already a Recorded Future client and wish to learn more about using Recorded Future’s Microsoft integrations, including how to obtain an API Token to enable an integration contact us at **support@recordedfuture.com**.
 
-If you not a current Recorded Future client and wish to become one, contact **sales@recordedfuture.com** to setup a discussion with one of our business development associates.
+If you are not a current Recorded Future client and wish to become one, contact **sales@recordedfuture.com** to setup a discussion with one of our business development associates.
