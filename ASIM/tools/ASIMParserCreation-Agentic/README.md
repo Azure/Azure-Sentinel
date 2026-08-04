@@ -62,12 +62,13 @@ Copilot skills for creating, validating, deploying, and packaging ASIM parsers l
 
 ## Parser authoring constraints
 
-Keep every generated parser record-local. A source record can produce at most one normalized record.
+Keep every generated parser event-local. A source record can produce at most one normalized record.
 
-- Use only the declared source table and values in the current row. Do not use a second table read, `join`, `lookup`, a secondary `union` branch, `externaldata`, a watchlist query, or an inline `datatable` mapping.
+- Read event records from only the declared source table. Query-local static mappings created with `datatable` and applied with `lookup` are allowed when each lookup key is unique.
+- Do not enrich events by reading or correlating records from the source table again, another workspace table, a watchlist, `externaldata`, or another external tabular source.
 - Do not use any `mv-*` operator, including `mv-expand` and `mv-apply`.
-- Do not use `summarize`, `distinct`, `arg_min`, `arg_max`, or another operation to correlate, deduplicate, aggregate, or reaggregate records.
-- If a field cannot be mapped without these patterns, correct the connector or source event shape, or leave a nonmandatory field unmapped.
+- Do not use `summarize`, `distinct`, `arg_min`, `arg_max`, or another operation to correlate, deduplicate, aggregate, or reaggregate event records.
+- If one source record contains multiple logical events, update the connector to emit one record for each event. If records lack a stable field that identifies their source or event type, update ingestion to add one. If you cannot change ingestion, leave nonmandatory fields unmapped and document the limitation.
 
 For detailed manual authoring guidance, see [Develop ASIM parsers](https://learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers).
 
