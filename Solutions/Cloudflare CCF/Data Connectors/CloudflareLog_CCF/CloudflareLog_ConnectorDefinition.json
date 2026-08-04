@@ -9,7 +9,7 @@
             "id": "CloudflareDefinition",
             "title": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
             "publisher": "Microsoft",
-            "descriptionMarkdown": " The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.\n\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: The Cloudflare (Using Blob Container) (via Codeless Connector Framework) data connector available in the solution requires the Azure Blob Storage account and the Microsoft Sentinel workspace to be in the <span style='font-weight:bold;'>same Azure subscription and the same Resource Group</span>. Deploying across different subscriptions or resource groups may result in errors such as <span style='font-weight:bold;'>CreateDataFlowResources not defined</span> during connector configuration.</p>",
+            "descriptionMarkdown": "The Cloudflare data connector ingests Cloudflare Logpush data from Azure Blob Storage into Microsoft Sentinel. It supports multiple Cloudflare accounts, storage accounts, and containers in one workspace while retaining the Cloudflare account identity on every ingested record. Refer to the [Cloudflare Logs documentation](https://developers.cloudflare.com/logs/about/) for more information.",
             "graphQueriesTableName": "CloudflareV2_CL",
             "graphQueries": [
                 {
@@ -27,7 +27,7 @@
             "dataTypes": [
                 {
                     "name": "{{graphQueriesTableName}}",
-                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                 }
             ],
             "connectivityCriteria": [
@@ -56,94 +56,200 @@
                 ],
                 "customs": [
                     {
-                        "name": "Create a storage account and a container",
-                        "description": "Before setting up logpush in Cloudflare, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to know more about Container and Blob. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+                        "name": "Deployment permissions",
+                        "description": "The identity adding a collector must be able to deploy resources in the Microsoft Sentinel workspace resource group and in the target storage account resource group. To create the required role assignments, use **Owner** or **Contributor** plus **User Access Administrator** at the applicable scopes."
                     },
                     {
-                        "name": "Generate a Blob SAS URL",
-                        "description": "Create and Write permissions are required. Refer the [documentation](https://learn.microsoft.com/en-us/azure/ai-services/translator/document-translation/how-to-guides/create-sas-tokens?tabs=Containers) to know more about Blob SAS token and url."
+                        "name": "Microsoft Sentinel service principal access",
+                        "description": "The template grants the Microsoft Sentinel service principal **Storage Blob Data Contributor** on the selected container and **Storage Queue Data Contributor** on the two per-instance queues. These are data-plane roles only; the template does not grant Storage Account Contributor or account-key access."
                     },
                     {
-                        "name": "Collecting logs from Cloudflare to your Blob container",
-                        "description": "Follow the steps in the [documentation](https://developers.cloudflare.com/logs/get-started/enable-destinations/azure/) for collecting logs from Cloudflare to your Blob container."
+                        "name": "Cloudflare Logpush",
+                        "description": "Configure Cloudflare Logpush to write JSON or compressed JSON logs to the selected blob container. Ensure the Cloudflare identity has the required Logpush permissions. See [Cloudflare Logpush permissions](https://developers.cloudflare.com/logs/logpush/permissions/) and [Azure destination setup](https://developers.cloudflare.com/logs/get-started/enable-destinations/azure/)."
+                    },
+                    {
+                        "name": "Role-assignment propagation",
+                        "description": "The deployment includes a bounded 90-second propagation buffer before creating the connector. The buffer uses an Azure deployment script, which can create short-lived supporting resources, incur small transient cost, and be blocked by restrictive Azure Policy. Azure role propagation can take longer; if access initially fails, wait and submit the same collector again. Deterministic naming makes that retry idempotent."
+                    },
+                    {
+                        "name": "Cleanup semantics",
+                        "description": "Removing only the Microsoft Sentinel data connector does not remove its DCR, DCE, diagnostic setting, Event Grid subscription, queues, or role assignments. One-click deletion is intentionally not offered. Remove resources sharing the connector's deterministic instance key, but do not delete the shared `CloudflareV2_CL` table or a system topic still used by another collector."
                     }
                 ]
             },
             "instructionSteps": [
                 {
-                    "title": "Connect Cloudflare Logs to Microsoft Sentinel",
-                    "description": "To enable Cloudflare logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                    "title": "1. Prepare Azure Storage and Cloudflare Logpush",
+                    "description": "Create an Azure Storage account and blob container, then configure Cloudflare Logpush to write to that container. Follow [Create a storage account](https://learn.microsoft.com/azure/storage/common/storage-account-create), [Create a container](https://learn.microsoft.com/azure/storage/blobs/blob-containers-portal), and [Configure the Cloudflare Azure destination](https://developers.cloudflare.com/logs/get-started/enable-destinations/azure/)."
+                },
+                {
+                    "title": "2. Add and review Cloudflare collectors",
+                    "description": "Select **Add new collector** for each immutable Cloudflare account and storage container combination. Redeploying the same values updates the same isolated resources instead of creating a duplicate.",
                     "instructions": [
                         {
+                            "type": "DataConnectorsGrid",
                             "parameters": {
-                                "tenantId": "[subscription().tenantId]",
-                                "name": "principalId",
-                                "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
-                            },
-                            "type": "ServicePrincipalIDTextBox_test"
+                                "mapping": [
+                                    {
+                                        "columnName": "Connector",
+                                        "columnValue": "name"
+                                    },
+                                    {
+                                        "columnName": "Cloudflare account",
+                                        "columnValue": "properties.addOnAttributes.CloudflareAccountName"
+                                    },
+                                    {
+                                        "columnName": "Cloudflare account ID",
+                                        "columnValue": "properties.addOnAttributes.CloudflareAccountId"
+                                    },
+                                    {
+                                        "columnName": "Queue URI",
+                                        "columnValue": "properties.request.QueueUri"
+                                    },
+                                    {
+                                        "columnName": "Stream",
+                                        "columnValue": "properties.dcrConfig.streamName"
+                                    },
+                                    {
+                                        "columnName": "DCR immutable ID",
+                                        "columnValue": "properties.dcrConfig.dataCollectionRuleImmutableId"
+                                    }
+                                ]
+                            }
                         },
                         {
+                            "type": "InfoMessage",
                             "parameters": {
-                                "label": "The Blob container's URL you want to collect data from",
-                                "type": "text",
-                                "name": "blobContainerUri",
-                                "validations": {
-                                    "required": true
-                                }
-                            },
-                            "type": "Textbox"
+                                "text": "Cleanup is a deliberate manual operation in this phase. Use the 13-character instance key at the end of the connector name to identify its DCR, DCE, diagnostic setting, Event Grid subscription, queues, and role assignments. Preserve the shared CloudflareV2_CL table and any Event Grid system topic used by another collector.",
+                                "visible": true,
+                                "inline": true
+                            }
                         },
                         {
+                            "type": "ContextPane",
                             "parameters": {
-                                "label": "The Blob container's storage account resource group name",
-                                "type": "text",
-                                "name": "StorageAccountResourceGroupName",
-                                "validations": {
-                                    "required": true
-                                }
-                            },
-                            "type": "Textbox"
-                        },
-                        {
-                            "parameters": {
-                                "label": "The Blob container's storage account location",
-                                "type": "text",
-                                "name": "StorageAccountLocation",
-                                "validations": {
-                                    "required": true
-                                }
-                            },
-                            "type": "Textbox"
-                        },
-                        {
-                            "parameters": {
-                                "label": "The Blob container's storage account subscription id",
-                                "type": "text",
-                                "name": "StorageAccountSubscription",
-                                "validations": {
-                                    "required": true
-                                }
-                            },
-                            "type": "Textbox"
-                        },
-                        {
-                            "parameters": {
-                                "label": "The event grid topic name of the blob container's storage account if exist. else keep empty.",
-                                "description": "The data flow using event grid to send 'blob-created event' notifications. There could be only one event grid topic for each storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, please provide it's name. Else, keep the text box empty.",
-                                "type": "text",
-                                "name": "EGSystemTopicName",
-                                "validations": {
-                                    "required": false
-                                }
-                            },
-                            "type": "Textbox"
-                        },
-                        {
-                            "parameters": {
-                                "label": "toggle",
-                                "name": "toggle"
-                            },
-                            "type": "ConnectionToggleButton"
+                                "contextPaneType": "DataConnectorsContextPane",
+                                "title": "Add a Cloudflare collector",
+                                "subtitle": "Cloudflare Logpush through Azure Blob Storage",
+                                "label": "Add new collector",
+                                "isPrimary": true,
+                                "instructionSteps": [
+                                    {
+                                        "instructions": [
+                                            {
+                                                "type": "ServicePrincipalIDTextBox_test",
+                                                "parameters": {
+                                                    "tenantId": "[subscription().tenantId]",
+                                                    "name": "principalId",
+                                                    "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Cloudflare account ID",
+                                                    "placeholder": "Enter the immutable Cloudflare account ID",
+                                                    "description": "Used with the storage and workspace identity to derive deterministic Azure resource names. Do not enter an API token or other secret.",
+                                                    "type": "text",
+                                                    "name": "CloudflareAccountId",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Cloudflare account display name",
+                                                    "placeholder": "For example, Contoso Production",
+                                                    "description": "A friendly label shown in the connections grid and retained on ingested records. It is not used directly in Azure resource names.",
+                                                    "type": "text",
+                                                    "name": "CloudflareAccountName",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Storage account name",
+                                                    "placeholder": "Enter the Azure Storage account name",
+                                                    "type": "text",
+                                                    "name": "StorageAccountName",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Blob container name",
+                                                    "placeholder": "Enter the blob container name",
+                                                    "type": "text",
+                                                    "name": "ContainerName",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Storage account resource group",
+                                                    "placeholder": "Enter the resource group name",
+                                                    "type": "text",
+                                                    "name": "StorageAccountResourceGroupName",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Storage account subscription ID",
+                                                    "placeholder": "Enter the subscription GUID",
+                                                    "type": "text",
+                                                    "name": "StorageAccountSubscription",
+                                                    "validations": {
+                                                        "required": true
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Existing Event Grid system topic name (optional)",
+                                                    "placeholder": "Leave blank for the first collector on this storage account",
+                                                    "description": "Azure Event Grid supports one system topic for a storage account. Leave blank to create or reuse this connector's deterministic topic. If another integration already owns the storage account's system topic, enter that topic name so only a new per-instance event subscription is added.",
+                                                    "type": "text",
+                                                    "name": "EGSystemTopicName",
+                                                    "validations": {
+                                                        "required": false
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Custom log table name (optional)",
+                                                    "placeholder": "Leave blank to use CloudflareV2_CL",
+                                                    "description": "Name of the Log Analytics custom table this collector writes to. Must end in _CL. Leave blank to use the solution default CloudflareV2_CL. Each collector instance may target its own table; instances that share a table name share that table.",
+                                                    "type": "text",
+                                                    "name": "TableName",
+                                                    "validations": {
+                                                        "required": false,
+                                                        "regex": "^$|^[A-Za-z][A-Za-z0-9_]{0,42}_CL$",
+                                                        "message": "Table name must start with a letter, contain only letters, digits and underscores, and end with _CL."
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
                 }

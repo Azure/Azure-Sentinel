@@ -109,7 +109,9 @@ function New-ParametersForConnectorInstuctions($instructions) {
             }
         }
         elseif ($instruction.type -eq "ContextPane") {
-            New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
+            foreach ($contextInstructionStep in @($instruction.parameters.instructionSteps)) {
+                New-ParametersForConnectorInstuctions $contextInstructionStep.instructions
+            }
         }
         elseif ($instruction.type -eq "Dropdown") {
             if ($instruction.parameters.name.tolower() -eq "streamname") {
@@ -440,6 +442,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
     try {
         foreach ($ccpItem in $ccpDict) {
+            $script:ccpPerInstanceDcrEnabled = $false
             $activeResource = @()
             $tableCounter = 1;
             $templateName = $ccpItem.DCDefinitionId;
@@ -502,6 +505,18 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 if ($TemplateCounter -eq 2) {
                     $templateContent.properties.mainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]"        
                     $templateContentConnections = $templateContent
+
+                    # Make connector-definition inputs available before poller-specific
+                    # generators run. The same parameters are merged again later for
+                    # backward compatibility, where existing entries are left intact.
+                    foreach ($paramItem in $paramItems.PSObject.Properties) {
+                        if (-not $templateContentConnections.properties.mainTemplate.parameters.PSObject.Properties[$paramItem.Name]) {
+                            $templateContentConnections.properties.mainTemplate.parameters | Add-Member `
+                                -MemberType NoteProperty `
+                                -Name $paramItem.Name `
+                                -Value $paramItem.Value
+                        }
+                    }
 
                     $global:DependencyCriteria += [PSCustomObject]@{
                         kind      = "DataConnector";
@@ -765,8 +780,20 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         CreateAwsResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -isDynamicStreamName $ccpItem.isDynamicStreamName
                     }
                     elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer') {
-                        . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
-                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                        if ($null -ne $fileContent.connectionDeployment -and $fileContent.connectionDeployment.mode -eq "PerInstance") {
+                            . "$PSScriptRoot/perInstanceStorageDeploymentTemplate.ps1"
+                            $script:ccpPerInstanceDcrEnabled = $true
+                            CreatePerInstanceStorageAccountBlobContainerResourceProperties `
+                                -ArmResource $armResource `
+                                -TemplateContentConnections $templateContentConnections `
+                                -FileType $fileType `
+                                -DeploymentConfig $fileContent.connectionDeployment `
+                                -CcpItem $ccpItem
+                        }
+                        else {
+                            . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
+                            CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                        }
                     }
                     elseif ($armResource.kind.ToLower() -eq 'oci') {                        
                         CreateOciResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
@@ -815,7 +842,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 exit 1;
             }
 
-            if ($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
+            if ($script:ccpPerInstanceDcrEnabled) {
+                Write-Host "Skipping shared DCR content-template resource because this connector deploys an authoritative per-instance DCR."
+            }
+            elseif ($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
                 Write-Host "Processing for CCP DCR file path: $ccpDCRFilePath"
                 if (-not $fileContent.properties.destinations.PSObject.Properties.Name -contains "logAnalytics") {
                     # if logAnalytics array is not specified
@@ -1021,6 +1051,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             ## Build the full package resources
             $finalParameters = $templateContentConnections.properties.mainTemplate.parameters;
             foreach ($paramItem in $paramItems.PSObject.Properties) {
+                if ($script:ccpPerInstanceDcrEnabled -and $paramItem.Name -eq "dcrConfig") {
+                    continue
+                }
+
                 $existingParam = $finalParameters.PSObject.Properties[$paramItem.Name]
             
                 if (-not $existingParam) {
