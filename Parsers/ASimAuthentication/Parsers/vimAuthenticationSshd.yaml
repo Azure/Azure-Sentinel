@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for OpenSSH sshd
-  Version: '0.3.0'
-  LastUpdated: Jan 16, 2026
+  Version: '0.3.1'
+  LastUpdated: Jan 29, 2026
 Product:
   Name: OpenSSH
 Normalization:
@@ -167,8 +167,10 @@ ParserQuery: |
             | where not(disabled)
             | where ProcessName == "sshd" and SyslogMessage startswith 'Invalid user'
             | invoke prefilter()
-            | parse SyslogMessage with "Invalid user " TargetUsername: string " from " SrcIpAddr: string " port " SrcPortNumber: int
-            | parse SyslogMessage with "Invalid user  from " SrcIpAddrNoUser: string " port " SrcPortNumberNoUser: int
+            | parse SyslogMessage with "Invalid user " TargetUsername:string " from " SrcIpAddrAndPort:string // SrcIpAddrAndPort can either be "0.0.0.0 port 0" or just "0.0.0.0"
+            | parse SyslogMessage with "Invalid user  from " SrcIpAddrNoUser:string " port " SrcPortNumberNoUser:int
+            | extend SrcInfo = split(SrcIpAddrAndPort, " ")
+            | extend SrcIpAddr = tostring(SrcInfo[0]), SrcPortNumber = toint(SrcInfo[2]) // Ignore [1] ("port"). [2] will be null if there is no port.
             | extend
                 EventCount            = int(1),
                 EventResult           = 'Failure',
@@ -177,7 +179,7 @@ ParserQuery: |
                 EventType             = 'Logon',
                 SrcIpAddr             = coalesce(SrcIpAddr, SrcIpAddrNoUser),
                 SrcPortNumber         = coalesce(SrcPortNumber, SrcPortNumberNoUser)
-            | project-away SyslogMessage, ProcessName, SrcIpAddrNoUser, SrcPortNumberNoUser
+            | project-away SyslogMessage, ProcessName, SrcIpAddrNoUser, SrcPortNumberNoUser, SrcIpAddrAndPort, SrcInfo
     };
     //
     // -- Blocked intrusion attempts

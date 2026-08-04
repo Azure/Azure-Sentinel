@@ -1,0 +1,205 @@
+{
+  "name": "AWSELBConnector",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "AWSELBConnector",
+      "title": "Amazon Web Services Elastic Load Balancing (via Codeless Connector Framework)",
+      "publisher": "Amazon Web Services",
+      "descriptionMarkdown": "The AWS Elastic Load Balancing (ELB) connector for Microsoft Sentinel allows you to ingest access logs and flow logs from AWS Application Load Balancers (ALB), Network Load Balancers (NLB), and Gateway Load Balancers (GLB) into Microsoft Sentinel. These logs provide detailed information about requests processed by your load balancers and VPC traffic flows, enabling security monitoring, threat detection, and traffic analysis.",
+      "graphQueriesTableName": "AWSALBAccessLogsData",
+      "graphQueries": [
+        {
+          "metricName": "Total ALB Access Logs received",
+          "legend": "ALB Access Logs",
+          "baseQuery": "AWSALBAccessLogsData"
+        },
+        {
+          "metricName": "Total NLB Access Logs received",
+          "legend": "NLB Access Logs",
+          "baseQuery": "AWSNLBAccessLogsData"
+        },
+        {
+          "metricName": "Total ELB Flow Logs received",
+          "legend": "ELB Flow Logs",
+          "baseQuery": "AWSELBFlowLogsData"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get sample of ALB Access Logs",
+          "query": "AWSALBAccessLogsData\n| take 10"
+        },
+        {
+          "description": "Get sample of NLB Access Logs",
+          "query": "AWSNLBAccessLogsData\n| take 10"
+        },
+        {
+          "description": "Get sample of ELB Flow Logs",
+          "query": "AWSELBFlowLogsData\n| take 10"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "AWSALBAccessLogsData",
+          "lastDataReceivedQuery": "AWSALBAccessLogsData\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "AWSNLBAccessLogsData",
+          "lastDataReceivedQuery": "AWSNLBAccessLogsData\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "AWSELBFlowLogsData",
+          "lastDataReceivedQuery": "AWSELBFlowLogsData\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "AWS IAM Role ARN and SQS Queue",
+            "description": "An **AWS IAM Role ARN** with cross-account access and an **SQS Queue URL** configured for S3 event notifications are required. See [AWS ELB connector documentation](https://learn.microsoft.com/en-us/azure/sentinel/connect-aws) for setup instructions."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 1. AWS CloudFormation Deployment \n To configure access on AWS, use CloudFormation templates to set up the environment to send logs from ALB, NLB and GLB to your Log Analytics Workspace."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Deployment steps: \n1. Go to the [Cloud Formation Templates](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AWS%20ELB/Data%20Connectors/CloudFormationTemplates), download the JSON template files. \n2. Go to [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create). \n3. First deploy the **OIDCWebIdProvider.json** template (skip if you already have an OIDC provider for Microsoft Sentinel). \n4. Then deploy the **AWSS3ELB.json** template with your parameters. \n5. Note down the following values from the stack outputs: \n   - `IAMRoleArn` \n   - `ALBSQSQueueURL` \n   - `NLBSQSQueueURL` \n   - `NLBFlowLogsSQSQueueURL` \n   - `GLBFlowLogsSQSQueueURL` \n\n#### Post-deployment Configuration: \nOnce the CloudFormation stack is successfully deployed: \n- Go to the **Resources** tab in the stack. \n- Locate the created **S3 bucket name**. \n- In the S3 bucket, manually create the following folders: \n  - `ALBLogs` \n  - `NLBAccessLogs` \n  - `NLBFlowLogs` \n  - `GLBFlowLogs` \n\n#### Sending Logs: \nAfter folder creation, configure your AWS services to send logs to the appropriate folders: \n- ALB access logs -> `ALBLogs/` \n- NLB access logs -> `NLBAccessLogs/` \n- NLB flow logs -> `NLBFlowLogs/` \n- GLB flow logs -> `GLBFlowLogs/` \n\nThese logs will be ingested into the corresponding tables in your Log Analytics Workspace. \n\n#### Table Mapping: \n- ALB access logs -> `AWSALBAccessLogsData` \n- NLB access logs -> `AWSNLBAccessLogsData` \n- NLB and GLB flow logs -> `AWSELBFlowLogsData` \n\n> **Note:** \nIn the `AWSELBFlowLogsData` table, a column named `LogType` will indicate whether a row is from **NLB flow logs** or **GLB flow logs**."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 2. Connect new collectors \n To enable the connector, click **Add new collector**, enter the required details, and click **Connect**."
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Role ARN",
+                    "columnValue": "properties.roleArn"
+                  },
+                  {
+                    "columnName": "Queue URL",
+                    "columnValue": "properties.sqsUrls[0]"
+                  },
+                  {
+                    "columnName": "Stream",
+                    "columnValue": "properties.dcrConfig.streamName"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add new collector",
+                "title": "Add new collector",
+                "subtitle": "AWS S3 connector",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "title": "Account details",
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Role ARN",
+                          "placeholder": "arn:aws:iam::123456789012:role/SentinelELBRole",
+                          "type": "text",
+                          "name": "roleArn",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Queue URL",
+                          "placeholder": "https://sqs.us-east-1.amazonaws.com/123456789012/my-elb-queue",
+                          "type": "text",
+                          "name": "queueUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data type",
+                          "name": "selectedDataType",
+                          "options": [
+                            {
+                              "key": "albAccessLogs",
+                              "text": "ALB Access Logs"
+                            },
+                            {
+                              "key": "nlbAccessLogs",
+                              "text": "NLB Access Logs"
+                            },
+                            {
+                              "key": "nlbFlowLogs",
+                              "text": "NLB Flow Logs"
+                            },
+                            {
+                              "key": "glbFlowLogs",
+                              "text": "GLB Flow Logs"
+                            }
+                          ],
+                          "placeholder": "Select a data type",
+                          "required": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

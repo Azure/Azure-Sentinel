@@ -1,0 +1,91 @@
+id: 5f1c1a92-cd98-4e7b-a3df-6bd6d5d2c2a1
+name: Web service child process with egress
+description: |
+  This query searches for web-facing server processes that run shells or staging utilities and then connect to a public IPAddress shortly afterward.
+description-detailed: |
+  This hunt looks for likely post-exploitation behavior after server-side remote code execution in a web application. It correlates public-facing service parents with child shells or download tools and then requires a near-term public outbound connection from that child process. Review server role, maintenance windows, and approved deployment tooling before escalating results.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1190
+  - T1059
+tags:
+  - Server RCE
+  - Web server
+  - Post exploitation
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  // Parent processes commonly associated with web-facing services.
+  let WebServiceParents = dynamic([
+    "w3wp.exe", "httpd.exe", "nginx.exe", "apache2", "tomcat9.exe",
+    "java.exe", "java", "node.exe", "dotnet.exe", "php-cgi.exe", "php.exe"
+  ]);
+  // Child processes and utilities frequently seen in post-exploitation chains.
+  let RareChildProcesses = dynamic([
+    "cmd.exe", "powershell.exe", "pwsh.exe", "sh", "bash", "curl", "wget",
+    "certutil.exe", "bitsadmin.exe", "mshta.exe", "rundll32.exe", "python.exe", "python3"
+  ]);
+  // Command-line indicators that suggest staging, download, or shell launch behavior.
+  let EgressIndicators = dynamic(["http://", "https://", "-enc", "/c ", "/bin/sh", "wget ", "curl "]);
+  // Find suspicious child process executions launched by web-service parents.
+  let RareChildren =
+    _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
+    | where EventType =~ "ProcessCreated"
+    | extend ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName)),
+             ChildProcess = tolower(coalesce(TargetProcessFilename, TargetProcessFileOriginalName)),
+             ChildCommandLine = coalesce(TargetProcessCommandLine, "")
+    | where ParentProcess in~ (WebServiceParents)
+    | where ChildProcess in~ (RareChildProcesses)
+      or ChildCommandLine has_any (EgressIndicators)
+    | project ProcessTime = TimeGenerated,
+              DeviceId = tostring(coalesce(DvcId, DvcHostname)),
+              DeviceName = coalesce(DvcHostname, DvcFQDN),
+              InitiatingProcessFileName = ParentProcess,
+              InitiatingProcessCommandLine = tostring(ActingProcessCommandLine),
+              FileName = ChildProcess,
+              ProcessCommandLine = ChildCommandLine;
+  // Capture successful outbound connections to public (non-private) IP space.
+  let OutboundConnections =
+    _Im_NetworkSession(starttime=StartTime, endtime=EndTime)
+    | where isnotempty(DstIpAddr)
+    | where not(
+        ipv4_is_in_range(DstIpAddr, "10.0.0.0/8")
+        or ipv4_is_in_range(DstIpAddr, "172.16.0.0/12")
+        or ipv4_is_in_range(DstIpAddr, "192.168.0.0/16")
+        or ipv4_is_in_range(DstIpAddr, "100.64.0.0/10")
+        or ipv4_is_in_range(DstIpAddr, "127.0.0.0/8")
+        or ipv4_is_in_range(DstIpAddr, "169.254.0.0/16")
+        or ipv6_is_in_range(DstIpAddr, "::1/128")
+        or ipv6_is_in_range(DstIpAddr, "fc00::/7")
+        or ipv6_is_in_range(DstIpAddr, "fe80::/10")
+      )
+    | where EventResult !~ "Failure"
+    | project DeviceId = tostring(coalesce(DvcId, DvcHostname)),
+              RemoteIP = DstIpAddr,
+              RemotePort = DstPortNumber,
+              NetworkTime = TimeGenerated;
+  // Correlate suspicious child execution with near-term public egress on the same host.
+  RareChildren
+  | join kind=innerunique OutboundConnections on DeviceId
+  | where NetworkTime between (ProcessTime .. (ProcessTime + 5m))
+  | extend TimeGenerated = ProcessTime
+  | project TimeGenerated, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine,
+            FileName, ProcessCommandLine, RemoteIP, RemotePort
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+version: 1.0.0

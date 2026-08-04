@@ -1,0 +1,140 @@
+id: 9e0f2cf7-e3cb-4de2-a3f0-4a01fca52790
+name: Key Vault harvest to SPN sign-in then out-of-scope resource access
+description: |
+  Hunts for a chain where Key Vault secret retrieval is followed by suspicious SPN sign-in and access to resource scopes not seen in baseline.
+description-detailed: |
+  This query focuses on operational scope drift. It baselines historical resource scope for each service principal, then detects novel scope
+  touches after Key Vault secret retrieval and subsequent SPN authentication from matching source context.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADServicePrincipalSignInLogs
+tactics:
+  - CredentialAccess
+  - Discovery
+  - Collection
+relevantTechniques:
+  - T1552.007
+  - T1078.004
+  - T1526
+tags:
+  - Key Vault
+  - Service principal
+  - Scope drift
+  - Resource access anomaly
+query: |
+  // Time and tuning parameters
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineWindow = 14d;
+  let PivotWindow = 6h;
+  let ScopeWindow = 6h;
+  let SuccessStatus = dynamic(['succeeded', 'success']);
+  // Stage A: successful Key Vault secret retrieval
+  let KvSecretReads =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+    | extend CallerNorm = tolower(tostring(Caller)),
+             CallerIp = tostring(CallerIpAddress),
+             Op = tolower(tostring(OperationNameValue)),
+             Status = tolower(tostring(ActivityStatusValue)),
+             SubStatus = tolower(tostring(ActivitySubstatusValue))
+    | where Op has 'microsoft.keyvault/vaults/' and Op has '/secrets/'
+    | where Op has_any ('/get', '/read')
+    | where Status in (SuccessStatus) or SubStatus has 'ok'
+    | summarize FirstKvRead=min(TimeGenerated), LastKvRead=max(TimeGenerated), KvReadCount=count() by CallerNorm, CallerIp;
+  // Stage B: successful SPN sign-ins in timeframe
+  let SpnSignins =
+    AADServicePrincipalSignInLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ResultType =~ 'Success' or ResultType == '0'
+    | extend SpId = tolower(tostring(ServicePrincipalId)),
+             AppIdNorm = tolower(tostring(AppId)),
+             SigninIp = tostring(IPAddress),
+             UaNorm = tostring(UserAgent),
+             CredNorm = tostring(ClientCredentialType)
+    | where isnotempty(SpId) and isnotempty(SigninIp)
+    | project SigninTime = TimeGenerated, SpId, AppIdNorm, SpnName = tostring(ServicePrincipalName), Identity, SigninIp, UaNorm, CredNorm;
+  // Baseline historical scope touched by each principal in control
+  let ScopeBaseline =
+    AzureActivity
+    | where TimeGenerated between ((StartTime - BaselineWindow) .. StartTime)
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(tostring(Caller)),
+             ScopeKey = tolower(tostring(coalesce(ResourceGroup, ResourceId, SubscriptionId))),
+             Provider = tostring(ResourceProviderValue)
+    | where isnotempty(ScopeKey)
+    | summarize by CallerNorm, ScopeKey, Provider;
+  // Current scope touched by caller after suspicious SPN authentication
+  let ScopeCurrent =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(tostring(Caller)),
+             ScopeKey = tolower(tostring(coalesce(ResourceGroup, ResourceId, SubscriptionId))),
+             Provider = tostring(ResourceProviderValue),
+             Op = tostring(OperationNameValue)
+    | where isnotempty(ScopeKey)
+    | project ActTime = TimeGenerated, CallerNorm, ScopeKey, Provider, Op, ResourceId, ResourceGroup, SubscriptionId, CallerIpAddress;
+  // Keep only novel scope for each caller.
+  let ScopeNovel =
+    ScopeCurrent
+    | join kind=leftanti ScopeBaseline on CallerNorm, ScopeKey, Provider;
+  // Correlate full chain: KeyVault read -> SPN sign-in -> novel scope
+  KvSecretReads
+  | join kind=inner (
+      SpnSignins
+      | extend JoinKeys = pack_array(SpId, AppIdNorm)
+      | mv-expand JoinKey = JoinKeys
+      | extend JoinKey = tostring(JoinKey)
+      | project SigninTime, SpId, AppIdNorm, SpnName, Identity, SigninIp, UaNorm, CredNorm, JoinKey
+    ) on $left.CallerNorm == $right.JoinKey and $left.CallerIp == $right.SigninIp
+  | where SigninTime between (FirstKvRead .. (LastKvRead + PivotWindow))
+  | join kind=inner ScopeNovel on $left.CallerNorm == $right.CallerNorm
+  | where ActTime between (SigninTime .. (SigninTime + ScopeWindow))
+  | summarize FirstKvRead=min(FirstKvRead),
+              FirstSignin=min(SigninTime),
+              FirstNovelScope=min(ActTime),
+              NovelScopeCount=dcount(ScopeKey),
+              Providers=make_set(Provider, 15),
+              Operations=make_set(Op, 20),
+              Scopes=make_set(ScopeKey, 30),
+              ResourceIds=make_set(ResourceId, 20),
+              ResourceGroups=make_set(ResourceGroup, 20),
+              Subscriptions=make_set(SubscriptionId, 10)
+    by CallerNorm, CallerIp, SpId, AppIdNorm, SpnName, Identity, UaNorm, CredNorm
+  | extend TimeGenerated = FirstKvRead
+  | where NovelScopeCount >= 2
+  | project TimeGenerated,
+            Identity = CallerNorm,
+            SourceIp = CallerIp,
+            ServicePrincipalId = SpId,
+            AppId = AppIdNorm,
+            ServicePrincipalName = SpnName,
+            FirstKvRead,
+            FirstSignin,
+            FirstNovelScope,
+            NovelScopeCount,
+            Providers,
+            Operations,
+            Scopes,
+            ResourceIds,
+            ResourceGroups,
+            Subscriptions,
+            UserAgent = UaNorm,
+            ClientCredentialType = CredNorm
+  | order by NovelScopeCount desc, FirstNovelScope desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ServicePrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0

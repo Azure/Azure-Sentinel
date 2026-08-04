@@ -1,0 +1,123 @@
+id: 57579898-8421-42a9-a7a1-bf7c777bd355
+name: Privileged Entra ID account sign-in via legacy authentication protocol
+description: |
+  Identifies directory role holders signing in via legacy authentication protocols
+  (which bypass Conditional Access MFA), correlated with a high-impact audit operation
+  within one hour. Suggests credential theft or MFA bypass on legacy-auth accounts.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+  - T1562.001
+query: |
+  let timeframe = 1d;
+  let roleBaseline = 90d;
+  let correlationWindow = 1h;
+  let LegacyClients = dynamic([
+      "Exchange ActiveSync",
+      "IMAP4",
+      "MAPI over HTTP",
+      "POP3",
+      "SMTP Auth",
+      "Authenticated SMTP",
+      "Other clients"
+  ]);
+  let HighImpactOps = dynamic([
+      "Add member to role.",
+      "Add member to role",
+      "Add service principal credentials.",
+      "Add service principal credentials",
+      "Update application - Certificates and secrets management",
+      "Add owner to service principal.",
+      "Add owner to service principal",
+      "Reset user password.",
+      "Reset user password",
+      "Set domain authentication.",
+      "Set domain authentication"
+  ]);
+  // Role holders from role assignment events over a 90-day baseline
+  // Using a longer window than the detection timeframe to capture accounts
+  // that received roles weeks or months ago, not just within the last day
+  let PrivilegedAccounts =
+      AuditLogs
+      | where TimeGenerated >= ago(roleBaseline)
+      | where OperationName in~ ("Add member to role.", "Add member to role")
+      | where Result =~ "success"
+      | mv-expand TargetResource = TargetResources
+      | where tostring(TargetResource.type) =~ "User"
+      | extend TargetUpn = tolower(tostring(TargetResource.userPrincipalName))
+      | where isnotempty(TargetUpn)
+      | summarize by TargetUpn;
+  // Legacy auth sign-ins from privileged accounts
+  let LegacySignIns =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where ResultType == 0
+      | where ClientAppUsed in~ (LegacyClients)
+      | extend UserUpn = tolower(UserPrincipalName)
+      | join kind=inner PrivilegedAccounts on $left.UserUpn == $right.TargetUpn
+      | project
+          SignInTime = TimeGenerated,
+          UserUpn,
+          IPAddress,
+          ClientAppUsed,
+          AppDisplayName,
+          Location,
+          AutonomousSystemNumber,
+          CorrelationId;
+  // High-impact audit operations by the same account within the correlation window
+  let AuditActivity =
+      AuditLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where OperationName in~ (HighImpactOps)
+      | where Result =~ "success"
+      | extend ActorUpn = tolower(tostring(InitiatedBy.user.userPrincipalName))
+      | where isnotempty(ActorUpn)
+      | project AuditTime = TimeGenerated, ActorUpn, OperationName;
+  LegacySignIns
+  | join kind=inner AuditActivity on $left.UserUpn == $right.ActorUpn
+  | where AuditTime between (SignInTime .. (SignInTime + correlationWindow))
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      SignInTime,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      IPAddress,
+      ClientAppUsed,
+      AppDisplayName,
+      Location,
+      AuditTime,
+      OperationName,
+      CorrelationId
+  | sort by SignInTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

@@ -1,111 +1,287 @@
 {
-    "version": "Notebook/1.0",
-    "items": [
-      {
-        "type": 12,
-        "content": {
-          "version": "NotebookGroup/1.0",
-          "groupType": "editable",
-          "items": [
-            {
-              "type": 3,
-              "content": {
-                "version": "KqlItem/1.0",
-                "query": "CiscoETD_CL | summarize TotalMessages = count() by verdict_category_s | extend Categories = coalesce(verdict_category_s, 'No Verdict') | project Verdicts = Categories, TotalMessages | render piechart title = 'Email Threat Defense Messages by Verdict'",
-                "size": 0,
-                "title": "Total Messages by Threat Type",
-                "timeContext": {
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "cd8447d8-b10e-4a79-9a0d-1e2b4d7e2f5a",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
                   "durationMs": 86400000
                 },
-                "queryType": 0,
-                "resourceType": "microsoft.operationalinsights/workspaces"
-              },
-              "customWidth": "50",
-              "name": "query - 0",
-              "styleSettings": {
-                "margin": "10px"
-              }
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
             },
-            {
-              "type": 12,
-              "content": {
-                "version": "NotebookGroup/1.0",
-                "groupType": "editable",
-                "title": "Top 10 Malicious Senders Domains",
-                "items": [
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Cisco Email Threat Defense\nThis workbook visualizes email threat data from the Cisco ETD v5 connector querying **CiscoETDv2_CL** directly \u2014 fields are extracted at ingestion time by the DCR transform. Use the time range filter above to scope all tiles.\n\n> **Note:** Verdict analysis excludes `update` events (re-remediation records that carry no sender/verdict data)."
+      },
+      "name": "header-text"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Overview",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| extend Folder = tostring(message['action']['folder'])\n| summarize\n    ['Total Events']       = count(),\n    ['New Messages']       = countif(EventType =~ 'create'),\n    ['Remediation Updates']= countif(EventType =~ 'update'),\n    Phishing               = countif(Verdict =~ 'phishing'),\n    Malicious              = countif(Verdict =~ 'malicious'),\n    BEC                    = countif(Verdict =~ 'bec'),\n    Graymail               = countif(Verdict =~ 'graymail'),\n    Spam                   = countif(Verdict =~ 'spam'),\n    Scam                   = countif(Verdict =~ 'scam'),\n    Quarantined            = countif(Folder =~ 'quarantine'),\n    ['Sent to Junk']       = countif(Folder =~ 'junk')",
+              "size": 4,
+              "title": "Message Summary",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "query-summary",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| summarize Count = count() by Verdict\n| render piechart title = 'Messages by Verdict'",
+              "size": 0,
+              "title": "Messages by Verdict",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "33",
+            "name": "query-verdict-pie",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| summarize Count = count() by bin(EventTime, 1h), Verdict\n| render timechart title = 'Message Volume Over Time'",
+              "size": 0,
+              "title": "Message Volume Over Time (by Verdict)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "67",
+            "name": "query-volume-time",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-overview",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Senders & Recipients",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Sender)\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by Sender\n| top 10 by MessageCount desc",
+              "size": 0,
+              "title": "Top 10 Senders",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "gridSettings": {
+                "sortBy": [
                   {
-                    "type": 3,
-                    "content": {
-                      "version": "KqlItem/1.0",
-                      "query": "CiscoETD_CL\n| extend Domain = tostring(split(fromAddress_s, '@')[1])\n| where isnotnull(Domain) and trim(' ', Domain) != ''\n| summarize Count = count() by Domain\n| top 10 by Count desc\n",
-                      "size": 0,
-                      "timeContext": {
-                        "durationMs": 86400000
-                      },
-                      "queryType": 0,
-                      "resourceType": "microsoft.operationalinsights/workspaces",
-                      "visualization": "categoricalbar",
-                      "graphSettings": {
-                        "type": 0,
-                        "topContent": {
-                          "columnMatch": "Domain",
-                          "formatter": 1
-                        },
-                        "centerContent": {
-                          "columnMatch": "Count",
-                          "formatter": 1,
-                          "numberFormat": {
-                            "unit": 17,
-                            "options": {
-                              "maximumSignificantDigits": 3,
-                              "maximumFractionDigits": 2
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "name": "query - 0"
+                    "itemKey": "MessageCount",
+                    "sortOrder": 2
                   }
                 ]
               },
-              "customWidth": "50",
-              "name": "group - 9",
-              "styleSettings": {
-                "margin": "10px"
-              }
+              "sortBy": [
+                {
+                  "itemKey": "MessageCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-top-senders",
+            "styleSettings": {
+              "margin": "10px"
             }
-          ]
-        },
-        "customWidth": "100",
-        "name": "group - 6",
-        "styleSettings": {
-          "margin": "10px",
-          "showBorder": true
-        }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Sender)\n| extend SenderDomain = tostring(split(Sender, '@')[1])\n| where isnotempty(SenderDomain)\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by SenderDomain\n| top 10 by MessageCount desc",
+              "size": 0,
+              "title": "Top 10 Sender Domains",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "MessageCount",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "MessageCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-top-sender-domains",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Recipient)\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by Recipient\n| top 10 by MessageCount desc",
+              "size": 0,
+              "title": "Top 10 Targeted Recipients",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "MessageCount",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "MessageCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-top-recipients",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Recipient)\n| extend RecipientDomain = tostring(split(Recipient, '@')[1])\n| where isnotempty(RecipientDomain)\n| summarize MessageCount = count() by RecipientDomain\n| top 10 by MessageCount desc",
+              "size": 0,
+              "title": "Top 10 Targeted Recipient Domains",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "MessageCount",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "MessageCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-top-recipient-domains",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
       },
-      {
-        "type": 12,
-        "content": {
-          "version": "NotebookGroup/1.0",
-          "groupType": "editable",
-          "items": [
-            {
-              "type": 3,
-              "content": {
-                "version": "KqlItem/1.0",
-                "query": "CiscoETD_CL\n| extend Email = fromAddress_s\n| where isnotnull(Email) and trim(' ', Email) != ''\n| summarize Count = count() by Email\n| top 10 by Count desc",
-                "size": 0,
-                "title": "Top 10 Malicious Senders",
-                "queryType": 0,
-                "resourceType": "microsoft.operationalinsights/workspaces",
-                "gridSettings": {
-                  "sortBy": [
-                    {
-                      "itemKey": "Count",
-                      "sortOrder": 2
-                    }
-                  ]
-                },
+      "name": "group-senders-recipients",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Detection Techniques",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| mv-expand detection = message['verdict']['detections']\n| where isnotnull(detection)\n| extend Technique = tostring(detection['technique'])\n| where isnotempty(Technique)\n| summarize Count = count() by Technique\n| top 15 by Count desc",
+              "size": 0,
+              "title": "Top Detection Techniques",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "gridSettings": {
                 "sortBy": [
                   {
                     "itemKey": "Count",
@@ -113,34 +289,501 @@
                   }
                 ]
               },
-              "customWidth": "50",
-              "name": "query - 2",
-              "styleSettings": {
-                "margin": "10px"
-              }
+              "sortBy": [
+                {
+                  "itemKey": "Count",
+                  "sortOrder": 2
+                }
+              ]
             },
-            {
-              "type": 3,
-              "content": {
-                "version": "KqlItem/1.0",
-                "query": "CiscoETD_CL\n| summarize Count = count() by mailboxes_s\n| top 10 by Count desc\n| extend  Email = tostring(replace(\"[\\\"\\\"\\\\[\\\\]]\", \"\", mailboxes_s))\n| project Email, Count",
-                "size": 0,
-                "title": "Top 10 Targetd users",
-                "queryType": 0,
-                "resourceType": "microsoft.operationalinsights/workspaces"
-              },
-              "customWidth": "50",
-              "name": "query - 3",
-              "styleSettings": {
-                "margin": "10px"
-              }
+            "customWidth": "60",
+            "name": "query-detection-techniques",
+            "styleSettings": {
+              "margin": "10px"
             }
-          ]
-        },
-        "name": "Group_Top 10"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| extend BusinessRisk = tostring(message['verdict']['businessRisk'])\n| where isnotempty(BusinessRisk)\n| summarize Count = count() by BusinessRisk\n| render piechart title = 'Business Risk'",
+              "size": 0,
+              "title": "Business Risk\n(phishing / malicious only)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "40",
+            "name": "query-business-risk",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| mv-expand detection = message['verdict']['detections']\n| where isnotnull(detection)\n| extend Technique    = tostring(detection['technique']),\n         DetectionType = tostring(detection['type']),\n         Description  = tostring(detection['description'])\n| where isnotempty(Technique)\n| summarize Count = count() by Verdict, Technique, DetectionType\n| sort by Verdict asc, Count desc\n| project Verdict, Technique, DetectionType, Count",
+              "size": 0,
+              "title": "Detection Technique Details",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Count",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Count",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-detection-detail-grid",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-detections",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
       }
-    ],
-    "fallbackResourceIds": [],
-    "fromTemplateId": "sentinel-CiscoETD",
-    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
-  }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Actions & Remediation",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| extend Folder = tostring(message['action']['folder'])\n| where isnotempty(Folder)\n| summarize Count = count() by Folder\n| render piechart title = 'Disposition Folder'",
+              "size": 0,
+              "title": "Disposition Folder\n(junk vs quarantine)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "33",
+            "name": "query-action-folder",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| extend Folder = tostring(message['action']['folder'])\n| where isnotempty(Folder)\n| summarize Count = count() by Verdict, Folder\n| sort by Count desc",
+              "size": 0,
+              "title": "Verdict vs. Folder",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar"
+            },
+            "customWidth": "34",
+            "name": "query-verdict-folder",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Verdict)\n| extend IsAutoRemediated = tostring(message['verdict']['isAutoRemediated'])\n| extend ReclassifiedBy  = tostring(message['verdict']['reclassifiedBy'])\n| where isnotempty(IsAutoRemediated)\n| summarize Count = count() by IsAutoRemediated, ReclassifiedBy\n| project ['Auto-Remediated'] = IsAutoRemediated, ['Reclassified By'] = ReclassifiedBy, Count",
+              "size": 0,
+              "title": "Auto-Remediation & Reclassification",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "33",
+            "name": "query-auto-remediation",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'update'\n| extend Folder       = tostring(message['action']['folder'])\n| extend RemediatedBy = tostring(message['action']['remediatedBy'])\n| extend ActionType   = tostring(message['action']['action'])\n| project EventTime, MessageId, ActionType, Folder, RemediatedBy\n| sort by EventTime desc",
+              "size": 0,
+              "title": "Remediation Update Events",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "EventTime",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "EventTime",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-remediation-updates",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-actions",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Attachments",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotnull(message['attachments'])\n| mv-expand attachment = message['attachments']\n| extend FileName = tostring(attachment['filename'])\n| where isnotempty(FileName)\n| extend FileExt = tolower(extract(@'\\.([^.]+)$', 1, FileName))\n| where isnotempty(FileExt)\n| summarize Count = count() by FileExt\n| top 10 by Count desc\n| render piechart title = 'Attachment File Types'",
+              "size": 0,
+              "title": "Attachment File Extensions",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "33",
+            "name": "query-attachment-types",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotnull(message['attachments'])\n| mv-expand attachment = message['attachments']\n| extend FileName = tostring(attachment['filename']),\n         SHA256   = tostring(attachment['SHA256'])\n| where isnotempty(SHA256)\n// Deduplicate by SHA256 to find unique files seen across many messages\n| summarize\n    FileNames  = make_set(FileName, 10),\n    TimeSeen   = count(),\n    Verdicts   = make_set(Verdict, 5),\n    Senders    = make_set(Sender, 10)\n    by SHA256\n| sort by TimeSeen desc",
+              "size": 0,
+              "title": "Unique Attachment Hashes (SHA256)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "TimeSeen",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "TimeSeen",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "67",
+            "name": "query-attachment-hashes",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// Uses the verdict detections array \u2014 type='sha256' entries flag files\n// identified by threat intelligence, distinct from all attachments above\nCiscoETDv2_CL\n| where EventType =~ 'create'\n| where Verdict =~ 'malicious'\n| mv-expand detection = message['verdict']['detections']\n| where tostring(detection['type']) =~ 'sha256'\n| extend SHA256    = tostring(detection['description']),\n         Technique = tostring(detection['technique'])\n| where isnotempty(SHA256)\n| summarize Count = count() by SHA256, Technique, Sender, Subject\n| sort by Count desc",
+              "size": 0,
+              "title": "Malicious File Hashes (from Threat Detections)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Count",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Count",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-malicious-hashes",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-attachments",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Suspicious URLs",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// URLs surfaced in the verdict detections array with type='url'\n// These are the URLs Cisco ETD flagged as malicious/suspicious\nCiscoETDv2_CL\n| where EventType =~ 'create'\n| where Verdict in~ ('phishing', 'malicious')\n| mv-expand detection = message['verdict']['detections']\n| where tostring(detection['type']) =~ 'url'\n| extend MaliciousUrl = tostring(detection['description']),\n         Technique    = tostring(detection['technique'])\n| where isnotempty(MaliciousUrl)\n| summarize Count = count(), Senders = make_set(Sender, 5) by MaliciousUrl, Technique\n| sort by Count desc",
+              "size": 0,
+              "title": "Malicious URLs (flagged in Detections)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Count",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Count",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-malicious-urls",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// All URLs in urlMetadata across threat messages, grouped by domain\n// Excludes HTML entities (&nbsp;) and mailto links\nCiscoETDv2_CL\n| where EventType =~ 'create'\n| where Verdict in~ ('phishing', 'malicious', 'bec')\n| where isnotnull(message['urlMetadata'])\n| mv-expand urlItem = message['urlMetadata']\n| extend Url = tostring(urlItem['url'])\n| where isnotempty(Url)\n    and Url !startswith '&'\n    and Url !startswith 'http://mailto'\n    and not(Url matches regex @'^www\\.')\n| extend UrlDomain = extract(@'^https?://([^/?#\\s]+)', 1, Url)\n| where isnotempty(UrlDomain)\n| summarize Count = count() by UrlDomain\n| top 20 by Count desc",
+              "size": 0,
+              "title": "Top URL Domains in Threat Messages",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Count",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Count",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-url-domains",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-urls",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Network Indicators",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// clientIp = the external IP that delivered mail to the Cisco gateway\n// This is meaningful: hotmail.com sends from Azure IPs, gmail.com from Google IPs, etc.\nCiscoETDv2_CL\n| where EventType =~ 'create'\n| extend ClientIp = tostring(message['clientIp'])\n| where isnotempty(ClientIp)\n| summarize\n    MessageCount = count(),\n    Verdicts     = make_set(Verdict, 5),\n    Senders      = make_set(Sender, 10)\n    by ClientIp\n| sort by MessageCount desc",
+              "size": 0,
+              "title": "Top Sending Client IPs",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "MessageCount",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "MessageCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-client-ips",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where Verdict in~ ('phishing', 'malicious', 'bec')\n| extend ClientIp = tostring(message['clientIp'])\n| where isnotempty(ClientIp)\n| summarize\n    ThreatCount  = count(),\n    Verdicts     = make_set(Verdict, 5),\n    Senders      = make_set(Sender, 5),\n    Subjects     = make_set(Subject, 5)\n    by ClientIp\n| sort by ThreatCount desc",
+              "size": 0,
+              "title": "Threat-Associated Sending IPs",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "ThreatCount",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "ThreatCount",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query-threat-ips",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-network",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Recent Threats",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where Verdict in~ ('phishing', 'malicious', 'bec')\n| extend ClientIp     = tostring(message['clientIp'])\n| extend Folder       = tostring(message['action']['folder'])\n| extend BusinessRisk = tostring(message['verdict']['businessRisk'])\n| extend HasAttach    = isnotnull(message['attachments']) and array_length(message['attachments']) > 0\n| extend HasMalUrl    = isnotnull(message['verdict']['detections'])\n| project\n    EventTime,\n    MessageId,\n    Verdict,\n    BusinessRisk,\n    Sender,\n    Recipient,\n    Subject,\n    Folder,\n    ['Has Attachments'] = HasAttach,\n    ['Has Malicious URL'] = HasMalUrl,\n    ClientIp\n| sort by EventTime desc\n| take 100",
+              "size": 0,
+              "title": "Recent High-Threat Messages (Phishing / Malicious / BEC)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "EventTime",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "EventTime",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-recent-threats",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CiscoETDv2_CL\n| where EventType =~ 'create'\n| where isnotempty(Subject) and isnotempty(Verdict)\n| where Verdict in~ ('phishing', 'malicious', 'bec')\n| project EventTime, Verdict, Subject, Sender, Recipient\n| sort by EventTime desc",
+              "size": 0,
+              "title": "Subject Lines in Threat Messages",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "EventTime",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "EventTime",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "query-threat-subjects",
+            "styleSettings": {
+              "margin": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group-recent",
+      "styleSettings": {
+        "showBorder": true,
+        "margin": "10px"
+      }
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-CiscoETDv2_CL",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

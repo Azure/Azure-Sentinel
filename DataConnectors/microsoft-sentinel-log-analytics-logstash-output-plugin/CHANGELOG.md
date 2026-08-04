@@ -1,3 +1,14 @@
+> **⚠️ DEPRECATED — Ruby version**
+> This is the changelog for the deprecated Ruby version (1.x.x) of the Microsoft Sentinel Logstash output plugin. The plugin has since been refactored from Ruby to Java (2.x.x and later), and the Ruby version is no longer actively maintained. For the current version and its changelog, see [microsoft-sentinel-log-analytics-logstash-output-plugin_java](../microsoft-sentinel-log-analytics-logstash-output-plugin_java/CHANGELOG.md).
+
+## 1.2.0
+- Adds managed identity authentication support for Azure VMs/VMSS (system-assigned and user-assigned via IMDS).
+- Adds AKS workload identity support via OIDC token exchange.
+- Adds Azure Arc managed identity support for hybrid and on-premises servers.
+- Auto-detects authentication method at runtime based on environment (workload identity env vars, Arc agent, or IMDS fallback).
+- Migrates HTTP client from `excon` to `rest-client` for improved JRuby and Logstash plugin ecosystem compatibility.
+- Renames Azure Active Directory references to Microsoft Entra ID.
+
 ## 1.1.4
 -  Limit `excon` library version to lower than 1.0.0 to make sure port is always used when using a proxy.
   

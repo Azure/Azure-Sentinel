@@ -1,0 +1,77 @@
+id: b54123ef-cfa7-769e-a959-f437404a1192
+name: "UniFi Site Manager: ISP Downtime"
+description: |
+  Identifies when the ISP connection experiences downtime, impacting business operations and requiring documentation for SLA purposes.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_ISPMetrics_CL
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+  - T1499
+subTechniques:
+  - T1499.002
+query: |
+  // UniFi ISP Downtime Detection
+  let MinDowntimeSeconds = 60;
+  Unifi_SiteManager_ISPMetrics_CL
+  | where TimeGenerated > ago(30m)
+  | mv-expand period = Periods
+  | extend
+      metricTime = todatetime(period.metricTime),
+      downtime = toint(period.data.wan.downtime),
+      uptime = todouble(period.data.wan.uptime),
+      ispName = tostring(period.data.wan.ispName),
+      ispAsn = tostring(period.data.wan.ispAsn)
+  // De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, downtime, uptime, ispAsn) by tostring(SiteId), ispName, metricTime
+  | where metricTime > ago(30m)
+  | where downtime > 0
+  | summarize
+      TotalDowntimeSeconds = sum(downtime),
+      EventCount = count(),
+      AvgUptime = round(avg(uptime), 2),
+      FirstSeen = min(metricTime),
+      LastSeen = max(metricTime)
+      by SiteId, ispName, ispAsn
+  | where TotalDowntimeSeconds >= MinDowntimeSeconds
+  | extend
+      TimeGenerated = now(),
+      DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)
+  | project
+      TimeGenerated,
+      SiteId = SiteId,
+      ISPName = ispName,
+      ISPAsn = ispAsn,
+      TotalDowntimeSeconds,
+      DowntimeMinutes,
+      AvgUptimePct = AvgUptime,
+      EventCount,
+      FirstSeen,
+      LastSeen
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ISPName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.1

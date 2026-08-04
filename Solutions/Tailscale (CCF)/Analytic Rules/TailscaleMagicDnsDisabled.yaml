@@ -1,0 +1,42 @@
+id: f8a9b0c1-4567-8901-23ab-cdef12345020
+name: "Tailscale: MagicDNS disabled"
+description: |
+  Identifies when MagicDNS is turned off on the tailnet. Disabling MagicDNS changes DNS behaviour for every device and is occasionally a precursor to wider DNS hijacking - verify the change was intentional.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1556
+query: |
+  Tailscale_Audit_CL
+  | where Action == "UPDATE"
+  | where tostring(Target.type) == "TAILNET"
+  | where tostring(Target.property) == "MAGICDNS_PREFERENCES"
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend OldMagicDns = tobool(Old.magicDNS)
+  | extend NewMagicDns = tobool(New.magicDNS)
+  | where OldMagicDns == true and NewMagicDns == false
+  | project TimeGenerated, ActorLogin, OldMagicDns, NewMagicDns, Origin
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

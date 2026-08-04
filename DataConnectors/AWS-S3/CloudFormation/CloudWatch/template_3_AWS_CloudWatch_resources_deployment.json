@@ -1,0 +1,204 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Step 2 - Microsoft Sentinel CloudWatch integration: Lambda exporter (CloudWatch -> S3) and EventBridge schedule.\n",
+    "Parameters": {
+        "EnvironmentName": {
+            "Type": "String",
+            "Description": "Short environment name used in resource names (e.g. Omicron)."
+        },
+        "CloudWatchBucketName": {
+            "Type": "String",
+            "Description": "Name of the S3 bucket where CloudWatch export .gz files for Sentinel are stored."
+        },
+        "LambdaRoleName": {
+            "Type": "String",
+            "Description": "Name of the IAM role used by the CloudWatch exporter Lambda."
+        },
+        "ExporterLambdaName": {
+            "Type": "String",
+            "Description": "Name of the CloudWatch export Lambda function."
+        },
+        "LambdaWindowMinutes": {
+            "Type": "Number",
+            "Default": 15,
+            "Description": "How many minutes of logs to export each run (rolling window)."
+        },
+        "LambdaScheduleMinutes": {
+            "Type": "Number",
+            "Default": 15,
+            "Description": "How often (in minutes) to run the exporter Lambda."
+        },
+        "LogGroupPrefixes": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional comma-separated list of CloudWatch log group name prefixes to export (for example \"/aws/lambda/,/aws/rds/\"). If left empty, ALL log groups are scanned each run, which can be slow and expensive in large accounts.\n"
+        }
+    },
+    "Resources": {
+        "CloudWatchExporterLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "LambdaRoleName"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchExporterPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "CloudWatchRead",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "logs:GetLogEvents",
+                                        "logs:FilterLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                                    }
+                                },
+                                {
+                                    "Sid": "WriteToSentinelBucket",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:AbortMultipartUpload"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${CloudWatchBucketName}/AWSLogs/${AWS::AccountId}/CloudWatch/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "BasicLambdaLogging",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ExporterLambdaName}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchExporterLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ExporterLambdaName"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "CloudWatchExporterLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 120,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Ref": "CloudWatchBucketName"
+                        },
+                        "BUCKET_PREFIX": {
+                            "Fn::Sub": "AWSLogs/${AWS::AccountId}/CloudWatch/"
+                        },
+                        "WINDOW_MINUTES": {
+                            "Ref": "LambdaWindowMinutes"
+                        },
+                        "LOG_GROUP_PREFIXES": {
+                            "Ref": "LogGroupPrefixes"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport os\nfrom datetime import datetime, timedelta\nimport gzip\nimport io\nimport uuid\n\n# AWS clients\nlogs_client = boto3.client(\"logs\")\ns3_client = boto3.client(\"s3\")\n\n# Environment variables (configure these in the Lambda console)\nBUCKET_NAME = os.environ[\"BUCKET_NAME\"]        # e.g. azure-sentinel-cloudwatch-<suffix>\nBUCKET_PREFIX = os.environ[\"BUCKET_PREFIX\"]    # e.g. AWSLogs/<account-id>/CloudWatch/\nWINDOW_MINUTES = int(os.environ.get(\"WINDOW_MINUTES\", \"15\"))  # default: last 15 minutes\n\n# Optional comma-separated list of log group name prefixes to export.\n# If empty, ALL log groups are scanned (not recommended in large accounts).\nLOG_GROUP_PREFIXES = [\n    p.strip()\n    for p in os.environ.get(\"LOG_GROUP_PREFIXES\", \"\").split(\",\")\n    if p.strip()\n]\n\n\ndef _ms_to_iso8601(ms: int | None) -> str | None:\n    \"\"\"\n    Convert milliseconds since epoch to ISO8601 Zulu string, or None if ms is None.\n    Example: 2025-11-27T10:15:30.123Z\n    \"\"\"\n    if ms is None:\n        return None\n    dt = datetime.utcfromtimestamp(ms / 1000.0)\n    return dt.strftime(\"%Y-%m-%dT%H:%M:%S.%f\")[:-3] + \"Z\"\n\n\ndef _iter_log_groups():\n    \"\"\"\n    Yield log group names. If LOG_GROUP_PREFIXES is set, only groups matching\n    one of those prefixes are returned (queried server-side via the\n    logGroupNamePrefix parameter). Otherwise, all groups are returned.\n    \"\"\"\n    paginator = logs_client.get_paginator(\"describe_log_groups\")\n    seen = set()\n\n    if LOG_GROUP_PREFIXES:\n        for prefix in LOG_GROUP_PREFIXES:\n            for page in paginator.paginate(logGroupNamePrefix=prefix):\n                for lg in page.get(\"logGroups\", []):\n                    name = lg[\"logGroupName\"]\n                    if name not in seen:\n                        seen.add(name)\n                        yield name\n    else:\n        for page in paginator.paginate():\n            for lg in page.get(\"logGroups\", []):\n                name = lg[\"logGroupName\"]\n                if name not in seen:\n                    seen.add(name)\n                    yield name\n\n\ndef lambda_handler(event, context):\n    # Rolling time window: last WINDOW_MINUTES minutes in UTC\n    end_dt = datetime.utcnow()\n    start_dt = end_dt - timedelta(minutes=WINDOW_MINUTES)\n\n    start_ms = int(start_dt.timestamp() * 1000)\n    end_ms = int(end_dt.timestamp() * 1000)\n\n    scope = (\n        f\"prefixes {LOG_GROUP_PREFIXES}\" if LOG_GROUP_PREFIXES else \"ALL log groups\"\n    )\n    print(\n        f\"Exporting CloudWatch logs from {start_dt} to {end_dt} UTC \"\n        f\"({start_ms}..{end_ms} ms), scope: {scope}\"\n    )\n\n    exported_objects = 0\n\n    try:\n        for log_group in _iter_log_groups():\n            print(f\"Processing log group: {log_group}\")\n\n            # List log streams in this group, newest activity first\n            ls_paginator = logs_client.get_paginator(\"describe_log_streams\")\n\n            done_with_group = False\n            for ls_page in ls_paginator.paginate(\n                logGroupName=log_group,\n                orderBy=\"LastEventTime\",\n                descending=True,\n            ):\n                if done_with_group:\n                    break\n\n                for ls in ls_page.get(\"logStreams\", []):\n                    log_stream = ls[\"logStreamName\"]\n\n                    # Streams are ordered by last event time, descending.\n                    # Once we reach a stream whose most recent event predates\n                    # the window, every subsequent stream is older too, so we\n                    # can stop scanning this group entirely.\n                    last_event = ls.get(\"lastEventTimestamp\")\n                    if last_event is not None and last_event < start_ms:\n                        done_with_group = True\n                        break\n\n                    # Pull all events for this stream in the time window\n                    next_token = None\n                    all_events = []\n\n                    while True:\n                        kwargs = {\n                            \"logGroupName\": log_group,\n                            \"logStreamName\": log_stream,\n                            \"startTime\": start_ms,\n                            \"endTime\": end_ms,\n                            \"startFromHead\": True,\n                        }\n                        if next_token:\n                            kwargs[\"nextToken\"] = next_token\n\n                        resp = logs_client.get_log_events(**kwargs)\n                        events = resp.get(\"events\", [])\n                        all_events.extend(events)\n\n                        new_token = resp.get(\"nextForwardToken\")\n                        if not new_token or new_token == next_token:\n                            break\n                        next_token = new_token\n\n                    if not all_events:\n                        # No events in this stream for the window\n                        continue\n\n                    # Build gzipped NDJSON payload (one JSON object per line)\n                    buf = io.BytesIO()\n                    with gzip.GzipFile(fileobj=buf, mode=\"w\") as gz:\n                        for e in all_events:\n                            ts_ms = e.get(\"timestamp\")\n                            ing_ms = e.get(\"ingestionTime\")\n\n                            record = {\n                                \"timestamp\": _ms_to_iso8601(ts_ms),\n                                \"ingestionTime\": _ms_to_iso8601(ing_ms),\n                                \"message\": e.get(\"message\"),\n                                \"logGroup\": log_group,\n                                \"logStream\": log_stream,\n                            }\n                            gz.write((json.dumps(record) + \"\\n\").encode(\"utf-8\"))\n\n                    # Derive a safe filename from the log stream\n                    file_name = log_stream\n                    closing_bracket_index = file_name.find(\"]\")\n                    if closing_bracket_index != -1:\n                        output_name = file_name[closing_bracket_index + 1 :]\n                    else:\n                        output_name = str(uuid.uuid4()).replace(\"-\", \"\")\n\n                    # Clean log group name for folder use\n                    safe_group = log_group.strip(\"/\").replace(\"/\", \"_\")\n\n                    # Final S3 key\n                    key = (\n                        f\"{BUCKET_PREFIX}\"\n                        f\"{safe_group}/\"\n                        f\"{output_name}_{start_ms}_{end_ms}.json.gz\"\n                    )\n\n                    print(\n                        f\"Uploading {len(all_events)} events to \"\n                        f\"s3://{BUCKET_NAME}/{key}\"\n                    )\n\n                    s3_client.put_object(\n                        Bucket=BUCKET_NAME,\n                        Key=key,\n                        Body=buf.getvalue(),\n                        ContentType=\"application/json\",\n                        ContentEncoding=\"gzip\",\n                    )\n\n                    exported_objects += 1\n\n    except Exception as e:\n        print(f\"ERROR exporting logs: {e}\")\n        raise\n\n    print(f\"Exported {exported_objects} S3 objects\")\n    return {\n        \"statusCode\": 200,\n        \"body\": json.dumps({\"exported_objects\": exported_objects})\n    }\n"
+                }
+            }
+        },
+        "CloudWatchExporterInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "CloudWatchExporterLambda",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "CloudWatchExporterSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "CloudWatchExporterSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudWatchExporter-Rate"
+                },
+                "ScheduleExpression": {
+                    "Fn::Sub": "rate(${LambdaScheduleMinutes} minutes)"
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "CloudWatchExporterLambdaTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CloudWatchExporterLambda",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ExporterLambdaArn": {
+            "Description": "ARN of the CloudWatch exporter Lambda",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudWatchExporterLambda",
+                    "Arn"
+                ]
+            }
+        },
+        "LambdaRoleArn": {
+            "Description": "ARN of the Lambda execution role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudWatchExporterLambdaRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

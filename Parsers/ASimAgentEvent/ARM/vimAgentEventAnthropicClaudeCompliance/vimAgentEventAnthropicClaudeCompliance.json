@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAgentEventAnthropicClaudeCompliance')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Agent Event ASIM parser for Anthropic Claude Compliance",
+        "category": "ASIM",
+        "FunctionAlias": "vimAgentEventAnthropicClaudeCompliance",
+        "query": "let Parser = (\n    starttime: datetime=datetime(null),\n    endtime: datetime=datetime(null),\n    agentid_has_any: dynamic=dynamic([]),\n    agentname_has_any: dynamic=dynamic([]),\n    username_has_any: dynamic=dynamic([]),\n    disabled: bool=false,\n    pack: bool=false\n)\n{\n    BV_ClaudeCompliance_ComplianceActivities_CL\n    | where not(disabled)\n    | where (\n        (isnull(starttime) or TimeGenerated >= starttime)\n        and (isnull(endtime) or TimeGenerated <= endtime)\n    )\n    // AgentID filtering done later in the parser\n    // AgentName filtering done later in the parser\n    // Username filtering done later in the parser\n    | where type_CF != 'compliance_api_accessed' //filter out API requests for logs\n    | project-rename\n        EventStartTime = created_at,\n        EventUid = _ItemId,\n        EventOriginalUid = id_CF,\n        EventType = type_CF\n    | extend\n        EventSchema = 'AgentEvent',\n        EventSchemaVersion = '0.1.0',\n        EventCount = toint(1),\n        EventVendor = 'Anthropic',\n        EventProduct = 'Claude Enterprise',\n        TargetAgentId = coalesce(claude_project_id, claude_chat_id, claude_file_id, claude_artifact_id),\n        EventEndTime = TimeGenerated,\n        ActorIpAddr = tostring(actor.ip_address),\n        ActorType = tostring(actor.type),\n        ActorUserAgent = tostring(actor.user_agent),\n        ActorApiKeyId = tostring(actor.api_key_id),\n        ActorUserIdFromActor = tostring(actor.user_id),\n        ActorEmail = tostring(actor.email_address),\n        ActorUnauthEmail = tostring(actor.unauthenticated_email_address),\n        ActorServiceAccountId = tostring(actor.service_account_id),\n        TargetAgentName = coalesce(mcp_server_name, plugin_name, skill_name, group_name, service_name, extract(@'/v1/compliance/([^/]+)', 1, url), '')\n    | where (\n        ((array_length(agentid_has_any) == 0) or (TargetAgentId has_any (agentid_has_any)))\n        and ((array_length(agentname_has_any) == 0) or (TargetAgentName has_any (agentname_has_any)))\n    )\n    | extend\n        ActorUserId = coalesce(ActorUserIdFromActor, user_id),\n        SrcIpAddr = ActorIpAddr,\n        HttpUserAgent = ActorUserAgent,\n        ActorUsername = coalesce(ActorEmail, ActorUnauthEmail),\n        ActorUsernameType = iff(isnotempty(coalesce(ActorEmail, ActorUnauthEmail)), 'UPN', ''),\n        ActorScopeId = coalesce(ActorApiKeyId, ActorServiceAccountId)\n    | where ((array_length(username_has_any) == 0) or (ActorUsername has_any (username_has_any)))\n    | extend\n        EventResult = case(\n            status_code >= 200 and status_code < 300, 'Success',\n            status_code >= 400, 'Failure',\n            ''\n        ),\n        EventResultDetails = tostring(status_code)\n    | extend AdditionalFields = iff(\n        pack,\n        bag_pack(\n            'request_id', request_id,\n            'request_method', request_method,\n            'status_code', status_code,\n            'url', url,\n            'claude_chat_id', claude_chat_id,\n            'claude_file_id', claude_file_id,\n            'claude_project_id', claude_project_id,\n            'claude_artifact_id', claude_artifact_id,\n            'user_agent', ActorUserAgent,\n            'actor_type', ActorType,\n            'api_key_id', ActorApiKeyId,\n            'service_account_id', ActorServiceAccountId,\n            'organization_id', organization_id,\n            'organization_uuid', organization_uuid,\n            'workspace_id', workspace_id,\n            'group_id', group_id,\n            'role_id', role_id,\n            'session_id', session_id,\n            'action', action,\n            'decision', decision,\n            'reason', reason\n        ),\n        dynamic({})\n    )\n    | project\n        TimeGenerated,\n        Type,\n        EventStartTime,\n        EventEndTime,\n        EventUid,\n        EventOriginalUid,\n        EventType,\n        EventSchema,\n        EventSchemaVersion,\n        EventCount,\n        EventVendor,\n        EventProduct,\n        EventResult,\n        EventResultDetails,\n        TargetAgentId,\n        TargetAgentName,\n        ActorUserId,\n        ActorUsername,\n        ActorUsernameType,\n        ActorScopeId,\n        SrcIpAddr,\n        HttpUserAgent,\n        Dvc = SrcIpAddr,\n        AdditionalFields\n};\nParser(\n    starttime = starttime,\n    endtime = endtime,\n    agentid_has_any = agentid_has_any,\n    agentname_has_any = agentname_has_any,\n    username_has_any = username_has_any,\n    disabled = disabled,\n    pack = pack\n)",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),agentid_has_any:dynamic=dynamic([]),agentname_has_any:dynamic=dynamic([]),username_has_any:dynamic=dynamic([]),disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}

@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-ASN_DCR_NAME = "ipinfo_rule_for_ASN_tables"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+ASN_DCR_NAME = f"ipinfo_rule_for_ASN_tables_{WORKSPACE_NAME.lower()}"
 ASN_TABLE_NAME = "Ipinfo_ASN_CL"
 ASN_STREAM_DECLARATION = "Custom-Ipinfo_ASN_CL"
 

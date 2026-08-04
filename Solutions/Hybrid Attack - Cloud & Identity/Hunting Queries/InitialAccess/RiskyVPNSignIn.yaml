@@ -1,0 +1,93 @@
+id: 482a1615-5bc6-4b23-b2c5-97a4c3179240
+name: Risky Successful Sign-in to VPN or Network Access Application
+description: |
+  Hunts for successful sign-ins to VPN or network access applications correlated with Entra ID
+  risk detection events - combining app context from SignInLogs with specific risk reasons from
+  AADUserRiskEvents.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADUserRiskEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1133
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let correlationWindowMinutes = 60; // risk event must occur within this window of the sign-in
+  let vpnAppKeywords = dynamic(["GlobalProtect", "Palo Alto Networks", "Fortinet",
+      "Cisco AnyConnect", "Cisco Secure Client", "Zscaler", "Pulse Secure",
+      "Ivanti Connect Secure", "Ivanti Secure Access", "Ivanti VPN", "F5", "NetScaler", "Citrix Gateway",
+      "Barracuda VPN", "SonicWall"]);
+  let highValueRiskTypes = dynamic([
+      "leakedCredentials",
+      "investigationsThreatIntelligence",
+      "mcasImpossibleTravel",
+      "unlikelyTravel",
+      "anonymizedIPAddress",
+      "maliciousIPAddress",
+      "unfamiliarFeatures"]);
+  // Successful VPN logins
+  let VPNLogins =
+      SigninLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where ResultType == 0
+      | where AppDisplayName has_any (vpnAppKeywords)
+      | project
+          SignInTime        = TimeGenerated,
+          UserPrincipalName,
+          IPAddress,
+          AppDisplayName,
+          Country           = tostring(LocationDetails.countryOrRegion),
+          City              = tostring(LocationDetails.city),
+          ConditionalAccessStatus;
+  // Risk detection events for same period
+  // RiskState filter: exclude already-remediated/dismissed events to avoid FPs
+  let RiskEvents =
+      AADUserRiskEvents
+      | where TimeGenerated between (starttime .. endtime)
+      | where RiskLevel in ("high", "medium")
+      | where RiskEventType in (highValueRiskTypes)
+      | where RiskState in ("atRisk", "confirmedCompromised")  // exclude remediated/dismissed/confirmedSafe
+      | project
+          RiskTime          = coalesce(ActivityDateTime, TimeGenerated),
+          UserPrincipalName,
+          RiskEventType,
+          RiskLevel,
+          RiskDetail,
+          RiskState;
+  // Join: VPN login correlated with a risk event for same user within riskWindow
+  VPNLogins
+  | join kind=inner RiskEvents on UserPrincipalName
+  | where abs(datetime_diff('minute', SignInTime, RiskTime)) <= correlationWindowMinutes
+  | summarize arg_min(RiskTime, *) by UserPrincipalName, SignInTime, IPAddress, AppDisplayName
+  | project
+      HuntTime              = SignInTime,
+      UserPrincipalName,
+      IPAddress,
+      AppDisplayName,
+      Country,
+      City,
+      RiskEventType,
+      RiskLevel,
+      RiskDetail,
+      RiskState,
+      RiskTime,
+      ConditionalAccessStatus
+  | extend AccountName      = tostring(split(UserPrincipalName, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | sort by HuntTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0

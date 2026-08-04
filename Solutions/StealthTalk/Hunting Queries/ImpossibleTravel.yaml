@@ -1,0 +1,59 @@
+id: c1d4e7f2-8b3a-4c6d-9e5f-2a1b3c4d5e6f
+name: StealthTalk - Impossible travel
+description: |
+  Identifies a single StealthTalk user authenticating from two different countries within a 30-minute window. Legitimate physical travel between countries cannot occur on that timescale, so this is a strong indicator of stolen credentials.
+description-detailed: |
+  Hunting query that scans GeoAnomalyLogin events ordered per-user by time, and uses
+  serialized prev() to compare each event with the immediately-preceding event of the same
+  user. Pairs where LoginCountry differs and the elapsed time is <= 30 minutes are surfaced
+  as candidate impossible-travel cases. The serialized-scan approach is O(N) per user instead
+  of O(N^2) self-join, keeping the hunt responsive over a 7-day lookback on busy workspaces.
+  Results are ordered by elapsed time (smallest gap first), making the most egregious cases
+  appear at the top. Useful for proactive threat-hunting to find compromised accounts that
+  may not have triggered a single-event detection.
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FirstIP
+query: |
+  let lookback = 7d;
+  StealthTalkAnomalousAuth_CL
+  | where TimeGenerated >= ago(lookback)
+  | where EventType == "GeoAnomalyLogin"
+  | project TimeGenerated, UserId, LoginCountry, LoginCity, IpAddress
+  | order by UserId asc, TimeGenerated asc
+  | serialize
+  | extend
+      PrevUser    = prev(UserId),
+      PrevTime    = prev(TimeGenerated),
+      PrevCountry = prev(LoginCountry),
+      PrevIP      = prev(IpAddress)
+  | where UserId == PrevUser
+  | where LoginCountry != PrevCountry
+  | where TimeGenerated - PrevTime <= 30m
+  | project
+      UserId,
+      FirstCountry   = PrevCountry,
+      SecondCountry  = LoginCountry,
+      FirstTime      = PrevTime,
+      SecondTime     = TimeGenerated,
+      MinutesBetween = datetime_diff('minute', TimeGenerated, PrevTime),
+      FirstIP        = PrevIP,
+      SecondIP       = IpAddress
+  | extend AlertName = "ImpossibleTravel"
+  | order by MinutesBetween asc
+version: 1.0.0

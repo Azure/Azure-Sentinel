@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-WHOIS_ORG_DCR_NAME = "ipinfo_rule_for_WHOIS_ORG_tables"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+WHOIS_ORG_DCR_NAME = f"ipinfo_rule_for_WHOIS_ORG_tables-{WORKSPACE_NAME.lower()}"
 WHOIS_ORG_TABLE_NAME = "Ipinfo_WHOIS_ORG_CL"
 WHOIS_ORG_STREAM_DECLARATION = "Custom-Ipinfo_WHOIS_ORG_CL"
 

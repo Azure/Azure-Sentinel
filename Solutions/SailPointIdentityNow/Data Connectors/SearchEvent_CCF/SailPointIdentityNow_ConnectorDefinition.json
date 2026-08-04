@@ -1,0 +1,206 @@
+{
+  "name": "SailPointIdentityNowConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "SailPointIdentityNowConnector",
+      "title": "SailPoint IdentityNow (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The [SailPoint](https://www.sailpoint.com/) IdentityNow data connector provides the capability to ingest [SailPoint IdentityNow] search events into Microsoft Sentinel through the REST API. The connector provides customers the ability to extract audit information from their IdentityNow tenant. It supports connecting multiple SailPoint IdentityNow tenants simultaneously - each identified by its unique Tenant ID and domain - making it easy to monitor multiple environments (production, demo, partner) from a single Microsoft Sentinel workspace. Refer to [SailPoint Developer Documentation](https://developer.sailpoint.com/docs/api/authentication/) for API authentication details.",
+      "graphQueriesTableName": "SailPointIDN_EventsV2",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "SailPoint IdentityNow Events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "Failed events",
+          "legend": "Failed Events",
+          "baseQuery": "{{graphQueriesTableName}}\n | where Status == 'FAILED'"
+        },
+        {
+          "metricName": "Authentication events",
+          "legend": "Authentication Events",
+          "baseQuery": "{{graphQueriesTableName}}\n | where EventType == 'AUTH'"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get sample of SailPoint IdentityNow events",
+          "query": "{{graphQueriesTableName}}\n | take 10"
+        },
+        {
+          "description": "Get all failed events",
+          "query": "{{graphQueriesTableName}}\n | where Status == 'FAILED'\n | project TimeGenerated, TechnicalName, Operation, EventType\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get recent authentication events",
+          "query": "{{graphQueriesTableName}}\n | where EventType == 'AUTH' and TimeGenerated > ago(1d)\n | project TimeGenerated, TechnicalName, Status\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get events by type summary",
+          "query": "{{graphQueriesTableName}}\n | summarize Count=count() by EventType\n | order by Count desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h)\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "SailPoint IdentityNow OAuth2 Client Credentials",
+            "description": "An OAuth2 **Client ID** and **Client Secret** with the `sp:search:read` scope are required. Create an API client in your SailPoint admin console under **Admin > Global > Security Settings > API Management**. [See the documentation](https://developer.sailpoint.com/docs/api/authentication/) for step-by-step instructions."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Prerequisites",
+          "description": "",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. Find your Tenant ID and Domain\nYour **Tenant ID** is the subdomain of your SailPoint URL.\n\n| Environment | Your URL | Tenant ID | Domain |\n|---|---|---|---|\n| Production | `https://acme.identitynow.com` | `acme` | `identitynow.com` |\n| Demo/Partner | `https://ta-partner19947.identitynow-demo.com` | `ta-partner19947` | `identitynow-demo.com` |\n\nThe connector will call: `https://{Tenant ID}.api.{Domain}/v2025/search/events`"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. Create an API Client\n1. In the SailPoint admin console, go to **Admin > Global > Security Settings > API Management**.\n2. Click **+ New** to create a new API client.\n3. Enable **Client Credentials** grant type.\n4. Copy the generated **Client ID** and **Client Secret** - the secret is only shown once."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 3. Assign the required scope\nEnsure the API client has the `sp:search:read` scope to query the Search API."
+              }
+            }
+          ]
+        },
+        {
+          "title": "SailPoint IdentityNow Connections",
+          "description": "Add and manage connections to your SailPoint IdentityNow tenants. You can connect multiple tenants simultaneously.",
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Tenant ID",
+                    "columnValue": "properties.addOnAttributes.tenantId"
+                  },
+                  {
+                    "columnName": "Domain",
+                    "columnValue": "properties.addOnAttributes.identityNowDomain"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.dataType"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connection",
+                "title": "Add SailPoint IdentityNow Connection",
+                "subtitle": "Connect a SailPoint IdentityNow tenant to Microsoft Sentinel",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Tenant ID",
+                          "placeholder": "e.g. acme or ta-partner19947",
+                          "type": "text",
+                          "name": "tenantId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "IdentityNow Domain",
+                          "placeholder": "e.g. identitynow.com or identitynow-demo.com",
+                          "type": "text",
+                          "name": "identityNowDomain",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client ID",
+                          "placeholder": "Enter your OAuth2 Client ID",
+                          "type": "text",
+                          "name": "clientId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client Secret",
+                          "placeholder": "Enter your OAuth2 Client Secret",
+                          "type": "password",
+                          "name": "clientSecret",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": true
+    }
+  }
+}

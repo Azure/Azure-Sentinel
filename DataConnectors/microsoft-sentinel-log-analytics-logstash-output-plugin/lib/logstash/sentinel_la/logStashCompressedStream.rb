@@ -3,6 +3,7 @@
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/customSizeBasedBuffer"
 require "logstash/sentinel_la/logStashEventsBatcher"
+require "logstash/json"
 require 'zlib'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
@@ -70,7 +71,7 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
         # Adding an event document into the compressed stream
         private
         def add_event_to_compression_buffer(event_document)
-            event_json = event_document.to_json
+            event_json = LogStash::Json.dump(event_document)
                
             # Ensure that adding the current event to the stream will not exceed the maximum size allowed. 
             # If so, first flush and clear the current stream and then add the current record to the new stream instance.

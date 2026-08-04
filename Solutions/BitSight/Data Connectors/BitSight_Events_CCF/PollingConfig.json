@@ -1,0 +1,474 @@
+[
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2025-03-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','BitSightAlerts' , uniqueString(parameters('friendlyName')) )]",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "Basic",
+        "UserName": "[[parameters('username')]",
+        "Password": "[[parameters('password')]"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/v2/alerts/')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "paginatedCallsPerSecond": 1.0,
+        "queryWindowInMin": 1440,
+        "queryWindowDelayInMin": 30,
+        "queryTimeFormat": "yyyy-MM-dd",
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json",
+          "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+          "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+        },
+        "queryParameters": {
+          "sort": "alert_date",
+          "alert_date_gte": "{_QueryWindowStartTime}",
+          "alert_date_lte": "{_QueryWindowEndTime}"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.results[*]"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "offsetParaName": "offset",
+        "pageSize": 1000,
+        "pageSizeParameterName": "limit"
+      },
+      "connectorDefinitionName": "BitSightEventsConnector",
+      "dataType": "BitSightAlerts",
+      "dcrConfig": {
+        "streamName": "Custom-BitSightAlerts_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "friendlyName": "[[parameters('friendlyName')]",
+        "userStream": "ALERTS"
+      }
+    },
+    "condition": "[[equals(parameters('dataStream')[0], 'ALERTS')]"
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2025-03-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','BitSightBreaches' , uniqueString(parameters('friendlyName')) )]",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "Basic",
+        "UserName": "[[parameters('username')]",
+        "Password": "[[parameters('password')]"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v2/portfolio')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "paginatedCallsPerSecond": 1.0,
+        "queryWindowInMin": 1440,
+        "queryWindowDelayInMin": 60,
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json",
+          "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+          "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+        },
+        "queryParameters": {
+          "fields": "name,guid"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.results[*]"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "offsetParaName": "offset",
+        "pageSize": 500,
+        "pageSizeParameterName": "limit"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetch_company_breaches",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project company_guid_PlaceHolder = tostring(res['guid']), company_name_PlaceHolder = tostring(res['name'])"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetch_company_breaches": {
+          "shouldJoinNestedData": false,
+          "request": {
+            "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/v1/companies/$company_guid_PlaceHolder$/providers/breaches')]",
+            "httpMethod": "GET",
+            "queryWindowInMin": 1440,
+            "queryTimeFormat": "yyyy-MM-dd",
+            "retryCount": 3,
+            "timeoutInSeconds": 30,
+            "headers": {
+              "Accept": "application/json",
+              "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+              "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+            },
+            "queryParameters": {
+              "date_created_gte": "{_QueryWindowStartTime}",
+              "date_created_lte": "{_QueryWindowEndTime}"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.results[*]"
+            ],
+            "format": "json"
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSize": 500,
+            "pageSizeParaName": "limit"
+          }
+        }
+      },
+      "connectorDefinitionName": "BitSightEventsConnector",
+      "dataType": "BitSightBreaches",
+      "dcrConfig": {
+        "streamName": "Custom-BitSightBreaches_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "company_guid": "$company_guid_PlaceHolder$",
+        "company_name": "$company_name_PlaceHolder$",
+        "friendlyName": "[[parameters('friendlyName')]",
+        "userStream": "BREACHES"
+      }
+    },
+    "condition": "[[equals(parameters('dataStream')[0], 'BREACHES')]"
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2025-03-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','BitSightFindings' , uniqueString(parameters('friendlyName')), uniqueString('Diligence') )]",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "Basic",
+        "UserName": "[[parameters('username')]",
+        "Password": "[[parameters('password')]"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v2/portfolio')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "paginatedCallsPerSecond": 1.0,
+        "queryWindowInMin": 1,
+        "queryWindowDelayInMin": 60,
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json",
+          "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+          "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+        },
+        "queryParameters": {
+          "fields": "name,guid"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.results[*]"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "offsetParaName": "offset",
+        "pageSize": 500,
+        "pageSizeParameterName": "limit"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetch_company_findings",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project company_guid_PlaceHolder = tostring(res['guid']), company_name_PlaceHolder = tostring(res['name'])"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetch_company_findings": {
+          "shouldJoinNestedData": false,
+          "request": {
+            "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v1/companies/$company_guid_PlaceHolder$/findings')]",
+            "httpMethod": "GET",
+            "queryWindowInMin": 1440,
+            "queryTimeFormat": "yyyy-MM-dd",
+            "retryCount": 3,
+            "timeoutInSeconds": 30,
+            "headers": {
+              "Accept": "application/json",
+              "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+              "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+            },
+            "queryParameters": {
+              "sort": "last_seen",
+              "expand": "attributed_companies",
+              "risk_category": "Diligence",
+              "last_seen_gte": "{_QueryWindowStartTime}",
+              "last_seen_lte": "{_QueryWindowEndTime}"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.results[*]"
+            ],
+            "format": "json"
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSize": 1000,
+            "pageSizeParaName": "limit"
+          }
+        }
+      },
+      "connectorDefinitionName": "BitSightEventsConnector",
+      "dataType": "BitSightFindings",
+      "dcrConfig": {
+        "streamName": "Custom-BitSightFindings_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "company_guid": "$company_guid_PlaceHolder$",
+        "company_name": "$company_name_PlaceHolder$",
+        "userStream": "DILIGENCE",
+        "friendlyName": "[[parameters('friendlyName')]"
+      }
+    },
+    "condition": "[[equals(parameters('dataStream')[0], 'DILIGENCE')]"
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2025-03-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','BitSightFindings' , uniqueString(parameters('friendlyName')), uniqueString('Compromised Systems') )]",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "Basic",
+        "UserName": "[[parameters('username')]",
+        "Password": "[[parameters('password')]"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v2/portfolio')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "paginatedCallsPerSecond": 1.0,
+        "queryWindowInMin": 1,
+        "queryWindowDelayInMin": 60,
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json",
+          "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+          "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+        },
+        "queryParameters": {
+          "fields": "name,guid"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.results[*]"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "offsetParaName": "offset",
+        "pageSize": 500,
+        "pageSizeParameterName": "limit"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetch_company_findings",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project company_guid_PlaceHolder = tostring(res['guid']), company_name_PlaceHolder = tostring(res['name'])"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetch_company_findings": {
+          "shouldJoinNestedData": false,
+          "request": {
+            "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v1/companies/$company_guid_PlaceHolder$/findings')]",
+            "httpMethod": "GET",
+            "queryWindowInMin": 1440,
+            "queryTimeFormat": "yyyy-MM-dd",
+            "retryCount": 3,
+            "timeoutInSeconds": 30,
+            "headers": {
+              "Accept": "application/json",
+              "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+              "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+            },
+            "queryParameters": {
+              "sort": "last_seen",
+              "expand": "attributed_companies",
+              "risk_category": "Compromised Systems",
+              "last_seen_gte": "{_QueryWindowStartTime}",
+              "last_seen_lte": "{_QueryWindowEndTime}"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.results[*]"
+            ],
+            "format": "json"
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSize": 1000,
+            "pageSizeParaName": "limit"
+          }
+        }
+      },
+      "connectorDefinitionName": "BitSightEventsConnector",
+      "dataType": "BitSightFindings",
+      "dcrConfig": {
+        "streamName": "Custom-BitSightFindings_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "company_guid": "$company_guid_PlaceHolder$",
+        "company_name": "$company_name_PlaceHolder$",
+        "userStream": "COMPROMISED_SYSTEMS",
+        "friendlyName": "[[parameters('friendlyName')]"
+      }
+    },
+    "condition": "[[equals(parameters('dataStream')[0], 'COMPROMISED_SYSTEMS')]"
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2025-03-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','BitSightFindings' , uniqueString(parameters('friendlyName')), uniqueString('User Behavior') )]",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "Basic",
+        "UserName": "[[parameters('username')]",
+        "Password": "[[parameters('password')]"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v2/portfolio')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "paginatedCallsPerSecond": 1.0,
+        "queryWindowInMin": 1,
+        "queryWindowDelayInMin": 60,
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json",
+          "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+          "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+        },
+        "queryParameters": {
+          "fields": "name,guid"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.results[*]"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "offsetParaName": "offset",
+        "pageSize": 500,
+        "pageSizeParameterName": "limit"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetch_company_findings",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project company_guid_PlaceHolder = tostring(res['guid']), company_name_PlaceHolder = tostring(res['name'])"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetch_company_findings": {
+          "shouldJoinNestedData": false,
+          "request": {
+            "apiEndpoint": "[[concat(parameters('bitSightApiUrl'), '/ratings/v1/companies/$company_guid_PlaceHolder$/findings')]",
+            "httpMethod": "GET",
+            "queryWindowInMin": 1440,
+            "queryTimeFormat": "yyyy-MM-dd",
+            "retryCount": 3,
+            "timeoutInSeconds": 30,
+            "headers": {
+              "Accept": "application/json",
+              "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+              "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
+            },
+            "queryParameters": {
+              "sort": "last_seen",
+              "expand": "attributed_companies",
+              "risk_category": "User Behavior",
+              "last_seen_gte": "{_QueryWindowStartTime}",
+              "last_seen_lte": "{_QueryWindowEndTime}"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.results[*]"
+            ],
+            "format": "json"
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSize": 1000,
+            "pageSizeParaName": "limit"
+          }
+        }
+      },
+      "connectorDefinitionName": "BitSightEventsConnector",
+      "dataType": "BitSightFindings",
+      "dcrConfig": {
+        "streamName": "Custom-BitSightFindings_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "company_guid": "$company_guid_PlaceHolder$",
+        "company_name": "$company_name_PlaceHolder$",
+        "userStream": "USER_BEHAVIOR",
+        "friendlyName": "[[parameters('friendlyName')]"
+      }
+    },
+    "condition": "[[equals(parameters('dataStream')[0], 'USER_BEHAVIOR')]"
+  }
+]

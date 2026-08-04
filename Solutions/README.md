@@ -82,6 +82,40 @@ For a detailed walkthrough of how to publish your solutions, please refer to the
 1. Publish solutions to Microsoft Sentinel - https://learn.microsoft.com/en-us/azure/sentinel/publish-sentinel-solutions
 2. Solution tracking after publishing in the Microsoft Partner center - https://learn.microsoft.com/en-us/azure/sentinel/sentinel-solutions-post-publish-tracking
 
+
+### Certification FAQs:
+
++ #### What Search keyword must be present for Sentinel solutions? 
+&emsp;&emsp;&emsp; The Search keyword must contain the Sentinel GUID: **f1de974b-f438-4719-b423-8bf704ba2aef**. 
+
++ #### Is the text 'Azure Sentinel' allowed in offers or packages? 
+&emsp;&emsp;&emsp; No. The text 'Azure Sentinel' must not appear anywhere. The correct branding is 'Microsoft Sentinel'. 
+
++ #### Should package name and package version match? 
+&emsp;&emsp;&emsp; Yes. Package name and package version mentioned in Partner Center must be the same. For instance if package version is 3.0.1 then the package name should be 3.0.1.zip.
+
++ #### Where should the version number match? 
+&emsp;&emsp;&emsp; The version number must match across Partner Center, Solution Metadata, and mainTemplate.json. 
+
++ #### Is ARM-TTK validation required? 
+&emsp;&emsp;&emsp; Yes. ARM-TTK must pass successfully. Any failures should result in rejection with details. 
+
++ #### What image and logo checks are required? 
+&emsp;&emsp;&emsp; Ensure images load correctly and logos referenced to master branch, not PR links or private branch links. 
+
++ #### Should DARSy zip content match GitHub repository content? 
+&emsp;&emsp;&emsp; Yes. The package submitted to certification must exactly match GitHub master repository files. To ensure this, the Pull Request must be approved and merged prior to publishing the offer.
+
++ #### Why should short-links be verified? 
+&emsp;&emsp;&emsp; All links, especially short-links, must resolve correctly. Broken links are grounds for rejection. 
+
++ #### Are release notes mandatory? 
+&emsp;&emsp;&emsp; Yes. Release notes must be present and properly added. Missing release notes will cause rejection. 
+
++ #### Are support information mandatory?
+&emsp;&emsp;&emsp; Yes. Support information including name, email, tier and link is mandatory.
+
+
 ## Feedback
 
 [Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 

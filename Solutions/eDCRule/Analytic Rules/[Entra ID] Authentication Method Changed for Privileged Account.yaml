@@ -1,0 +1,129 @@
+id: 9f7197b6-eeb2-46f3-83b1-a2c4dfca46a0
+name: "[Entra ID] Authentication Method Changed for Privileged Account"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects changes to authentication methods on privileged accounts. This may indicate an attacker added a new method to maintain access.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let queryperiod = 1d;
+  let queryfrequency = 1d;
+  let security_info_actions = dynamic(["User registered security info", "User changed default security info", "User deleted security info", "Admin updated security info", "Admin deleted security info", "Admin registered security info"]);
+  let VIPUsers = (
+      IdentityInfo
+      | where TimeGenerated > ago(queryperiod)
+      | mv-expand AssignedRoles
+      | where AssignedRoles contains 'Admin'
+      | summarize by AccountUPN);
+  AuditLogs
+  | where TimeGenerated > ago(queryperiod)
+  | where Category =~ "UserManagement"
+  | where ActivityDisplayName in (security_info_actions)
+  | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
+  | extend IP = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+  | mv-apply TargetResource = TargetResources on
+      (
+      where TargetResource.type =~ "User"
+      | extend Target = tostring(TargetResource.userPrincipalName)
+      )
+  | where Target in~ (VIPUsers)
+  // Uncomment the line below if you are experiencing high volumes of Target entities. If this is uncommented, the Target column will not be mapped to an entity.
+  //| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256) by Initiator, IP, Result
+  // Comment out this line below, if line above is used.
+  | summarize
+      Start=min(TimeGenerated),
+      End=max(TimeGenerated),
+      Actions = make_set(ResultReason, MaxSize=8),
+      Target_ResourceName = make_set(TargetResources)
+      by
+      Initiator,
+      IP,
+      Result,
+      Targets = Target,
+      InitiatingAppServicePrincipalId,
+      InitiatingAppServicePrincipalName,
+      bin(TimeGenerated, 1h)
+  | mv-expand Actions
+  | extend
+      Action = tostring(Actions),
+      InitiatorName = tostring(split(Initiator, '@', 0)[0]),
+      InitiatorUPNSuffix = tostring(split(Initiator, '@', 1)[0]),
+      //TargetName = iff(tostring(Targets) has "[", "", tostring(split(Targets, '@', 0)[0])),
+      TargetUPNSuffix = iff(tostring(Targets) has "[", "", tostring(split(Targets, '@', 1)[0]))
+  | extend Source_Network_IPLocation = ""
+  | project
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Identity Privilege Modification",
+      Alert_Name_en = "Authentication Method Changed for Privileged Account",
+      Alert_Description_en =  strcat(
+                              "At Taiwan time: ",
+                              format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                              "in the Microsoft Entra ID tenant"
+      ", user:  ",
+                              iff(isnotempty(Initiator), Initiator, ""),
+                              " at IP: ",
+                              IP,
+                              ", performed an authentication method change"
+                          ),
+      Alert_TriageStep_en = strcat(
+                            "1. Check whether there are successful records for the authentication method change."
+      "2. Confirm with user: ",
+                            iff(isnotempty(Initiator), Initiator, ""),
+                            " whether the change was performed."
+                        ),
+      Alert_Containment_en = strcat(
+                             "1. Immediately revoke all existing sign-in tokens and sessions (sign-in session / refresh token) for the account, and force password and MFA reset.  ",
+                             "2. Immediately disable the account."
+                         ),
+      Alert_Remediation_en = strcat(
+                             "1. Strengthen security info governance for Admin/VIP accounts and require additional verification or manual review for security info changes.",
+                             "2. Enforce advanced Conditional Access policies for high-privilege accounts, including MFA/compliant devices/risk-based sign-in policies, and block change activity from unknown locations or new devices.  ",
+                             "3. Establish and optimize real-time alerts and automated response SOAR for security info changes, such as automatically blocking accounts/notifying SOC/requesting user confirmation.  "
+                         ),
+              Alert_Time_TW = datetime_utc_to_local(TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = TimeGenerated,
+      Event_Action = Actions,
+      Event_Status = Result,
+      //Event_Description = ActivityDisplayName,
+      Source_Identity_FullName = Initiator,
+      //Source_Identity_ID = ActorID,
+      Source_Identity_Type = iff(isnotempty(Initiator), "User", "Service"),
+      Source_Network_IPAddress = IP,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Source_Resource_Name = InitiatingAppServicePrincipalName,
+      Target_Identity_FullName = Targets,
+      Target_Identity_Type = "User",
+      Target_Resource_Type = "Entra ID"
+  //CreateTime:2025/1/5
+  //EditTime:
+  //Editor:Lancy
+  //Version v1.0
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Source_Identity_FullName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Target_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+

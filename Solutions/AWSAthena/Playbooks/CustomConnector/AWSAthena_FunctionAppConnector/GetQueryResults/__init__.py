@@ -59,7 +59,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 for row in results:
                     tmp_row = []
                     for data in row['Data']:
-                        tmp_row.append(list(dict(data).values())[0])
+                        values = list(dict(data).values())
+                        if values:
+                            tmp_row.append(values[0])
+                        else:
+                            tmp_row.append(None)  
 
                     if is_header_row:
                         headers = tmp_row

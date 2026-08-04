@@ -4,15 +4,15 @@
 # The service key contains the necessary credentials to connect SAP BTP Auditlog Management with Microsoft Sentinel for SAP BTP.
 #
 # Prerequisites:
-# - Cloud Foundry CLI (cf) installed and configured
-# - CF login session established (run 'cf login' before executing this script)
+# - SAP BTP CLI installed: https://tools.hana.ondemand.com/#cloud-btpcli
+# - Azure CLI installed (if using Key Vault export): https://learn.microsoft.com/cli/azure/install-azure-cli
 # - Appropriate permissions in SAP BTP to create services in target orgs/spaces
 # - SAP BTP entitlements/quota for 'auditlog-management' service in each subaccount
 # - Sentinel Solution for SAP BTP deployed in your Azure environment
 # - A CSV file named 'subaccounts.csv' with columns: SubaccountId;cf-api-endpoint;cf-org-name;cf-space-name
 #
 # Usage: 
-#   1. Run 'cf login' first to establish authentication
+#   1. Ensure you have CF credentials (username/password)
 #   2. Update 'subaccounts.csv' with your subaccount details
 #   3. Execute this script in PowerShell from the Tools folder:
 #       $securePassword = Read-Host "Enter CF Password" -AsSecureString
@@ -30,18 +30,68 @@ param(
     [string]$ServicePlan = "default",
     
     [Parameter(Mandatory=$false)]
-    [string]$InstanceNamePrefix = "sentinel-audit-srv",
+    [string]$InstanceName = "sentinel-audit-srv",
     
     [Parameter(Mandatory=$false)]
     [string]$CfUsername = $env:CF_USERNAME,
     
     [Parameter(Mandatory=$false)]
-    [SecureString]$CfPassword
+    [SecureString]$CfPassword,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$ExportCredentialsToCsv,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$ExportCredentialsToKeyVault,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$KeyVaultName,
+    
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("CreateNewKey", "Cleanup")]
+    [string]$KeyRotationMode
 )
 
 # Import shared helper functions
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Import-Module "$scriptPath\BtpHelpers.ps1" -Force
+
+# Validate Key Vault parameters if exporting to Key Vault
+if ($ExportCredentialsToKeyVault) {
+    if ([string]::IsNullOrWhiteSpace($KeyVaultName)) {
+        Write-Log "KeyVaultName parameter is required when ExportCredentialsToKeyVault is specified" -Level "ERROR"
+        exit 1
+    }
+    
+    # Check if Azure CLI is available
+    if (-not (Test-AzCli)) {
+        Write-Log "Azure CLI is required for Key Vault operations. Exiting." -Level "ERROR"
+        exit 1
+    }
+}
+
+# Warn users about CSV security implications
+if ($ExportCredentialsToCsv) {
+    Write-Host ""
+    Write-Host "WARNING: CSV Export Security Notice" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "CSV files store credentials in plaintext without encryption, access controls,"
+    Write-Host "or audit trails. This method should ONLY be used for testing purposes."
+    Write-Host ""
+    Write-Host "For production environments, use Azure Key Vault instead:" -ForegroundColor Cyan
+    Write-Host "  -ExportCredentialsToKeyVault -KeyVaultName '<your-key-vault>'"
+    Write-Host ""
+    
+    $confirmation = Read-Host "Do you want to continue with CSV export? (yes/no)"
+    
+    if ($confirmation -notmatch '^(y|yes)$') {
+        Write-Log "CSV export cancelled by user" -Level "INFO"
+        exit 0
+    }
+    
+    Write-Log "User confirmed CSV export. Proceeding with caution..." -Level "WARNING"
+}
 
 # Validate and get CF credentials using helper function
 $credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
@@ -54,13 +104,20 @@ $CfPassword = $credentials.Password
 # Main script execution
 Write-Log "======================================================================="
 Write-Log "Starting SAP BTP Audit Log Management Onboarding Process"
-Write-Log "======================================================================="
-
-# Check if CF CLI is installed
-if (-not (Test-CfCli)) {
-    Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
-    exit 1
+if ($KeyRotationMode) {
+    Write-Log "Key Rotation Mode: $KeyRotationMode"
+} else {
+    Write-Log "Key Rotation Mode: Not specified (will reuse existing keys if present)"
 }
+if ($ExportCredentialsToCsv) {
+    Write-Log "Export Credentials to CSV: Enabled"
+    Write-Log "WARNING: Credentials will be stored in plaintext in CSV file" -Level "WARNING"
+}
+if ($ExportCredentialsToKeyVault) {
+    Write-Log "Export Credentials to Key Vault: Enabled"
+    Write-Log "Key Vault Name: $KeyVaultName"
+}
+Write-Log "======================================================================="
 
 # Load subaccounts from CSV using helper function
 $subaccounts = Import-BtpSubaccountsCsv -CsvPath $CsvPath
@@ -90,6 +147,10 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "Org: $orgName | Space: $spaceName"
     Write-Log "======================================================================="
     
+    # Initialize variables for this subaccount iteration
+    $serviceKey = $null
+    $credentials = $null
+    
     # Switch API endpoint if needed
     if ($currentApiEndpoint -ne $apiEndpoint) {
         if (-not (Set-CfApiEndpoint -ApiEndpoint $apiEndpoint -Username $CfUsername -Password $CfPassword -OrgName $orgName -SpaceName $spaceName)) {
@@ -107,33 +168,156 @@ foreach ($subaccount in $subaccounts) {
         continue
     }
     
-    # Generate instance name (same for all subaccounts)
-    $instanceName = $InstanceNamePrefix
-    $keyName = "$InstanceNamePrefix-key"
+    # Use the specified instance name (consistent with connect script approach)
+    $instanceName = $InstanceName
+    Write-Log "Using instance name: $instanceName" -Level "INFO"
     
-    # Create service instance
-    $serviceCreated = New-CfServiceInstance -InstanceName $instanceName -Service $ServiceName -Plan $ServicePlan
+    $keyName = "$instanceName-key"
     
-    if (-not $serviceCreated) {
+    # Create service instance (will skip if already exists)
+    # Returns: "created" if new instance was created, "exists" if already exists, $false on failure
+    $serviceResult = New-CfServiceInstance -InstanceName $instanceName -Service $ServiceName -Plan $ServicePlan
+    
+    if (-not $serviceResult) {
         $failureCount++
         continue
     }
     
-    # Wait a bit for service to be ready
-    Write-Log "Waiting for service instance to be ready..."
-    Start-Sleep -Seconds 5
-    
-    # Create service key
-    $keyCreated = New-CfServiceKey -InstanceName $instanceName -KeyName $keyName
-    
-    if ($keyCreated) {
-        $successCount++
-        Write-Log "Subaccount $subaccountId processed successfully" -Level "SUCCESS"
+    # Only wait for service to be ready if a new instance was created
+    if ($serviceResult -eq "created") {
+        Write-Log "Waiting for service instance to be ready..."
+        Start-Sleep -Seconds 5
     }
-    else {
-        $failureCount++
-        Write-Log "Subaccount $subaccountId partially completed (service created, key failed)" -Level "WARNING"
+    
+    # Handle key rotation based on mode
+    $existingKeyObjects = Get-CfServiceKeysWithDetails -InstanceName $instanceName
+    $existingKeys = @($existingKeyObjects | ForEach-Object { $_.name })
+    $keyExists = $existingKeys -contains $keyName
+    
+    if ($KeyRotationMode -eq "Cleanup") {
+        # Cleanup mode: Keep only the newest key, delete all others
+        Write-Log "Running in Cleanup mode: Removing old service keys..."
+        
+        if ($existingKeyObjects.Count -gt 1) {
+            # Sort by created_at timestamp, oldest first
+            $sortedKeys = $existingKeyObjects | Sort-Object created_at
+            $keysToDelete = $sortedKeys[0..($sortedKeys.Count-2)]
+            $newestKey = $sortedKeys[-1]
+            
+            Write-Log "Keeping newest key: $($newestKey.name) (created: $($newestKey.created_at))" -Level "INFO"
+            Write-Log "Deleting $($keysToDelete.Count) old key(s)..." -Level "INFO"
+            
+            foreach ($oldKey in $keysToDelete) {
+                Write-Log "Deleting old service key: $($oldKey.name) (created: $($oldKey.created_at))"
+                $deleted = Remove-CfServiceKey -KeyGuid $oldKey.guid -KeyName $oldKey.name
+                
+                if (-not $deleted) {
+                    Write-Log "Failed to delete service key '$($oldKey.name)'" -Level "WARNING"
+                }
+            }
+            
+            $successCount++
+            Write-Log "Cleanup completed for subaccount $subaccountId" -Level "SUCCESS"
+        } else {
+            Write-Log "Only one or no keys exist, nothing to clean up" -Level "INFO"
+            $successCount++
+        }
+        
+        # Skip to next subaccount in cleanup mode (no key creation)
+        Start-Sleep -Seconds 2
+        continue
     }
+    
+    # Handle key creation based on whether KeyRotationMode was specified
+    $keyCreated = $false
+    $reusingExistingKey = $false
+    
+    if ($keyExists) {
+        if ($KeyRotationMode -eq "CreateNewKey") {
+            # CreateNewKey mode explicitly requested - generate timestamped key name
+            $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+            $keyName = "$InstanceName-key-$timestamp"
+            Write-Log "Key rotation requested. Creating new key with timestamp: $keyName" -Level "INFO"
+        } else {
+            # No KeyRotationMode specified - reuse existing key, skip creation but allow exports
+            Write-Log "Service key '$keyName' already exists. Reusing existing key." -Level "INFO"
+            Write-Log "To create a new key, use -KeyRotationMode CreateNewKey" -Level "INFO"
+            $reusingExistingKey = $true
+        }
+    }
+    
+    # Create service key (only if key doesn't exist, or CreateNewKey mode was explicitly requested)
+    if (-not $reusingExistingKey) {
+        $keyCreated = New-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        
+        if (-not $keyCreated) {
+            $failureCount++
+            continue
+        }
+        
+        # Wait for service key to be provisioned by the service broker
+        # The auditlog-management service broker needs time to generate credentials
+        Write-Log "Waiting for service key credentials to be provisioned..."
+        Start-Sleep -Seconds 5
+    }
+    
+    # Export credentials to CSV if requested
+    if ($ExportCredentialsToCsv) {
+        Write-Log "Retrieving service key for CSV export..."
+        $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        
+        if ($null -ne $serviceKey) {
+            $credentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
+            
+            if ($null -ne $credentials) {
+                $exported = Export-ServiceKeyToCsv -CsvPath $CsvPath -SubaccountId $subaccountId -Credentials $credentials
+                
+                if ($exported) {
+                    Write-Log "Credentials exported to CSV for subaccount $subaccountId" -Level "SUCCESS"
+                } else {
+                    Write-Log "Failed to export credentials to CSV" -Level "WARNING"
+                }
+            } else {
+                Write-Log "Failed to extract credentials from service key" -Level "WARNING"
+            }
+        } else {
+            Write-Log "Failed to retrieve service key for export" -Level "WARNING"
+        }
+    }
+    
+    # Export credentials to Key Vault if requested
+    if ($ExportCredentialsToKeyVault) {
+        Write-Log "Retrieving service key for Key Vault export..."
+        
+        # Only retrieve service key if not already retrieved for CSV
+        if ($null -eq $serviceKey) {
+            $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        }
+        
+        if ($null -ne $serviceKey) {
+            # Only extract credentials if not already extracted for CSV
+            if ($null -eq $credentials) {
+                $credentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
+            }
+            
+            if ($null -ne $credentials) {
+                $exported = Export-ServiceKeyToKeyVault -KeyVaultName $KeyVaultName -SubaccountId $subaccountId -Credentials $credentials
+                
+                if ($exported) {
+                    Write-Log "Credentials exported to Key Vault for subaccount $subaccountId" -Level "SUCCESS"
+                } else {
+                    Write-Log "Failed to export credentials to Key Vault" -Level "WARNING"
+                }
+            } else {
+                Write-Log "Failed to extract credentials from service key" -Level "WARNING"
+            }
+        } else {
+            Write-Log "Failed to retrieve service key for export" -Level "WARNING"
+        }
+    }
+    
+    $successCount++
+    Write-Log "Subaccount $subaccountId processed successfully" -Level "SUCCESS"
     
     # Small delay between subaccounts
     Start-Sleep -Seconds 2

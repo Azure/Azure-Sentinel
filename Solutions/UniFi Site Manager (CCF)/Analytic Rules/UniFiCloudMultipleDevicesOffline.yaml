@@ -1,0 +1,68 @@
+id: 9283b576-5350-fca1-3979-dacb6acd1d16
+name: "UniFi Site Manager: Multiple Devices Offline"
+description: |
+  Identifies when multiple UniFi devices go offline simultaneously, typically signaling a power outage, upstream connectivity failure, or infrastructure issue requiring investigation.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Devices_CL
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+  - T1499
+subTechniques:
+  - T1499.002
+query: |
+  let prev_offline_ids = Unifi_SiteManager_Devices_CL
+      | where TimeGenerated between (ago(45m) .. ago(15m))
+      | summarize arg_max(TimeGenerated, *) by Id
+      | where Status == "offline"
+      | distinct Id;
+  Unifi_SiteManager_Devices_CL
+  | where TimeGenerated > ago(15m)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where Status == "offline"
+  | extend IsNew = Id !in (prev_offline_ids)
+  | summarize
+      OfflineDeviceCount = count(),
+      NewlyOfflineCount = countif(IsNew),
+      OfflineDevices = make_list(coalesce(Name, Id)),
+      NewlyOfflineDevices = make_list_if(coalesce(Name, Id), IsNew),
+      ProductLines = make_set(ProductLine)
+  | where OfflineDeviceCount >= 3
+  | where NewlyOfflineCount > 0
+  | extend
+      TimeGenerated = now(),
+      OfflineDeviceList = strcat_array(OfflineDevices, ", "),
+      NewlyOfflineList = strcat_array(NewlyOfflineDevices, ", "),
+      AffectedProductLines = strcat_array(ProductLines, ", ")
+  | extend Activity = strcat(NewlyOfflineCount, ' device(s) newly offline (', OfflineDeviceCount, ' total offline): ', NewlyOfflineList)
+  | project
+      TimeGenerated,
+      OfflineDeviceCount,
+      NewlyOfflineCount,
+      OfflineDeviceList,
+      NewlyOfflineList,
+      AffectedProductLines,
+      Activity
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AffectedProductLines
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.3

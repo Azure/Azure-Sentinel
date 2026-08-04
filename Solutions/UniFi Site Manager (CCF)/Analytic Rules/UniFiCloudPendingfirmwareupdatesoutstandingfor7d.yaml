@@ -1,0 +1,43 @@
+id: d943d401-861e-7186-d42c-c505fbf7c619
+name: "UniFi Site Manager: Pending firmware updates outstanding for 7d+"
+description: |
+  Identifies sites with pending firmware updates outstanding continuously for the last 7 days, indicating patch debt that should be scheduled.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Sites_CL
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+subTechniques: []
+query: |
+  Unifi_SiteManager_Sites_CL
+        | where TimeGenerated > ago(7d)
+  | extend pendingUpdates = PendingUpdateDevices
+        | summarize MinPending = min(pendingUpdates), MaxPending = max(pendingUpdates), arg_max(TimeGenerated, pendingUpdates) by SiteId, SiteName
+        | where MinPending > 0
+        | extend Activity = strcat('Pending updates sustained - current ', pendingUpdates, ' device(s)')
+        | project TimeGenerated, SiteId, SiteName, Activity, PendingDevices = pendingUpdates
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteId
+      - identifier: DnsDomain
+        columnName: SiteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.1

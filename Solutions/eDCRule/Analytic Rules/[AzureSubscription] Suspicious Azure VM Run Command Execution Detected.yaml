@@ -1,0 +1,175 @@
+id: 6fa564ac-dfb7-4753-a49b-5fc919866c28
+name: "[AzureSubscription] Suspicious Azure VM Run Command Execution Detected"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects Azure VM Run Command execution correlated with unusual sign-in behavior from UEBA. This can indicate administrative abuse or post-compromise activity.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+  - CredentialAccess
+relevantTechniques:
+  - T1570
+  - T1212
+query: |
+  AzureActivity
+  // Isolate run command actions
+  | where OperationNameValue =~ "MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION"
+  // Confirm that the operation impacted a virtual machine
+  | where Authorization has "virtualMachines"
+  // Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).
+  | summarize
+      StartTime=min(TimeGenerated),
+      EndTime=max(TimeGenerated),
+      max(CallerIpAddress),
+      make_list(ActivityStatusValue)
+      by CorrelationId, Authorization, Caller, OperationNameValue
+  // Limit to Run Command executions that Succeeded
+  | where list_ActivityStatusValue has_any ("Success", "Succeeded")
+  // Extract data from the Authorization field
+  | extend Authorization_d = parse_json(Authorization)
+  | extend Scope = Authorization_d.scope
+  | extend Scope_s = split(Scope, "/")
+  | extend Subscription = tostring(Scope_s[2])
+  | extend VirtualMachineName = tostring(Scope_s[-1])
+  | project
+      StartTime,
+      EndTime,
+      Subscription,
+      VirtualMachineName,
+      CorrelationId,
+      Caller,
+      CallerIpAddress=max_CallerIpAddress,
+      OperationNameValue
+  // Create a join key using  the Caller (UPN)
+  | extend joinkey = tolower(Caller)
+  // Join the Run Command actions to UEBA data
+  | join kind = inner (
+      BehaviorAnalytics
+      // We are specifically interested in unusual logins
+      | where EventSource == "Azure AD" and ActivityInsights.ActionUncommonlyPerformedByUser == "True"
+      | project
+          UEBAEventTime=TimeGenerated,
+          UEBAActionType=ActionType,
+          UserPrincipalName,
+          UEBASourceIPLocation=SourceIPLocation,
+          UEBAActivityInsights=ActivityInsights,
+          UEBAUsersInsights=UsersInsights
+      | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)
+      | extend joinkey = tolower(UserPrincipalName)
+      )
+      on joinkey
+  // Create a window around the UEBA event times, check to see if the Run Command action was performed within them
+  | extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 6h
+  | where StartTime between (UEBAWindowStart .. UEBAWindowEnd)
+  | project
+      StartTime,
+      EndTime,
+      Subscription,
+      VirtualMachineName,
+      Caller,
+      CallerIpAddress,
+      UEBAEventTime,
+      UEBAActionType,
+      UEBASourceIPLocation,
+      UEBAActivityInsights,
+      UEBAUsersInsights,
+      OperationNameValue
+  | extend
+      AccountName = tostring(split(Caller, "@")[0]),
+      AccountUPNSuffix = tostring(split(Caller, "@")[1])
+  | extend Source_Network_IPLocation = ""
+  | project
+          Alert_Category_en = "Azure Subscription",
+      Alert_SubCategory_en = "Anomaly User Access Resource",
+      Alert_Name_en = "Suspicious Azure VM Run Command Execution Detected",
+      Alert_Description_en=
+      strcat(
+      "At Taiwan time: ",
+      format_datetime(datetime_utc_to_local(StartTime, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+      ", detected user  ",
+      iff(isnotempty(Caller), Caller, "<NoCaller>"),
+      "  in subscription  ",
+      iff(isnotempty(Subscription), Subscription, "<NoSubscription>"),
+      "  executed against virtual machine  ",
+      iff(isnotempty(VirtualMachineName), VirtualMachineName, "<NoVM>"),
+      "  successfully performed Run Command operation: ",
+      OperationNameValue,
+      ". Source IP: ",
+      iff(isnotempty(CallerIpAddress), CallerIpAddress, "<NoIP>"),
+      ". The user was also flagged by UEBA detection for uncommon behavior: ",
+      iff(isnotempty(UEBAActionType), UEBAActionType, "<NoUEBAType>"),
+      ", source location: ",
+      iff(isnotempty(UEBASourceIPLocation), UEBASourceIPLocation, "<NoLocation>"),
+      ", indicating this administrative operation has potential account abuse risk."
+  ),
+      Alert_TriageStep_en=
+      strcat(
+      "1. Confirm whether user  ",
+      iff(isnotempty(Caller), Caller, "<NoCaller>"),
+      "  is a legitimate operator/maintainer of the VM, and check whether there is a corresponding change or maintenance ticket.",
+      "2. Review whether Run Command is an expected command and confirm whether it involves download, account creation, service modification, or persistence behavior.",
+      "3. Compare source IP  ",
+      iff(isnotempty(CallerIpAddress), CallerIpAddress, "<NoIP>"),
+      "  with the location flagged by UEBA ",
+      iff(isnotempty(UEBASourceIPLocation), UEBASourceIPLocation, "<NoLocation>"),
+      "  to determine whether it is abnormal (VPN, uncommon location, jump server)."
+  ),
+      Alert_Containment_en=
+      strcat(
+      "1. If confirmed as an unauthorized operation, immediately revoke user  ",
+      iff(isnotempty(Caller), Caller, "<NoCaller>"),
+      " 's existing sign-in sessions and access tokens, and force re-authentication or suspend the account.",
+      "2. Temporarily remove the account's administrative permissions on the target virtual machine (such as Virtual Machine Contributor / Owner) to prevent Run Command from being executed again.",
+      "3. For source IP  ",
+      iff(isnotempty(CallerIpAddress), CallerIpAddress, "<NoIP>"),
+      "  block it or increase Conditional Access restrictions to prevent continued abuse.",
+      "4. Depending on the risk level, isolate the affected VM and perform cybersecurity forensics to prevent lateral movement or malicious persistence."
+  ),
+      Alert_Remediation_en=
+      strcat(
+      "1. Apply the least privilege principle to all roles that can execute Run Command, and manage high-privilege accounts through PIM/JIT.",
+      "2. Strengthen Conditional Access policies by requiring management operations to pass MFA, device compliance, and named location checks, and block uncommon location sign-ins.",
+      "3. Establish real-time alerts and automated response for Run Command-related activity, such as revoking sessions, disabling accounts, and notifying SOC.",
+      "4. Ensure Defender for Cloud and EDR are enabled on virtual machines, and regularly audit scheduled tasks, services, and startup items on VMs to avoid malicious command remnants.",
+      "5. Reduce the risk of hosts being exploited again through known vulnerabilities by applying regular security patches and vulnerability updates."
+  ),
+              Alert_Time_TW = datetime_utc_to_local(StartTime, "Asia/Taipei"),
+      Alert_Time_UTC0 = StartTime,
+      Event_TimeRange_Start_TW = datetime_utc_to_local(StartTime, 'Asia/Taipei'),
+      Event_TimeRange_End_TW = datetime_utc_to_local(EndTime, 'Asia/Taipei'),
+      Event_TimeRange_Start_UTC0 = StartTime,
+      Event_TimeRange_End_UTC0 = EndTime,
+      Event_Action = OperationNameValue,
+      //Event_Code = score,
+      Source_Identity_FullName = Caller,
+      //Source_Identity_ID = ActorID,
+      Source_Identity_Type = iff(Caller contains '@', "User", "Service"),
+      Source_Network_IPAddress = CallerIpAddress,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Target_Device_Name = VirtualMachineName,
+      Target_Resource_ID = Subscription,
+      Target_Resource_Type = "Azure Subscription"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Target_Device_Name
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+

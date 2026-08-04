@@ -25,6 +25,28 @@ function GetCatalogDetails($offerId)
                 return $null;
             }
             else {
+                # Handle case where multiple offers are returned with same OfferId
+                if ($offerDetails -is [System.Object[]] -and $offerDetails.Count -gt 1)
+                {
+                    Write-Host "Multiple offers found for offerId $offerId. Matching by publisherId from baseMetadata."
+                    $matched = $offerDetails | Where-Object { $_.publisherId -eq $baseMetadata.publisherId }
+                    if ($null -ne $matched)
+                    {
+                        if ($matched -is [System.Object[]])
+                        {
+                            $offerDetails = $matched[0]
+                        }
+                        else
+                        {
+                            $offerDetails = $matched
+                        }
+                    }
+                    else
+                    {
+                        Write-Host "No offer matched publisherId '$($baseMetadata.publisherId)'. Defaulting to first offer."
+                        $offerDetails = $offerDetails[0]
+                    }
+                }
                 Write-Host "CatalogAPI Details found for offerId $offerId"
                 return $offerDetails;
             }
@@ -137,7 +159,7 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
         [int]$defaultMajor = $defaultMajor
         [int]$defaultMinor = $defaultMinor
         [int]$defaultBuild = $defaultBuild
-
+        
         if ($userInputMajor -ge 3) {
             # Version 3.x.x or higher: use user input if minor and build are greater than default
             if ($userInputMinor -ge $defaultMinor -and $userInputBuild -gt $defaultBuild) {
@@ -196,9 +218,14 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
                 {
                     $identifiedOfferVersion = $offerMetadataVersion
                     $catalogMajor,$catalogminor,$catalogbuild,$catalogrevision = $identifiedOfferVersion.split(".")
-                    $defaultMajor,$defaultminor,$defaultbuild,$defaultrevision = $setPackageVersion.split(".")
-
-                    if ($defaultMajor -gt $catalogMajor -and $defaultminor -gt $catalogminor -and $defaultbuild -ge $catalogbuild)
+                    $defaultMajor,$defaultMinor,$defaultBuild,$defaultrevision = $setPackageVersion.split(".")
+                    
+                    if($catalogMajor -le 3)
+                    {
+                        Write-Host "Package version $setPackageVersion greater then the CatalogAPI version so $defaultVersionMessage"
+                        return $setPackageVersion
+                    }
+                    elseif ($defaultMajor -gt $catalogMajor -and $defaultMinor -gt $catalogminor -and $defaultBuild -ge $catalogbuild)
                     {
                         # eg: 3.0.0 > 2.0.1 ==> 3.0.0 or 3.1.2 > 3.1.1 ==> 3.1.2
                         Write-Host "Package version $setPackageVersion greater then the CatalogAPI version so $defaultVersionMessage"

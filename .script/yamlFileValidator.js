@@ -3,7 +3,7 @@ import yaml from "js-yaml";
 import fs from "fs";
 import * as logger from "./utils/logger.js";
 export async function IsValidYamlFile(filePath) {
-    yaml.safeLoad(fs.readFileSync(filePath, "utf8"));
+    yaml.load(fs.readFileSync(filePath, "utf8"));
     return 0 /* ExitCode.SUCCESS */;
 }
 let fileTypeSuffixes = ["yaml", "yml"];

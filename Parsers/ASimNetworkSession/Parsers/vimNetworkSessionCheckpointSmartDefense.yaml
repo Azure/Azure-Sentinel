@@ -1,0 +1,210 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Check Point Smart Defense
+  Version: '0.1.0'
+  LastUpdated: Mar 30, 2026
+Product:
+  Name: CheckPointSmartDefense
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.7'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Field Description in Check Point Logs 
+    Link: https://supportcenter.checkpoint.com/supportcenter/portal?eventSubmit_doGoviewsolutiondetails=&solutionid=sk144192
+Description: |
+  This ASIM parser supports normalizing Check Point Smart Defense logs coming from CEF Data Connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionCheckPointSmartDefense                               
+EquivalentBuiltInParser: _Im_NetworkSession_CheckPointSmartDefense                                
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstportnumber:int=int(null),
+    hostname_has_any:dynamic=dynamic([]), 
+    dvcaction:dynamic=dynamic([]),
+    eventresult:string='*', disabled: bool, pack: bool) {
+    let DvcActionLookup = datatable (DvcOriginalAction: string, DvcAction: string) [
+        "Reject", "Deny",
+        "Drop", "Drop",
+        "Accept", "Allow",
+        "Prevent", "Deny",
+        "Detect", "Deny"
+    ];
+    let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [
+        "Low", "Low",
+        "Medium", "Medium",
+        "Very-High", "High",
+        "High", "High",
+        "Unknown", ""
+    ];
+    let ThreatConfidenceLookup = datatable (ThreatOriginalConfidence: int, ThreatConfidenceNew: int) [
+        0, 0,
+        1, 20,
+        2, 40,
+        3, 60,
+        4, 80,
+        5, 100
+    ];
+    let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    CommonSecurityLog
+    | where not(disabled)
+    | where DeviceVendor == "Check Point" and DeviceProduct == "SmartDefense"
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and ((array_length(hostname_has_any) == 0) or SourceHostName has_any (hostname_has_any))
+            and (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+    | extend
+        temp_isSrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any), 
+        temp_isDstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
+    | extend ASimMatchingIpAddr = case(
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", 
+        (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+        temp_isSrcMatch, "SrcIpAddr",
+        temp_isDstMatch, "DstIpAddr",
+        "No match"
+    )
+    | where ASimMatchingIpAddr != "No match"
+    | extend
+        EventSchema = "NetworkSession",
+        EventSchemaVersion = "0.2.7",
+        EventCount = coalesce(EventCount, int(1)),
+        Type = "CommonSecurityLog",
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventVendor = "CheckPoint",
+        EventType = "NetworkSession"
+    | project-rename
+        EventProduct = DeviceProduct,
+        SrcIpAddr = SourceIP,
+        SrcPortNumber = SourcePort,
+        SrcUsername = SourceUserName,
+        SrcHostname = SourceHostName,
+        DstIpAddr = DestinationIP,
+        DstPortNumber = DestinationPort,
+        EventOriginalSeverity = LogSeverity,
+        EventMessage = Message,
+        SrcBytes = SentBytes,
+        DstBytes = ReceivedBytes,
+        DvcOriginalAction = DeviceAction,
+        EventOriginalSubType = Activity,
+        SrcAppName = SourceServiceName
+    | lookup EventSeverityLookup on EventOriginalSeverity
+    | lookup DvcActionLookup on DvcOriginalAction
+    | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+    | parse-kv AdditionalExtensions as (version: string, rule: string, rule_name: string, loguid: string, originsicname: string, origin: string) with (kv_delimiter="=", pair_delimiter=";")
+    | parse originsicname with "CN\\=" DvcHostname "," *
+    | project-rename
+        Dvc = origin,
+        EventOriginalUid = loguid
+    | extend
+        EventResult = iff(DvcAction == "Allow" or DvcAction == "", "Success", "Failure")
+    | where ((eventresult == "*") or (EventResult == eventresult))
+    | extend
+        SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+        NetworkRuleName = rule_name,
+        NetworkRuleNumber = toint(rule),
+        EventProductVersion = version,
+        NetworkDirection = case(
+            CommunicationDirection == "1", "Inbound",
+            CommunicationDirection == "0", "Outbound",
+            "NA"
+        ),
+        AdditionalFields = bag_pack(
+            "Performance Impact", iff(FlexNumber2Label == "Performance Impact", FlexNumber2, toint("")),
+            "Threat Prevention Rule Name", iff(DeviceCustomString1Label == "Threat Prevention Rule Name", DeviceCustomString1, ""),
+            "Protection ID", iff(DeviceCustomString2Label == "Protection ID", DeviceCustomString2, ""),
+            "Protection Type", iff(DeviceCustomString3Label == "Protection Type", DeviceCustomString3, ""),
+            "Threat Prevention Rule ID", iff(DeviceCustomString4Label == "Threat Prevention Rule ID", DeviceCustomString4, ""),
+            "Protection Name", iff(DeviceCustomString4Label == "Protection Name", DeviceCustomString4, "")
+        )
+    | extend
+        ThreatOriginalConfidence = iff(FlexNumber1Label == "Confidence", FlexNumber1, toint("")),
+        ThreatName = iff(FlexString2Label == "Attack Information", FlexString2, "")
+    | lookup ThreatConfidenceLookup on ThreatOriginalConfidence
+    | extend
+        ThreatOriginalConfidence = tostring(ThreatOriginalConfidence),
+        ThreatConfidence = ThreatConfidenceNew,
+        IpAddr = SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventSchema,
+        EventSchemaVersion,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventVendor,
+        EventProduct,
+        EventType,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcUsername,
+        SrcHostname,
+        DstIpAddr,
+        DstPortNumber,
+        EventOriginalSeverity,
+        EventMessage,
+        SrcBytes,
+        DstBytes,
+        DvcOriginalAction,
+        EventOriginalSubType,
+        SrcAppName,
+        EventSeverity,
+        DvcAction,
+        DvcHostname,
+        Dvc,
+        EventOriginalUid,
+        SrcUsernameType,
+        NetworkRuleName,
+        NetworkRuleNumber,
+        EventProductVersion,
+        EventResult,
+        NetworkDirection,
+        AdditionalFields,
+        ThreatOriginalConfidence,
+        ThreatName,
+        ThreatConfidence,
+        IpAddr,
+        ASimMatchingIpAddr
+  };
+  parser(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled, pack=pack)

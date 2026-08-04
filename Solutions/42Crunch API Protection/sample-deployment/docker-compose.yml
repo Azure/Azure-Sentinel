@@ -1,0 +1,106 @@
+version: '3.4'
+
+# 42Crunch API Protection - CCF Sample Deployment
+#
+# Replaces the legacy FW2LA (Workspace ID + Primary Key) stack with CCF push
+# connector (OAuth2 Entra ID + DCE/DCR). The guardian firewall writes log files
+# to a shared volume; the ccf-forwarder reads those files and pushes events to
+# Azure Monitor.
+#
+# Prerequisites:
+#   1. Deploy the ARM template from Sentinel Data Connectors blade
+#   2. Click "Deploy 42Crunch API Protection connector resources" to create the
+#      DCE, DCR, table, and Entra app - copy the output values into .env
+#   3. Copy .env.example to .env and fill in your Azure credentials
+#   4. Run: docker compose up
+#
+# Note: Set PROTECTION_TOKEN in your .env file (obtained from platform.42crunch.com).
+#       Remove PLATFORM_CONNECTIVITY=NONE to connect to the 42Crunch platform (live mode).
+#       To run in offline mode (no token required), set PROTECTION_TOKEN=NOTUSED and
+#       uncomment PLATFORM_CONNECTIVITY=NONE below.
+
+services:
+
+  # ── httpbin backend API ─────────────────────────────────────────────────────
+  # The API being protected. The firewall proxies traffic to this container.
+  api:
+    image: kennethreitz/httpbin
+    restart: on-failure
+    expose:
+      - "80"
+
+  # ── 42Crunch API Firewall ────────────────────────────────────────────────────
+  # Production firewall image (actively maintained). Connects to the 42Crunch
+  # platform using PROTECTION_TOKEN. Writes transaction logs to /opt/guardian/logs/Local/
+  api-firewall:
+    image: 42crunch/apifirewall:latest
+    pull_policy: always
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    expose:
+      - "8080"
+    volumes:
+      - firewall-logs:/opt/guardian/logs:rw
+    stop_grace_period: 1s
+    command: ["/bin/squire", "-platform", "protection.trials.42crunch.com:8001"]
+    environment:
+      - PROTECTION_TOKEN=${PROTECTION_TOKEN}
+      # - PLATFORM_CONNECTIVITY=NONE  # uncomment to run in offline mode (no token required)
+      - LISTEN_NO_TLS=true
+      - LISTEN_PORT=8080
+      - GUARDIAN_NODE_NAME=Local
+      - SERVER_NAME=localhost
+      - TARGET_URL=http://api:80
+      - LOG_LEVEL=INFO
+      - LOG_DESTINATION=FILES
+    depends_on:
+      - api
+
+  # ── CCF Log Forwarder (custom – replaces 42c-fw-2la) ────────────────────────
+  # Reads guardian JSON transaction logs and pushes events to Azure Monitor
+  # DCE/DCR using OAuth2 client credentials (Entra ID).
+  #
+  # Field mapping (guardian JSON → CCF table column):
+  #   uuid                          → Uuid
+  #   pod.instance_name             → InstanceName
+  #   date_epoch (microseconds)     → Timestamp
+  #   api                           → ApiId
+  #   non_blocking_mode             → NonBlockingMode
+  #   source_ip / source_port       → SourceIp / SourcePort
+  #   destination_port              → DestinationPort
+  #   hostname                      → Hostname
+  #   uri_path                      → UriPath
+  #   method                        → (not in CCF schema)
+  #   status                        → Status
+  #   query                         → Query
+  #   params.request_header         → RequestHeader
+  #   params.response_header        → ResponseHeader
+  #   errors                        → Errors (JSON string)
+  #   errors[-1].message            → ErrorMessage
+  #   log_type (1=api / 2=unknown)  → EventType ("request" / "unknown")
+  ccf-forwarder:
+    build: "./ccf-forwarder"
+    restart: on-failure
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    volumes:
+      - firewall-logs:/opt/guardian/logs:ro
+      - forwarder-state:/app/.state:rw
+    environment:
+      - TENANT_ID=${TENANT_ID}
+      - CLIENT_ID=${CLIENT_ID}
+      - CLIENT_SECRET=${CLIENT_SECRET}
+      - DCE_ENDPOINT=${DCE_ENDPOINT}
+      - DCR_IMMUTABLE_ID=${DCR_IMMUTABLE_ID}
+      - DCR_STREAM_NAME=Custom-FortyTwoCrunchAPIProtectionV2_CL
+      - LOGS_FOLDER=/opt/guardian/logs
+      - STATE_FOLDER=/app/.state
+      - TICK_INTERVAL=10
+    depends_on:
+      - api-firewall
+
+volumes:
+  firewall-logs:
+  forwarder-state:

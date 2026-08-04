@@ -1,0 +1,46 @@
+id: 85db7cdc-378e-48b9-b6cf-77fd622aa617
+name: Valimail Enforce - Bulk Domain Changes by Single User
+description: |
+  Hunt for users who have made configuration changes to an unusually high number
+  of domains in a short period. May indicate a compromised admin account or
+  unauthorized bulk reconfiguration.
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+  - T1098
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+query: |
+  // Flag users who touched more than this many distinct domains within the timeframe
+  let threshold = 5;
+  let timeframe = 1d;
+  ValimailEnforceEvents_CL
+  | where PerformedAt > ago(timeframe)
+  | where IsHighValueEvent == true
+  | summarize
+      DomainCount = dcount(Subject),
+      Domains = make_set(Subject),
+      Actions = make_set(EventType),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt)
+    by User
+  | where DomainCount > threshold
+  | extend
+      AccountName = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1])
+  | project FirstSeen, LastSeen, User, AccountName, AccountDomain, DomainCount, Domains, Actions
+  | order by DomainCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+version: 1.0.0

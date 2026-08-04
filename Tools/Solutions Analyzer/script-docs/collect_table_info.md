@@ -4,12 +4,13 @@
 
 ## Overview
 
-Collects comprehensive table metadata from Microsoft Azure Monitor documentation sources:
+Collects comprehensive table metadata from Microsoft documentation sources:
 
 - Azure Monitor Logs table reference
 - Microsoft Defender XDR schema reference
 - Table feature support information
 - Ingestion API compatibility
+- Microsoft Sentinel data connectors reference (lake-only ingestion, DCR support)
 
 The collected data is saved to `tables_reference.csv` which is used by:
 - **`map_solutions_connectors_tables.py`** - To enrich table metadata in `tables.csv` and determine collection methods
@@ -54,30 +55,27 @@ python collect_table_info.py --skip-details
 
 ## Output Files
 
-### tables_reference.csv
+See [`csv/`](csv/README.md) for full per-file documentation.
 
-Comprehensive CSV with table metadata:
+| File | Description | Doc |
+|------|-------------|-----|
+| `tables_reference.csv` | Comprehensive table metadata fetched from Microsoft documentation | [`csv/tables_reference.md`](csv/tables_reference.md) |
+| `la_table_schemas.csv` | Column-level schemas from Azure Monitor and Defender XDR rendered HTML pages (only when `--skip-details` is **not** used) | [`csv/la_table_schemas.md`](csv/la_table_schemas.md) |
 
-| Column | Description |
-|--------|-------------|
-| `table_name` | Table name |
-| `description` | Table description from documentation |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) |
-| `support_tier` | Support tier (from overrides) |
-| `collection_method` | Data collection method (from resource_types or overrides) |
-| `solutions` | Associated Log Analytics solutions |
-| `resource_types` | Azure resource types that emit to this table |
-| `table_type` | Table type (e.g., Microsoft, Azure, Custom) |
-| `source_azure_monitor` | Whether table is in Azure Monitor reference |
-| `source_defender_xdr` | Whether table is in Defender XDR schema |
-| `xdr_only` | Whether table is only available in Defender XDR (not in Azure Monitor) |
-| `source_feature_support` | Whether table has feature support info |
-| `source_ingestion_api` | Whether table supports ingestion API |
-| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
-| `defender_xdr_doc_link` | Link to Defender XDR documentation |
-| `basic_logs_eligible` | Whether table supports Basic Logs plan |
-| `supports_transformations` | Whether ingestion-time transformations are supported |
-| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
+## Transformation Support Enrichment
+
+The `supports_transformations` field is populated from two sources:
+1. **Primary**: [Tables Feature Support](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support) page
+2. **Fallback**: [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) (used when primary source has no data)
+
+When both sources have data for a table, the script validates consistency and generates a `transformation_support_mismatch_report.md` file if any discrepancies are found.
+
+## Custom Log Table Rules
+
+Custom log tables (tables with a `_CL` suffix) are not listed in Microsoft's standard reference documentation, so their capabilities cannot be determined from the parsed sources. The following rules are applied after merging all sources:
+
+- **Ingestion API**: All `_CL` tables are marked as supporting the Ingestion API (`ingestion_api_supported = Yes`), since custom log tables are created via DCR-based ingestion.
+- **Transformations**: `_CL` tables that support lake-only ingestion are also marked as supporting transformations, since lake-only ingestion requires DCR pipeline support which includes transformations.
 
 ## Override System
 
@@ -107,7 +105,7 @@ The script uses file-based caching to minimize network requests:
 
 ```bash
 # Clear cache and fetch fresh data
-python collect_table_info.py --clear-cache
+python collect_table_info.py --refresh-cache
 
 # Use shorter cache TTL (e.g., 1 day = 86400 seconds)
 python collect_table_info.py --cache-ttl 86400
@@ -121,9 +119,12 @@ The script collects table information from the following Microsoft documentation
 |--------|-----|----------------------|
 | Azure Monitor Tables (by category) | [tables-category](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-category) | Table names, categories, documentation links |
 | Individual Table Reference Pages | [tables/{tablename}](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/) | Description, categories, solutions, resource types, basic log eligibility |
+| Rendered Table Reference Pages | [tables/{tablename}](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/) (HTML) | Column names, types, descriptions (for `la_table_schemas.csv`) |
 | Defender XDR Schema | [advanced-hunting-schema-tables](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables) | Table names, descriptions, Defender documentation links |
+| Rendered Defender XDR Pages | [advanced-hunting-{tablename}-table](https://learn.microsoft.com/en-us/defender-xdr/) (HTML) | Column names, types, descriptions (for `la_table_schemas.csv`) |
 | Tables Feature Support | [tables-feature-support](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tables-feature-support) | Tables that support ingestion-time transformations |
 | Logs Ingestion API | [logs-ingestion-api-overview](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview) | Tables that support ingestion via Data Collector API |
+| Sentinel Tables/Connectors | [sentinel-tables-connectors](https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference) (include file) | DCR support and lake-only ingestion support |
 
 ## Collection Method Detection
 
@@ -139,8 +140,8 @@ This information is then used by `map_solutions_connectors_tables.py` when deter
 
 The recommended order of script execution:
 
-1. **`collect_table_info.py`** - Generate `tables_reference.csv` with Azure Monitor metadata
-2. **`map_solutions_connectors_tables.py`** - Generate connector mappings (uses `tables_reference.csv`)
-3. **`generate_connector_docs.py`** - Generate documentation (uses both CSVs)
+1. **`collect_table_info.py`** - Generate `tables_reference.csv` (table metadata) and `la_table_schemas.csv` (column schemas)
+2. **`map_solutions_connectors_tables.py`** - Generate connector mappings (uses `tables_reference.csv` and `la_table_schemas.csv`)
+3. **`generate_connector_docs.py`** - Generate documentation (uses all CSVs)
 
 The documentation generator (`generate_connector_docs.py`) automatically runs the first two scripts if needed, unless `--skip-input-generation` is specified.

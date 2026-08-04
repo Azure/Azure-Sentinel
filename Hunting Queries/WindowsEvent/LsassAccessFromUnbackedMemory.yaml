@@ -1,0 +1,136 @@
+id: a1b305af-363b-4b70-a3be-ca54ad3a088c
+name: Process accessed LSASS from unbacked memory
+description: Identifies processes accessing LSASS from unmapped or unbacked memory regions. This physics-based behavior strongly indicates process hollowing or shellcode injection credential dumping, bypassing standard hooks without relying on file-backed binaries.
+description-detailed: |
+  NOTE: This rule requires Sysmon Event ID 10 to capture this in the CallTrace field as 'UNKNOWN(...)'. 
+  When an adversary injects shellcode into a process or uses process hollowing, the injected code runs from an unmapped/unbacked memory region (not backed by a legitimate .DLL on disk). When this unbacked code calls APIs like MiniDumpWriteDump to read the LSASS process, the OS kernel records the originating memory region. 
+  
+  This query focuses purely on the physics of memory architecture. Legitimate, compiled binaries will never issue API calls from unbacked memory. Catching 'UNKNOWN' in the CallTrace provides near 100% fidelity without the burden of constant maintenance or tuning.
+  References:
+  https://thedfirreport.com/2026/02/23/apache-activemq-exploit-leads-to-lockbit-ransomware
+  https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventid=90010
+  https://jeffreyappel.nl/deploy-sysmon-and-collect-data-with-sentinel-and-the-ama-agent/
+
+requiredDataConnectors:
+  - connectorId: WindowsEventForwarding
+    dataTypes:
+      - WindowsEvent
+
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003.001
+query: |
+  // DETECTION STRATEGY: Process Hollowing & Unbacked Code Injection targeting LSASS.
+  //
+  // THE MECHANIC: When an adversary injects shellcode into a process or uses process hollowing, 
+  // the injected code runs from an unmapped/unbacked memory region (not backed by a legitimate .DLL on disk). 
+  // When this unbacked code calls APIs like MiniDumpWriteDump to read the LSASS process, 
+  // the OS kernel records the originating memory region. Sysmon Event ID 10 captures this in the CallTrace field as "UNKNOWN(...)".
+  //
+  // THE RESILIENCE: Instead of playing whack-a-mole allowlisting every legitimate IT tool, backup agent, or EDR that 
+  // reads LSASS, this query focuses purely on the physics of memory architecture. Legitimate, compiled 
+  // binaries will never issue API calls from unbacked memory. Therefore, catching "UNKNOWN" in the CallTrace 
+  // provides near 100% fidelity without the burden of constant maintenance or tuning.
+
+  // Tier 1: Target Granted Access Masks
+  // Define the specific GrantedAccess masks required to dump or map process memory.
+  // We only care about processes requesting PROCESS_VM_READ (0x10) or PROCESS_QUERY_INFORMATION (0x400) combinations.
+  let SuspectAccessMasks = dynamic([
+      "0x1010",   // PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION
+      "0x1410",   // PROCESS_VM_READ | PROCESS_QUERY_INFORMATION
+      "0x1fffff", // PROCESS_ALL_ACCESS (often requested by tools like Mimikatz)
+      "0x10",     // PROCESS_VM_READ
+      "0x143a"    // Read combinations with specific thread/VM rights
+  ]);
+
+  // STEP 1: Pre-filter the dataset as aggressively as possible using inverted indexes.
+  // Filter early, extend late: Do not parse the heavy EventData JSON object until we know the row is relevant.
+  WindowsEvent
+  | where Provider == "Microsoft-Windows-Sysmon" and EventID == 10
+  // Use the highly indexed 'has' operator to pre-filter rows for our target keywords before dynamic parsing
+  | where EventData has "lsass.exe" and EventData has "UNKNOWN"
+
+  // STEP 2: Extract strictly typed fields from the dynamic EventData object.
+  // Use tostring() to ensure type safety and prevent downstream schema failures during entity mapping.
+  | extend TargetImage = tostring(EventData.TargetImage),
+          CallTrace = tostring(EventData.CallTrace),
+          GrantedAccess = tostring(EventData.GrantedAccess)
+
+  // STEP 3: Apply structural and behavioral conditions.
+  // CONDITION A: Ensure the target is definitively the LSASS process.
+  | where TargetImage endswith @"\lsass.exe"
+  // CONDITION B: Ensure the call originates from unbacked memory.
+  | where CallTrace has "UNKNOWN"
+  // CONDITION C: Ensure the process actually requested memory reading capabilities.
+  | where GrantedAccess in~ (SuspectAccessMasks)
+
+  // STEP 4: Extract and cast remaining triage context.
+  | extend SourceImage = tostring(EventData.SourceImage),
+          // Explicitly cast SourceProcessId to a string to satisfy the strict Process entity mapping schema
+          SourceProcessIdString = tostring(EventData.SourceProcessId)
+
+  // STEP 5: Tuning Guidance
+  // EXCLUSION: Filter out poorly behaved legacy applications or explicit, authorized red team tooling.
+  // Note: Legitimate software should never trigger this. Only use exclusions if absolutely necessary for business operations.
+  // | where SourceImage !in~ (
+  //     @"C:\Program Files\SomeLegacyApp\App.exe"
+  // )
+
+  // STEP 6: Format the output for triage
+  // Sanitize the output to drop the heavy dynamic EventData payload and any temporary variables.
+
+  // ANALYST ACTION: This is a near-guaranteed true positive for credential dumping. 
+  // Review the SourceImage. If it is a legitimate system binary (e.g., svchost.exe), 
+  // it has been hollowed. Isolate the Host immediately and dump memory for forensic analysis.
+
+  | project TimeGenerated, 
+            Computer, 
+            SystemUserId,
+            SourceImage,
+            SourceProcessIdString, 
+            TargetImage, 
+            GrantedAccess, 
+            CallTrace
+  // Reorder for visual left-to-right narrative: Time -> Location -> Identity -> Actor -> Evidence
+  | project-reorder TimeGenerated, 
+                    Computer,
+                    SystemUserId,
+                    SourceImage,
+                    SourceProcessIdString, 
+                    TargetImage, 
+                    GrantedAccess, 
+                    CallTrace
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: SystemUserId
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: SourceProcessIdString
+
+
+
+customDetails:
+  InjectedProcess: SourceImage
+  GrantedAccessMask: GrantedAccess
+  CallTraceDetail: CallTrace
+
+version: 1.0.0
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]

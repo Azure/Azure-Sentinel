@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-RWHOIS_DCR_NAME = "ipinfo_rule_for_RWHOIS_tables"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+RWHOIS_DCR_NAME = f"ipinfo_rule_for_RWHOIS_tables-{WORKSPACE_NAME.lower()}"
 RWHOIS_TABLE_NAME = "Ipinfo_RWHOIS_CL"
 RWHOIS_STREAM_DECLARATION = "Custom-Ipinfo_RWHOIS_CL"
 

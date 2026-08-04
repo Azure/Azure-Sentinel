@@ -1,7 +1,9 @@
 id: 279316e8-8965-47d2-9788-b94dc352c853
 name: SlackAudit - Public link created for file which can contain sensitive information.
 description: |
-  'Detects public links for files which potentialy may contain sensitive data such as passwords, authentication tokens, secret keys.'
+  'Detects public links created for files that may contain sensitive data such as passwords, authentication tokens,
+  secret keys, or private configuration files. Tune exclusions using the SlackAuditSensitiveFile_Allowlist_File and SlackAuditSensitiveFile_Allowlist_Account
+  watchlists when known benign files or accounts generate expected public-link activity.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -16,10 +18,18 @@ tactics:
   - Exfiltration
 relevantTechniques:
   - T1048
+  - T1567.002
 query: |
+  let AllowedFiles = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_File') | summarize make_set(tostring(SearchKey)));
+  let AllowedUsers = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_Account') | summarize make_set(tostring(SearchKey)));
   SlackAudit
   | where Action =~ 'file_public_link_created'
-  | where EntityFileName == 'id_rsa' or EntityFileName contains 'password' or EntityFileName contains 'key' or EntityFileName contains '_key' or EntityFileName contains '.ssh' or EntityFileName endswith '.npmrc' or EntityFileName endswith '.muttrc' or EntityFileName contains 'config.json' or EntityFileName contains '.gitconfig' or EntityFileName endswith '.netrc' or EntityFileName endswith 'package.json' or EntityFileName endswith 'Gemfile' or EntityFileName endswith 'bower.json' or EntityFileName endswith 'config.gypi' or EntityFileName endswith 'travis.yml'
+  | extend FileNameLower = tolower(EntityFileName), UserLower = tolower(SrcUserName)
+  | where EntityFileName in~ ('id_rsa')
+      or FileNameLower has_any ('password', 'secret', 'token', 'credential', 'private key', 'api key')
+      or FileNameLower has_any ('.ssh', '.npmrc', '.muttrc', '.gitconfig', '.netrc', 'package.json', 'Gemfile', 'bower.json', 'config.gypi', 'travis.yml', 'config.json')
+  | where isempty(AllowedFiles) or EntityFileName !in~ (AllowedFiles)
+  | where isempty(AllowedUsers) or UserLower !in~ (AllowedUsers)
   | extend AccountCustomEntity = SrcUserName
   | extend IPCustomEntity = SrcIpAddr
 entityMappings:
@@ -31,5 +41,15 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+alertDetailsOverride:
+  alertDisplayNameFormat: Slack public link created for sensitive file {{EntityFileName}} by {{SrcUserName}}
+  alertDescriptionFormat: Public link created for {{EntityFileName}} by {{SrcUserName}} from {{SrcIpAddr}}
+customDetails:
+  FileName: EntityFileName
+  Action: Action
+  SourceUser: SrcUserName
+  SourceIP: SrcIpAddr
+  ActorEntity: AccountCustomEntity
+  IpEntity: IPCustomEntity
+version: 1.0.1
 kind: Scheduled

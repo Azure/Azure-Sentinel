@@ -1,10 +1,13 @@
+> **⚠️ DEPRECATED — Ruby version**
+> This documentation describes the deprecated Ruby version (1.x.x) of the Microsoft Sentinel Logstash output plugin. The plugin has since been refactored from Ruby to Java (2.x.x and later), and the Ruby version is no longer actively maintained. For the current version and documentation, see [microsoft-sentinel-log-analytics-logstash-output-plugin_java](../microsoft-sentinel-log-analytics-logstash-output-plugin_java/README.md).
+
 # Microsoft Sentinel output plugin for Logstash 
 
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.1.3  
-Released on: 2024-10-10
+Plugin version: v1.2.0
+Released on: 2026-02-05
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -26,8 +29,14 @@ If you do not have a direct internet connection, you can install the plugin to a
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
-- 8.0 - 8.9
-- 8.11 - 8.15
+- 8.0 - 8.9 (NOTE: these versions require a security update, according to Logstash!)
+- 8.11 - 8.15 (NOTE: these versions require a security update, according to Logstash!)
+- 8.19.2 (NOTE: this version requires a security update, according to Logstash!)
+- 9.0.8 (NOTE: this version requires a security update, according to Logstash!)
+- 9.1.10 (NOTE: this version requires a security update, according to Logstash!)
+- 9.2.4 - 9.2.5 (NOTE: these versions require a security update, according to Logstash! [Security Update](https://discuss.elastic.co/t/logstash-8-19-14-9-2-8-9-3-3-security-update-esa-2026-29/385816))
+
+Note: The Ruby version of this plugin is deprecated. It may work with newer, up-to-date Logstash versions beyond those listed above, but compatibility with such versions is not something we guarantee or support, since this version is no longer actively maintained. For ongoing support and the latest Logstash version compatibility, use the [Java version of the plugin](../microsoft-sentinel-log-analytics-logstash-output-plugin_java/README.md).
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -51,7 +60,7 @@ Note: make sure that the path exists before creating the sample file.
 ### Configurations:
 The following parameters are optional and should be used to create a sample file.
 - **create_sample_file** - Boolean, False by default. When enabled, up to 10 events will be written to a sample json file.
-- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
+- **sample_file_path** - String, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
 
 ### Complete example
 1. set the pipeline.conf with the following configuration:
@@ -90,14 +99,25 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 1) To ingest the data to a custom table use [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs>) tutorial. Note that as part of creating the table and the DCR you will need to provide the sample file that you've created in the previous section.
 2) To ingest the data to a standard table like Syslog or CommonSecurityLog use [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api>).
 
+*Note:* The identity (service principal or managed identity) must have the **Monitoring Metrics Publisher** role on the target DCR:
+
+    az role assignment create \
+      --assignee <object-id-of-identity> \
+      --role "Monitoring Metrics Publisher" \
+      --scope "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Insights/dataCollectionRules/<dcr-name>"
+
 
 ## 4. Configure Logstash configuration file
 
-Use the tutorial from the previous section to retrieve the following attributes: 
+The plugin supports two authentication methods: **service principal** (client credentials) and **managed identity** (passwordless). Choose the method that suits your environment.
+
+### 4a. Service principal authentication
+
+Use the tutorial from the previous section to retrieve the following attributes:
 - **client_app_Id** - String, The 'Application (client) ID' value created in step #3 of the "Configure Application" section of the tutorial you used in the previous step.
-- **client_app_secret** -String, The value of the client secret created in step #5 of the "Configure Application" section of the tutorial you used in the previous step.
-- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Azure Active Directory -> Overview Under 'Basic Information'.
-- **data_collection_endpoint** - String, - The value of the logsIngestion URI (see step #3 of the "Create data collection endpoint" section in Tutorial [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api#create-data-collection-endpoint>).
+- **client_app_secret** - String, The value of the client secret created in step #5 of the "Configure Application" section of the tutorial you used in the previous step.
+- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Microsoft Entra ID -> Overview Under 'Basic Information'.
+- **data_collection_endpoint** - String, The value of the logsIngestion URI (see step #3 of the "Create data collection endpoint" section in Tutorial [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api#create-data-collection-endpoint>).
 - **dcr_immutable_id** - String, The value of the DCR immutableId (see the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>).
 - **dcr_stream_name** - String, The name of the data stream (Go to the json view of the DCR as explained in the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>) and copy the value of the "dataFlows -> streams" property (see circled in red in the below example).
 
@@ -107,7 +127,7 @@ Here is an example for the output plugin configuration section:
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
-        client_app_Id => "<enter your client_app_id value here>"
+        client_app_Id => "<enter your client_app_Id value here>"
         client_app_secret => "<enter your client_app_secret value here>"
         tenant_id => "<enter your tenant id here>"
         data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
@@ -117,15 +137,59 @@ output {
         sample_file_path => "c:\\temp"
     }
 }
-
 ```
-### Optional configuration 
+
+### 4b. Managed identity authentication (passwordless)
+
+When `managed_identity` is set to `true`, the plugin authenticates without a client secret. The plugin automatically detects the appropriate identity mechanism at runtime in the following order:
+
+1. **AKS Workload Identity** — If the environment variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_FEDERATED_TOKEN_FILE` are present (set automatically by AKS), the plugin performs an OIDC token exchange.
+2. **Azure Arc** — If the Azure Connected Machine Agent (`azcmagent`) is detected on the host, the plugin uses the Arc managed identity endpoint for hybrid and on-premises servers.
+3. **IMDS** — Otherwise, the plugin falls back to the Azure Instance Metadata Service (IMDS) for Azure VMs and VMSS.
+
+Required configuration for managed identity:
+- **managed_identity** - Boolean, false by default. Set to `true` to enable passwordless authentication.
+- **data_collection_endpoint** - String, The logsIngestion URI for your DCE.
+- **dcr_immutable_id** - String, The DCR immutableId.
+- **dcr_stream_name** - String, The name of the data stream.
+
+Optional:
+- **managed_identity_object_id** - String, Empty by default. The object ID of a user-assigned managed identity. Required when the VM has multiple user-assigned identities. Omit this for system-assigned managed identity.
+
+Example using system-assigned managed identity:
+```
+output {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
+        managed_identity => true
+        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
+        dcr_immutable_id => "<enter your DCR immutableId here>"
+        dcr_stream_name => "<enter your stream name here>"
+    }
+}
+```
+
+Example using user-assigned managed identity:
+```
+output {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
+        managed_identity => true
+        managed_identity_object_id => "<enter the object ID of your user-assigned identity>"
+        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
+        dcr_immutable_id => "<enter your DCR immutableId here>"
+        dcr_stream_name => "<enter your stream name here>"
+    }
+}
+```
+
+> **Note:** When using Azure Arc, the Logstash process must run as a user that is a member of the `himds` group to read the challenge token. See the [Azure Arc managed identity documentation](<https://learn.microsoft.com/azure/azure-arc/servers/managed-identity-authentication>) for details.
+
+### Optional configuration
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
-- **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
-- **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
+- **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics.
+- **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed.
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
-- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
+- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Microsoft Entra ID service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
 - **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
 
@@ -146,7 +210,7 @@ Here is an example configuration that parses Syslog incoming data into a custom 
 ```
 input {
     beats {
-        port => "5044"
+        port => 5044
     }
 }
  filter {
@@ -169,8 +233,8 @@ output {
 ```
 input {
     tcp {
-        port => "514"
-        type => syslog #optional, will effect log type in table
+        port => 514
+        type => syslog #optional, will affect log type in table
     }
 }
  filter {

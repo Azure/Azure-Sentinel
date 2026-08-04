@@ -1,0 +1,258 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Step 1 - Microsoft Sentinel CloudWatch integration: OIDC IAM role, S3 bucket (+ policy + notification), and SQS queue (+ policy).\n",
+    "Parameters": {
+        "CloudWatchBucketName": {
+            "Type": "String",
+            "Description": "Name of the S3 bucket where CloudWatch export .gz files for Sentinel will be stored."
+        },
+        "CloudWatchSQSQueueName": {
+            "Type": "String",
+            "Description": "Name of the SQS queue used by the Sentinel CloudWatch connector."
+        },
+        "SentinelRoleName": {
+            "Type": "String",
+            "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+            "Default": "OIDC_MicrosoftSentinelS3CloudWatchRole",
+            "Description": "Name of the IAM role to be used by Microsoft Sentinel (OIDC role). Must start with the exact prefix \"OIDC_\" or the connector cannot fetch its auth token.\n"
+        },
+        "SentinelWorkspaceId": {
+            "Type": "String",
+            "Description": "Microsoft Sentinel Workspace ID (also shown as External ID in the connector)."
+        }
+    },
+    "Resources": {
+        "SentinelCloudWatchRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "SentinelRoleName"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Federated": {
+                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/"
+                                }
+                            },
+                            "Action": "sts:AssumeRoleWithWebIdentity",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud": "api://1462b192-27f7-4cb9-8523-0f4ecb54b47e",
+                                    "sts:RoleSessionName": {
+                                        "Fn::Sub": "MicrosoftSentinel_${SentinelWorkspaceId}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SentinelCloudWatchQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Ref": "CloudWatchSQSQueueName"
+                },
+                "SqsManagedSseEnabled": true
+            }
+        },
+        "SentinelCloudWatchQueuePolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Id": "SentinelCloudWatchSQSPolicy",
+                    "Statement": [
+                        {
+                            "Sid": "AllowS3ToSendMessages",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": "SQS:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelCloudWatchQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${CloudWatchBucketName}"
+                                    }
+                                },
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowSentinelRoleToAccessQueue",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "SentinelCloudWatchRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "SQS:ReceiveMessage",
+                                "SQS:DeleteMessage",
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:GetQueueAttributes"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelCloudWatchQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Queues": [
+                    {
+                        "Ref": "SentinelCloudWatchQueue"
+                    }
+                ]
+            }
+        },
+        "CloudWatchExportBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "CloudWatchBucketName"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "QueueConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "SentinelCloudWatchQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".gz"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "DependsOn": [
+                "SentinelCloudWatchQueuePolicy"
+            ]
+        },
+        "CloudWatchExportBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudWatchExportBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Id": "AWSLogDeliveryAndSentinelAccess",
+                    "Statement": [
+                        {
+                            "Sid": "AllowSentinelCloudWatchRoleList",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "SentinelCloudWatchRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${CloudWatchBucketName}"
+                            }
+                        },
+                        {
+                            "Sid": "AllowSentinelCloudWatchRoleReadObjects",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "SentinelCloudWatchRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${CloudWatchBucketName}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "CloudWatchBucketNameOut": {
+            "Description": "S3 bucket used for Sentinel CloudWatch logs",
+            "Value": {
+                "Ref": "CloudWatchBucketName"
+            }
+        },
+        "CloudWatchQueueUrl": {
+            "Description": "SQS queue URL used by Sentinel CloudWatch connector",
+            "Value": {
+                "Ref": "SentinelCloudWatchQueue"
+            }
+        },
+        "CloudWatchQueueArn": {
+            "Description": "ARN of the SQS queue",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelCloudWatchQueue",
+                    "Arn"
+                ]
+            }
+        },
+        "SentinelRoleArn": {
+            "Description": "ARN of the IAM role that Sentinel must assume",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelCloudWatchRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

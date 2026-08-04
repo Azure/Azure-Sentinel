@@ -1,0 +1,44 @@
+id: 2bb29f25-833a-5544-4a8e-9bf6c4d8da56
+name: "UniFi Site Manager: WAN uptime below 99%"
+description: |
+  Identifies when site WAN uptime falls below 99 percent, an SLA-grade availability problem. Combine with the ISP Downtime rule for root-cause attribution.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Sites_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+subTechniques:
+  - T1499.002
+query: |
+  Unifi_SiteManager_Sites_CL
+        | where TimeGenerated > ago(1h)
+  | extend wanUptime = WanUptimePct
+        | where isnotnull(wanUptime) and wanUptime < 99.0
+        | summarize arg_max(TimeGenerated, *) by SiteId, SiteName
+        | extend Activity = strcat('WAN uptime ', round(wanUptime, 2), '% (below 99% SLA threshold)')
+        | project TimeGenerated, SiteId, SiteName, Activity, WanUptimePct = round(wanUptime, 2)
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteId
+      - identifier: DnsDomain
+        columnName: SiteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.1

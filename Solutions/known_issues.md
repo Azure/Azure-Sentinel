@@ -27,7 +27,7 @@ Workbooks and Hunting queries deployed by Solutions may miss correct metadata in
 A central option to uninstall all content associated with an Microsoft Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type in alignment with the feature gallery UX support (some feature galleries may not provide a content delete option by design). 
 
 ## Known Issue #6 - CSP Program Enablement
-All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support.
+All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support for assistance with Microsoft-supported solutions, and refer to the relevant support information for ISV or Partner-supported solutions provided within each specific solution.
 
 
 ## Known Issue #7 - Private solutions in Content hub
@@ -63,4 +63,16 @@ Note after deleting the function named in the workspace error message, re-search
 However, there are limitations with Oracle database unified and syslog limitations, which may require to make changes at the Oracle side. For example, you might need to create and enable an audit policy to log all the events, restart the database, and add the syslog config.
 
 If the rule is not giving appropriate results, it might be due to the complexity of the SQL injection patterns or the configuration of the Oracle servers. It’s recommended to revalidate the SQL injection patterns rule and adjust it according to the specific needs and configurations of the Oracle servers.
+## Known Issue #10 - Data truncation due to 64 KB field size limit in Log Analytics Ingestion API
+The Azure Monitor [Logs Ingestion API enforces a maximum field size of 64 KB](https://learn.microsoft.com/en-us/azure/azure-monitor/service-limits#logs-ingestion-api). Any individual field value that exceeds this limit is **silently truncated** during ingestion — no error or warning is surfaced to the user in the portal, connector health, or DCR logs.
 
+This affects data connectors (including Codeless Connector Framework / CCF-based connectors) that ingest data into custom Log Analytics tables via Data Collection Rules (DCRs). Fields carrying large payloads — such as `ScriptContentBytes`, `CommandLine`, `RequestBody`, or any free-text / encoded-content column — are most likely to be impacted.
+
+**Impact:** Truncated fields may result in incomplete data for investigation, missed detections, or broken parsing logic that depends on the full field value.
+
+**What you can do:**
+1. Query the `DCRLogErrors` table in your workspace to rule out other ingestion failures related to your connector's DCR, but note that **silent field truncation will not appear there**.
+2. Use a KQL query to identify potentially affected records using an approximate character-count heuristic, for example:
+   
+3. If the source system allows it, consider splitting or summarising large fields before they are sent to the connector.
+4. Be aware that this is a **platform-level limitation** and cannot be resolved from the connector side. For the latest limits, refer to [Azure Monitor service limits](https://learn.microsoft.com/en-us/azure/azure-monitor/service-limits#logs-ingestion-api).

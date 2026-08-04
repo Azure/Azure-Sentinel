@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Salesforce Service Cloud.
 
-This ASIM parser supports filtering and normalizing the Salesforce Service Cloud logs stored in 'SalesforceServiceCloud_CL' table to the ASIM authentication normalized schema.
+This ASIM parser supports normalizing Salesforce sign in logs, stored in the SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL or SalesforceServiceCloudV3_CL tables, to the ASIM Authentication schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/CHANGELOG/vimAuthenticationSalesforceSC.md)
 
 <br>
 

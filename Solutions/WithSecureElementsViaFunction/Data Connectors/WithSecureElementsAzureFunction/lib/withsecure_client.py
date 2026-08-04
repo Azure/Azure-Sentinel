@@ -101,7 +101,7 @@ class WithSecureClient:
             engine_param_value = self._engine_group
         else:
             engine_param = "engineGroup"
-            engine_param_value = "epp,edr,ecp"
+            engine_param_value = "epp,edr,ecp,xm"
 
         data = {
             "limit": 100,

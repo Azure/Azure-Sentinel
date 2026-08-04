@@ -12,6 +12,9 @@ For more information, see:
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM FileEvent normalization schema reference](https://aka.ms/ASimFileEventDoc)
 
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimFileEvent/CHANGELOG/vimFileEventMicrosoftSysmonWindowsEvent.md)
+
 <br>
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimFileEvent%2FARM%2FvimFileEventMicrosoftSysmonWindowsEvent%2FvimFileEventMicrosoftSysmonWindowsEvent.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimFileEvent%2FARM%2FvimFileEventMicrosoftSysmonWindowsEvent%2FvimFileEventMicrosoftSysmonWindowsEvent.json)

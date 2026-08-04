@@ -1,0 +1,418 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "NetApp RRS Manual IP to Volume Offline",
+    "description": "Manually trigger playbook to take a volume offline based on IP address enrichment",
+    "prerequisites": [
+      "1. NetApp RRS Auth Playbook must be deployed",
+      "2. NetApp RRS Async Poll Playbook must be deployed",
+      "3. NetApp RRS Enrich IP Playbook must be deployed",
+      "4. NetApp RRS Enrich StorageVM Playbook must be deployed",
+      "5. NetApp RRS Volume Offline Playbook must be deployed"
+    ],
+    "postDeployment": [
+      "1. Assign Managed Identity permissions if needed",
+      "2. Test with a valid IP address"
+    ],
+    "lastUpdateTime": "2026-02-09T00:00:00.000Z",
+    "entities": [],
+    "tags": ["NetApp", "Ransomware", "Volume", "Offline", "Manual"],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "NetApp"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "NetApp-RansomwareResilience-Manual-IP-to-Offline-Playbook",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "IPEnrichmentPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetApp-RansomwareResilience-Enrich-IP-Playbook",
+      "metadata": {
+        "description": "Name of the IP Enrichment Playbook"
+      }
+    },
+    "StorageVMEnrichmentPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetApp-RansomwareResilience-Enrich-StorageVM-Playbook",
+      "metadata": {
+        "description": "Name of the StorageVM Enrichment Playbook"
+      }
+    },
+    "VolumeOfflinePlaybookName": {
+      "type": "String",
+      "defaultValue": "NetApp-RansomwareResilience-Volume-Offline-Playbook",
+      "metadata": {
+        "description": "Name of the Volume Offline Playbook"
+      }
+    }
+  },
+  "variables": {
+    "IPEnrichmentPlaybookId": "[resourceId('Microsoft.Logic/workflows', parameters('IPEnrichmentPlaybookName'))]",
+    "StorageVMEnrichmentPlaybookId": "[resourceId('Microsoft.Logic/workflows', parameters('StorageVMEnrichmentPlaybookName'))]",
+    "VolumeOfflinePlaybookId": "[resourceId('Microsoft.Logic/workflows', parameters('VolumeOfflinePlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ip_address": {
+                      "type": "string",
+                      "description": "IP address to enrich and take volume offline"
+                    }
+                  },
+                  "required": ["ip_address"]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Variables": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "InputIP",
+                    "type": "string",
+                    "value": "@triggerBody()?['ip_address']"
+                  },
+                  {
+                    "name": "VolumeId",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "AgentId",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "SystemId",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "IPEnrichmentStatus",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "StorageEnrichmentStatus",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "VolumeOfflineStatus",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "ErrorMessage",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Step_1_Call_IP_Enrichment": {
+              "runAfter": {
+                "Initialize_Variables": ["Succeeded"]
+              },
+              "type": "Workflow",
+              "inputs": {
+                "host": {
+                  "triggerName": "manual",
+                  "workflow": {
+                    "id": "[variables('IPEnrichmentPlaybookId')]"
+                  }
+                },
+                "body": {
+                  "ip_address": "@variables('InputIP')"
+                }
+              }
+            },
+            "Parse_IP_Enrichment_Response": {
+              "runAfter": {
+                "Step_1_Call_IP_Enrichment": ["Succeeded", "Failed", "TimedOut"]
+              },
+              "type": "Compose",
+              "inputs": "@if(equals(actions('Step_1_Call_IP_Enrichment').status, 'Succeeded'), body('Step_1_Call_IP_Enrichment'), json(concat('{\"success\": false, \"message\": \"IP Enrichment workflow failed or timed out: ', actions('Step_1_Call_IP_Enrichment').status, '\"}')))"
+            },
+            "Check_IP_Enrichment_Success": {
+              "runAfter": {
+                "Parse_IP_Enrichment_Response": ["Succeeded"]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@outputs('Parse_IP_Enrichment_Response')?['success']",
+                      true
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Set_IP_Enrichment_Success": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "IPEnrichmentStatus",
+                    "value": "Success"
+                  }
+                },
+                "Extract_Volume_Data": {
+                  "runAfter": {
+                    "Set_IP_Enrichment_Success": ["Succeeded"]
+                  },
+                  "type": "Compose",
+                  "inputs": "@first(first(outputs('Parse_IP_Enrichment_Response')?['enrichment']?['polling_results'])?['poll_response']?['data']?['records'])"
+                },
+                "Set_Agent_ID": {
+                  "runAfter": {
+                    "Extract_Volume_Data": ["Succeeded"]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "AgentId",
+                    "value": "@{outputs('Extract_Volume_Data')?['agent_id']}"
+                  }
+                },
+                "Set_System_ID": {
+                  "runAfter": {
+                    "Set_Agent_ID": ["Succeeded"]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "SystemId",
+                    "value": "@{outputs('Extract_Volume_Data')?['system_id']}"
+                  }
+                },
+                "Step_2_Call_StorageVM_Enrichment": {
+                  "runAfter": {
+                    "Set_System_ID": ["Succeeded"]
+                  },
+                  "type": "Workflow",
+                  "inputs": {
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[variables('StorageVMEnrichmentPlaybookId')]"
+                      }
+                    },
+                    "body": {
+                      "agent_id": "@variables('AgentId')",
+                      "system_id": "@variables('SystemId')"
+                    }
+                  }
+                },
+                "Parse_StorageVM_Response": {
+                  "runAfter": {
+                    "Step_2_Call_StorageVM_Enrichment": ["Succeeded", "Failed", "TimedOut"]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(equals(actions('Step_2_Call_StorageVM_Enrichment').status, 'Succeeded'), body('Step_2_Call_StorageVM_Enrichment'), json(concat('{\"success\": false, \"message\": \"StorageVM Enrichment workflow failed or timed out: ', actions('Step_2_Call_StorageVM_Enrichment').status, '\"}')))"
+                },
+                "Check_StorageVM_Success": {
+                  "runAfter": {
+                    "Parse_StorageVM_Response": ["Succeeded"]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('Parse_StorageVM_Response')?['success']",
+                          true
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Set_StorageVM_Success": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "StorageEnrichmentStatus",
+                        "value": "Success"
+                      }
+                    },
+                    "Extract_Volume_UUID": {
+                      "runAfter": {
+                        "Set_StorageVM_Success": ["Succeeded"]
+                      },
+                      "type": "Compose",
+                      "inputs": "@first(outputs('Parse_StorageVM_Response')?['enrichment']?['storage_vms'])?['volume_uuid']"
+                    },
+                    "Update_Volume_ID": {
+                      "runAfter": {
+                        "Extract_Volume_UUID": ["Succeeded"]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VolumeId",
+                        "value": "@{outputs('Extract_Volume_UUID')}"
+                      }
+                    },
+                    "Step_3_Call_Volume_Offline": {
+                      "runAfter": {
+                        "Update_Volume_ID": ["Succeeded"]
+                      },
+                      "type": "Workflow",
+                      "inputs": {
+                        "host": {
+                          "triggerName": "manual",
+                          "workflow": {
+                            "id": "[variables('VolumeOfflinePlaybookId')]"
+                          }
+                        },
+                        "body": {
+                          "volume_id": "@variables('VolumeId')",
+                          "agent_id": "@variables('AgentId')",
+                          "system_id": "@variables('SystemId')",
+                          "poll": true
+                        }
+                      }
+                    },
+                    "Parse_Volume_Offline_Response": {
+                      "runAfter": {
+                        "Step_3_Call_Volume_Offline": ["Succeeded", "Failed", "TimedOut"]
+                      },
+                      "type": "Compose",
+                      "inputs": "@if(equals(actions('Step_3_Call_Volume_Offline').status, 'Succeeded'), body('Step_3_Call_Volume_Offline'), json(concat('{\"success\": false, \"message\": \"Volume Offline workflow failed or timed out: ', actions('Step_3_Call_Volume_Offline').status, '\"}')))"
+                    },
+                    "Set_Volume_Offline_Status": {
+                      "runAfter": {
+                        "Parse_Volume_Offline_Response": ["Succeeded"]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VolumeOfflineStatus",
+                        "value": "@{if(equals(outputs('Parse_Volume_Offline_Response')?['success'], true), 'Success - Volume Taken Offline', 'Failed - Volume NOT Offline')}"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Set_StorageVM_Failed": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "StorageEnrichmentStatus",
+                          "value": "Failed"
+                        }
+                      },
+                      "Set_StorageVM_Error": {
+                        "runAfter": {
+                          "Set_StorageVM_Failed": ["Succeeded"]
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "ErrorMessage",
+                          "value": "@{outputs('Parse_StorageVM_Response')?['message']}"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Set_IP_Enrichment_Failed": {
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "IPEnrichmentStatus",
+                      "value": "Failed"
+                    }
+                  },
+                  "Set_IP_Error": {
+                    "runAfter": {
+                      "Set_IP_Enrichment_Failed": ["Succeeded"]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "ErrorMessage",
+                      "value": "@{outputs('Parse_IP_Enrichment_Response')?['message']}"
+                    }
+                  }
+                }
+              }
+            },
+            "Response": {
+              "runAfter": {
+                "Check_IP_Enrichment_Success": ["Succeeded", "Failed"]
+              },
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "statusCode": "@{if(equals(variables('VolumeOfflineStatus'), 'Success - Volume Taken Offline'), 200, 400)}",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "success": "@{equals(variables('VolumeOfflineStatus'), 'Success - Volume Taken Offline')}",
+                  "input": {
+                    "ip_address": "@{variables('InputIP')}"
+                  },
+                  "enrichment_results": {
+                    "ip_enrichment_status": "@{variables('IPEnrichmentStatus')}",
+                    "storage_enrichment_status": "@{variables('StorageEnrichmentStatus')}",
+                    "volume_offline_status": "@{variables('VolumeOfflineStatus')}"
+                  },
+                  "volume_details": {
+                    "volume_id": "@{variables('VolumeId')}",
+                    "agent_id": "@{variables('AgentId')}",
+                    "system_id": "@{variables('SystemId')}"
+                  },
+                  "error_message": "@{variables('ErrorMessage')}",
+                  "timestamp": "@{utcNow()}"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookUrl": {
+      "type": "string",
+      "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('PlaybookName'), 'manual'), '2019-05-01').value]"
+    }
+  }
+}

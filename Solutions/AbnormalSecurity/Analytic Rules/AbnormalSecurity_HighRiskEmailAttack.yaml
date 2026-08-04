@@ -1,0 +1,83 @@
+id: 8effd19a-abab-433a-9184-ae67ac51e6d0
+name: Abnormal Security - High-risk email attack detected
+description: |
+  'Identifies email attacks detected by Abnormal Security whose attack type maps to a
+  high-risk category (credential phishing, Business Email Compromise, invoice/payment
+  fraud, malware, extortion, sensitive-data phishing, internal account-takeover attacks,
+  or scams). Lower-risk categories such as Spam, Graymail, and Reconnaissance are
+  intentionally excluded. Use this to triage targeted email threats that reached a mailbox.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AbnormalSecurityPush
+    dataTypes:
+      - ABNORMAL_SECURITY_THREAT_LOG_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  ABNORMAL_SECURITY_THREAT_LOG_CL
+  | where abx_body_abx_body_attack_type_s in~ (
+      "Phishing: Credential",
+      "Social Engineering (BEC)",
+      "Invoice/Payment Fraud (BEC)",
+      "Malware",
+      "Extortion",
+      "Phishing: Sensitive Data",
+      "Internal-to-Internal Attacks (Email Account Takeover)",
+      "Scam")
+  | extend
+      RecipientEmail = abx_body_abx_body_recipient_address_s,
+      SenderEmail = abx_body_abx_body_from_address_s,
+      SenderName = abx_body_abx_body_from_name_s,
+      SenderIP = abx_body_abx_body_sender_ip_address_s,
+      Subject = abx_body_abx_body_subject_s,
+      MessageId = abx_body_abx_body_internet_message_id_s,
+      AttackType = abx_body_abx_body_attack_type_s,
+      AttackScore = abx_body_abx_body_attack_score_d,
+      RemediationStatus = abx_body_abx_body_remediation_status_s,
+      PortalUrl = abx_body_abx_body_abx_portal_url_s
+  | project TimeGenerated, RecipientEmail, SenderEmail, SenderName, SenderIP, Subject, MessageId, AttackType, AttackScore, RemediationStatus, PortalUrl
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientEmail
+  - entityType: MailMessage
+    fieldMappings:
+      - identifier: Recipient
+        columnName: RecipientEmail
+      - identifier: Sender
+        columnName: SenderEmail
+      - identifier: NetworkMessageId
+        columnName: MessageId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIP
+customDetails:
+  AttackType: AttackType
+  AttackScore: AttackScore
+  RemediationStatus: RemediationStatus
+  AbnormalPortalUrl: PortalUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: "Abnormal Security: {{AttackType}} email delivered to {{RecipientEmail}}"
+  alertDescriptionFormat: "Abnormal Security detected a {{AttackType}} attack from {{SenderEmail}} to {{RecipientEmail}}. See attack score and remediation status in the custom details."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionDuration: PT5H
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

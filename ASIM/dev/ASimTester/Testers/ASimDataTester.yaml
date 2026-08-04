@@ -1,0 +1,106 @@
+Parser:
+  Title: ASIM Data tester
+  Version: '1.0.0'
+  LastUpdated: Mar 06, 2026
+Product:
+  Name: Source agnostic
+Description: |
+  This KQL function tests if the data present in your parser or ASim table conforms with the ASim schema provided.
+ParserName: ASimDataTester
+ParserParams:
+  - Name: T
+    Type: (*)
+  - Name: selected_schema
+    Type: string
+    Default: ''
+ParserQuery: |
+  let MACaddr_regex = @'^[a-fA-F0-9]{2}(:[a-fA-F0-9]{2}){5}$';
+  let FQDN_regex =  @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)+[a-zA-Z]{2,63}$'; // -- based on https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation without lookahead.
+  let DNS_domain_regex = @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)*[a-zA-Z]{2,63}$'; // -- Allow underscores in domain names, used by Microsoft DNS server
+  let domain_regex = @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)*[a-zA-Z]{2,63}$';
+  let Hostname_regex = @'^[a-zA-Z0-9-]{1,61}$';
+  let MD5_regex = @'[a-zA-Z0-9]{32}';
+  let SHA1_regex = @'[a-zA-Z0-9]{40}';
+  let SHA256_regex = @'[a-zA-Z0-9]{64}';
+  let SHA512_regex = @'[a-zA-Z0-9]{128}';
+  let IPprotocol = materialize (externaldata (code: string, value: string)
+  [@"https://www.iana.org/assignments/protocol-numbers/protocol-numbers-1.csv"] with (format="csv", IgnoreFirstRecord=true) | project value);
+  let DnsQueryTypeName = materialize (externaldata (value: string)
+  [@"https://www.iana.org/assignments/dns-parameters/dns-parameters-4.csv"] with (format="csv", IgnoreFirstRecord=true));
+  let DnsResponseCodeName = materialize (externaldata (code: string, value: string)
+  [@"https://www.iana.org/assignments/dns-parameters/dns-parameters-6.csv"] with (format="csv", IgnoreFirstRecord=true) | project toupper(value));
+  //let DnsQueryClassName = materialize (externaldata (dec: string, dex: string, value: string)
+  //  [@"https://www.iana.org/assignments/dns-parameters/dns-parameters-2.csv"] with (format="csv", IgnoreFirstRecord=true) | project value);
+  let DnsQueryClassName = datatable(Class:int, ClassName: string)[
+      0, 'Reserved',
+      1, 'IN',
+      2, 'Unassigned',
+      3, 'CH',
+      4, 'HS',
+      254, 'None',
+      255, 'Any'] | project ClassName;
+  let ASimFields = materialize(externaldata (ColumnName: string, ColumnType: string, Class: string, Schema: string, LogicalType:string, ListOfValues: string, AliasedField: string, DynamicType: string, ArrayValuesType: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/ASIM/dev/ASimTester/ASimTester.csv"] with (format="csv", IgnoreFirstRecord=true)
+      | project-rename dict_schema = Schema);
+  let ASimFieldsWithAliases = materialize(ASimFields
+      | project-rename SchemaColumn = ColumnName, SchemaType = ColumnType
+      | lookup (ASimFields | project ParentClass = Class, ParentColumn = ColumnName, dict_schema=dict_schema) on $left.AliasedField == $right.ParentColumn, $left.dict_schema == $right.dict_schema);
+  let ParserSchema = (T | getschema | project ColumnName, type = ColumnType);
+  let total_records_materialize = materialize (T | count);
+  let total_records = toscalar (total_records_materialize);
+  let percent_records = (records:int) { round(todouble(records) / todouble(total_records) * 100, 2) };
+  T
+  | extend f=pack_all()
+  | extend EventSchema = coalesce(selected_schema, f['EventSchema'], 'Common')
+  | mv-expand f
+  | project f, EventSchema
+  | extend ColumnName = tostring(bag_keys(f)[0])
+  | extend value = f[ColumnName]
+  | lookup ParserSchema on ColumnName
+  | extend dynamictype = iff(type == 'dynamic', gettype(value), '')
+  | mv-apply arrayValue = value on (
+      summarize array_types = make_set(gettype(arrayValue), 3) | extend numOfArrayTypes = array_length(array_types) | project numOfArrayTypes
+  )
+  | extend arrayValueType = iff(dynamictype == 'array', case(
+      numOfArrayTypes == 1, tostring(gettype(value[0])),
+      numOfArrayTypes >= 2, "FAIL",
+      ""
+      ), "")
+  | summarize cnt_records = count() by ColumnName, tostring(value), type, EventSchema, dynamictype, arrayValueType
+  | lookup ASimFieldsWithAliases on $left.ColumnName == $right.SchemaColumn, $left.EventSchema == $right.dict_schema
+  | extend Result = case(
+      SchemaType != "" and type != "null" and SchemaType != type, strcat ("(0) Error: type mismatch for column [", ColumnName, "]. It is currently [", type, "] and should be [", SchemaType, "] (Schema:", EventSchema, ")"),
+      Class == "Mandatory" and value == "", strcat ("(1) Warning: Empty value in ", cnt_records, " records (",percent_records(cnt_records),"%)  in mandatory field [", ColumnName, "] (Schema:", EventSchema, ")"),
+      Class == "Recommended" and value == "", strcat ("(2) Info: Empty value in ", cnt_records, " records (",percent_records(cnt_records),"%)  in recommended field [", ColumnName, "] (Schema:", EventSchema, ")"),
+      Class == "Optional" and value == "", strcat ("(2) Info: Empty value in ", cnt_records, " records (",percent_records(cnt_records),"%)  in optional field [", ColumnName, "] (Schema:", EventSchema, ")"),
+      isnotempty(DynamicType) and DynamicType != dynamictype, "Invalid Dynamic Type",
+      isnotempty(DynamicType) and DynamicType == 'array' and (arrayValueType == "FAIL" or arrayValueType != ArrayValuesType), "Invalid Dynamic Array Values",
+      LogicalType == "Enumerated" and ListOfValues != "" and ListOfValues !has value, "Invalid Value",
+      (LogicalType == "MAC Address") and (value != "") and not (value matches regex MACaddr_regex), "Invalid Value",
+      (LogicalType == "IP Address") and (value != "") and not(ipv4_is_match(value, "0.0.0.0",0)) and not(ipv6_is_match(value, "::1",0)) and not(ipv6_is_match(value, "0.0.0.0",0)), "Invalid Value",
+      (LogicalType == "FQDN") and (value != "") and not (value matches regex FQDN_regex), "Invalid Value",
+      (LogicalType == "RecommendedFQDN") and (value != "") and not (value matches regex FQDN_regex), "Abnormal Value",
+      (LogicalType == "Domain") and (value != "") and not (value matches regex domain_regex), "Invalid Value",
+      (LogicalType == "DnsDomain") and (value != "") and not (value matches regex DNS_domain_regex), "Invalid Value",
+      (LogicalType == "RecommendedDnsDomain") and (value != "") and not (value matches regex DNS_domain_regex), "Abnormal Value",
+      (LogicalType == "GUID") and (value != "") and isnull(toguid(value)), "Invalid Value",
+      (LogicalType == "Hostname") and (value != "") and not (value matches regex Hostname_regex) and not(ipv4_is_match(value, "0.0.0.0",0)) and not(ipv6_is_match(value, "::1",0)), "Invalid Value",
+      (LogicalType == "RiskLevel") and (value != "") and (toint(value) < 0 or toint(value) > 100), "Invalid Value",
+      (LogicalType == "DnsResponseCodeName") and (value != "") and value !in (DnsResponseCodeName) and value != "NA" , "Invalid Value",
+      (LogicalType == "DnsQueryTypeName") and (value != "") and value !in (DnsQueryTypeName) and value != "ANY" and not(value matches regex @'^TYPE\d+$'), "Invalid Value",
+      (LogicalType == "DnsQueryClassName") and (value != "") and value !in (DnsQueryClassName) and not(value matches regex @'^CLASS\d+$'), "Invalid Value",
+      (LogicalType == "NetworkProtocol") and (value != "") and value !in (IPprotocol), "Invalid Value",
+      (LogicalType == "MD5") and (value != "") and not (value matches regex MD5_regex), "Invalid Value",
+      (LogicalType == "SHA1") and (value != "") and not (value matches regex SHA1_regex), "Invalid Value",
+      (LogicalType == "SHA256") and (value != "") and not (value matches regex SHA256_regex), "Invalid Value",
+      (LogicalType == "SHA512") and (value != "") and not (value matches regex SHA512_regex), "Invalid Value",
+      'None'
+      )
+  | where Result != "None"
+  | summarize values = make_set(value, 10), cnt_values=count(), cnt_records=sum(cnt_records) by Result, ColumnName, LogicalType, EventSchema, DynamicType, ArrayValuesType
+  | extend Result = iif (Result == "Invalid Value", strcat ("(0) Error: ", cnt_values, " invalid value(s) (up to 10 listed) in ", cnt_records, " records (",percent_records(cnt_records),"%) for field [", ColumnName, "] of type [", LogicalType, "]: ", tostring(values), " (Schema:", EventSchema, ")"), Result)
+  | extend Result = iif (Result == "Abnormal Value", strcat ("(1) Warning: ", cnt_values, " abnormal value(s) (up to 10 listed) in ", cnt_records, " records (",percent_records(cnt_records),"%) for field [", ColumnName, "] of type [", LogicalType, "]: ", tostring(values), " (Schema:", EventSchema, ")"), Result)
+  | extend Result = iif (Result == "Invalid Dynamic Type", strcat ("(0) Error: ", cnt_values, " invalid dynamic type (up to 10 listed) in ", cnt_records, " records (",percent_records(cnt_records),"%) for field [", ColumnName, "] of type [", DynamicType, "]: ", tostring(values), " (Schema:", EventSchema, ")"), Result)
+  | extend Result = iif (Result == "Invalid Dynamic Array Values", strcat ("(0) Error: ", cnt_values, " invalid dynamic array(s). All inner values must be of type [", ArrayValuesType, "] (up to 10 listed) in ", cnt_records, " records (",percent_records(cnt_records),"%) for field [", ColumnName, "] of type [", DynamicType, "]: ", tostring(values), " (Schema:", EventSchema, ")"), Result)
+  | project Result
+  | sort by Result asc

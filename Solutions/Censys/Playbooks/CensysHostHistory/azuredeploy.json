@@ -1,0 +1,1583 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Censys Host History",
+        "description": "This playbook is triggered manually via HTTP request, typically invoked from a Microsoft Sentinel workbook. It retrieves historical timeline data for a specified host (IP address) from the Censys API (v3) within a given time range. The playbook accepts start_time, end_time, and host parameters in RFC3339 format. NOTE: Start time must be the timestamp closest to the current time (more recent) and End time must be the timestamp furthest from the current time (older). The playbook validates input parameters to ensure times are not in the future and start_time is not greater than end_time. It retrieves the Censys API token securely from Azure Key Vault, then queries the Censys host timeline endpoint with pagination support (up to 10 pages). The playbook processes various event types including service_scanned, endpoint_scanned, location_updated, route_updated, and whois_updated events. Each event is enriched with UI links to the Censys platform for detailed investigation. The collected history data is ingested into Azure Log Analytics (Censys_Host_History_Data table) for analysis and reporting. Comprehensive error handling is implemented for HTTP status codes (200, 401, 403, 404, 422).",
+        "prerequisites": [
+            "1. Create an Azure Key Vault and store your Censys API token as a secret named 'Censys-Access-Token'.",
+            "2. Obtain your Censys Organization ID from the Censys platform account settings.",
+            "3. Deploy the Censys Host History workbook to invoke this playbook."
+        ],
+        "postDeployment": [
+            "1. Grant the playbook's managed identity 'Key Vault Secrets User' role on the Azure Key Vault.",
+            "2. Authorize the Key Vault and Log Analytics Data Collector API connections.",
+            "3. Configure the Censys Host History workbook with this playbook's HTTP trigger URL.",
+            "4. Ensure the Log Analytics workspace is configured to receive custom logs."
+        ],
+        "entities": [
+            "IP",
+            "DNSResolution",
+            "FileHash"
+        ],
+        "tags": [
+            "Related Infra",
+            "Enrichment",
+            "History"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Censys"
+        },
+        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CensysHostHistory",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App (Playbook) to be deployed. Must be unique within the resource group."
+            }
+        },
+        "OrganizationID": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Censys Organization ID from the Censys platform account settings"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Azure Key Vault where the Censys API token is stored as a secret named 'Censys-Access-Token'"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal → Azure AD → Overview"
+            }
+        }
+    },
+    "variables": {
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]",
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "start_time": {
+                                            "type": "string"
+                                        },
+                                        "end_time": {
+                                            "type": "string"
+                                        },
+                                        "host": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_API_variables": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "https://api.platform.censys.io"
+                                    },
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3"
+                                    },
+                                    {
+                                        "name": "organization_id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('OrganizationID'))]"
+                                    },
+                                    {
+                                        "name": "platform_url",
+                                        "type": "string",
+                                        "value": "https://platform.censys.io/"
+                                    },
+                                    {
+                                        "name": "api_start_time",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(triggerBody()?['end_time'],'yyyy-MM-ddTHH:mm:ssZ')}"
+                                    },
+                                    {
+                                        "name": "api_end_time",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(triggerBody()?['start_time'],'yyyy-MM-ddTHH:mm:ssZ')}"
+                                    },
+                                    {
+                                        "name": "scanned_to",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "page_count",
+                                        "type": "integer",
+                                        "value": 0
+                                    },
+                                    {
+                                        "name": "user_agent",
+                                        "type": "string",
+                                        "value": "CensysMSSentinel/1.0.0"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_error_handling_variables": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "history_error",
+                                        "type": "boolean"
+                                    },
+                                    {
+                                        "name": "history_error_message",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "break_loop",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Get_Censys_API_token": {
+                            "runAfter": {
+                                "Condition_to_terminate_playbook_when_start_time_is_greater_than_input_end_time_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Censys-Access-Token')}/value"
+                            },
+                            "operationOptions": "DisableAutomaticDecompression"
+                        },
+                        "Until_Censys_API_request_is_finished_for_Host_History": {
+                            "actions": {
+                                "HTTP_request_to_get_host_history_from_Censys": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/host/@{trim(triggerBody()?['host'])}/timeline",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_Censys_API_token')?['value']}",
+                                            "User-Agent": "@{concat(variables('user_agent'),'; ts=',div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000))}"
+                                        },
+                                        "queries": {
+                                            "organization_id": "@{variables('organization_id')}",
+                                            "start_time": "@{variables('api_start_time')}",
+                                            "end_time": "@{variables('api_end_time')}"
+                                        }
+                                    },
+                                    "operationOptions": "DisableAutomaticDecompression",
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Status_code": {
+                                    "runAfter": {
+                                        "HTTP_request_to_get_host_history_from_Censys": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Status_code_200": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Parse_JSON": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_request_to_get_host_history_from_Censys')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "result": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "events": {
+                                                                            "type": "array",
+                                                                            "items": {
+                                                                                "type": "object",
+                                                                                "properties": {
+                                                                                    "resource": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                            "event_time": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "endpoint_scanned": {
+                                                                                                "type": "object",
+                                                                                                "properties": {
+                                                                                                    "scan": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "hostname": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "port": {
+                                                                                                                "type": "integer"
+                                                                                                            },
+                                                                                                            "path": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "endpoint_type": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "transport_protocol": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "scan_time": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "ip": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "is_success": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "http": {
+                                                                                                                "type": "object",
+                                                                                                                "properties": {
+                                                                                                                    "uri": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "protocol": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "status_code": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "status_reason": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "headers": {
+                                                                                                                        "type": "object",
+                                                                                                                        "properties": {
+                                                                                                                            "Connection": {
+                                                                                                                                "type": "object",
+                                                                                                                                "properties": {
+                                                                                                                                    "headers": {
+                                                                                                                                        "type": "array",
+                                                                                                                                        "items": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "Content-Length": {
+                                                                                                                                "type": "object",
+                                                                                                                                "properties": {
+                                                                                                                                    "headers": {
+                                                                                                                                        "type": "array",
+                                                                                                                                        "items": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "Content-Type": {
+                                                                                                                                "type": "object",
+                                                                                                                                "properties": {
+                                                                                                                                    "headers": {
+                                                                                                                                        "type": "array",
+                                                                                                                                        "items": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "Date": {
+                                                                                                                                "type": "object",
+                                                                                                                                "properties": {
+                                                                                                                                    "headers": {
+                                                                                                                                        "type": "array",
+                                                                                                                                        "items": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "Server": {
+                                                                                                                                "type": "object",
+                                                                                                                                "properties": {
+                                                                                                                                    "headers": {
+                                                                                                                                        "type": "array",
+                                                                                                                                        "items": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "html_tags": {
+                                                                                                                        "type": "array",
+                                                                                                                        "items": {
+                                                                                                                            "type": "string"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "body_size": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "body": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "html_title": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "body_hash_sha256": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "body_hash_sha1": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "supported_versions": {
+                                                                                                                        "type": "array",
+                                                                                                                        "items": {
+                                                                                                                            "type": "string"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "body_hash_tlsh": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "banner": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "banner_hash_sha256": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "extensions": {
+                                                                                        "type": "object",
+                                                                                        "properties": {}
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "resource",
+                                                                                    "extensions"
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        "scanned_to": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_to_terminate_if_no_data_found": {
+                                                    "actions": {
+                                                        "Set_break_loop_true_when_no_events_found": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "For_each_event": {
+                                                                "foreach": "@body('Parse_JSON')?['result']?['events']",
+                                                                "actions": {
+                                                                    "Condition_to_check_resource_is_service_scanned": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_service_scanned_event": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Service Scanned",
+                                                                                    "port": "@coalesce(item()?['resource']?['service_scanned']?['scan']?['port'],'N/A')",
+                                                                                    "protocol": "@coalesce(item()?['resource']?['service_scanned']?['scan']?['protocol'],'N/A')",
+                                                                                    "transport_protocol": "@coalesce(item()?['resource']?['service_scanned']?['scan']?['transport_protocol'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_service_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_service_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_service_scanned_event'),'display_data', concat(outputs('Prepare_fields_for_service_scanned_event')?['port'],'/',outputs('Prepare_fields_for_service_scanned_event')?['protocol'],'/',outputs('Prepare_fields_for_service_scanned_event')?['transport_protocol']))"
+                                                                            },
+                                                                            "Append_service_scanned_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_service_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_service_scanned_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_service_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_service_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_service_scanned_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "service_scanned"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_endpoint_scanned": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_endpoint_scanned_event": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Endpoint Scanned",
+                                                                                    "port": "@coalesce(item()?['resource']?['endpoint_scanned']?['scan']?['port'],'N/A')",
+                                                                                    "endpoint_type": "@coalesce(item()?['resource']?['endpoint_scanned']?['scan']?['endpoint_type'],'N/A')",
+                                                                                    "path": "@coalesce(item()?['resource']?['endpoint_scanned']?['scan']?['path'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_endpoint_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_endpoint_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_endpoint_scanned_event'),'display_data',concat(outputs('Prepare_fields_for_endpoint_scanned_event')?['port']))"
+                                                                            },
+                                                                            "Append_endpoint_scanned_data_to_event_hostory": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_endpoint_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_endpoint_scanned_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_endpoint_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_endpoint_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_endpoint_scanned_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "endpoint_scanned"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_jarm_scanned": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_jarm_scanned_event": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Jarm Scanned",
+                                                                                    "fingerprint": "@coalesce(item()?['resource']?['jarm_scanned']?['scan']?['fingerprint'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_jarm_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_jarm_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_jarm_scanned_event'),'display_data',outputs('Prepare_fields_for_jarm_scanned_event')?['fingerprint'])"
+                                                                            },
+                                                                            "Append_jarm_scanned_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_jarm_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_jarm_scanned_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_jarm_scanned_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_jarm_scanned_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_jarm_scanned_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "jarm_scanned"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_reverse_dns_resolved": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_reverse_dns_resolved": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Reverse DNS Resolved",
+                                                                                    "name": "@if(empty(item()?['resource']?['reverse_dns_resolved']?['names']),'N/A',item()?['resource']?['reverse_dns_resolved']?['names'][0])",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_reverse_dns_resolved_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_reverse_dns_resolved": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_reverse_dns_resolved'),'display_data',outputs('Prepare_fields_for_reverse_dns_resolved')?['name'])"
+                                                                            },
+                                                                            "Append_reverse_dns_resolved_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_reverse_dns_resolved_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_reverse_dns_resolved_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_reverse_dns_resolved_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_reverse_dns_resolved_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_reverse_dns_resolved_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "reverse_dns_resolved"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_forward_dns_resolved": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_forward_dns_resolved": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Forward DNS Resolved",
+                                                                                    "name": "@coalesce(item()?['resource']?['forward_dns_resolved']?['name'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_forward_dns_resolved_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_forward_dns_resolved": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_forward_dns_resolved'),'display_data',outputs('Prepare_fields_for_forward_dns_resolved')?['name'])"
+                                                                            },
+                                                                            "Append_forward_dns_resolved_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_forward_dns_resolved_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_forward_dns_resolved_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_forward_dns_resolved_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_forward_dns_resolved_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_forward_dns_resolved_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "forward_dns_resolved"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_location_updated": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_location_updated": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Location Updated",
+                                                                                    "city": "@coalesce(item()?['resource']?['location_updated']?['location']?['city'],'N/A')",
+                                                                                    "country": "@coalesce(item()?['resource']?['location_updated']?['location']?['country'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_location_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_location_updated": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_location_updated'),'display_data',concat(outputs('Prepare_fields_for_location_updated')?['city'],',',outputs('Prepare_fields_for_location_updated')?['country']))"
+                                                                            },
+                                                                            "Append_location_updated_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_location_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_location_updated_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_location_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_location_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_location_updated_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "location_updated"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_route_updated": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_route_updated": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Route Updated",
+                                                                                    "asn": "@coalesce(item()?['resource']?['route_updated']?['route']?['asn'],'N/A')",
+                                                                                    "organization": "@coalesce(item()?['resource']?['route_updated']?['route']?['organization'],'N/A')",
+                                                                                    "name": "@coalesce(item()?['resource']?['route']?['name'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_route_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_route_updated": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_route_updated'),'display_data',concat(outputs('Prepare_fields_for_route_updated')?['name'],' ',outputs('Prepare_fields_for_route_updated')?['organization'],' ',outputs('Prepare_fields_for_route_updated')?['asn']))"
+                                                                            },
+                                                                            "Append_route_updated_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_route_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_route_updated_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_route_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_route_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_route_updated_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "route_updated"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_to_check_resource_is_whois_updated": {
+                                                                        "actions": {
+                                                                            "Prepare_fields_for_whois_updated": {
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "resource_type": "Whois Updated",
+                                                                                    "network_name": "@coalesce(item()?['resource']?['whois_updated']?['whois']?['network']?['name'],'N/A')",
+                                                                                    "organization_name": "@coalesce(item()?['resource']?['whois_updated']?['whois']?['organization']?['name'],'N/A')",
+                                                                                    "event_time": "@coalesce(item()?['resource']?['event_time'],'N/A')",
+                                                                                    "ip": "@triggerBody()?['host']",
+                                                                                    "start_time": "@triggerBody()?['start_time']",
+                                                                                    "end_time": "@triggerBody()?['end_time']"
+                                                                                }
+                                                                            },
+                                                                            "Compose_whois_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_fields_for_whois_updated": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Prepare_fields_for_whois_updated'),'display_data',concat(outputs('Prepare_fields_for_whois_updated')?['network_name'],' ', outputs('Prepare_fields_for_whois_updated')?['organization_name']))"
+                                                                            },
+                                                                            "Append_whois_updated_data_to_event_history": {
+                                                                                "runAfter": {
+                                                                                    "Prepare_UI_link_for_whois_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "event_history_data",
+                                                                                    "value": "@outputs('Prepare_UI_link_for_whois_updated_event')"
+                                                                                }
+                                                                            },
+                                                                            "Prepare_UI_link_for_whois_updated_event": {
+                                                                                "runAfter": {
+                                                                                    "Compose_whois_updated_event": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Compose",
+                                                                                "inputs": "@setProperty(outputs('Compose_whois_updated_event'),'ui_link',concat(variables('platform_url'),'hosts/',triggerBody()?['host'],'/events?at_time=',outputs('Encode_event_time'),'&org=',variables('organization_id')))"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Encode_event_time": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@item()?['resource']",
+                                                                                        "whois_updated"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Encode_event_time": {
+                                                                        "type": "Compose",
+                                                                        "inputs": "@encodeUriComponent(coalesce(item()?['resource']?['event_time'],'N/A'))"
+                                                                    }
+                                                                },
+                                                                "type": "Foreach",
+                                                                "runtimeConfiguration": {
+                                                                    "concurrency": {
+                                                                        "repetitions": 1
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Compose_event_history_data": {
+                                                                "runAfter": {
+                                                                    "For_each_event": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Compose",
+                                                                "inputs": "@variables('event_history_data')"
+                                                            },
+                                                            "Ingest_host_history_data": {
+                                                                "runAfter": {
+                                                                    "Compose_event_history_data": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "body": "@{outputs('Compose_event_history_data')}",
+                                                                    "headers": {
+                                                                        "Log-Type": "@variables('history_data_table')"
+                                                                    },
+                                                                    "path": "/api/logs"
+                                                                }
+                                                            },
+                                                            "Condition_to_terminate_pagination": {
+                                                                "actions": {
+                                                                    "Set_break_loop_True_for_completing_pagination": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "break_loop",
+                                                                            "value": true
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Set_scanned_to": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Update_start_time_of_API_call": {
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "api_start_time",
+                                                                                "value": "@variables('scanned_to')"
+                                                                            }
+                                                                        },
+                                                                        "Increment_page_count": {
+                                                                            "runAfter": {
+                                                                                "Update_start_time_of_API_call": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "IncrementVariable",
+                                                                            "inputs": {
+                                                                                "name": "page_count",
+                                                                                "value": 1
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@lessOrEquals(variables('scanned_to'), variables('api_end_time'))",
+                                                                                "@true"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            },
+                                                            "Set_scanned_to": {
+                                                                "runAfter": {
+                                                                    "Reset_host_history_data": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "scanned_to",
+                                                                    "value": "@formatDateTime(body('Parse_JSON')?['result']?['scanned_to'],'yyyy-MM-ddTHH:mm:ssZ')"
+                                                                }
+                                                            },
+                                                            "Reset_host_history_data": {
+                                                                "runAfter": {
+                                                                    "Ingest_host_history_data": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "event_history_data",
+                                                                    "value": "@null"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@empty(body('Parse_JSON')?['result']?['events'])",
+                                                                    "@true"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "Status_code_401": {
+                                            "case": 401,
+                                            "actions": {
+                                                "Set_history_error_flag_true_for_401": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_history_error_message_for_401": {
+                                                    "runAfter": {
+                                                        "Set_history_error_flag_true_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error_message",
+                                                        "value": "@{body('HTTP_request_to_get_host_history_from_Censys')}"
+                                                    }
+                                                },
+                                                "Set_break_loop_true_for_401": {
+                                                    "runAfter": {
+                                                        "Set_history_error_message_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Status_code_404": {
+                                            "case": 404,
+                                            "actions": {
+                                                "Set_history_error_flag_true_for_404": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_history_error_message_for_404": {
+                                                    "runAfter": {
+                                                        "Set_history_error_flag_true_for_404": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error_message",
+                                                        "value": "@{body('HTTP_request_to_get_host_history_from_Censys')}"
+                                                    }
+                                                },
+                                                "Set_break_loop_true_for_404": {
+                                                    "runAfter": {
+                                                        "Set_history_error_message_for_404": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Status_code_422": {
+                                            "case": 422,
+                                            "actions": {
+                                                "Set_history_error_flag_true_for_422": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_history_error_message_for_422": {
+                                                    "runAfter": {
+                                                        "Set_history_error_flag_true_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error_message",
+                                                        "value": "@{body('HTTP_request_to_get_host_history_from_Censys')}"
+                                                    }
+                                                },
+                                                "Set_break_loop_for_true_for_422": {
+                                                    "runAfter": {
+                                                        "Set_history_error_message_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Status_code_403": {
+                                            "case": 403,
+                                            "actions": {
+                                                "Set_history_error_flag_true_for_403": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_history_error_message_for_403": {
+                                                    "runAfter": {
+                                                        "Set_history_error_flag_true_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "history_error_message",
+                                                        "value": "@{body('HTTP_request_to_get_host_history_from_Censys')}"
+                                                    }
+                                                },
+                                                "Set_break_loop_for_true_for_403": {
+                                                    "runAfter": {
+                                                        "Set_history_error_message_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@outputs('HTTP_request_to_get_host_history_from_Censys')?['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Censys_API_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(or(equals(variables('page_count'),10),equals(variables('break_loop'),true)), true)",
+                            "limit": {
+                                "count": 10,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Initialize_variables": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "event_history_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "history_data_table",
+                                        "type": "string",
+                                        "value": "Censys_Host_History_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_History_Data": {
+                            "actions": {
+                                "Response": {
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 400,
+                                        "body": "@variables('history_error_message')"
+                                    }
+                                },
+                                "Terminate": {
+                                    "runAfter": {
+                                        "Response": [
+                                            "Succeeded",
+                                            "Skipped",
+                                            "Failed",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "@variables('history_error_message')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Censys_API_request_is_finished_for_Host_History": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('history_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_terminate_playbook_if_input_end_time_is_in_future": {
+                            "actions": {
+                                "failed_Response_when_input_end_time_is_in_future": {
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 400,
+                                        "body": "Invalid input for end time. Make sure end time value is less than or equals to current time."
+                                    }
+                                },
+                                "Terminate_when_input_end_time_is_in_future": {
+                                    "runAfter": {
+                                        "failed_Response_when_input_end_time_is_in_future": [
+                                            "Succeeded",
+                                            "Skipped",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Invalid input for end time. Make sure end time value is less than or equals to current time."
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_API_variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_error_handling_variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@greater(variables('api_start_time'),utcNow())",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_terminate_playbook_if_input_start_time_is_in_future": {
+                            "actions": {
+                                "Failed_response_when_input_start_time_is_in_future": {
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 400,
+                                        "body": "Invalid input for start time. Make sure start time value is less than or equals to current time."
+                                    }
+                                },
+                                "Terminate_when_input_start_time_is_in_future": {
+                                    "runAfter": {
+                                        "Failed_response_when_input_start_time_is_in_future": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Invalid input for start time. Make sure start time value is less than or equals to current time."
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_to_terminate_playbook_if_input_end_time_is_in_future": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@greater(variables('api_end_time'),utcNow())",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_terminate_playbook_when_start_time_is_greater_than_input_end_time_": {
+                            "actions": {
+                                "Response_1": {
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 400,
+                                        "body": "Input start time is greater than input end time. Make sure that start time must be less than end time in input."
+                                    }
+                                },
+                                "Terminate_when_input_start_time_is_greater_than_input_end_time": {
+                                    "runAfter": {
+                                        "Response_1": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Input start time is greater than input end time. Make sure that start time must be less than end time in input."
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_to_terminate_playbook_if_input_start_time_is_in_future": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@greater(variables('api_end_time'),variables('api_start_time'))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Terminate_Success": {
+                            "runAfter": {
+                                "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_History_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        },
+                        "Terminate_failure": {
+                            "runAfter": {
+                                "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_History_Data": [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Failed",
+                                "runError": {
+                                    "code": "400",
+                                    "message": "Error occurred while collecting Host History data. See 'Run History' for more details."
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {}
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]",
+                                "connectionProperties": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "CensysHostHistory",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}

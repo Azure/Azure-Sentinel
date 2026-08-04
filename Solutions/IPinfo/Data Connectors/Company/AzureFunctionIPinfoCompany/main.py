@@ -3,6 +3,7 @@ import maxminddb
 import time
 import azure.functions as func
 from azure.identity import ClientSecretCredential
+from azure.core.exceptions import ClientAuthenticationError
 from azure.monitor.ingestion import LogsIngestionClient
 from .constants import *
 from .utils import download_mmdbs
@@ -55,10 +56,19 @@ def main(myTimer: func.TimerRequest) -> None:
 
     # Function flow starts here; above this line are function definitions
     credential = ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-    access_token = credential.get_token(AZURE_SCOPE).token
+    try:
+        access_token = credential.get_token(AZURE_SCOPE).token
+    except ClientAuthenticationError as e:
+        if "AADSTS700016" in e.message:
+            logging.error("\nAuthentication Failed: Please verify your Client ID\n")
+        elif "AADSTS7000215" in e.message:
+            logging.error("\nAuthentication Failed: Please verify your Client Secret\n")
+        elif "check your tenant name" in e.message:
+            logging.error("\nAuthentication Failed: Please verify your Tenant ID\n")
+        else:
+            logging.error(f"\nUnexpected error - {e.message}\n")
     if access_token:
         logging.info("\nAccess Token Retrieved\n")
-        logging.info(access_token)
     else:
         logging.error("\nFailed to retrieve access token\n")
 

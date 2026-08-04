@@ -1,0 +1,132 @@
+Parser:
+  Title: Web Session ASIM parser for Cisco Umbrella Proxy Logs
+  Version: '0.1.0'
+  LastUpdated: Mar 24, 2026
+Product:
+  Name: Cisco Umbrella
+Normalization:
+  Schema: WebSession
+  Version: '0.2.7'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cisco Umbrella Documentation
+  Link: https://securitydocs.cisco.com/docs/umbrella-dns/olh/147416.dita
+Description: |
+  This ASIM parser supports normalizing Cisco Umbrella proxy logs to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionCiscoUmbrella
+EquivalentBuiltInParser: _ASim_WebSession_CiscoUmbrella
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+      Cisco_Umbrella_proxy_CL
+      | where not(disabled)
+      | extend
+          EventStartTime = Timestamp_t,
+          EventEndTime = Timestamp_t,
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.7",
+          EventType = "HTTPsession",
+          EventProduct = "Cisco Umbrella",
+          EventVendor = "Cisco",
+          EventCount = int(1),
+          EventSeverity = "Informational",
+          Type = "Cisco_Umbrella_proxy_CL"
+      | parse PolicyIdentity_s with * "(" Email ")" *
+      | extend
+          SrcUsername = coalesce(Email, Policy_Identity_Type_s),
+          SrcUsernameType = iff(isnotempty(Email), "UPN", "Simple")
+      | project-rename
+          SrcIpAddr = Internal_IP_s,
+          DvcIpAddr = External_IP_s,
+          DstIpAddr = Destination_IP_s,
+          HttpContentType = Content_Type_s,
+          HttpReferrer = Referer_s,
+          HttpUserAgent = userAgent_s,
+          EventResultDetails = statusCode_s,
+          FileSHA256 = ['SHA-SHA256_s'],
+          ThreatOriginalRiskLevel = AMP_Disposition_s
+      | extend
+          Verdict = column_ifexists("Verdict_s", ""),
+          Url = column_ifexists("URL_s", ""),
+          HttpRequestMethod = column_ifexists("Request_Method_s", ""),
+          RuleName = column_ifexists("Rule_ID_s", ""),
+          RuleNumber = toint(column_ifexists("Ruleset_ID_s", "")),
+          FileName = column_ifexists("File_Name_s", ""),
+          ThreatCategory = tostring(Blocked_Categories_s)
+      | extend
+          EventResult = case(
+              Verdict =~ "Allowed", "Success",
+              Verdict =~ "Blocked", "Failure",
+              "NA"
+          ),
+          ThreatRiskLevel = toint(AMP_Score_s),
+          HttpRequestBodyBytes = tolong(requestSize_d),
+          HttpResponseBodyBytes = tolong(responseBodySize_d),
+          DstBytes = tolong(responseSize_d)
+      | extend
+          AdditionalFields = iff(pack, bag_pack(
+              "Categories", Categories_s,
+              "AVDetections", AVDetections_s,
+              "Identities", Identities_s,
+              "PolicyIdentityType", Policy_Identity_Type_s), dynamic([]))
+      | extend
+          HttpStatusCode = EventResultDetails,
+          Dst = DstIpAddr,
+          Src = SrcIpAddr,
+          Dvc = DvcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = SrcUsername,
+          Rule = RuleName
+      | project
+          TimeGenerated,
+          EventStartTime,
+          EventEndTime,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventProduct,
+          EventVendor,
+          EventCount,
+          EventSeverity,
+          Type,
+          SrcUsername,
+          SrcUsernameType,
+          SrcIpAddr,
+          DvcIpAddr,
+          DstIpAddr,
+          HttpContentType,
+          HttpReferrer,
+          HttpUserAgent,
+          EventResultDetails,
+          FileSHA256,
+          ThreatOriginalRiskLevel,
+          Url,
+          HttpRequestMethod,
+          RuleName,
+          RuleNumber,
+          FileName,
+          ThreatCategory,
+          EventResult,
+          ThreatRiskLevel,
+          HttpRequestBodyBytes,
+          HttpResponseBodyBytes,
+          DstBytes,
+          AdditionalFields,
+          HttpStatusCode,
+          Dst,
+          Src,
+          Dvc,
+          IpAddr,
+          User,
+          Rule
+  };
+  parser(disabled=disabled, pack=pack)
