@@ -44,13 +44,13 @@ Review the parameter-less parser for the following:
 
 - **No `project-away`**: The query must NOT use `project-away` to remove unmapped columns. It should use `project` instead, as `project-away` does not protect the parser from schema changes in the source data.
 
-- **No same-table or cross-table enrichment**: Verify that the query is a single pipeline over the declared source table. Flag any second read of the source table, self-join, cross-table reference, `join`, `lookup`, secondary `union` branch, `externaldata`, inline `datatable` mapping, or equivalent table-shaped enrichment. If a field cannot be produced from the current source row, it should remain unmapped rather than be enriched.
+- **No same-table or cross-table event enrichment**: Verify that the parser reads event records from one declared source table. Flag a second read of that table, a self-join, event-record correlation, a workspace-table or watchlist reference, `externaldata`, or another external tabular source. Allow query-local static mappings defined with `datatable` and applied with `lookup`; these map values without reading or correlating additional event records. Verify that each lookup key is unique so the mapping cannot fan out a source record. If a field cannot be produced from the current source row or a static mapping, it should remain unmapped rather than be enriched from event data.
 
 - **One source record produces at most one normalized record**: Flag any operation that fans out one source record into multiple normalized records, regardless of operator. Fan-out indicates a connector or source event-shape defect that should be corrected rather than supported in the parser.
 
 - **No `mv-*` operators**: Flag any KQL operator whose name begins with `mv-`, including `mv-expand` and `mv-apply`. The parser should use scalar dynamic-value access or other scalar expressions instead. If a field cannot be mapped without row expansion, it should remain unmapped.
 
-- **No aggregation, reaggregation, correlation, or deduplication**: Flag `summarize`, `distinct`, `arg_min`, `arg_max`, or any equivalent operation that combines source records or collapses expanded rows. An ASIM parser should normalize each source record independently rather than correlate, deduplicate, or reaggregate records.
+- **No event-record aggregation, reaggregation, correlation, or deduplication**: Flag `summarize`, `distinct`, `arg_min`, `arg_max`, or any equivalent operation that combines source records or collapses expanded rows. An ASIM parser should normalize each source record independently rather than correlate, deduplicate, or reaggregate event records.
 
 - **`pack` parameter**: If the query uses `AdditionalFields`, verify that a `pack: bool = false` parameter is included. This allows users to choose whether to populate `AdditionalFields` or return an empty dynamic, improving performance for users who do not need the extra information.
 
@@ -60,7 +60,7 @@ Review the parameter-less parser for the following:
 
 - **General KQL performance**: Flag any other inefficient patterns such as unnecessary `let` statements, redundant filters, or operations that could be reordered for better performance.
 
-Treat every same-table enrichment, cross-table/table-shaped enrichment, fan-out, `mv-*`, or aggregation/reaggregation violation as 🔴 High priority.
+Treat every same-table or cross-table event enrichment, fan-out, `mv-*`, or event-record aggregation/reaggregation violation as 🔴 High priority.
 
 **Output format:**
 
@@ -95,7 +95,7 @@ Please review:
 3. **Redundant computation**: Are there any calculated fields or parsing operations that occur before the parameter filters, when they could be moved after?
 4. **Parameter completeness**: Are the filtering parameters comprehensive enough to allow efficient querying for common use cases?
 5. **Placeholder entity field consistency**: Compare the parameterized parser's placeholder fields and values with the parameter-less parser. Report fields missing from both parsers only in the parameter-less review above. In this section, report only differences introduced by the parameterized parser, such as a placeholder that is omitted, renamed, or populated when the parameter-less parser defines it correctly. Matching omissions are not acceptable; they are already reported in the parameter-less review.
-6. **Prohibited pattern consistency**: Report any same-table enrichment, cross-table/table-shaped enrichment, fan-out, `mv-*`, or aggregation/reaggregation introduced only by the parameterized parser as 🔴 High priority. If the same violation exists in both parser versions, report it only in the parameter-less review above.
+6. **Prohibited pattern consistency**: Report any same-table or cross-table event enrichment, fan-out, `mv-*`, or event-record aggregation/reaggregation introduced only by the parameterized parser as 🔴 High priority. Query-local static `datatable` and `lookup` mappings are allowed. If the same violation exists in both parser versions, report it only in the parameter-less review above.
 
 **Output format:**
 
