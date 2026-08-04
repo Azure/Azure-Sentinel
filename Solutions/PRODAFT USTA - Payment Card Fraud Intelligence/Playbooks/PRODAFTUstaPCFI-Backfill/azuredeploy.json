@@ -3,9 +3,9 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "PRODAFTUstaPCFI-Backfill",
-    "description": "On-demand backfill playbook for PRODAFT USTA - Payment Card Fraud Intelligence. Pages through the USTA credit-card API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (PAN redaction, field mapping) as live polling. The deployment is self-contained: it creates its own Data Collection Endpoint and Rule (writing into the existing PRODAFTUstaCompromisedCards_CL table) and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
+    "description": "On-demand backfill playbook for PRODAFT USTA - Payment Card Fraud Intelligence. Pages through the USTA credit-card API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (PAN redaction, field mapping) as live polling. The deployment is self-contained: it creates the PRODAFTUstaCompromisedCards_CL table if it does not exist yet, its own Data Collection Endpoint and Rule, and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
     "prerequisites": [
-      "The PRODAFT USTA - Payment Card Fraud Intelligence solution installed (this creates the PRODAFTUstaCompromisedCards_CL table the backfill writes into); connecting the data connector starts forward polling.",
+      "The PRODAFT USTA - Payment Card Fraud Intelligence solution installed. The backfill can run before the data connector has ingested anything: it creates the PRODAFTUstaCompromisedCards_CL table itself if the connector has not yet done so. Connecting the data connector starts forward polling.",
       "A PRODAFT USTA long-lived API key.",
       "Permission to create role assignments in the workspace resource group (Owner or User Access Administrator), since the template grants its identity 'Monitoring Metrics Publisher' automatically."
     ],
@@ -61,10 +61,18 @@
       "type": "int",
       "defaultValue": 90,
       "metadata": { "description": "Number of days of history to backfill." }
+    },
+    "TableRetentionDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "metadata": { "description": "Retention in days applied to the PRODAFTUstaCompromisedCards_CL table. Only relevant when this deployment has to create the table; set it to the table's current retention if the table already exists and you have changed it from the 90-day default." }
     }
   },
   "variables": {
     "BackfillWorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "TableName": "PRODAFTUstaCompromisedCards_CL",
+    "TableDeploymentName": "[concat(parameters('PlaybookName'), '-table')]",
+    "TableDeploymentResourceId": "[resourceId('Microsoft.Resources/deployments', concat(parameters('PlaybookName'), '-table'))]",
     "DceName": "[concat(parameters('PlaybookName'), '-DCE')]",
     "DcrName": "[concat(parameters('PlaybookName'), '-DCR')]",
     "DceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
@@ -72,6 +80,51 @@
     "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]"
   },
   "resources": [
+    {
+      "comments": "Ensures the destination table exists. The codeless connector only materialises PRODAFTUstaCompromisedCards_CL once it ingests its first record, so a backfill run before any live data would otherwise fail with the table not found. Deploying the table is a PUT: it creates the table when absent and is a no-op when the connector already created it. Runs in the workspace's resource group, which may differ from this deployment's.",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('TableDeploymentName')]",
+      "resourceGroup": "[parameters('WorkspaceResourceGroup')]",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[concat(parameters('WorkspaceName'), '/', variables('TableName'))]",
+              "properties": {
+                "totalRetentionInDays": "[parameters('TableRetentionDays')]",
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "schema": {
+                  "name": "[variables('TableName')]",
+                  "description": "PRODAFT USTA Payment Card Fraud Intelligence - compromised payment cards (PAN redacted). TimeGenerated reflects ingestion time; Created and StatusTimestamp carry the true event time reported by USTA. Only BIN (first 6), last 4 digits, brand, and length of the card number are retained.",
+                  "columns": [
+                    { "name": "TimeGenerated", "type": "dateTime" },
+                    { "name": "TicketId", "type": "long" },
+                    { "name": "Status", "type": "string" },
+                    { "name": "StatusTimestamp", "type": "dateTime" },
+                    { "name": "Created", "type": "dateTime" },
+                    { "name": "ContentType", "type": "string" },
+                    { "name": "CompanyId", "type": "int" },
+                    { "name": "CompanyName", "type": "string" },
+                    { "name": "CardBin", "type": "string" },
+                    { "name": "CardLast4", "type": "string" },
+                    { "name": "CardMasked", "type": "string" },
+                    { "name": "CardBrand", "type": "string" },
+                    { "name": "CardLength", "type": "int" },
+                    { "name": "ExpirationDate", "type": "dateTime" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
     {
       "type": "Microsoft.Insights/dataCollectionEndpoints",
       "apiVersion": "2024-03-11",
@@ -90,7 +143,8 @@
       "name": "[variables('DcrName')]",
       "location": "[parameters('WorkspaceLocation')]",
       "dependsOn": [
-        "[variables('DceResourceId')]"
+        "[variables('DceResourceId')]",
+        "[variables('TableDeploymentResourceId')]"
       ],
       "properties": {
         "description": "DCR for the PRODAFT USTA PCFI backfill playbook. Applies the same transform as the connector DCR and writes to the existing PRODAFTUstaCompromisedCards_CL table.",
