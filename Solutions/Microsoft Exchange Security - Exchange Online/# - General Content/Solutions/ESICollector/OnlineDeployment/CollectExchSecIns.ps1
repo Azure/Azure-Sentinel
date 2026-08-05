@@ -1249,6 +1249,9 @@ $Script:SupportedConfigurationVersion = "2.4"
 
     function Connect-LogIngestionAPI
     {
+        Param(
+            $configNode
+        )
         Write-LogMessage -Message ("Generate Log Ingestion API Token with Type $($Script:ESIProcessingType) ...")
         Write-LogMessage -Message "Connect to Azure RM"
 
@@ -1257,7 +1260,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             # Ensures you do not inherit an AzContext in your runbook
             Disable-AzContextAutosave -Scope Process
             
-            if ($isRunbook -and $Script:SentinelLogCollector.UseManagedIdentity)
+            if ($isRunbook -and $configNode.UseManagedIdentity)
             {
                 # Connect to Azure with system-assigned managed identity
                 $AzureContext = (Connect-AzAccount -Identity -ContextName "SentinelIngestion").context
@@ -1271,7 +1274,7 @@ $Script:SupportedConfigurationVersion = "2.4"
                 }
                 else {
                     Write-LogMessage -Message "Az Connect with Interactive Logon"
-                    $AzureContext = (Connect-AzAccount -ContextName "SentinelIngestion" -CertificateThumbprint $Script:SentinelLogCollector.TargetLogCertificateThumbprint -Tenant $Script:SentinelLogCollector.TargetLogTenantID -ApplicationId $Script:SentinelLogCollector.TargetLogAppID).context
+                    $AzureContext = (Connect-AzAccount -ContextName "SentinelIngestion" -CertificateThumbprint $configNode.TargetLogCertificateThumbprint -Tenant $configNode.TargetLogTenantID -ApplicationId $configNode.TargetLogAppID).context
                 }
                 $Global:AlreadyAzSentinelConnected = $true
             }
@@ -1788,13 +1791,14 @@ $Script:SupportedConfigurationVersion = "2.4"
     {
         Param(
             [string]$body, 
-            [string]$logType
+            [string]$logType,
+            $configNode = $Script:SentinelLogCollectorAuthentication
         )
 
         $method = "POST"
 
-        $DceUri = $Script:SentinelLogCollector.DataCollectionEndpointURI
-        $DCRImmutableID = $Script:SentinelLogCollector.DCRImmutableId
+        $DceUri = $configNode.DataCollectionEndpointURI
+        $DCRImmutableID = $configNode.DCRImmutableId
         $streamName = $logType
 
         # if StreamName doesn't begin with 'Custom-', add it
@@ -1804,7 +1808,7 @@ $Script:SupportedConfigurationVersion = "2.4"
 
         if ($null -eq $Script:SentinelLogIngestionToken)
         {
-            Connect-LogIngestionAPI
+            Connect-LogIngestionAPI -configNode $configNode
         }
 
         $bearerToken = $Script:SentinelLogIngestionToken.AccessToken
@@ -3642,6 +3646,30 @@ $Script:SupportedConfigurationVersion = "2.4"
                         if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.OutputName)) {
                             $Script:InstanceConfiguration | Add-Member Noteproperty -Name OutputName -value $jsonConfig.InstanceConfiguration.$InstanceName.OutputName
                         }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppId)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name EntraIDAppId -value $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppId
+                        }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppSecretReference)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name EntraIDAppSecretReference -value $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppSecretReference
+                        }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppCertificateThumbprint)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name EntraIDAppCertificateThumbprint -value $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppCertificateThumbprint
+                        }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDTenantId)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name EntraIDTenantId -value $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDTenantId
+                        }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.DataCollectionEndpointURI)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name DataCollectionEndpointURI -value $jsonConfig.InstanceConfiguration.$InstanceName.DataCollectionEndpointURI
+                        }
+
+                        if (-not [String]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.DCRImmutableId)) {
+                            $Script:InstanceConfiguration | Add-Member Noteproperty -Name DCRImmutableId -value $jsonConfig.InstanceConfiguration.$InstanceName.DCRImmutableId
+                        }
                     }
                 }
                 else {
@@ -3700,29 +3728,54 @@ $Script:SupportedConfigurationVersion = "2.4"
                 }
                 else { $Script:SentinelLogCollector.SentinelLogIngestionAPIActivated = $false }
 
+                $Script:SentinelLogCollectorAuthentication = $Script:SentinelLogCollector
+                if ($InstanceName -ne "Default")
+                {
+                    if (-not [string]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.DataCollectionEndpointURI)) 
+                    {   
+                        $Script:SentinelLogCollectorAuthentication.DataCollectionEndpointURI = $jsonConfig.InstanceConfiguration.$InstanceName.DataCollectionEndpointURI
+                    }
+                    if (-not [string]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.DCRImmutableId)) 
+                    {   
+                        $Script:SentinelLogCollectorAuthentication.DCRImmutableId = $jsonConfig.InstanceConfiguration.$InstanceName.DCRImmutableId
+                    }
+                    if (-not [string]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDTenantId)) 
+                    {   
+                        $Script:SentinelLogCollectorAuthentication.TargetLogTenantID = $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDTenantId
+                    }
+                    if (-not [string]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppId)) 
+                    {   
+                        $Script:SentinelLogCollectorAuthentication.TargetLogAppID = $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppId
+                    }
+                    if (-not [string]::IsNullOrEmpty($jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppCertificateThumbprint)) 
+                    {   
+                        $Script:SentinelLogCollectorAuthentication.TargetLogCertificateThumbprint = $jsonConfig.InstanceConfiguration.$InstanceName.EntraIDAppCertificateThumbprint
+                    }
+                }
+
 
                 if ($Script:SentinelLogCollector.SentinelLogIngestionAPIActivated)
                 {
                     
                     #throw "Sentinel Log Collector configuration with new Log Ingestion API is currently not supported."
 
-                    if ([string]::IsNullOrEmpty($Script:SentinelLogCollector.DataCollectionEndpointURI) -or
-                    [string]::IsNullOrEmpty($Script:SentinelLogCollector.DCRImmutableId) -or
-                    $null -eq $Script:SentinelLogCollector.UseManagedIdentity -or (
-                        $Script:SentinelLogCollector.UseManagedIdentity -eq $false -and (
-                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogTenantID) -or
-                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogAppID) -or
-                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogCertificateThumbprint)
+                    if ([string]::IsNullOrEmpty($Script:SentinelLogCollectorAuthentication.DataCollectionEndpointURI) -or
+                    [string]::IsNullOrEmpty($Script:SentinelLogCollectorAuthentication.DCRImmutableId) -or
+                    $null -eq $Script:SentinelLogCollectorAuthentication.UseManagedIdentity -or (
+                        $Script:SentinelLogCollectorAuthentication.UseManagedIdentity -eq $false -and (
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollectorAuthentication.TargetLogTenantID) -or
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollectorAuthentication.TargetLogAppID) -or
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollectorAuthentication.TargetLogCertificateThumbprint)
                         )
                     ))
                     {
                         throw "Sentinel Log Collector configuration with new Log Ingestion API Endpoint is activated but DCE URI or DCR Immutable Id or Authentication information are missing."
                     }
 
-                    if ($script:IsRunbook -and -not $Script:SentinelLogCollector.UseManagedIdentity)
+                    if ($script:IsRunbook -and -not $Script:SentinelLogCollectorAuthentication.UseManagedIdentity)
                     {
                         try {
-                            Get-AutomationVariable -Name $Script:SentinelLogCollector.TargetLogAppSecretReference -ErrorAction Stop | Out-Null
+                            Get-AutomationVariable -Name $Script:SentinelLogCollectorAuthentication.TargetLogAppSecretReference -ErrorAction Stop | Out-Null
                         }
                         catch {
                             throw "Sentinel Log Collector configuration with new Log Ingestion API Endpoint is activated but Secret information is missing. Exception : $($_.Exception.Message)"
