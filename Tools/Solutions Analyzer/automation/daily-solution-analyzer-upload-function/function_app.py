@@ -30,13 +30,10 @@ def daily_solution_analyzer_upload(mytimer: func.TimerRequest) -> None:
     auth_mode = os.getenv("KUSTO_AUTH_MODE", "managed-identity")
     managed_identity_client_id = os.getenv("MANAGED_IDENTITY_CLIENT_ID", "").strip()
 
-    # Prefer packaged uploader that is deployed with the function app.
-    # Fallback to repository-relative path for local development.
+    # Function files live under: Tools/Solutions Analyzer/automation/daily-solution-analyzer-upload-function
+    # upload_to_kusto.py is two levels up.
     function_dir = Path(__file__).resolve().parent
-    uploader = function_dir / "upload_to_kusto.py"
-
-    if not uploader.exists():
-        uploader = function_dir.parent.parent / "upload_to_kusto.py"
+    uploader = function_dir.parent.parent / "upload_to_kusto.py"
 
     if not uploader.exists():
         raise FileNotFoundError(f"upload_to_kusto.py not found at {uploader}")
