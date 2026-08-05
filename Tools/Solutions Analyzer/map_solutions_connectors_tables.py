@@ -2928,6 +2928,648 @@ def apply_overrides_to_data(
     return [apply_overrides_to_row(row, overrides, entity_type, key_field) for row in data]
 
 
+# ---------------------------------------------------------------------------
+# Advanced (data-driven) source/collector vendor & product resolution
+# ---------------------------------------------------------------------------
+# The 4 fields source_vendor / source_product / collector_vendor / collector_product
+# are populated entirely from knowledge kept in solution_analyzer_overrides.csv,
+# using a small set of derivation entities. Precedence policy lives here in code;
+# ALL vendor/product knowledge (publisher aliases, name patterns, forwarder
+# registry, long-tail corrections) lives as override rows.
+#
+# Override entities consumed here:
+#   connector           - explicit literal override on a connector id (Tier 0, wins)
+#   connector_publisher - Pattern matches the connector's publisher VALUE (Tier 2)
+#   solution_author     - Pattern matches the connector's solution author (Tier 3)
+#   connector_name_pattern - Pattern matches connector id/title/solution (Tier 4)
+#   connector_publisher_fallback - low-precedence publisher map, e.g. Microsoft (Tier 5)
+#   collector_pattern   - Pattern matches connector id/title/solution -> collector_* fields
+#   vendor_alias        - Pattern matches a vendor VALUE -> canonical value (normalization)
+#   table_name_pattern  - Pattern matches a table name -> any of the 4 fields
+#
+# Value DSL: a value of "${column}" copies that column's value from the row
+# (e.g. connector_publisher -> source_vendor). Any other value is a literal.
+
+SOURCE_COLLECTOR_FIELDS = ('source_vendor', 'source_product', 'collector_vendor', 'collector_product')
+
+
+def _override_is_literal(o: 'Override') -> bool:
+    """True if the override value is a literal (not a ${column} reference)."""
+    v = (o.value or '').strip()
+    return not (v.startswith('${') and v.endswith('}'))
+
+
+def _resolve_override_value(value: str, row: Dict[str, str]) -> str:
+    """Resolve a ${column} reference against the row; otherwise return the literal."""
+    v = (value or '').strip()
+    if v.startswith('${') and v.endswith('}'):
+        return (row.get(v[2:-1].strip(), '') or '').strip()
+    return value
+
+
+def _apply_vendor_alias(value: str, alias_rules: List['Override']) -> str:
+    """Normalize each ';'-separated vendor token through vendor_alias rules."""
+    if not value:
+        return value
+    out: List[str] = []
+    seen: Set[str] = set()
+    for token in (p.strip() for p in value.split(';') if p.strip()):
+        canonical = token
+        for a in alias_rules:
+            if a.matches(token):
+                canonical = a.value.strip()
+                break
+        if canonical and canonical not in seen:
+            seen.add(canonical)
+            out.append(canonical)
+    return ';'.join(out)
+
+
+# URLs whose domain never indicates a real event-source vendor (Microsoft / infra
+# / generic hosting / standards bodies). Used by the evidence-based vendor tier.
+_NON_VENDOR_URL_DOMAINS = {
+    'microsoft', 'azure', 'windows', 'office', 'office365', 'microsoftonline',
+    'msn', 'live', 'visualstudio', 'msdn', 'msftconnecttest', 'azureedge', 'azure-api',
+    'github', 'githubusercontent', 'gist', 'schema', 'schemas', 'w3', 'ietf',
+    'oauth', 'json', 'xml', 'jsonschema', 'swagger', 'openapi',
+    'google', 'gstatic', 'googleapis', 'gravatar', 'wikipedia', 'wikimedia',
+    'youtube', 'youtu', 'linkedin', 'twitter', 'facebook',
+    'apache', 'mit', 'creativecommons', 'gnu', 'readthedocs', 'npmjs', 'pypi',
+    'docker', 'kubernetes', 'terraform',
+    'sentinel', 'loganalytics', 'applicationinsights',
+    'aka', 'bit', 'tinyurl', 'goo', 'example', 'localhost', 'contoso',
+}
+
+# Generic tokens that are never a real event-source vendor on their own.
+
+_EVIDENCE_URL_RE = re.compile(r'https?://([A-Za-z0-9.\-]+)')
+_CC_SECOND_LEVEL = {'co', 'com', 'org', 'net', 'gov', 'edu', 'ac'}
+
+
+def _iter_url_vendor_domains(text: str) -> Iterable[str]:
+    """Yield registrable-domain main labels from URLs in `text`, skipping infra /
+    Microsoft / generic domains. E.g. 'https://docs.cyberark.com/...' -> 'cyberark'."""
+    if not text:
+        return
+    seen: Set[str] = set()
+    for host in _EVIDENCE_URL_RE.findall(text):
+        parts = [p for p in host.lower().split('.') if p]
+        if len(parts) < 2:
+            continue
+        label = parts[-2]
+        # crude second-level ccTLD handling (e.g. docs.cyberark.co.uk -> cyberark)
+        if label in _CC_SECOND_LEVEL and len(parts) >= 3:
+            label = parts[-3]
+        if label and label not in _NON_VENDOR_URL_DOMAINS and label not in seen:
+            seen.add(label)
+            yield label
+
+
+def _vendor_from_title_known(title: str, known_vendors_sorted: List[str]) -> str:
+    """Return a KNOWN vendor that appears at the start of the connector title
+    (longest match wins), or ''. Matching only against an existing vendor
+    dictionary avoids inventing a vendor from arbitrary title words (e.g. the
+    generic 'Common', 'Custom', 'Syslog', or Microsoft's own 'Windows' /
+    'Exchange'). `known_vendors_sorted` must be sorted by descending length.
+
+    Also tries a camelCase-split of the title so concatenated names match
+    (e.g. 'SlackAudit ...' -> 'Slack Audit ...' -> 'Slack')."""
+    t = (title or '').strip()
+    # strip leading status markers like "[Deprecated] "
+    while t.startswith('['):
+        end = t.find(']')
+        if end == -1:
+            break
+        t = t[end + 1:].strip()
+    candidates = [t]
+    split = re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', t)
+    if split != t:
+        candidates.append(split)
+    for cand in candidates:
+        tl = cand.strip().lower()
+        if not tl:
+            continue
+        for kv in known_vendors_sorted:
+            kvl = kv.lower()
+            if (tl == kvl or tl.startswith(kvl + ' ') or tl.startswith(kvl + ',')
+                    or tl.startswith(kvl + ':') or tl.startswith(kvl + '(')
+                    or tl.startswith(kvl + '-')):
+                return kv
+    return ''
+
+
+def _vendor_from_evidence(c: Dict[str, str], domain_vendor_rules: List['Override'],
+                          known_vendors_sorted: List[str]) -> Tuple[str, str]:
+    """Infer a source vendor from connector evidence when the publisher-based tiers
+    failed (typically Microsoft-published third-party connectors). Returns
+    (vendor_value, basis) or ('', '').
+      (A) vendor domains in the connector description (highest precision), mapped
+          to a canonical vendor via `domain_vendor` overrides;
+      (B) a KNOWN vendor at the start of the connector title.
+    """
+    desc = c.get('connector_description', '') or ''
+    for label in _iter_url_vendor_domains(desc):
+        for o in domain_vendor_rules:
+            if o.field == 'source_vendor' and o.matches(label):
+                return o.value, 'description_url'
+    cand = _vendor_from_title_known(c.get('connector_title', '') or '', known_vendors_sorted)
+    if cand:
+        return cand, 'title'
+    return '', ''
+
+
+# Trailing connector-framework / delivery-method noise stripped from a connector
+# title before extracting the product name (everything from the first "(", a
+# " via "/" using " clause, or a " for [Microsoft/Azure] Sentinel" clause, onward).
+_PRODUCT_TAIL_RE = re.compile(
+    r'\s*(?:\(|\bvia\b|\busing\b|\bfor\s+(?:microsoft\s+|azure\s+)?sentinel\b).*$',
+    re.IGNORECASE)
+# Trailing product-version token (e.g. 'V1', 'V2', 'v2.0') -- not part of the name.
+_VERSION_TAIL_RE = re.compile(r'\s+v\d+(?:\.\d+)*$', re.IGNORECASE)
+# Trailing connective / filler words left dangling after event-type words are
+# split off (e.g. 'Exchange Logs and Events' -> 'Exchange').
+_CONNECTIVE_TAILS = ('and', 'or', '&', 'by', 'of', 'the', 'to')
+# Leading filler / collection-mechanism tokens stripped from the FRONT of the
+# product remainder: connective words ('for Active Directory' -> 'Active
+# Directory') and fetch mechanisms ('S3' in AWS titles is how events are
+# fetched, not the product -> 'S3 VPC Flow' -> 'VPC Flow').
+_LEADING_PRODUCT_STRIP = ('for', 'of', 'the', 'and', 'to', 'by', 'or', '&', 's3')
+# Trailing plumbing / Sentinel-integration phrases stripped from the product
+# remainder (longest first) -- never part of the product name.
+_PRODUCT_TAIL_STRIP = (
+    'for microsoft sentinel', 'for sentinel', 'microsoft sentinel',
+    'data connector', 'connector', 'connectors', 'collector', 'ingestion', 'data',
+)
+# Event / record TYPE words -- they describe the *kind* of records, not the
+# product, so they are captured into `source_event_type` instead (longest first).
+_EVENT_TYPE_STRIP = (
+    'admin audit logs', 'security statistics', 'threat indicators',
+    'audit logs', 'audit log', 'event logs', 'event log', 'activity logs',
+    'access logs', 'security events', 'alerts', 'alert', 'iocs', 'ioc',
+    'indicators', 'indicator', 'incidents', 'incident', 'cases', 'findings',
+    'finding', 'events', 'event', 'logs', 'log', 'audit', 'activities',
+    'activity', 'threats', 'threat', 'vulnerabilities', 'reports', 'report',
+    'notifications', 'notification', 'telemetry', 'messages', 'message',
+    'records', 'statistics', 'devices', 'device',
+)
+# Canonical event-type labels -- synonyms collapse to a single value so the
+# `source_event_type` column uses a consistent vocabulary (e.g. Logs / Activity
+# / Security Events / Event Logs all become 'Events'; Audit Logs -> 'Audit').
+_EVENT_TYPE_CANON = {
+    'events': 'Events', 'event': 'Events', 'event logs': 'Events', 'event log': 'Events',
+    'security events': 'Events', 'activity': 'Events', 'activities': 'Events',
+    'activity logs': 'Events', 'access logs': 'Events', 'logs': 'Events', 'log': 'Events',
+    'telemetry': 'Events', 'messages': 'Events', 'message': 'Events', 'records': 'Events',
+    'audit': 'Audit', 'audit logs': 'Audit', 'audit log': 'Audit', 'admin audit logs': 'Audit',
+    'alerts': 'Alerts', 'alert': 'Alerts',
+    'iocs': 'IOCs', 'ioc': 'IOCs', 'indicators': 'IOCs', 'indicator': 'IOCs',
+    'threat indicators': 'IOCs',
+    'incidents': 'Incidents', 'incident': 'Incidents',
+    'cases': 'Cases', 'case': 'Cases',
+    'findings': 'Findings', 'finding': 'Findings',
+    'vulnerabilities': 'Vulnerabilities', 'vulnerability': 'Vulnerabilities',
+    'reports': 'Reports', 'report': 'Reports',
+    'notifications': 'Notifications', 'notification': 'Notifications',
+    'threats': 'Threats', 'threat': 'Threats',
+    'devices': 'Devices', 'device': 'Devices',
+    'statistics': 'Statistics', 'security statistics': 'Statistics',
+}
+
+
+def _canonical_event_type(raw: str) -> str:
+    """Map a captured event-type phrase to its canonical label (e.g. 'Logs' /
+    'Activity' -> 'Events'), falling back to a title-cased form when unknown."""
+    key = (raw or '').strip().lower()
+    if not key:
+        return ''
+    return _EVENT_TYPE_CANON.get(key, raw.strip())
+
+
+# Multi-word vendor-name continuations that survive vendor-alias shortening and
+# must also be stripped from the product remainder (e.g. AWS connector titles
+# start with 'Amazon Web Services' but the vendor is normalized to 'Amazon').
+_PRODUCT_VENDOR_TAILS = ('web services',)
+# Whole-remainder values that are not a product: generic ingestion mechanisms,
+# consumer use-cases (DSPM is a Microsoft use-case), or leftover plumbing words.
+_GENERIC_NON_PRODUCT = frozenset({
+    'syslog', 'common event format', 'custom logs', 'custom log',
+    'api', 'apis', 'dspm', 'data', 'connector', 'data connector',
+})
+# event_product values that are internal codenames, not real product names.
+_BAD_EVENT_PRODUCTS = frozenset({'vault', 'falconhost'})
+_SCREAMING_SNAKE_RE = re.compile(r'[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+')
+
+
+def _is_bad_event_product(p: str) -> bool:
+    """True if an event_product value is an internal codename or a generic
+    ingestion term rather than a real product (e.g. 'Vault', 'FalconHost',
+    'ESA_CONSOLIDATED_LOG_EVENT', 'akamai_siem', 'Data Connector')."""
+    p = (p or '').strip()
+    if not p:
+        return False
+    if p.lower() in _BAD_EVENT_PRODUCTS or p.lower() in _GENERIC_NON_PRODUCT:
+        return True
+    # a single token containing underscores is an internal codename, not a
+    # product (e.g. 'akamai_siem', 'ESA_CONSOLIDATED_LOG_EVENT').
+    if '_' in p and ' ' not in p:
+        return True
+    return bool(_SCREAMING_SNAKE_RE.fullmatch(p))
+
+
+def _product_and_type_from_title(title: str, vendor: str) -> Tuple[str, str]:
+    """Derive (product, event_type) from a connector title: remove framework /
+    delivery-method clauses and the leading vendor, then separate trailing
+    event/record-type words (Alerts, IOCs, Events, Audit, Logs, …) into the
+    event_type. Returns ('', '') when nothing meaningful remains.
+    E.g. 'Check Point Cyberint Alerts Connector (via CCF)' -> ('Cyberint',
+    'Alerts'); 'CyberArk Audit' -> ('', 'Audit'); 'Cisco Secure Endpoint (via
+    CCF)' -> ('Secure Endpoint', '')."""
+    t = (title or '').strip()
+    while t.startswith('['):
+        end = t.find(']')
+        if end == -1:
+            break
+        t = t[end + 1:].strip()
+    t = _PRODUCT_TAIL_RE.sub('', t).strip()
+    if not t or not vendor.strip():
+        return '', ''
+    vl = vendor.strip().lower()
+    v_words = vl.split()
+    remainder = None
+    # Strip the leading vendor by matching consecutive leading words. This
+    # tolerates alias expansion where the title uses a shorter vendor form than
+    # the normalized value (e.g. title 'Palo Alto Cortex XDR' vs vendor 'Palo
+    # Alto Networks' -> remainder 'Cortex XDR'). The camelCase-split candidate
+    # rescues concatenated titles ('SlackAudit').
+    for candidate in (t, re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', t)):
+        c_words = candidate.split()
+        if not c_words:
+            continue
+        cw_low = [w.lower() for w in c_words]
+        k = 0
+        while k < len(v_words) and k < len(cw_low) and cw_low[k] == v_words[k]:
+            k += 1
+        if k == 0:
+            continue  # vendor is not a leading prefix in this candidate form
+        if k >= len(c_words):
+            return '', ''  # title is exactly the vendor (or a prefix of it)
+        remainder = ' '.join(c_words[k:]).strip()
+        break
+    if remainder is None:
+        if v_words and v_words[0] == 'microsoft':
+            remainder = t  # Microsoft product titles don't repeat 'Microsoft'
+        else:
+            return '', ''
+    # strip a multi-word vendor-name continuation (e.g. 'Amazon' + 'Web Services')
+    rl = remainder.lower()
+    for tail in _PRODUCT_VENDOR_TAILS:
+        if rl == tail:
+            remainder = ''
+        elif rl.startswith(tail + ' '):
+            remainder = remainder[len(tail):].strip()
+            break
+    # iteratively strip leading fillers/mechanisms, trailing plumbing phrases,
+    # trailing version tokens, and capture trailing event/record-type words
+    event_types: List[str] = []
+    changed = True
+    while changed and remainder:
+        changed = False
+        low = remainder.lower()
+        _vm = _VERSION_TAIL_RE.search(remainder)
+        if _vm:
+            remainder = remainder[:_vm.start()].strip()
+            changed = True
+            continue
+        for lw in _LEADING_PRODUCT_STRIP:
+            if low == lw:
+                remainder = ''
+                changed = True
+                break
+            if low.startswith(lw + ' '):
+                remainder = remainder[len(lw) + 1:].strip()
+                changed = True
+                break
+        if changed:
+            continue
+        for cw in _CONNECTIVE_TAILS:
+            if low == cw:
+                remainder = ''
+                changed = True
+                break
+            if low.endswith(' ' + cw):
+                remainder = remainder[: -(len(cw) + 1)].strip()
+                changed = True
+                break
+        if changed:
+            continue
+        for ph in _PRODUCT_TAIL_STRIP:
+            if low == ph:
+                remainder = ''
+                changed = True
+                break
+            if low.endswith(' ' + ph):
+                remainder = remainder[: -(len(ph) + 1)].strip()
+                changed = True
+                break
+        if changed:
+            continue
+        for et in _EVENT_TYPE_STRIP:
+            if low == et:
+                event_types.insert(0, remainder)
+                remainder = ''
+                changed = True
+                break
+            if low.endswith(' ' + et):
+                event_types.insert(0, remainder[-len(et):])
+                remainder = remainder[: -(len(et) + 1)].strip()
+                changed = True
+                break
+    product = remainder.strip(' -:').strip()
+    if product.lower() in _GENERIC_NON_PRODUCT or product.lower() == vl:
+        product = ''  # generic leftover, or product would just repeat the vendor
+    # canonicalize + de-duplicate the captured event-type labels
+    canon: List[str] = []
+    for e in event_types:
+        c = _canonical_event_type(e)
+        if c and c not in canon:
+            canon.append(c)
+    return product, ', '.join(canon)
+
+
+def resolve_source_collector_fields(
+    connectors_data: List[Dict[str, str]],
+    solutions_data: List[Dict[str, str]],
+    overrides: List[Override],
+) -> None:
+    """Populate the 4 source/collector fields + their *_basis provenance columns
+    on each connector row, in place, using tiered override-driven derivation.
+
+    Precedence (source_vendor / source_product):
+      0 explicit connector override (already applied by generic pass) -> basis 'override'
+      1 event_* seed already on the row                               -> basis 'event'
+      2 connector_publisher rule (skip Microsoft-ish publishers)      -> basis 'publisher'
+      3 solution_author rule (skip Microsoft-ish authors)             -> basis 'solution_author'
+      4 connector_name_pattern rule                                   -> basis 'name_pattern'
+      4.5 evidence (source_vendor only): vendor domain in the connector
+          description via `domain_vendor` override                    -> basis 'description_url'
+          else the leading vendor phrase in the connector title       -> basis 'title'
+      5 connector_publisher_fallback rule (e.g. Microsoft)            -> basis 'publisher_fallback'
+                                                                         (LOW CONFIDENCE)
+    Precedence (collector_vendor / collector_product):
+      0 explicit connector override -> basis 'override'
+      1 collector_pattern rule      -> basis 'collector_pattern'
+      2 connector_name_pattern rule -> basis 'name_pattern'
+    """
+    author_by_solution: Dict[str, str] = {}
+    for s in solutions_data:
+        name = (s.get('solution_name', '') or '').strip()
+        if name:
+            author_by_solution[name] = (s.get('solution_author_name', '') or '').strip()
+
+    def rules(entity: str) -> List['Override']:
+        return [o for o in overrides if o.entity == entity]
+
+    pub_rules = rules('connector_publisher')
+    author_rules = rules('solution_author')
+    name_rules = rules('connector_name_pattern')
+    pub_fallback_rules = rules('connector_publisher_fallback')
+    coll_rules = rules('collector_pattern')
+    alias_rules = rules('vendor_alias')
+    domain_vendor_rules = rules('domain_vendor')
+    explicit_conn = [o for o in overrides
+                     if o.entity == 'connector' and o.field in SOURCE_COLLECTOR_FIELDS
+                     and _override_is_literal(o)]
+
+    def is_microsoftish(name: str) -> bool:
+        return name.strip().lower().startswith('microsoft')
+
+    def first_rule(rule_list: List['Override'], field: str, *keys: str) -> Optional['Override']:
+        for o in rule_list:
+            if o.field != field:
+                continue
+            for k in keys:
+                if k and o.matches(k):
+                    return o
+        return None
+
+    def explicit_matches(field: str, cid: str) -> bool:
+        return any(o.field == field and o.matches(cid) for o in explicit_conn)
+
+    # Vendor dictionary for the title-evidence tier (see _vendor_from_title_known):
+    # canonical vendors we already know from override knowledge, ground-truth event
+    # vendors, and non-Microsoft publishers. Sorted longest-first so multi-word
+    # vendors match before their prefixes.
+    known_vendors: Set[str] = set()
+    for _o in domain_vendor_rules:
+        if (_o.value or '').strip():
+            known_vendors.add(_o.value.strip())
+    for _a in alias_rules:
+        if (_a.value or '').strip():
+            known_vendors.add(_a.value.strip())
+    for _c in connectors_data:
+        for _tok in (_c.get('source_vendor', '') or '').split(';'):
+            if _tok.strip():
+                known_vendors.add(_tok.strip())
+        _p = (_c.get('connector_publisher', '') or '').strip()
+        if _p and not is_microsoftish(_p):
+            known_vendors.add(_p)
+    known_vendors = {_apply_vendor_alias(v, alias_rules) or v for v in known_vendors}
+    known_vendors = {v for v in known_vendors if v and not is_microsoftish(v)}
+    known_vendors_sorted = sorted(known_vendors, key=lambda s: (-len(s), s.lower()))
+
+    for c in connectors_data:
+        cid = (c.get('connector_id', '') or '').strip()
+        title = (c.get('connector_title', '') or '').strip()
+        sol = (c.get('solution_name', '') or '').strip()
+        # Normalize the publisher display value through vendor_alias so it is
+        # consistent (e.g. 'Microsoft Corporation'/'Microsoft Sentinel' ->
+        # 'Microsoft' via the 'Microsoft.*' alias; 'Crowdstrike' -> 'CrowdStrike').
+        pub = _apply_vendor_alias((c.get('connector_publisher', '') or '').strip(), alias_rules)
+        c['connector_publisher'] = pub
+        author = author_by_solution.get(sol, '')
+
+        # ----- source_vendor / source_product -----
+        for field in ('source_vendor', 'source_product'):
+            basis = ''
+            if explicit_matches(field, cid):
+                basis = 'override'
+            elif (c.get(field, '') or '').strip():
+                basis = 'event'
+            else:
+                o = None
+                ev_value = ''
+                if pub and not is_microsoftish(pub):
+                    o = first_rule(pub_rules, field, pub)
+                    if o:
+                        basis = 'publisher'
+                if o is None and author and not is_microsoftish(author):
+                    o = first_rule(author_rules, field, author)
+                    if o:
+                        basis = 'solution_author'
+                if o is None:
+                    o = first_rule(name_rules, field, cid, title, sol)
+                    if o:
+                        basis = 'name_pattern'
+                # Evidence-based vendor (description URLs -> title) before the
+                # low-confidence publisher fallback. This rescues Microsoft-published
+                # third-party connectors (e.g. CyberArk Audit) that would otherwise
+                # fall back to Microsoft. source_vendor only.
+                if o is None and field == 'source_vendor':
+                    ev_value, ev_basis = _vendor_from_evidence(c, domain_vendor_rules, known_vendors_sorted)
+                    if ev_value:
+                        basis = ev_basis
+                if o is None and not ev_value and pub:
+                    o = first_rule(pub_fallback_rules, field, pub)
+                    if o:
+                        basis = 'publisher_fallback'
+                if o is not None:
+                    c[field] = _resolve_override_value(o.value, c)
+                elif ev_value:
+                    c[field] = ev_value
+            # normalize + record provenance
+            c[field] = _apply_vendor_alias((c.get(field, '') or '').strip(), alias_rules) \
+                if field == 'source_vendor' else (c.get(field, '') or '').strip()
+            if field == 'source_vendor':
+                c['source_vendor_basis'] = basis if c.get('source_vendor', '').strip() else ''
+
+        # ----- source_product / source_event_type + provenance -----
+        # event_product (KQL) is ground truth, but some are internal codenames
+        # (Vault, FalconHost, SCREAMING_SNAKE); drop those so the title supplies a
+        # product. When the product is still unknown and the vendor is known,
+        # derive product + event type from the title remainder.
+        _sp_cur = (c.get('source_product', '') or '').strip()
+        _sp_basis = ''
+        if _sp_cur:
+            _sp_basis = 'event' if (c.get('event_product', '') or '').strip() else 'override'
+            if _sp_basis == 'event' and _is_bad_event_product(_sp_cur):
+                c['source_product'] = ''
+                _sp_cur = ''
+                _sp_basis = ''
+        _etype = ''
+        _sv = (c.get('source_vendor', '') or '').strip()
+        if _sv and ';' not in _sv:
+            _prod_t, _etype = _product_and_type_from_title(title, _sv)
+            if not _sp_cur and _prod_t:
+                c['source_product'] = _prod_t
+                _sp_basis = 'title'
+        c['source_product_basis'] = _sp_basis
+        c['source_event_type'] = _etype
+
+        # ----- collector_vendor / collector_product -----
+        for field in ('collector_vendor', 'collector_product'):
+            basis = ''
+            if explicit_matches(field, cid):
+                basis = 'override'
+            elif (c.get(field, '') or '').strip():
+                basis = 'override'
+            else:
+                o = first_rule(coll_rules, field, cid, title, sol)
+                if o:
+                    basis = 'collector_pattern'
+                if o is None:
+                    o = first_rule(name_rules, field, cid, title, sol)
+                    if o:
+                        basis = 'name_pattern'
+                if o is not None:
+                    c[field] = _resolve_override_value(o.value, c)
+            c[field] = _apply_vendor_alias((c.get(field, '') or '').strip(), alias_rules) \
+                if field == 'collector_vendor' else (c.get(field, '') or '').strip()
+            if field == 'collector_vendor':
+                c['collector_vendor_basis'] = basis if c.get('collector_vendor', '').strip() else ''
+
+        # A collector only carries information when it is a DIFFERENT vendor than the
+        # source (a third party forwarding another vendor's data, e.g. Cribl shipping
+        # Palo Alto logs). When the collector vendor set equals the source vendor set
+        # (e.g. the Cribl connector collecting Cribl's own telemetry), the "collector"
+        # is just the source's own shipping mechanism, so clear it to avoid a
+        # redundant collector == source.
+        def _vendor_set(v: str) -> Set[str]:
+            return {p.strip().lower() for p in (v or '').split(';') if p.strip()}
+        if (c.get('collector_vendor', '').strip()
+                and _vendor_set(c.get('collector_vendor', '')) == _vendor_set(c.get('source_vendor', ''))):
+            c['collector_vendor'] = ''
+            c['collector_product'] = ''
+            c['collector_vendor_basis'] = ''
+
+
+# Bases considered LOW CONFIDENCE for the solution-level rollup. When a solution
+# has at least one connector contributing a higher-confidence vendor, values that
+# come only from these bases are dropped from the solution rollup so a generic
+# fallback (e.g. the Microsoft publisher fallback) never pollutes the solution's
+# vendor set alongside the real third-party vendor.
+LOW_CONFIDENCE_BASES = ('publisher_fallback',)
+
+
+def rollup_solution_source_collector_fields(
+    connectors_data: List[Dict[str, str]],
+    solutions_data: List[Dict[str, str]],
+) -> None:
+    """Roll the connector-level source/collector vendor & product fields up to the
+    owning solution row, in place, and record a rollup provenance in the *_basis
+    columns.
+
+    Low-confidence handling: for source_vendor / source_product, contributions whose
+    connector basis is in LOW_CONFIDENCE_BASES (e.g. the Microsoft publisher
+    fallback) are excluded whenever the solution also has at least one
+    higher-confidence contribution. If every contribution is low confidence, the
+    low-confidence values are kept (so the field is never left empty needlessly).
+
+    Solution *_basis value:
+      - the single contributing basis if all kept contributions share it,
+      - 'mixed' if kept contributions carry more than one distinct basis,
+      - '' when the field is empty.
+    """
+    # solution_name -> field -> list of (value_token, basis)
+    contributions: Dict[str, Dict[str, List[Tuple[str, str]]]] = {}
+
+    def basis_for(field: str, conn: Dict[str, str]) -> str:
+        if field in ('source_vendor', 'source_product'):
+            return (conn.get('source_vendor_basis', '') or '').strip()
+        return (conn.get('collector_vendor_basis', '') or '').strip()
+
+    for c in connectors_data:
+        sol = (c.get('solution_name', '') or '').strip()
+        if not sol:
+            continue
+        bucket = contributions.setdefault(sol, {f: [] for f in SOURCE_COLLECTOR_FIELDS})
+        for field in SOURCE_COLLECTOR_FIELDS:
+            b = basis_for(field, c)
+            for token in (p.strip() for p in (c.get(field, '') or '').split(';') if p.strip()):
+                bucket[field].append((token, b))
+
+    for s in solutions_data:
+        sol = (s.get('solution_name', '') or '').strip()
+        bucket = contributions.get(sol, {})
+        for field in SOURCE_COLLECTOR_FIELDS:
+            pairs = bucket.get(field, [])
+            # Drop low-confidence contributions when a higher-confidence one exists.
+            high = [(v, b) for (v, b) in pairs if b not in LOW_CONFIDENCE_BASES]
+            kept = high if high else pairs
+            values: List[str] = []
+            bases: List[str] = []
+            seen: Set[str] = set()
+            for v, b in kept:
+                if v and v not in seen:
+                    seen.add(v)
+                    values.append(v)
+                    if b:
+                        bases.append(b)
+            s[field] = ';'.join(values)
+            if field == 'source_vendor':
+                s['source_vendor_basis'] = _rollup_basis(values, bases)
+            elif field == 'collector_vendor':
+                s['collector_vendor_basis'] = _rollup_basis(values, bases)
+
+
+def _rollup_basis(values: List[str], bases: List[str]) -> str:
+    if not values:
+        return ''
+    distinct = list(dict.fromkeys(b for b in bases if b))
+    if not distinct:
+        return ''
+    return distinct[0] if len(distinct) == 1 else 'mixed'
+
+
 def apply_plural_table_fix(name: str) -> Tuple[str, Optional[str]]:
     lowered = name.lower()
     corrected = PLURAL_TABLE_CORRECTIONS.get(lowered)
@@ -3532,8 +4174,11 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
     """
     Extract table names from *_DCR.json files (Data Collection Rule definitions).
     
-    DCR files contain table names in the "outputStream" parameter within dataFlows.
-    The value is prefixed with "Microsoft-" or "Custom-" which should be stripped.
+    DCR files contain table names in ``dataFlows``.
+    For each flow, ``outputStream`` is authoritative for destination table names.
+    If ``outputStream`` is missing, ``streams`` is used as a fallback.
+    Stream values are normalized by stripping ``Microsoft-`` / ``Custom-`` and
+    a leading ``Sentinel`` token.
     
     Args:
         dcr_json_path: Path to the *_DCR.json file
@@ -3548,7 +4193,7 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
         return tables
     
     def extract_output_streams(obj: Any) -> Set[str]:
-        """Extract table names from outputStream fields in a DCR object."""
+        """Extract destination table names from DCR dataFlows."""
         found_tables: Set[str] = set()
         
         if isinstance(obj, dict):
@@ -3557,15 +4202,15 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
             if isinstance(data_flows, list):
                 for flow in data_flows:
                     if isinstance(flow, dict):
-                        # Try both "outputStream" (legacy) and "streams" (standard)
+                        # Prefer outputStream (destination table); fall back to streams.
                         output_streams = []
                         output_stream = flow.get("outputStream")
                         if isinstance(output_stream, str):
                             output_streams.append(output_stream)
-                        
-                        streams = flow.get("streams")
-                        if isinstance(streams, list):
-                            output_streams.extend(s for s in streams if isinstance(s, str))
+                        else:
+                            streams = flow.get("streams")
+                            if isinstance(streams, list):
+                                output_streams.extend(s for s in streams if isinstance(s, str))
                         
                         for output_stream in output_streams:
                             # Normalize stream names to table names
@@ -3965,6 +4610,78 @@ def find_companion_table_files(connector_json_path: Path) -> Tuple[List[Path], L
             dcr_files.append(file_path)
     
     return table_files, dcr_files
+
+
+def extract_tables_from_datatypes_fallback(data: Any) -> Dict[str, Dict[str, Any]]:
+    """Extract table tokens from connector ``dataTypes`` as a fallback source.
+
+    This resolver expands placeholders (for example ``{{graphQueriesTableName}}``)
+    and can use query fields (``lastDataReceivedQuery`` / ``query``) when a
+    concrete ``name`` token is not available.
+    """
+    tables: Dict[str, Dict[str, Any]] = {}
+    cache: Dict[str, Optional[str]] = {}
+
+    def _record(tbl_name: Optional[str]) -> None:
+        if not isinstance(tbl_name, str):
+            return
+        cleaned = tbl_name.strip()
+        if not cleaned or cleaned.lower() == "let":
+            return
+        if cleaned not in tables:
+            tables[cleaned] = {
+                "has_mismatch": False,
+                "actual_table": None,
+                "sources": {"dataTypes"},
+            }
+
+    def _collect_from_container(container: Any) -> None:
+        if not isinstance(container, dict):
+            return
+        for dt in container.get("dataTypes", []) or []:
+            if not isinstance(dt, dict):
+                continue
+
+            name_token = extract_table_token(
+                dt.get("name"),
+                data,
+                cache,
+                allow_parser_tokens=True,
+            )
+            if name_token:
+                _record(name_token)
+                continue
+
+            query_field = dt.get("lastDataReceivedQuery") or dt.get("query")
+            for token in extract_query_table_tokens(
+                query_field,
+                data,
+                cache,
+                allow_parser_tokens=True,
+            ):
+                _record(token)
+
+            if not name_token:
+                query_token = extract_table_token(
+                    query_field,
+                    data,
+                    cache,
+                    allow_parser_tokens=True,
+                )
+                _record(query_token)
+
+    _collect_from_container(data)
+    if isinstance(data, dict):
+        props = data.get("properties")
+        if isinstance(props, dict):
+            _collect_from_container(props.get("connectorUiConfig"))
+        for resource in data.get("resources", []) or []:
+            if isinstance(resource, dict):
+                r_props = resource.get("properties")
+                if isinstance(r_props, dict):
+                    _collect_from_container(r_props.get("connectorUiConfig"))
+
+    return tables
 
 
 def is_solution_package_template(data: Any) -> bool:
@@ -4589,17 +5306,23 @@ def find_connectors_in_main_template(data: Any) -> List[Dict[str, Any]]:
                         if "permissions" in ui_config:
                             entry["permissions"] = json.dumps(ui_config["permissions"])
                         
-                        # Extract table names from dataTypes
+                        # Extract table names from dataTypes (with placeholder expansion)
                         tables: List[str] = []
                         data_types = ui_config.get("dataTypes", [])
+                        dt_cache: Dict[str, Optional[str]] = {}
                         if isinstance(data_types, list):
                             for dt in data_types:
                                 if isinstance(dt, dict):
                                     tbl_name = dt.get("name", "")
                                     if isinstance(tbl_name, str) and tbl_name.strip():
-                                        # Skip ARM template placeholders like {{graphQueriesTableName}}
-                                        if not tbl_name.startswith("{{"):
-                                            tables.append(tbl_name.strip())
+                                        resolved = extract_table_token(
+                                            tbl_name,
+                                            ui_config,
+                                            dt_cache,
+                                            allow_parser_tokens=True,
+                                        )
+                                        if resolved:
+                                            tables.append(resolved.strip())
                         
                         entry["tables_from_datatypes"] = tables
                         connectors.append(entry)
@@ -6317,6 +7040,57 @@ def _process_asim_parser_file(
         return None
 
 
+def _union_subtype_action(name: str) -> str:
+    """Return the sub-type action token of a multi-variant unifying parser.
+
+    Most ASIM schemas have a single unifying parser, but ProcessEvent splits
+    into Create/Terminate variants (e.g. ASimProcessEventCreate / imProcessCreate).
+    This token lets the ASim and im unifying parsers of the same sub-type be
+    paired within a schema. Returns '' for the base (single) variant.
+    """
+    for action in ('Create', 'Terminate'):
+        if name.endswith(action):
+            return action
+    return ''
+
+
+def _dedup_union_parsers(parser_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse duplicate unifying (union) parsers to the ASim variant.
+
+    Each ASIM schema exposes two unifying parsers: a parameter-less ASim variant
+    (e.g. ASimDns / _ASim_Dns) and a filtering im variant (e.g. imDns / _Im_Dns).
+    They are the same unifying parser, so the CSV should carry only the ASim row.
+    The filtering variant's identity is preserved on the ASim row via the
+    ``filtering_parser_name`` and ``filtering_equivalent_builtin`` columns so the
+    documentation can still surface both variants. Source parsers (all ASim*-named;
+    the vim* duplicates are already skipped at load time) and non-union rows pass
+    through unchanged.
+    """
+    # Index im (filtering) union rows by (schema, action) so each ASim union row
+    # can find its paired filtering variant. Pairing by schema alone is ambiguous
+    # for ProcessEvent (3 variants), so the sub-type action disambiguates.
+    im_union_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for rec in parser_records:
+        if rec.get('parser_type') == 'union' and not rec.get('parser_name', '').startswith('ASim'):
+            key = (rec.get('schema', ''), _union_subtype_action(rec.get('parser_name', '')))
+            im_union_by_key.setdefault(key, rec)
+
+    deduped: List[Dict[str, Any]] = []
+    for rec in parser_records:
+        is_union = rec.get('parser_type') == 'union'
+        name = rec.get('parser_name', '')
+        if is_union and not name.startswith('ASim'):
+            # Drop the filtering (im) union row; it is represented by the paired ASim row.
+            continue
+        if is_union and name.startswith('ASim'):
+            im_row = im_union_by_key.get((rec.get('schema', ''), _union_subtype_action(name)))
+            if im_row:
+                rec['filtering_parser_name'] = im_row.get('parser_name', '')
+                rec['filtering_equivalent_builtin'] = im_row.get('equivalent_builtin', '')
+        deduped.append(rec)
+    return deduped
+
+
 def load_asim_parsers_detailed(repo_root: Path) -> Tuple[List[Dict[str, Any]], Set[str], Dict[str, Set[str]], Dict[str, str]]:
     """
     Load ASIM parsers from /Parsers/ASim*/Parsers directories with full metadata for CSV export.
@@ -6406,6 +7180,12 @@ def load_asim_parsers_detailed(repo_root: Path) -> Tuple[List[Dict[str, Any]], S
         if cache_hits > 0:
             log_print(f"    ({cache_hits} from cache)")
     
+    # Collapse duplicate unifying parsers (im/vim) to the ASim variant for the CSV,
+    # preserving the filtering variant's identity on the ASim row. The parser_names /
+    # table / alias maps are intentionally left intact so connector and analytic-rule
+    # queries that reference _Im_* / im* functions are still recognized as ASIM parsers.
+    parser_records = _dedup_union_parsers(parser_records)
+
     return parser_records, parser_names, dict(parser_table_map), parser_alias_map
 
 
@@ -6418,6 +7198,8 @@ def write_asim_parsers_csv(parser_records: List[Dict[str, Any]], output_path: Pa
     fieldnames = [
         "parser_name",
         "equivalent_builtin",
+        "filtering_parser_name",
+        "filtering_equivalent_builtin",
         "schema",
         "schema_version",
         "parser_type",
@@ -6713,7 +7495,44 @@ TI_UPLOAD_NEW_TABLE_PATTERNS = {
 }
 TI_UPLOAD_METHOD = "Azure Function (TI Upload API)"
 TI_UPLOAD_TABLES: Tuple[str, ...] = ("ThreatIntelIndicators", "ThreatIntelObjects")
+# Internal Sentinel tables are frequently referenced by connector UX/status
+# queries (for example in lastDataReceivedQuery) without being actual
+# ingestion targets. Suppress connector->table mapping rows for such tables,
+# except TI tables where connector attribution is intentional.
+CONNECTOR_INTERNAL_TABLE_ALLOWLIST: Set[str] = {
+    "ThreatIntelIndicators",
+    "ThreatIntelObjects",
+    "ThreatIntelligenceIndicator",
+}
 _TI_UPLOAD_SKIP_DIRS = {".python_packages", "__pycache__", "node_modules", ".venv", "venv"}
+
+
+def is_internal_connector_association_table(
+    table_name: str,
+    tables_reference: Dict[str, Dict[str, str]],
+) -> bool:
+    """Return True when connector attribution for this table should be suppressed.
+
+    A table is considered suppressible when tables_reference marks it as
+    internal (either category token "Internal" or collection_method "Internal")
+    and it is not explicitly allowlisted for TI connector attribution.
+    """
+    if not table_name:
+        return False
+    normalized_name = normalize_table_case(table_name)
+    if normalized_name in CONNECTOR_INTERNAL_TABLE_ALLOWLIST:
+        return False
+
+    ref = tables_reference.get(normalized_name, {})
+    if not ref:
+        return False
+
+    categories = {c.lower() for c in _table_categories(ref)}
+    if "internal" in categories:
+        return True
+
+    methods = {m.strip().lower() for m in (ref.get("collection_method") or "").split("|") if m.strip()}
+    return "internal" in methods
 
 # Methods superseded by TI Upload API. When a connector is reclassified as
 # Azure Function (TI Upload API), the generic / parent classifications are
@@ -9220,6 +10039,27 @@ def main() -> None:
                 if table_name:
                     tables_reference[table_name] = row
 
+    # Flag categoryless Azure Monitor tables. collect_table_info.py derives
+    # source_azure_monitor from the tables-category page, which omits tables
+    # that have no category (e.g. ApiManagementGatewayLlmLog). The companion
+    # azure_monitor_tables_index.txt holds the authoritative complete set of
+    # Azure Monitor table reference pages, so any referenced table present there
+    # but flagged 'No' is corrected here (and given its reference doc link).
+    am_index_path = tables_reference_path.parent / "azure_monitor_tables_index.txt"
+    if am_index_path.exists():
+        with am_index_path.open("r", encoding="utf-8") as f:
+            am_index = {line.strip().lower() for line in f if line.strip()}
+        am_ref_base = "https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/"
+        am_fixed = 0
+        for table_name, ref in tables_reference.items():
+            if ref.get('source_azure_monitor', '').strip().lower() != 'yes' and table_name.lower() in am_index:
+                ref['source_azure_monitor'] = 'Yes'
+                if not ref.get('azure_monitor_doc_link', '').strip():
+                    ref['azure_monitor_doc_link'] = f"{am_ref_base}{table_name.lower()}"
+                am_fixed += 1
+        if am_fixed:
+            log_print(f"Flagged {am_fixed} categoryless table(s) as Azure Monitor via reference index")
+
     # Load overrides from CSV file
     overrides: List[Override] = load_overrides(args.overrides_csv.resolve())
     if overrides:
@@ -9545,36 +10385,15 @@ def main() -> None:
                 has_valid_connector = True
                 
                 # === Table extraction with priority ordering ===
-                # Priority 0: dataTypes in standalone connector definitions (e.g. *_ConnectorDefinition.json)
                 # Priority 1: *_Table.json companion files
-                # Priority 2: *_DCR.json companion files  
+                # Priority 2: *_DCR.json companion files
                 # Priority 3: Query analysis from connector JSON
+                # Priority 4 (fallback): dataTypes from connector definition
                 
                 table_map: Dict[str, Dict[str, Any]] = {}
                 tables_from_companion_files = False
                 
-                # Priority 0: Extract tables from dataTypes in the connector definition JSON
-                # For standalone connector definition files (like *_ConnectorDefinition.json or
-                # CCF v3 definition JSON), extract table names from connectorUiConfig.dataTypes
-                if isinstance(data, dict):
-                    properties = data.get("properties", {})
-                    if isinstance(properties, dict):
-                        ui_config = properties.get("connectorUiConfig", {})
-                        if isinstance(ui_config, dict):
-                            data_types = ui_config.get("dataTypes", [])
-                            if isinstance(data_types, list):
-                                for dt in data_types:
-                                    if isinstance(dt, dict):
-                                        tbl_name = dt.get("name", "")
-                                        if isinstance(tbl_name, str) and tbl_name.strip() and not tbl_name.startswith("{{"):
-                                            if tbl_name not in table_map:
-                                                table_map[tbl_name] = {
-                                                    "has_mismatch": False,
-                                                    "actual_table": None,
-                                                    "sources": {"dataTypes"},
-                                                    "from_companion_file": True,  # Mark as authoritative
-                                                }
-                                                tables_from_companion_files = True
+                data_types_fallback_tables = extract_tables_from_datatypes_fallback(data)
                 
                 # Check for companion Table and DCR files
                 table_json_files, dcr_json_files = find_companion_table_files(json_path)
@@ -9658,6 +10477,11 @@ def main() -> None:
                                 existing_sources = table_map[tbl_name].get("sources", set())
                                 if isinstance(existing_sources, set):
                                     existing_sources.update(tbl_info.get("sources", set()))
+
+                # Priority 4: dataTypes fallback (placeholder-expanded) only when
+                # companion files and query analysis produced no table definitions.
+                if not table_map and data_types_fallback_tables:
+                    table_map.update(data_types_fallback_tables)
                 
                 log_table_candidates = extract_log_analytics_tables(data)
                 used_loganalytics_fallback = False
@@ -9794,6 +10618,24 @@ def main() -> None:
                             continue
                         if not table_name:
                             continue
+                        normalized_table_name = normalize_table_case(table_name)
+                        if is_internal_connector_association_table(normalized_table_name, tables_reference):
+                            add_issue(
+                                issues,
+                                solution_name=solution_info["solution_name"],
+                                solution_folder=solution_info["solution_folder"],
+                                connector_id=connector_id,
+                                connector_title=connector_title,
+                                connector_publisher=connector_publisher,
+                                relevant_file=relative_path,
+                                reason="internal_table_excluded",
+                                details=(
+                                    f"Table '{normalized_table_name}' dropped from connector tables "
+                                    "because it is classified as an internal Sentinel table; "
+                                    "TI tables remain allowlisted for connector attribution."
+                                ),
+                            )
+                            continue
                         plural_sources = table_info.get("plural_sources") or []
                         mismatch = table_info.get("has_mismatch", False)
                         actual_name = table_info.get("actual_table")
@@ -9810,8 +10652,6 @@ def main() -> None:
                                 reason="plural_table_name",
                                 details=f"Plural table name(s) {plural_list} replaced with '{table_name}'.",
                             )
-                        # Normalize table name to proper case from reference
-                        normalized_table_name = normalize_table_case(table_name)
                         row_key = (
                             solution_info["solution_name"],
                             solution_info["solution_folder"],
@@ -9988,6 +10828,23 @@ def main() -> None:
                             continue
 
                         normalized_table_name = normalize_table_case(table_name)
+                        if is_internal_connector_association_table(normalized_table_name, tables_reference):
+                            add_issue(
+                                issues,
+                                solution_name=solution_info["solution_name"],
+                                solution_folder=solution_info["solution_folder"],
+                                connector_id=connector_id,
+                                connector_title=connector_title,
+                                connector_publisher=connector_publisher,
+                                relevant_file=str(relative_path),
+                                reason="internal_table_excluded",
+                                details=(
+                                    f"Table '{normalized_table_name}' dropped from connector tables "
+                                    "because it is classified as an internal Sentinel table; "
+                                    "TI tables remain allowlisted for connector attribution."
+                                ),
+                            )
+                            continue
                         row_key = (
                             solution_info["solution_name"],
                             solution_info["solution_folder"],
@@ -10092,6 +10949,23 @@ def main() -> None:
                         continue
 
                     normalized_table_name = normalize_table_case(table_name)
+                    if is_internal_connector_association_table(normalized_table_name, tables_reference):
+                        add_issue(
+                            issues,
+                            solution_name=solution_info["solution_name"],
+                            solution_folder=solution_info["solution_folder"],
+                            connector_id=connector_id,
+                            connector_title=connector_title,
+                            connector_publisher=connector_publisher,
+                            relevant_file=relative_path,
+                            reason="internal_table_excluded",
+                            details=(
+                                f"Table '{normalized_table_name}' dropped from connector tables "
+                                "because it is classified as an internal Sentinel table; "
+                                "TI tables remain allowlisted for connector attribution."
+                            ),
+                        )
+                        continue
                     row_key = (
                         solution_info["solution_name"],
                         solution_info["solution_folder"],
@@ -10760,6 +11634,23 @@ def main() -> None:
             'event_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
             'event_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
             'event_vendor_product_by_table': json.dumps(vp_by_table_serialized) if vp_by_table_serialized else '',
+            # source_* is the real event-source vendor/product (seeded from the
+            # ground-truth event_vendor/event_product, then refined by overrides).
+            # collector_* is the system that collected/shipped the events from the
+            # source; it is populated only when it differs from the source (via
+            # overrides), otherwise left blank.
+            'source_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
+            'source_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
+            'collector_vendor': '',
+            'collector_product': '',
+            # provenance of the derived vendor values (see resolve_source_collector_fields):
+            # one of override/event/publisher/solution_author/name_pattern/collector_pattern, or blank.
+            'source_vendor_basis': '',
+            'collector_vendor_basis': '',
+            # provenance of source_product (event/title/override) and the record
+            # TYPE (Alerts/IOCs/Events/Audit/…) separated out of the product name.
+            'source_product_basis': '',
+            'source_event_type': '',
             'filter_fields': filter_fields_str,
             'not_in_solution_json': info.get('not_in_solution_json', 'false'),
             'solution_name': info.get('solution_name', ''),
@@ -11190,9 +12081,96 @@ def main() -> None:
     # Merge standalone items with solution content items
     all_content_items.extend(standalone_items)
     log_print(f"  Added {len(standalone_items)} standalone content items")
-    
-    # Associate connectors to ASIM parsers and standalone/GitHub Only content items
-    # This matches items to connectors based on shared tables and filter field subsets
+
+    # ---- Resolve parser names mis-recorded as tables --------------------------
+    # Some content-item queries call a solution/ASIM parser function (e.g.
+    # `ImpervaWAFCloud`, `OktaSSO`) that the per-query expansion failed to
+    # resolve, so the parser NAME leaked into content_table_mappings as if it
+    # were a table -- and would otherwise surface as a phantom table page with no
+    # data. Rewrite every mapping whose table_name is actually a known parser
+    # into that parser's underlying tables (tagging `source_parser`). A token
+    # that is itself a genuine table -- documented in tables_reference.csv or a
+    # `*_CL` custom log (e.g. the parser-and-table `CortexXDR_Incidents_CL`) -- is
+    # always kept as-is.
+    #
+    # The parser universe is built from the exact records written to parsers.csv /
+    # asim_parsers.csv (each record's `parser_name` + `tables`), so it matches
+    # precisely what the analyzer reports as a parser.
+    _parser_tables_map: Dict[str, Set[str]] = {}
+    _parser_names_norm: Set[str] = set()
+    for _rec in list(all_parser_records) + list(asim_parser_records):
+        _nm = (_rec.get('parser_name') or '').strip()
+        if not _nm:
+            continue
+        _parser_names_norm.add(normalize_parser_name(_nm))
+        _raw_tbls = (_rec.get('tables') or '').replace(';', ',')
+        _parser_tables_map[_nm.lower()] = {
+            t.strip() for t in _raw_tbls.split(',') if t.strip()
+        }
+
+    def _is_parser_not_table(name: str) -> bool:
+        """True if `name` is a parser function that is NOT itself a real table.
+
+        A parser name is kept as a genuine table when ANY of these hold:
+          - the parser reads a same-named table (self-referential, e.g.
+            `CortexXDR_Incidents_CL`, whose parser resolves to that table), or
+          - the name is a `*_CL` custom log, or
+          - tables_reference.csv documents it as a real Azure Monitor / Defender
+            XDR table (`source_azure_monitor`/`source_defender_xdr` == `Yes`).
+        Otherwise it is a pure parser alias and must not surface as a table -- even
+        when it was mistakenly listed in tables_reference.csv via the
+        `source_sentinel_tables` discovery source (the phantom-table bug).
+        """
+        if not name:
+            return False
+        if normalize_parser_name(name) not in _parser_names_norm:
+            return False  # not a known parser at all
+        low = name.strip().lower()
+        if low.endswith('_cl'):
+            return False  # real custom-log table
+        own = {t.strip().lower() for t in _parser_tables_map.get(low, set())}
+        if low in own:
+            return False  # self-referential parser over a same-named real table
+        ref = tables_reference.get(name, {}) or tables_reference.get(normalize_table_case(name), {})
+        if (ref.get('source_azure_monitor', '').strip().lower() == 'yes' or
+                ref.get('source_defender_xdr', '').strip().lower() == 'yes'):
+            return False  # genuinely documented Azure Monitor / Defender table
+        return True  # pure parser alias -> not a table
+
+    def _expand_parser_to_real_tables(name: str) -> Set[str]:
+        """Expand a parser name to its underlying real table names (recursively),
+        dropping any residual parser tokens. May be empty (parser with no tables)."""
+        expanded = expand_parser_tables(name, _parser_tables_map)
+        return {
+            normalize_table_case(t) for t in expanded
+            if t and not _is_parser_not_table(t)
+        }
+
+    _resolved_mappings: List[Dict[str, str]] = []
+    _seen_map_keys: Set[Tuple[str, str, str, str]] = set()
+    _phantom_parser_tables: Set[str] = set()
+    for mapping in content_table_mappings:
+        tname = mapping.get('table_name', '')
+        if not _is_parser_not_table(tname):
+            _resolved_mappings.append(mapping)
+            continue
+        _phantom_parser_tables.add(tname)
+        for real_table in sorted(_expand_parser_to_real_tables(tname)):
+            new_map = dict(mapping)
+            new_map['table_name'] = real_table
+            new_map['source_parser'] = tname
+            key = (new_map.get('content_id', ''), new_map.get('content_name', ''),
+                   real_table, new_map.get('table_usage', ''))
+            if key in _seen_map_keys:
+                continue
+            _seen_map_keys.add(key)
+            _resolved_mappings.append(new_map)
+    if _phantom_parser_tables:
+        content_table_mappings[:] = _resolved_mappings
+        log_print(
+            f"  Resolved {len(_phantom_parser_tables)} parser name(s) mis-recorded as "
+            f"tables into their underlying tables: {', '.join(sorted(_phantom_parser_tables))}"
+        )
     log_print("\nAssociating connectors to ASIM parsers and content items...")
     
     # Load connector association overrides from the main overrides file
@@ -11413,6 +12391,18 @@ def main() -> None:
     for table in tables_reference:
         if table:
             all_tables.add(table)
+
+    # Safety net: never emit a parser function name as a table. Content mappings
+    # were already rewritten above; this also catches any parser token that
+    # reached all_tables via the connector mapping rows. Genuine tables
+    # (documented or *_CL) are preserved by _is_parser_not_table().
+    _phantom_in_tables = {t for t in all_tables if _is_parser_not_table(t)}
+    if _phantom_in_tables:
+        all_tables -= _phantom_in_tables
+        log_print(
+            f"  Dropped {len(_phantom_in_tables)} parser name(s) from the table set: "
+            f"{', '.join(sorted(_phantom_in_tables))}"
+        )
     
     # Apply solution overrides to rows early, before building table_support_tiers
     # This ensures solution-level overrides (like support_tier fixes) affect derived table data
@@ -11765,6 +12755,20 @@ def main() -> None:
             'feeding_connector_ids': ','.join(
                 sorted(table_connector_ids.get(table_name, set()))
             ),
+            # source_*/collector_* are projected from the feeding connectors
+            # after all connector overrides are applied (see projection pass
+            # below). Table-level overrides win, so start empty here.
+            'source_vendor': '',
+            'source_product': '',
+            'collector_vendor': '',
+            'collector_product': '',
+            # provenance of the derived vendor values: override/projected/name_pattern, or blank.
+            'source_vendor_basis': '',
+            'collector_vendor_basis': '',
+            # provenance of source_product and the record TYPE projected from
+            # feeding connectors (see projection pass below).
+            'source_product_basis': '',
+            'source_event_type': '',
             'resource_types': ref.get('resource_types', ''),
             'source_azure_monitor': ref.get('source_azure_monitor', ''),
             'source_defender_xdr': ref.get('source_defender_xdr', ''),
@@ -12212,7 +13216,81 @@ def main() -> None:
         log_print(f"  Detected ingestion API for {total_api_connectors} connectors:")
         for api_name, count in sorted(ingestion_api_counts.items(), key=lambda x: -x[1]):
             log_print(f"    {api_name}: {count}")
-    
+
+    # ===================== SOURCE/COLLECTOR PROJECTION ONTO TABLES =====================
+    # First derive the connector-level source/collector vendor & product fields
+    # (all knowledge lives in the overrides CSV; precedence policy lives in the
+    # resolver). Explicit connector overrides have already been applied above, so
+    # the resolver only fills gaps and records provenance in the *_basis columns.
+    resolve_source_collector_fields(connectors_data, solutions_data, overrides)
+
+    # Roll the connector-level vendor/product fields up to the owning solution row,
+    # excluding low-confidence fallback contributions when a stronger vendor exists.
+    rollup_solution_source_collector_fields(connectors_data, solutions_data)
+
+    # Project source_vendor/source_product/collector_vendor/collector_product from
+    # each table's feeding connectors onto the table row. Connector values are now
+    # final. Table-level overrides (applied earlier) win, so only fill fields that
+    # are still empty. Record provenance in the table's *_basis columns.
+    _sc_fields = ('source_vendor', 'source_product', 'collector_vendor', 'collector_product')
+    _table_name_rules = [o for o in overrides if o.entity == 'table_name_pattern']
+    _conn_by_id = {
+        c.get('connector_id', ''): c
+        for c in connectors_data
+        if c.get('connector_id', '')
+    }
+    for _t in tables_data:
+        _tname = _t.get('table_name', '') or ''
+        _feeders = [f for f in (_t.get('feeding_connector_ids', '') or '').split(',') if f]
+        for _field in _sc_fields:
+            if _t.get(_field):
+                # table-level override wins; record provenance
+                if _field == 'source_vendor':
+                    _t['source_vendor_basis'] = 'override'
+                elif _field == 'collector_vendor':
+                    _t['collector_vendor_basis'] = 'override'
+                continue
+            _vals: Set[str] = set()
+            for _cid in _feeders:
+                _c = _conn_by_id.get(_cid)
+                if not _c:
+                    continue
+                for _part in (_c.get(_field, '') or '').split(';'):
+                    _part = _part.strip()
+                    if _part:
+                        _vals.add(_part)
+            _basis = ''
+            if _vals:
+                _t[_field] = ';'.join(sorted(_vals))
+                _basis = 'projected'
+            else:
+                # fall back to table-name pattern rules for feeder-less tables
+                for _o in _table_name_rules:
+                    if _o.field == _field and _o.matches(_tname):
+                        _t[_field] = _resolve_override_value(_o.value, _t)
+                        _basis = 'name_pattern'
+                        break
+            if _field == 'source_vendor':
+                _t['source_vendor_basis'] = _basis if _t.get('source_vendor', '').strip() else ''
+            elif _field == 'collector_vendor':
+                _t['collector_vendor_basis'] = _basis if _t.get('collector_vendor', '').strip() else ''
+        # Project the connector-only source_product_basis and source_event_type.
+        # Basis mirrors how source_product was populated (projected from feeders);
+        # source_event_type is the union of the feeding connectors' record types.
+        if _t.get('source_product', '').strip():
+            _t['source_product_basis'] = 'projected'
+        _etypes: Set[str] = set()
+        for _cid in _feeders:
+            _c = _conn_by_id.get(_cid)
+            if not _c:
+                continue
+            for _part in (_c.get('source_event_type', '') or '').split(';'):
+                _part = _part.strip()
+                if _part:
+                    _etypes.add(_part)
+        if _etypes:
+            _t['source_event_type'] = ';'.join(sorted(_etypes))
+
     # ===================== PER-TABLE ATTRIBUTION CSV =====================
     # Emit connector_table_ingestion.csv for multi-method/API connectors with per-table attribution
     connector_table_ingestion_path = args.connectors_csv.parent / "connector_table_ingestion.csv"
@@ -12419,6 +13497,14 @@ def main() -> None:
         'event_vendor',
         'event_product',
         'event_vendor_product_by_table',
+        'source_vendor',
+        'source_product',
+        'collector_vendor',
+        'collector_product',
+        'source_vendor_basis',
+        'collector_vendor_basis',
+        'source_product_basis',
+        'source_event_type',
         'filter_fields',
         'not_in_solution_json',
         'solution_name',
@@ -12463,6 +13549,12 @@ def main() -> None:
         'deprecation_date',
         'is_published',
         'marketplace_url',
+        'source_vendor',
+        'source_product',
+        'collector_vendor',
+        'collector_product',
+        'source_vendor_basis',
+        'collector_vendor_basis',
     ] + MARKETPLACE_FIELDS
     solutions_path = args.solutions_csv.resolve()
     with solutions_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -12517,6 +13609,14 @@ def main() -> None:
         'collection_method_source',
         'collection_method_candidates',
         'feeding_connector_ids',
+        'source_vendor',
+        'source_product',
+        'collector_vendor',
+        'collector_product',
+        'source_vendor_basis',
+        'collector_vendor_basis',
+        'source_product_basis',
+        'source_event_type',
         'resource_types',
         'source_azure_monitor',
         'source_defender_xdr',

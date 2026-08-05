@@ -5,9 +5,9 @@
 Total fields collected: 2208
 Schemas processed: 14
 
-Fields matched in ASIM Tester: 1738
+Fields matched in ASIM Tester: 1714
 Fields matched in physical tables: 1301
-Fields only in tester (not in docs): 4
+Fields only in tester (not in docs): 1
 Fields only in physical tables (not in docs): 15
 
 ## Fields per Schema
@@ -39,8 +39,8 @@ Fields only in physical tables (not in docs): 15
 | EntityExtension | 566 |
 | InheritedFromNetworkSession | 129 |
 | PhysicalTableOnly | 15 |
-| SchemaDoc | 1023 |
-| TesterOnly | 4 |
+| SchemaDoc | 1026 |
+| TesterOnly | 1 |
 
 ## Fields by Class
 
@@ -59,6 +59,6 @@ Fields only in physical tables (not in docs): 15
 |-------------|-------|
 | Tester class differs from docs | 57 |
 | Tester type differs from docs | 99 |
-| Tester logical type differs from docs | 174 |
-| Tester allowed values differ from docs | 174 |
+| Tester logical type differs from docs | 154 |
+| Tester allowed values differ from docs | 151 |
 | Physical table type differs from docs | 30 |

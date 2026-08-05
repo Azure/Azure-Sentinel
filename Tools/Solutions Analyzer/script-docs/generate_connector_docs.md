@@ -35,7 +35,7 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - 🔶 icon for Custom Log V1 (CLv1) tables with type-suffixed columns
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
 - **[Parsers Index](../connector-docs/parsers/parsers-index.md)** - All non-ASIM parsers organized by solution
-- **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
+- **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema. Unifying parsers are deduplicated to the `ASim` (parameter-less) variant; the paired `im`/`vim` (filtering) variant is documented on the parser's own page.
 - **[Collection Methods Index](../connector-docs/collection-methods/collection-methods-index.md)** - Connectors grouped by data collection method
 - **[Statistics](../connector-docs/statistics.md)** - Comprehensive statistics and metrics
 - **[Interactive Index](../connector-docs/index.html)** - HTML page with DataTables.js for filtering, sorting, and searching across all entity types
@@ -44,7 +44,7 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](../connector-docs/connectors/) directory)
 - **Individual Table Pages** - Detailed pages for each table with metadata (in [`tables/`](../connector-docs/tables/) directory)
 - **Individual Content Item Pages** - Detailed pages for each content item (in [`content/`](../connector-docs/content/) directory)
-- **Individual Parser Pages** - Detailed pages for each parser (in [`parsers/`](../connector-docs/parsers/) and [`asim/`](../connector-docs/asim/) directories)
+- **Individual Parser Pages** - Detailed pages for each parser (in [`parsers/`](../connector-docs/parsers/) and [`asim/`](../connector-docs/asim/) directories). Each ASIM unifying parser page lists both its parameter-less `ASim` variant and its filtering `im`/`vim` variant in the Parser Information table.
 
 See the [connector-docs README](../connector-docs/README.md) for full documentation.
 

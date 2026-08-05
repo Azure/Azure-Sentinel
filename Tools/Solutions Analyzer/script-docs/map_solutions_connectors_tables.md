@@ -33,6 +33,7 @@ The Solution Connector Tables Analyzer is a comprehensive tool that scans the Az
 
 **Data Connector Analysis**
 - Extract table references from connector JSON files (queries, sample queries, data types)
+- Suppress connector-to-table edges for internal Sentinel tables (for example `SecurityAlert`, `SecurityIncident`) while allowlisting TI tables for intentional TI connector attribution
 - Detect collection methods (AMA, MMA, Azure Diagnostics, CCF, CCF Push, CCF Legacy, Azure Functions, REST API, Native)
 - Extract filter fields (DeviceVendor, EventID, Facility, etc.) to identify data sources
 - Resolve parser function references to actual underlying tables
@@ -101,6 +102,8 @@ The mapping script automatically loads `tables_reference.csv` if present and use
 - Populate table metadata (category, description, resource_types)
 - Determine collection method based on table properties (e.g., "Azure Resources" category → Azure Diagnostics)
 - Include transformation support and ingestion API compatibility information
+
+If the companion `azure_monitor_tables_index.txt` (written by `collect_table_info.py`) is present, the mapper also flags any referenced table whose `source_azure_monitor` is `No` but whose name appears in that authoritative index — correcting categoryless Azure Monitor tables (e.g. `ApiManagementGatewayLlmLog`) to `source_azure_monitor=Yes` and giving them their `…/reference/tables/{name}` documentation link. This in turn lets the `source_azure_monitor` collection-method fallback (Azure Diagnostics) and the correct schema-reference link fire for those tables.
 
 See [collect_table_info.md](collect_table_info.md) for details.
 
@@ -842,9 +845,9 @@ When a connector references a parser function (e.g., `ASimDns`):
 
 For each connector, tables are gathered from several sources. The most authoritative source for what a connector *ingests* is its Data Collection Rule (DCR) and table-definition companion files, so the analyzer applies the following priority:
 
-1. **`dataTypes` declarations** in the connector definition.
-2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR `dataFlows` stream declarations (`outputStream` and `streams`) and the table definition declare exactly what the connector writes to. Stream values are normalized by stripping `Microsoft-` / `Custom-` prefixes and a leading `Sentinel` token (for example, `Microsoft-SentinelAlibabaCloudWAFLogs` -> `AlibabaCloudWAFLogs`).
-3. **Query analysis** of the connector's UI/status queries (`graphQueries`, `sampleQueries`, `lastDataReceivedQuery`, connectivity criteria), including expansion of any parser functions they reference.
+1. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). For DCR files, `outputStream` is authoritative when present; `streams` is used as a fallback when `outputStream` is missing. Stream values are normalized by stripping `Microsoft-` / `Custom-` prefixes and a leading `Sentinel` token (for example, `Microsoft-SentinelAlibabaCloudWAFLogs` -> `AlibabaCloudWAFLogs`).
+2. **Query analysis** of the connector's UI/status queries (`graphQueries`, `sampleQueries`, `lastDataReceivedQuery`, connectivity criteria), including expansion of any parser functions they reference.
+3. **`dataTypes` declarations** in the connector definition as a fallback when neither companion files nor query analysis produce table definitions. Placeholder names (for example `{{graphQueriesTableName}}`) are expanded before use.
 
 **The DCR/Table companion files trump query analysis.** When companion `*_Table.json` / `*_DCR.json` files are present for a connector, the analyzer treats them as ground truth and **skips query analysis** (priority 3) entirely for that connector. This prevents non-ingested tables from leaking onto the connector.
 
@@ -878,6 +881,17 @@ When enabled with `--show-detection-methods`, the `table_detection_methods` colu
 | `connectivityCriterias.{index}.value.{sub_index}` | From connectivity criteria queries |
 | `logAnalyticsTableId` | Extracted from ARM template variables |
 | `parser:{parser_name}` | Resolved from parser function to actual table |
+
+#### Internal Table Suppression for Connector Mappings
+
+Connector mappings intentionally exclude tables that `tables_reference.csv` classifies as internal (`category` contains `Internal` or `collection_method` is `Internal`). This prevents status/health queries from creating false ingestion-attribution edges for internal Sentinel tables such as `SecurityAlert` and `SecurityIncident`.
+
+Threat intelligence tables remain allowlisted for connector attribution:
+- `ThreatIntelIndicators`
+- `ThreatIntelObjects`
+- `ThreatIntelligenceIndicator`
+
+When this suppression rule drops a table edge, the analyzer emits an `internal_table_excluded` row in `solutions_connectors_tables_issues_and_exceptions_report.csv`.
 
 ### Context-Aware Table Detection
 

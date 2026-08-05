@@ -17,6 +17,7 @@ Flattened solution metadata combining `SolutionMetadata.json` and `Data/Solution
 - **Dependency graphing** — `solution_dependencies` lists `publisherId.offerId` of explicit dependencies; combine with [`solution_dependencies.csv`](solution_dependencies.md) for resolved names.
 - **Marketplace listing audit** — verify that solutions display correctly on the Marketplace (`mp_display_name`, `mp_summary`, `mp_categories`, `mp_keywords`).
 - **Pricing model audit** — `mp_is_free`, `mp_is_byol`, `mp_is_microsoft_product`.
+- **Vendor rollup** — `source_vendor`/`source_product`/`collector_vendor`/`collector_product` summarize, at the solution level, the vendors and products of all the solution's connectors (low-confidence fallback contributions are dropped when a stronger vendor exists). Use `source_vendor_basis` to gauge confidence and to find single-vendor vs multi-vendor solutions.
 - **Kusto upload** — uploaded as `solution_analyzer_solutions_lookup` by `upload_to_kusto.py`.
 
 ## Columns
@@ -45,6 +46,19 @@ Flattened solution metadata combining `SolutionMetadata.json` and `Data/Solution
 | `has_connectors` | `true` if solution has data connectors | Computed |
 | `is_deprecated` | `true` if description contains deprecation language | Regex; overridable |
 | `deprecation_date` | Extracted date when deprecated | Regex; overridable |
+
+### Source & collector vendor/product (rolled up from connectors)
+
+These six columns roll the connector-level source/collector fields up to the solution. See [Vendor/product rollup](#vendorproduct-rollup) for the aggregation and low-confidence rules, and [`connectors.csv` › Source & collector derivation](connectors.md#source--collector-vendorproduct-derivation) for how the underlying connector values are derived.
+
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `source_vendor` | Semicolon-separated vendor(s) of the systems that generated the solution's events, aggregated across all the solution's connectors. Exactly one value = a single-vendor (deterministic) solution; multiple values = a multi-vendor solution. | Rollup of connector `source_vendor` |
+| `source_product` | Semicolon-separated product(s) of the systems that generated the events, aggregated across the solution's connectors. | Rollup of connector `source_product` |
+| `collector_vendor` | Semicolon-separated vendor(s) of the intermediaries that collected/forwarded the events (populated only where a collector differs from the source). | Rollup of connector `collector_vendor` |
+| `collector_product` | Semicolon-separated product(s) of the collecting/forwarding intermediaries. | Rollup of connector `collector_product` |
+| `source_vendor_basis` | Provenance of the rolled-up `source_vendor`: the single contributing connector basis (`override`, `event`, `publisher`, `solution_author`, `name_pattern`, `publisher_fallback`) when all kept contributions agree, `mixed` when they carry more than one basis, or blank. `publisher_fallback` marks a **low-confidence** solution whose vendor came only from a generic publisher guess. | Recorded during rollup |
+| `collector_vendor_basis` | Provenance of the rolled-up `collector_vendor`, using the same values as `source_vendor_basis`, or blank when no collector was resolved. | Recorded during rollup |
 
 ### Legacy marketplace fields (kept for backward compatibility)
 
@@ -78,6 +92,20 @@ Flattened solution metadata combining `SolutionMetadata.json` and `Data/Solution
 | `mp_last_checked` | Date when marketplace data was last fetched |
 
 See [`map_solutions_connectors_tables.md` › Azure Marketplace Availability](../map_solutions_connectors_tables.md#azure-marketplace-availability) for caching and refresh details.
+
+## Vendor/product rollup
+
+The six `source_*`/`collector_*` columns are **rolled up from the solution's connectors** (`rollup_solution_source_collector_fields`), after the connector-level values have been resolved. For each of the four value fields, the solution takes the de-duplicated union of the corresponding field across all its connectors.
+
+**Low-confidence handling.** Connector contributions whose basis is low confidence — currently only `publisher_fallback` (a generic publisher guess such as Microsoft) — are **dropped from the rollup whenever the solution also has at least one higher-confidence contribution**. This prevents a generic fallback vendor from appearing alongside the real third-party vendor and turning a genuinely single-vendor solution into an apparent multi-vendor one. If *every* contribution is low confidence, the low-confidence values are kept so the field is never left empty needlessly.
+
+**Basis.** `source_vendor_basis` / `collector_vendor_basis` record the provenance of the kept contributions:
+
+- the single connector basis (`override`, `event`, `publisher`, `solution_author`, `name_pattern`, or `publisher_fallback`) when all kept contributions share it,
+- `mixed` when the kept contributions carry more than one distinct basis,
+- blank when the field is empty.
+
+Use this to distinguish **deterministic** solutions (exactly one `source_vendor`) from **multi-vendor** solutions (more than one), and to filter out low-confidence rows via `source_vendor_basis = publisher_fallback`.
 
 ## Related CSVs
 

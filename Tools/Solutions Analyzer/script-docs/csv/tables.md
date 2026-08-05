@@ -12,10 +12,11 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 
 - **Table catalog** — inventory every table actually used by any Sentinel solution.
 - **Capability filter** — find tables that support `supports_transformations`, `ingestion_api_supported`, or `lake_only_supported`.
-- **Detect Custom Log V1 (legacy) tables** — `is_clv1 == true` flags tables that should be migrated to DCR-based ingestion.
+- **Detect Custom Log V1 (legacy) tables** — `is_clv1 == true` flags tables that should be migrated to DCR-based ingestion (excluding tables associated with connectors that already use DCR definitions).
 - **Categorization** — group by `category_primary` for reporting against the closed taxonomy (`Cloud`, `Endpoint`, `Syslog/CEF`, `3rd Party (SaaS)`, `Defender`, `ASIM`, `Internal`, `Unknown`); the raw `category` doc string is kept for traceability.
 - **Defender XDR vs Azure Monitor** — `source_azure_monitor` / `source_defender_xdr` identify the documentation surface for each table.
 - **Support tier rollup** — `support_tier` derives from solutions using the table; `Various` indicates mixed Microsoft/Partner/Community usage.
+- **Source vs collector vendor** — `source_vendor`/`source_product` name the true event-source vendor/product; `collector_vendor`/`collector_product` name the intermediary that shipped the events. Both are projected from the table's feeding connectors (see below); `source_vendor_basis`/`collector_vendor_basis`/`source_product_basis` record whether the value came from a table override, connector projection, or a table-name pattern, and `source_event_type` carries the record type (Alerts, IOCs, Audit, …) unioned from the feeding connectors.
 - **Kusto upload** — uploaded as `solution_analyzer_tables_lookup` by `upload_to_kusto.py`.
 
 ## Columns
@@ -33,8 +34,16 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 | `collection_method_source` | How `collection_method` was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence({rule trail})` | Computed |
 | `collection_method_candidates` | Comma-separated distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables) | Computed |
 | `feeding_connector_ids` | Comma-separated IDs of every connector that ingests the table | Computed |
+| `source_vendor` | Semicolon-separated vendor(s) of the system that generated the events, projected as the union of the feeding connectors' `source_vendor` values. Table-level overrides win over projection. | Projected from feeding connectors; overridable |
+| `source_product` | Semicolon-separated product(s) of the event source, projected from the feeding connectors' `source_product`. | Projected from feeding connectors; overridable |
+| `collector_vendor` | Semicolon-separated vendor(s) of the intermediary that collected/forwarded the events, projected from the feeding connectors' `collector_vendor`. Blank when the collector is the source. | Projected from feeding connectors; overridable |
+| `collector_product` | Semicolon-separated product(s) of the collector, projected from the feeding connectors' `collector_product`. | Projected from feeding connectors; overridable |
+| `source_vendor_basis` | Provenance of the table's `source_vendor`: `override` (table-level override), `projected` (union of feeding connectors), `name_pattern` (`table_name_pattern` rule for feeder-less tables), or blank. | Recorded during projection |
+| `collector_vendor_basis` | Provenance of the table's `collector_vendor`: `override`, `projected`, `name_pattern`, or blank. | Recorded during projection |
+| `source_product_basis` | Provenance of the table's `source_product`: `projected` (from feeding connectors) or blank. | Recorded during projection |
+| `source_event_type` | Record/event type(s) (e.g. `Alerts`, `IOCs`, `Audit`, `Logs`) carried by the feeding connectors, unioned onto the table. Blank when no feeder conveys an event type. | Union of feeding connectors' `source_event_type` |
 | `resource_types` | Azure resource types that emit to this table | `tables_reference.csv` |
-| `source_azure_monitor` | `true` if documented in Azure Monitor reference | `tables_reference.csv` |
+| `source_azure_monitor` | `Yes` if documented in Azure Monitor reference (includes categoryless tables flagged via the reference index) | `tables_reference.csv` |
 | `source_defender_xdr` | `true` if documented in Defender XDR schema | `tables_reference.csv` |
 | `azure_monitor_doc_link` | Link to Azure Monitor documentation | `tables_reference.csv` |
 | `defender_xdr_doc_link` | Link to Defender XDR documentation | `tables_reference.csv` |
@@ -42,7 +51,7 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 | `supports_transformations` | `Yes`/`No`/empty — supports ingestion-time transformations | `tables_reference.csv` |
 | `ingestion_api_supported` | `Yes`/`No`/empty — supports Logs Ingestion API | `tables_reference.csv` |
 | `lake_only_supported` | `Yes`/`No`/empty — supports lake-only ingestion | `tables_reference.csv` |
-| `is_clv1` | `true` if table uses Custom Log V1 schema (type-suffixed columns or `_CL` from HTTP Data Collector connector) | CLv1 detection logic |
+| `is_clv1` | `true` if table uses Custom Log V1 schema (type-suffixed columns or `_CL` from HTTP Data Collector connector), excluding tables associated with connectors that have DCR definition files | CLv1 detection logic |
 
 > Tables not found in `tables_reference.csv` will have empty metadata fields. Run [`collect_table_info.py`](../collect_table_info.md) first to populate this data.
 

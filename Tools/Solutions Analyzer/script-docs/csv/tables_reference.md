@@ -36,7 +36,7 @@ This file is the upstream input for [`tables.csv`](tables.md) (which filters dow
 | `solutions` | Associated Log Analytics solutions | Azure Monitor individual pages |
 | `resource_types` | Azure resource types that emit to this table | Azure Monitor individual pages |
 | `table_type` | Table type (e.g., Microsoft, Azure, Custom) | Azure Monitor individual pages |
-| `source_azure_monitor` | `true` if table is in Azure Monitor reference | Azure Monitor tables-category |
+| `source_azure_monitor` | `Yes` if table is in the Azure Monitor reference. Set from the tables-category page, and additionally from the complete per-table reference index (Git Trees API) so categoryless tables omitted from the category page (e.g. `ApiManagementGatewayLlmLog`) are still detected. | Azure Monitor tables-category + reference index |
 | `source_defender_xdr` | `true` if table is in Defender XDR schema | Defender XDR schema |
 | `xdr_only` | `true` if table is only in Defender XDR (not in Azure Monitor) | Computed |
 | `source_feature_support` | `true` if table has feature-support info | Tables feature support |

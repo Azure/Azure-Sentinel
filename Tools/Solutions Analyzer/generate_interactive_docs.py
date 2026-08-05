@@ -156,11 +156,17 @@ def load_tables_overrides(tables_overrides_csv: Path, tables_ref: Dict[str, Dict
     """Load tables.csv (mapper output) and merge overrides into tables_ref in-place.
     
     Tables not in tables_ref are added; existing entries get category/is_clv1 overrides.
+    The mapper's tables.csv is the authoritative real-table list, so any tables_ref
+    entry the mapper did NOT keep (parser names mis-listed as tables in
+    tables_reference.csv, e.g. `ImpervaWAFCloud`) is removed here, keeping the
+    interactive index in sync with the static docs (no broken phantom-table links).
     """
+    mapper_table_names: Set[str] = set()
     for row in load_csv(tables_overrides_csv):
         name = row.get('table_name', '')
         if not name:
             continue
+        mapper_table_names.add(name)
         if name not in tables_ref:
             tables_ref[name] = row
         else:
@@ -168,6 +174,9 @@ def load_tables_overrides(tables_overrides_csv: Path, tables_ref: Dict[str, Dict
                 tables_ref[name]['category'] = 'Internal'
             if row.get('is_clv1', ''):
                 tables_ref[name]['is_clv1'] = row['is_clv1']
+    if mapper_table_names:
+        for name in [t for t in tables_ref if t not in mapper_table_names]:
+            del tables_ref[name]
 
 
 def load_content_tables(content_tables_csv: Path) -> Dict[str, Dict[str, Set[str]]]:
@@ -380,7 +389,7 @@ def build_connectors_table_data(
 
             connectors_map[cid] = {
                 'id': cid,
-                'title': c.get('connector_title', cid),
+                'title': c.get('connector_title', cid).strip(),
                 'solution': sol_name,
                 'publisher': c.get('connector_publisher', ''),
                 'collection_method': ref.get('collection_method', ''),
@@ -624,6 +633,11 @@ def build_asim_table_data(asim_parsers: List[Dict[str, str]]) -> List[Dict[str, 
             continue  # skip empty/placeholder parsers
         name = p.get('parser_name', '')
         if not name:
+            continue
+        # Deduplicate unifying parsers: each schema exposes an ASim (parameter-less) and an
+        # im/vim (filtering) union parser. List only the ASim variant; the filtering variant
+        # is documented on the same parser detail page.
+        if ptype == 'union' and not name.startswith('ASim'):
             continue
         schema = p.get('schema', '')
         product = p.get('product_name', '')

@@ -375,7 +375,10 @@ def get_ingestion_api_link(api_name: str, relative_path: str = "") -> str:
     if not api_name:
         return ''
     filename = get_ingestion_api_filename(api_name)
-    return f"[{api_name}]({relative_path}methods/{filename}.md)"
+    # Escape pipe characters in the display label so a combined value like "A|B"
+    # cannot break a markdown table cell when this link is placed in a table.
+    display = api_name.replace('|', '\\|')
+    return f"[{display}]({relative_path}methods/{filename}.md)"
 
 
 def get_collection_method_filename(method: str) -> str:
@@ -1567,6 +1570,67 @@ def parse_filter_fields(filter_fields: str) -> Dict[str, List[str]]:
             criteria_by_table[table_name].append(field_condition)
     
     return dict(criteria_by_table)
+
+
+def write_source_collector_rows(f, *sources: Dict[str, str], omit_source_vendor: bool = False) -> None:
+    """Write Source/Collector vendor & product rows into an open Attribute|Value
+    metadata table. Values are read from the first mapping that provides them
+    (e.g. connectors.csv reference, then the raw entry). Semicolon-separated
+    vendor/product lists are rendered comma-separated, and the derivation basis
+    is appended as an italic note; a `publisher_fallback` basis is flagged as
+    low confidence.
+
+    When ``omit_source_vendor`` is True the Source Vendor row is suppressed
+    (the caller has merged it into a combined "Publisher / Vendor" row because
+    the source vendor is identical to the publisher).
+    """
+    def pick(field: str) -> str:
+        for src in sources:
+            if src and (src.get(field, '') or '').strip():
+                return (src.get(field, '') or '').strip()
+        return ''
+
+    def basis_note(basis: str) -> str:
+        if not basis:
+            return ''
+        if basis == 'publisher_fallback':
+            return f" *(basis: {basis} — low confidence)*"
+        return f" *(basis: {basis})*"
+
+    source_vendor = pick('source_vendor')
+    source_product = pick('source_product')
+    collector_vendor = pick('collector_vendor')
+    collector_product = pick('collector_product')
+    source_basis = pick('source_vendor_basis')
+    collector_basis = pick('collector_vendor_basis')
+    source_product_basis = pick('source_product_basis')
+    source_event_type = pick('source_event_type')
+
+    if source_vendor and not omit_source_vendor:
+        f.write(f"| **Source Vendor** | {source_vendor.replace(';', ', ')}{basis_note(source_basis)} |\n")
+    if source_product:
+        f.write(f"| **Source Product** | {source_product.replace(';', ', ')}{basis_note(source_product_basis)} |\n")
+    if source_event_type:
+        f.write(f"| **Event Type** | {source_event_type.replace(';', ', ')} |\n")
+    if collector_vendor:
+        f.write(f"| **Collector Vendor** | {collector_vendor.replace(';', ', ')}{basis_note(collector_basis)} |\n")
+    if collector_product:
+        f.write(f"| **Collector Product** | {collector_product.replace(';', ', ')} |\n")
+
+
+def _norm_vendor_for_compare(name: str) -> str:
+    """Lowercase + strip trailing company suffixes so 'Microsoft Corporation'
+    and 'Microsoft' compare equal when deciding whether the source vendor is
+    just the publisher."""
+    n = (name or '').strip().lower().rstrip('.').strip()
+    for suffix in (' corporation', ' corp', ' inc', ' incorporated', ' llc',
+                   ' ltd', ' limited', ' gmbh', ' co', ' sa', ' ag', ' plc'):
+        if n.endswith(suffix):
+            n = n[: -len(suffix)].strip().rstrip(',').strip()
+    return n
+
+
+
 
 
 def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[str, str]], 
@@ -3823,7 +3887,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             if not connector_id or connector_id in connectors_map:
                 continue
             
-            connector_title = conn.get('connector_title', connector_id)
+            connector_title = conn.get('connector_title', connector_id).strip()
             connectors_map[connector_id] = {
                 'title': connector_title,
                 'publisher': conn.get('connector_publisher', 'N/A'),
@@ -4888,6 +4952,26 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             category = table_ref.get('category', '')
             if category:
                 attributes.append(('Category', category))
+
+            # Source & collector vendor/product (projected from feeding connectors).
+            _sv = (table_ref.get('source_vendor', '') or '').strip()
+            _sp = (table_ref.get('source_product', '') or '').strip()
+            _cv = (table_ref.get('collector_vendor', '') or '').strip()
+            _cp = (table_ref.get('collector_product', '') or '').strip()
+            _svb = (table_ref.get('source_vendor_basis', '') or '').strip()
+            _cvb = (table_ref.get('collector_vendor_basis', '') or '').strip()
+            _spb = (table_ref.get('source_product_basis', '') or '').strip()
+            _set = (table_ref.get('source_event_type', '') or '').strip()
+            if _sv:
+                attributes.append(('Source Vendor', _sv.replace(';', ', ') + (f" *(basis: {_svb})*" if _svb else '')))
+            if _sp:
+                attributes.append(('Source Product', _sp.replace(';', ', ') + (f" *(basis: {_spb})*" if _spb else '')))
+            if _set:
+                attributes.append(('Event Type', _set.replace(';', ', ')))
+            if _cv:
+                attributes.append(('Collector Vendor', _cv.replace(';', ', ') + (f" *(basis: {_cvb})*" if _cvb else '')))
+            if _cp:
+                attributes.append(('Collector Product', _cp.replace(';', ', ')))
             
             # Custom Log V1 flag
             is_clv1 = table_ref.get('is_clv1', '').lower() == 'true'
@@ -5093,6 +5177,25 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             
             # Schema References section - links to official documentation
             schema_refs = get_schema_references(table)
+            # Prefer the table-specific Azure Monitor / Defender XDR reference
+            # page (which documents the actual column schema) over the generic
+            # fallback. Recomputed locally so it stays correct for categoryless
+            # Azure Monitor tables flagged via the reference index.
+            sr_am_link = table_ref.get('azure_monitor_doc_link', '')
+            if not sr_am_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
+                sr_am_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"
+            sr_xdr_link = table_ref.get('defender_xdr_doc_link', '')
+            specific_refs: List[Tuple[str, str]] = []
+            if sr_am_link:
+                specific_refs.append((f"{table} Schema Reference (Azure Monitor)", sr_am_link))
+            if sr_xdr_link:
+                specific_refs.append((f"{table} Schema Reference (Defender XDR)", sr_xdr_link))
+            if specific_refs:
+                # A table-specific reference exists; drop the generic fallback,
+                # but keep any curated table-name-specific entry.
+                schema_refs = specific_refs + [
+                    r for r in schema_refs if r[0] != "Data Source Schema Reference"
+                ]
             if schema_refs:
                 f.write("## Schema References\n\n")
                 f.write("Official Microsoft Learn documentation for field/column information:\n\n")
@@ -5655,7 +5758,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         # Get additional connector info from connectors_reference (includes not_in_solution_json, is_deprecated)
         connector_ref = connectors_reference.get(connector_id, {})
         
-        connector_title = first_entry.get('connector_title', connector_id)
+        connector_title = first_entry.get('connector_title', connector_id).strip()
         
         # Check status flags - use is_deprecated from CSV if available, fallback to title check
         is_deprecated = connector_ref.get('is_deprecated', first_entry.get('is_deprecated', 'false')) == 'true'
@@ -5703,9 +5806,23 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             f.write(f"| **Connector ID** | `{connector_id}` |\n")
             
             publisher = first_entry.get('connector_publisher', '')
-            if publisher:
+            # If the derived source vendor is just the publisher (single value,
+            # same name), don't list it twice — merge into one "Publisher / Vendor"
+            # row and suppress the separate Source Vendor row.
+            _sv = (connector_ref.get('source_vendor', '') or first_entry.get('source_vendor', '')).strip()
+            _merge_pub_vendor = bool(
+                publisher and _sv and ';' not in _sv
+                and _norm_vendor_for_compare(_sv) == _norm_vendor_for_compare(publisher)
+            )
+            if _merge_pub_vendor:
+                f.write(f"| **Publisher / Vendor** | {publisher} |\n")
+            elif publisher:
                 f.write(f"| **Publisher** | {publisher} |\n")
-            
+
+            # Source & collector vendor/product (derived by the mapper's resolver;
+            # basis records how confident the derivation is).
+            write_source_collector_rows(f, connector_ref, first_entry, omit_source_vendor=_merge_pub_vendor)
+
             # Solutions
             solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
             f.write(f"| **Used in Solutions** | {solutions_list} |\n")
@@ -5747,9 +5864,15 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             # Ingestion API
             ingestion_api = connector_ref.get('ingestion_api', '')
             if ingestion_api:
-                ingestion_api_link = get_ingestion_api_link(ingestion_api, "../")
+                # ingestion_api may be a pipe-joined combination of detected signals
+                # (e.g., "Log Ingestion API|Undetermined"). Render each as its own link
+                # and join with an escaped pipe so the markdown table cell stays intact.
+                api_parts = [a.strip() for a in ingestion_api.split('|') if a.strip()]
+                ingestion_api_link = " \\| ".join(get_ingestion_api_link(a, "../") for a in api_parts)
                 ingestion_api_reason = connector_ref.get('ingestion_api_reason', '')
-                reason_suffix = f" — *{ingestion_api_reason}*" if ingestion_api_reason else ""
+                # The reason is similarly pipe-joined; replace pipes with "; " so the
+                # combined explanation reads cleanly and does not break the table cell.
+                reason_suffix = f" — *{ingestion_api_reason.replace('|', '; ')}*" if ingestion_api_reason else ""
                 f.write(f"| **Ingestion API** | {ingestion_api_link}{reason_suffix} |\n")
             
             # Custom Log V1 tables
@@ -5861,7 +5984,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                           solution_deps: List[Dict[str, str]] = None,
                           all_solutions_connectors: Dict[str, List[Dict[str, str]]] = None,
                           connectors_reference: Dict[str, Dict[str, str]] = None,
-                          tables_reference: Dict[str, Dict[str, str]] = None) -> None:
+                          tables_reference: Dict[str, Dict[str, str]] = None,
+                          solutions_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate individual solution documentation page.
     
     Args:
@@ -5892,6 +6016,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         connectors_reference = {}
     if tables_reference is None:
         tables_reference = {}
+    if solutions_reference is None:
+        solutions_reference = {}
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -5986,7 +6112,12 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         categories = metadata.get('solution_categories', '')
         if categories:
             f.write(f"| **Categories** | {categories} |\n")
-        
+
+        # Source & collector vendor/product rolled up from the solution's connectors
+        # (low-confidence fallback contributions dropped when a stronger vendor exists).
+        solution_ref = solutions_reference.get(solution_name, {})
+        write_source_collector_rows(f, solution_ref)
+
         version = metadata.get('solution_version', '')
         if version:
             f.write(f"| **Version** | {version} |\n")
@@ -6769,11 +6900,26 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         f.write("## Parser Information\n\n")
         f.write("| Property | Value |\n")
         f.write("|:---------|:------|\n")
-        f.write(f"| **Parser Name** | `{parser_name}` |\n")
-        
+
         equivalent = parser.get('equivalent_builtin', '')
+        parser_type = parser.get('parser_type', '')
+
+        # For unifying (union) parsers, surface both the parameter-less ASim variant and the
+        # filtering im/vim variant. The mapper deduplicates the unifying pair to the ASim row
+        # and records the filtering variant's identity on it, so read it directly.
+        im_variant_name = parser.get('filtering_parser_name', '') if parser_type == 'union' else ''
+        im_variant_builtin = parser.get('filtering_equivalent_builtin', '') if parser_type == 'union' else ''
+
+        if im_variant_name:
+            f.write(f"| **Parser Name** | `{parser_name}` (parameter-less) · `{im_variant_name}` (filtering) |\n")
+        else:
+            f.write(f"| **Parser Name** | `{parser_name}` |\n")
+
         if equivalent:
-            f.write(f"| **Built-in Parser** | `{equivalent}` |\n")
+            if im_variant_builtin:
+                f.write(f"| **Built-in Parser** | `{equivalent}` (parameter-less) · `{im_variant_builtin}` (filtering) |\n")
+            else:
+                f.write(f"| **Built-in Parser** | `{equivalent}` |\n")
         
         schema = parser.get('schema', '')
         if schema:
@@ -7256,14 +7402,12 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
         schema = parser.get('schema', 'Other')
         by_schema[schema].append(parser)
     
-    # Count by type
-    union_count = sum(1 for p in parsers if p.get('parser_type') == 'union')
+    # Count by type. Unifying (union) parsers come as an ASim (parameter-less) and an
+    # im/vim (filtering) variant for the same schema; the listing is deduplicated to the
+    # ASim variant, so count only those. Source parsers are already a single ASim parser each.
+    union_count = sum(1 for p in parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim'))
     source_count = sum(1 for p in parsers if p.get('parser_type') == 'source')
     empty_count = sum(1 for p in parsers if p.get('parser_type') == 'empty')
-    
-    # Parser pairs (ASim + vim = 1 pair)
-    source_pair_count = source_count // 2
-    union_pair_count = union_count // 2
     
     with index_path.open("w", encoding="utf-8") as f:
         f.write(f"# {ASIM_BADGE_LARGE} ASIM Parsers Index\n\n")
@@ -7279,10 +7423,10 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
         f.write("---\n\n")
         
         # Summary count
-        f.write(f"**{len(by_schema)} schemas** with {source_pair_count} source parser pairs and {union_pair_count} union parser pairs. ")
+        f.write(f"**{len(by_schema)} schemas** with {source_count} source parsers and {union_count} unifying parsers. ")
         f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns.\n\n")
         
-        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        f.write("\\* *Each unifying parser is available as a parameter-less `ASim` parser and a filtering `im`/`vim` parser; both are listed on the parser's page.*\n\n")
         
         # Quick links by schema with detailed counts
         f.write("## Schemas\n\n")
@@ -7290,15 +7434,15 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
             anchor = schema.lower().replace(' ', '-')
             schema_parsers = by_schema[schema]
             schema_source = sum(1 for p in schema_parsers if p.get('parser_type') == 'source')
-            schema_union = sum(1 for p in schema_parsers if p.get('parser_type') == 'union')
+            schema_union = sum(1 for p in schema_parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim'))
             schema_empty = sum(1 for p in schema_parsers if p.get('parser_type') == 'empty')
             
             # Build counts string
             counts_parts = []
             if schema_source > 0:
-                counts_parts.append(f"{schema_source // 2} source pairs")
+                counts_parts.append(f"{schema_source} source")
             if schema_union > 0:
-                counts_parts.append(f"{schema_union // 2} union pair{'s' if schema_union > 2 else ''}")
+                counts_parts.append(f"{schema_union} unifying")
             if schema_empty > 0:
                 counts_parts.append(f"{schema_empty} empty")
             counts_str = ", ".join(counts_parts)
@@ -7312,8 +7456,9 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
             
             f.write(f"## {schema}\n\n")
             
-            # Separate union and source parsers
-            union_parsers = [p for p in schema_parsers if p.get('parser_type') == 'union']
+            # Separate union and source parsers. Unifying parsers are deduplicated to the
+            # ASim variant; the filtering im/vim variant is surfaced on the parser's page.
+            union_parsers = [p for p in schema_parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim')]
             source_parsers = [p for p in schema_parsers if p.get('parser_type') == 'source']
             empty_parsers = [p for p in schema_parsers if p.get('parser_type') == 'empty']
             
@@ -9565,11 +9710,13 @@ def main() -> None:
     # Load tables overrides CSV (mapper output) to get internal table categories
     if args.tables_overrides_csv.exists():
         print(f"Reading {args.tables_overrides_csv} for overrides...")
+        mapper_table_names: Set[str] = set()
         with args.tables_overrides_csv.open("r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 table_name = row.get('table_name', '')
                 if table_name:
+                    mapper_table_names.add(table_name)
                     # Track internal tables (category="Internal")
                     if row.get('category', '').lower() == 'internal':
                         INTERNAL_TABLES.add(table_name)
@@ -9583,6 +9730,26 @@ def main() -> None:
                         # Merge is_clv1 from mapper output
                         if row.get('is_clv1', ''):
                             tables_reference[table_name]['is_clv1'] = row['is_clv1']
+                        # Merge source/collector vendor & product fields (mapper-derived;
+                        # absent from the Azure Monitor tables_reference.csv)
+                        for _vf in ('source_vendor', 'source_product', 'collector_vendor',
+                                    'collector_product', 'source_vendor_basis', 'collector_vendor_basis',
+                                    'source_product_basis', 'source_event_type'):
+                            if row.get(_vf, ''):
+                                tables_reference[table_name][_vf] = row[_vf]
+        # The mapper's tables.csv is the authoritative real-table list: it emits a
+        # row for every genuine table (including reference-only tables like
+        # AKSAudit) but excludes parser names mis-listed as tables in
+        # tables_reference.csv (e.g. `ImpervaWAFCloud`, `OktaSSO`). Drop any
+        # tables_reference entry the mapper did not keep, so those phantoms never
+        # get a table page.
+        if mapper_table_names:
+            _dropped = [t for t in tables_reference if t not in mapper_table_names]
+            for _t in _dropped:
+                del tables_reference[_t]
+            if _dropped:
+                print(f"  Excluded {len(_dropped)} non-table entries absent from mapper tables.csv "
+                      f"(e.g. parser names): {', '.join(sorted(_dropped)[:12])}")
         print(f"Loaded overrides ({len(INTERNAL_TABLES)} internal tables)")
     else:
         print(f"Warning: Tables overrides CSV not found: {args.tables_overrides_csv}")
@@ -9983,7 +10150,7 @@ def main() -> None:
         solution_content = content_items_by_solution.get(solution_name, [])
         solution_table_types = solution_table_content_types.get(solution_name, {})
         sol_deps = solution_dependencies.get(solution_name, [])
-        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution, connectors_reference, tables_reference)
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution, connectors_reference, tables_reference, solutions_reference)
     
     # Generate individual table pages with content item references
     # Build parser-to-table mappings for table pages

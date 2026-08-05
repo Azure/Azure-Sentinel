@@ -2,6 +2,10 @@
 
 This Function App uploads Solution Analyzer CSVs to Azure Data Explorer (Kusto) on a daily schedule.
 
+If deployment was blocked and you need to resume later, use:
+
+- [CONTINUATION-RUNBOOK.md](CONTINUATION-RUNBOOK.md)
+
 It reuses the existing uploader in [../../upload_to_kusto.py](../../upload_to_kusto.py) and runs it with:
 
 - `--solution-analyzer`
@@ -19,7 +23,7 @@ Timer trigger schedule in [function_app.py](function_app.py):
 - `KUSTO_CLUSTER_URL`: e.g. `https://dataacquisition.eastus.kusto.windows.net`
 - `KUSTO_DATABASE`: target database name
 - `SA_OUTPUT_RAW_BASE_URL`: raw GitHub URL for output branch CSV root
-  - Example: `https://raw.githubusercontent.com/<org>/<repo>/<branch>/Tools/Solutions%20Analyzer`
+  - Current output branch URL: `https://raw.githubusercontent.com/Azure/Azure-Sentinel/solution_analyzer_output/Tools/Solutions%20Analyzer`
 - `KUSTO_AUTH_MODE`: `managed-identity` or `azure-cli`
   - Use `managed-identity` in Azure
 - `MANAGED_IDENTITY_CLIENT_ID` (optional): user-assigned MI client ID
@@ -47,14 +51,51 @@ func start
 
 ## Deployment notes
 
-Deploy this folder as a Python Function App package.
+You can deploy end-to-end with the script in this folder:
 
-Recommended:
+```powershell
+cd "Tools/Solutions Analyzer/automation/daily-solution-analyzer-upload-function"
 
-1. `func azure functionapp publish <app-name>`
-2. Configure app settings listed above
-3. Enable system-assigned or user-assigned managed identity
-4. Grant Kusto permissions
+./deploy_connectorsacceleration_staging.ps1 `
+  -FunctionAppName "<function-app-name>" `
+  -StorageAccountName "<storage-account-name>" `
+  -AppServicePlanName "<plan-name>"
+```
+
+This wrapper preloads your known environment defaults:
+
+- Subscription: `2f0fdbc8-ab60-4386-af30-dd0fac77130e` (`ConnectorsAcceleration.Staging`)
+- Resource group: `dataacquisition-rg`
+- Location: `eastus`
+- Output branch CSV source: `solution_analyzer_output`
+
+If you need full control, use:
+
+```powershell
+./deploy_function.ps1 `
+  -SubscriptionId "<subscription-guid>" `
+  -ResourceGroup "<rg-name>" `
+  -Location "eastus" `
+  -FunctionAppName "<function-app-name>" `
+  -StorageAccountName "<storage-account-name>" `
+  -AppServicePlanName "<plan-name>" `
+  -KustoClusterUrl "https://dataacquisition.eastus.kusto.windows.net" `
+  -KustoDatabase "dataacquisition" `
+  -SaOutputRawBaseUrl "https://raw.githubusercontent.com/<org>/<repo>/<output-branch>/Tools/Solutions%20Analyzer" `
+  -KustoAuthMode "managed-identity"
+```
+
+Then grant Kusto permissions using [grant_kusto_permissions.kql](grant_kusto_permissions.kql):
+
+1. Get the Function principal ID from deploy output (or `az functionapp identity show ...`).
+2. Replace placeholders in the KQL file.
+3. Execute commands on the target Kusto database.
+
+Finally run a smoke validation:
+
+```powershell
+./smoke_test_upload.ps1 -SubscriptionId "<subscription-guid>" -ResourceGroup "<rg-name>" -FunctionAppName "<function-app-name>"
+```
 
 ## Why Azure Function over Logic App
 

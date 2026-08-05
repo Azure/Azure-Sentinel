@@ -15,7 +15,7 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 - **Identify legacy ingestion** — query `is_clv1 == true` or `ingestion_api == "HTTP Data Collector API"` to find connectors that should be migrated to DCR/Log Ingestion API.
 - **CCF feature audit** — use `ccf_capabilities` to find connectors using paging, OAuth2, push mode, etc.
 - **Content-hub publication status** — `is_published` indicates whether the connector ships to the content hub: `true` when the parent solution is live on Azure Marketplace *and* the connector is referenced by the solution definition file; `false` for connectors discovered only in the `Data Connectors` folder but absent from the solution's `Solution_*.json` (they are retained for inventory but are not on the content hub).
-- **Source-data filtering** — `filter_fields`, `event_vendor`, `event_product` reveal which vendor/product/event-class each connector targets.
+- **Source-data filtering** — `filter_fields`, `event_vendor`, `event_product` reveal which vendor/product/event-class each connector targets. `source_vendor`/`source_product` name the true event-source vendor/product, while `collector_vendor`/`collector_product` name the intermediary that shipped the events (populated only when it differs from the source). `source_vendor_basis`/`collector_vendor_basis`/`source_product_basis` record how each value was derived, and `source_event_type` isolates the record type (Alerts, IOCs, Audit, …) so it is not mixed into the product name.
 - **Deprecation tracking** — `is_deprecated` + `deprecation_date` for clean-up planning.
 - **Discovered vs declared** — `not_in_solution_json == true` flags connectors found via mainTemplate fallback or file scan that aren't listed in the Solution JSON. When the parent solution ships a working definition that references other connectors, such folder-only connectors are also forced to `is_published == false` (not on the content hub).
 - **Kusto upload** — uploaded as `solution_analyzer_connectors_lookup` by `upload_to_kusto.py`.
@@ -38,6 +38,14 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 | `event_vendor` | Semicolon-separated vendor values extracted from queries | KQL filter-field analysis |
 | `event_product` | Semicolon-separated product values extracted from queries | KQL filter-field analysis |
 | `event_vendor_product_by_table` | JSON mapping of tables → vendor/product pairs | KQL filter-field analysis with table context |
+| `source_vendor` | Semicolon-separated vendor(s) of the system that generated the events. Derived through a tiered, override-driven resolver: explicit connector override → `event_vendor` ground-truth seed → connector-publisher value (via the `connector_publisher` override entity) → solution author → connector name pattern → publisher fallback (e.g. Microsoft). All vendor knowledge lives in the overrides CSV; values are normalized via `vendor_alias` rules. | Tiered override-driven derivation (see [Source & collector derivation](#source--collector-vendorproduct-derivation)) |
+| `source_product` | Semicolon-separated product(s) of the system that generated the events. Seeded from `event_product`, refined by the tiered override entities, and — when still empty and the vendor is known — derived from the **connector title remainder** (title minus framework/delivery-method clauses, `for [Microsoft] Sentinel` suffixes, version tokens, leading fillers/mechanisms like `for` and `S3`, and the leading vendor, e.g. `Cisco Secure Endpoint (via CCF)` → `Secure Endpoint`; `Amazon Web Services S3 VPC Flow Logs` → `VPC Flow`; `Palo Alto Cortex XDR` → `Cortex XDR`). The leading-vendor strip matches word-by-word so alias-expanded vendors still strip (title `Palo Alto …` vs vendor `Palo Alto Networks`). Event/record-type words (Alerts, IOCs, Events, Audit, Logs, Devices, …) are split out into `source_event_type` rather than kept in the product, and generic non-products (`Syslog`, `API`, `DSPM`, `Data Connector`) and internal codenames (`Vault`, `FalconHost`, `akamai_siem`, `ESA_CONSOLIDATED_LOG_EVENT` — any single token with underscores) are dropped. | Tiered override-driven derivation + title remainder |
+| `collector_vendor` | Vendor of the intermediary that collected/forwarded the events from the source. Populated only when it differs from the source vendor (e.g. `SecurityBridge`, `Onapsis`, `Pathlock` forwarding SAP telemetry; `Cribl`, `Logstash`, `NXLog`, `Fluentd` forwarders) via `collector_pattern`/connector overrides; blank when the collector is the source itself. As a final step the resolver clears `collector_vendor`/`collector_product` whenever the collector vendor set equals the source vendor set (e.g. the Cribl connector collecting Cribl's own telemetry), since a collector only carries information when it is a different vendor than the source. | Override-driven (`collector_pattern`) |
+| `collector_product` | Product of the intermediary that collected/forwarded the events. Populated only when the collector differs from the source; otherwise blank. | Override-driven (`collector_pattern`) |
+| `source_vendor_basis` | Provenance of the derived `source_vendor` value: one of `override`, `event`, `publisher`, `solution_author`, `name_pattern`, `description_url`, `title`, `publisher_fallback`, or blank when no vendor was resolved. Lets consumers gauge confidence (ground-truth `event` vs. inferred `publisher`/`name_pattern`/`description_url`/`title`). `publisher_fallback` is **low confidence** — a generic publisher-based guess (e.g. Microsoft) used only when nothing stronger matched. | Recorded by the resolver |
+| `collector_vendor_basis` | Provenance of the derived `collector_vendor` value: one of `override`, `collector_pattern`, `name_pattern`, or blank. | Recorded by the resolver |
+| `source_product_basis` | Provenance of the derived `source_product` value: one of `event` (ground-truth `event_product` seed), `override`, `title` (derived from the connector title remainder), or blank when no product was resolved. | Recorded by the resolver |
+| `source_event_type` | The **record/event type** carried by the connector, mapped to a **canonical vocabulary** so synonyms collapse to one label — `Logs` / `Activity` / `Security Events` / `Event Logs` → `Events`; `Audit Logs` → `Audit`; `Indicators` / `Threat Indicators` → `IOCs`; plus `Alerts`, `Incidents`, `Cases`, `Findings`, `Vulnerabilities`, `Reports`, `Devices`, `Statistics`, `Threats`, … — split out of the connector title so it is not conflated with the product name. Multiple types are comma-separated. Blank when the title conveys no event-type word. | Extracted from the connector title + canonicalized |
 | `filter_fields` | Pipe-separated `Table.Field op "value"` clauses extracted from connector queries. Predicates on raw documented columns are attributed to the owning table; predicates on fields defined via `\| extend` use the synthetic table `_Computed`. When a connector's query is just a vendor parser-function call (e.g. `ClarotyEvent`), the parser's own `filter_fields` are inherited so the connector reflects the parser's selection criteria. | See [`map_solutions_connectors_tables.md` › Filter Fields Detection](../map_solutions_connectors_tables.md#filter-fields-detection) |
 | `not_in_solution_json` | `true` if found by file scan / mainTemplate fallback but not listed in Solution JSON | Comparison |
 | `solution_name` | Parent solution name | Solution folder |
@@ -49,8 +57,41 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 | `ccf_capabilities` | Semicolon-separated CCF capabilities (auth type, paging, POST, push, etc.) | Parsed from CCF config JSON |
 | `ingestion_api` | `Log Ingestion API`, `HTTP Data Collector API`, `Undetermined`, or empty (CCF/Native are platform-managed) | Multi-rule detection |
 | `ingestion_api_reason` | Human-readable explanation of how `ingestion_api` was determined | Computed |
-| `is_clv1` | `true` if any of the connector's tables use the legacy Custom Log V1 schema | CLv1 detection |
+| `is_clv1` | `true` if any of the connector's tables use the legacy Custom Log V1 schema (excluding connectors whose collection method includes Azure Diagnostics and connectors that have DCR definition files) | CLv1 detection |
 | `learn_doc_url` | Deep-link to the connector's section on the Microsoft Learn [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) page (e.g. `…#cisco-secure-endpoint-via-codeless-connector-framework`). Populated when the connector's title slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page, with `[Recommended]` / `[Preview]` prefixes and trailing `(Preview)` markers stripped. Empty when no anchor matches. | Anchor scrape of Learn page, cached as `data_connectors_reference_anchors.json` |
+
+## Source & collector vendor/product derivation
+
+The four `source_*`/`collector_*` fields (plus their `*_basis` provenance columns) are populated by a single data-driven resolver (`resolve_source_collector_fields`). The **precedence policy lives in code**; **all vendor/product knowledge lives in `solution_analyzer_overrides.csv`** as override rows, keyed by dedicated derivation entities.
+
+`source_vendor` / `source_product` precedence (first match wins), with the recorded `source_vendor_basis`:
+
+| Tier | Signal | Override entity | `basis` |
+| --- | --- | --- | --- |
+| 0 | Explicit connector override | `connector` (field = `source_vendor`/`source_product`) | `override` |
+| 1 | `event_vendor`/`event_product` ground-truth seed already on the row | — | `event` |
+| 2 | Connector publisher value (skipped for Microsoft-ish publishers) | `connector_publisher` | `publisher` |
+| 3 | Solution author value (skipped for Microsoft-ish authors) | `solution_author` | `solution_author` |
+| 4 | Connector id / title / solution name pattern | `connector_name_pattern` | `name_pattern` |
+| 4.5 | **Evidence** (source_vendor only): a vendor domain in the connector **description** (mapped via `domain_vendor`); else a **known vendor** at the start of the connector **title** | `domain_vendor` (+ built-in vendor dictionary) | `description_url` / `title` |
+| 5 | Low-precedence publisher fallback (e.g. Microsoft) — **low confidence** | `connector_publisher_fallback` | `publisher_fallback` |
+
+`collector_vendor` / `collector_product` precedence, with `collector_vendor_basis`:
+
+| Tier | Signal | Override entity | `basis` |
+| --- | --- | --- | --- |
+| 0 | Explicit connector override | `connector` | `override` |
+| 1 | Collector/forwarder name pattern (Cribl, Logstash, NXLog, Fluentd, SAP forwarders) | `collector_pattern` | `collector_pattern` |
+| 2 | Connector name pattern | `connector_name_pattern` | `name_pattern` |
+
+Supporting entities:
+
+- **`connector_publisher`** — `Pattern` matches the connector's **publisher value** (not its id). Value may be the literal vendor or `${connector_publisher}` to copy the publisher through.
+- **`domain_vendor`** — maps a vendor's registrable domain label (the second-level domain, e.g. `cyberark` from `docs.cyberark.com`) found in the connector **description** to a canonical vendor. Powers the evidence tier that rescues Microsoft-published third-party connectors (e.g. CyberArk Audit) from the low-confidence Microsoft fallback. The title half of the evidence tier matches only vendors already known from overrides / non-Microsoft publishers / `event_vendor`, so it never invents a vendor from arbitrary title words (generic titles like `Common Event Format`, `Syslog`, or Microsoft's own `Windows`/`Exchange` correctly stay on the Microsoft fallback).
+- **`vendor_alias`** — normalizes each resolved vendor token to a canonical form (e.g. `Crowdstrike` → `CrowdStrike`, `Amazon Web Services` → `Amazon`, `Palo Alto` → `Palo Alto Networks`). Applied to every `source_vendor`/`collector_vendor` value regardless of tier, preventing vendor fragmentation.
+- **`table_name_pattern`** — fills a table's `source_*`/`collector_*` when it has no feeding connector to project from (e.g. synthetic-connector-fed SAP ABAP tables).
+
+**Value DSL:** an override `Value` of `${column}` copies that column's value from the row (used by `connector_publisher` → `source_vendor`). Any other value is a literal.
 
 ## Related CSVs
 
