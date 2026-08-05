@@ -1,0 +1,418 @@
+Parser:
+  Title: Network Session ASIM parser for Cisco FTD
+  Version: '0.1.0'
+  LastUpdated: Jun 26, 2026
+Product:
+  Name: Cisco FTD
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.7'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: Field Description Cisco FTD logs
+    Link: https://www.cisco.com/c/en/us/td/docs/security/firepower/Syslogs/fptd_syslog_guide/security-event-syslog-messages.html
+Description: |
+  This ASIM parser supports the normalization of Cisco FTD logs via AMA to the ASIM Network Session schema.
+ParserName: ASimNetworkSessionCiscoFTD
+EquivalentBuiltInParser: _ASim_NetworkSession_CiscoFTD
+ParserParams:
+  - Name: disabled
+    Type: bool 
+    Default: false
+  - Name: pack
+    Type: bool 
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled:bool = false,
+      pack:bool = false
+  )
+  {
+      let FTDBase =
+          CommonSecurityLog
+          | where not(disabled)
+          | where DeviceVendor == "Cisco" and DeviceProduct == "FTD"
+          | where DeviceEventClassID in (
+              '430001', //intrusion event
+              '430002', //connection event logged at the beginning of the connection
+              '430003', //connection event logged at the end of the connection
+              '430005', //file malware event
+              '430007' //elephant Flow
+          )
+          | project-rename
+              Raw = Message, //Message used in Intrusion logs
+              EventUid = _ItemId,
+              DvcIpAddr = DeviceAddress,
+              EventOriginalType = DeviceEventClassID
+          | extend
+              Raw = trim_start(@'%FTD-\d+-\d+:', Raw),
+              Hostname = coalesce(DeviceName, Computer, '')
+          | parse-kv Raw as (
+              DeviceUUID: string,
+              InstanceID: string,
+              FirstPacketSecond: datetime,
+              ConnectionID: string,
+              SrcIP: string,
+              DstIP: string,
+              SrcPort: int,
+              DstPort: int,
+              Protocol: string,
+              IngressInterface: string,
+              EgressInterface: string,
+              ACPolicy: string,
+              AccessControlRuleName: string,
+              IngressVRF: string,
+              EgressVRF: string,
+              IngressZone: string,
+              EgressZone: string,
+              NAPPolicy: string
+          ) with (pair_delimiter=',', kv_delimiter=':')
+          | project-rename
+              EventStartTime = FirstPacketSecond,
+              DvcInboundInterface = IngressInterface,
+              DvcOutboundInterface = EgressInterface,
+              DvcId = DeviceUUID,
+              EventOriginalUid = ConnectionID,
+              DvcZone = IngressVRF,
+              DstIpAddr = DstIP,
+              SrcIpAddr = SrcIP,
+              SrcPortNumber = SrcPort,
+              DstPortNumber = DstPort,
+              DstZone = EgressZone,
+              NetworkRuleName = AccessControlRuleName,
+              DvcDescription = NAPPolicy
+          | extend
+              EventEndTime = TimeGenerated,
+              EventProductVersion = tostring(split(Raw, '-')[1]),
+              NetworkProtocol = toupper(Protocol)
+      ;
+      let Intrusion =
+          FTDBase
+          | where EventOriginalType == '430001'
+          | parse-kv Raw as (
+              Priority: string,
+              GID: int,
+              SID: int,
+              Revision: int,
+              Message: string,
+              Classification: string,
+              IntrusionPolicy: string,
+              InlineResult: string,
+              SnortRuleGroups: string,
+              MitreAttackGroups: string
+          ) with (pair_delimiter=',', kv_delimiter=':')
+          | project-rename
+              EventOriginalResultDetails = InlineResult,
+              EventMessage = Message,
+              EventOriginalSeverity = Priority,
+              NetworkRuleNumber = SID,
+              ThreatCategory = Classification
+          | extend
+              ThreatName = EventMessage,
+              ThreatId = strcat(GID, ':', NetworkRuleNumber, ':', Revision)
+          | extend
+              EventType = 'IDS',
+              EventResult = iff(EventOriginalResultDetails in ('Alert', 'Block', 'Would block'), 'Success', 'Failure'),
+              DvcAction = case(
+                  EventOriginalResultDetails in ('Alert', 'Would block'), 'Allow',
+                  EventOriginalResultDetails == 'Block', 'Deny',
+                  ''
+              ),
+              EventResultDetails = case(
+                  EventOriginalResultDetails == 'Would block', 'Simulation',
+                  EventOriginalResultDetails == 'Block', 'Terminated',
+                  'NA'
+              ),
+              EventSeverity = case(
+                  EventOriginalSeverity == '1', 'High',
+                  EventOriginalSeverity == '2', 'Medium',
+                  EventOriginalSeverity == '3', 'Low',
+                  'Informational'
+              ),
+              AdditionalFields = iff(
+                  pack,
+                  bag_pack(
+                      'InstanceID', InstanceID,
+                      'ACPolicy', ACPolicy,
+                      'IntrusionPolicy', IntrusionPolicy,
+                      'SnortRuleGroups', SnortRuleGroups,
+                      'MitreAttackGroups', MitreAttackGroups
+                  ),
+                  dynamic({})
+              ),
+              ThreatConfidence = int(null)
+      ;
+      let Connections =
+          FTDBase
+          | where EventOriginalType in (
+              '430002',
+              '430003',
+              '430007'
+          )
+          | parse-kv Raw as (
+              EventPriority: string,
+              AccessControlRuleAction: string,
+              ['Prefilter Policy']: string,
+              User: string,
+              InitiatorPackets: long,
+              ResponderPackets: long,
+              InitiatorBytes: long,
+              ResponderBytes: long,
+              ClientAppDetector: string,
+              Client: string,
+              ApplicationProtocol: string,
+              ConnectionDuration: int,
+              DNSQuery: string,
+              DNSRecordType: string,
+              DNSResponseType: string,
+              DNS_TTL: long,
+              ReferencedHost: string,
+              AccessControlRuleReason: string,
+              SLActualAction: string,
+              SSLExpectedAction: string,
+              URL: string,
+              NAT_InitiatorPort: int,
+              NAT_ResponderPort: int,
+              NAT_InitiatorIP: string,
+              NAT_ResponderIP: string,
+              EVE_Fingerprint: string,
+              EVE_Process: string,
+              EVE_ProcessConfidencePct: string,
+              EVE_ThreatConfidencePct: int,
+              EVE_ThreatConfidenceIndex: string
+          ) with (pair_delimiter=',', kv_delimiter=':')
+          | project-rename
+              PrefilterPolicy = ['Prefilter Policy'],
+              EventOriginalResultDetails = AccessControlRuleAction,
+              EventOriginalSeverity = EventPriority,
+              NetworkApplicationProtocol = ApplicationProtocol,
+              NetworkDuration = ConnectionDuration,
+              DstBytes = ResponderBytes,
+              SrcBytes = InitiatorBytes,
+              DstPackets = ResponderPackets,
+              SrcPackets = InitiatorPackets,
+              SrcUsername = User,
+              SrcAppName = Client,
+              ThreatCategory = AccessControlRuleReason,
+              SrcNatIpAddr = NAT_InitiatorIP,
+              SrcNatPortNumber = NAT_InitiatorPort,
+              DstNatIpAddr = NAT_ResponderIP,
+              DstNatPortNumber = NAT_ResponderPort
+          | extend
+              EventType = 'NetworkSession',
+              EventSubType = case(
+                  EventOriginalType == '430002', 'Start',
+                  EventOriginalType == '430003', 'End',
+                  ''
+              ),
+              EventResult = case(
+                  EventOriginalResultDetails in ('Block', 'Block with reset'), 'Failure', 
+                  EventOriginalResultDetails in ('Allow', 'Fastpath', 'Trust'), 'Success',
+                  ''
+                  ),
+              DvcAction = case(
+                  EventOriginalResultDetails in ('Allow', 'Fastpath', 'Trust'), 'Allow',
+                  EventOriginalResultDetails == 'Block', 'Deny',
+                  EventOriginalResultDetails == 'Block with reset', 'Reset',
+                  ''
+              ),
+              EventResultDetails = case(
+                  EventOriginalResultDetails in ('Block', 'Drop'), 'Terminated',
+                  EventOriginalResultDetails == 'Block with reset', 'Reset',
+                  EventOriginalResultDetails in ('Allow', 'Fastpath', 'Trust'), 'NA',
+                  'Unknown'
+              ),
+              EventSeverity = case(
+                  EventOriginalSeverity =~ 'High', 'High',
+                  EventOriginalSeverity =~ 'Medium', 'Medium',
+                  EventOriginalSeverity =~ 'Low', 'Low',
+                  'Informational'
+              ),
+              ThreatConfidence = EVE_ThreatConfidencePct,
+              EventReportUrl = coalesce(URL, DNSQuery),
+              EventMessage = strcat(SrcIpAddr, ':', SrcPortNumber, ' -> ', DstIpAddr, ':', DstPortNumber, ' [', EventOriginalResultDetails, ']'),
+              NetworkBytes = DstBytes + SrcBytes,
+              NetworkPackets = DstPackets + SrcPackets,
+              AdditionalFields = iff(
+                  pack,
+                  bag_pack(
+                      'InstanceID', InstanceID,
+                      'ACPolicy', ACPolicy,
+                      'PrefilterPolicy', PrefilterPolicy,
+                      'DNSQuery', DNSQuery,
+                      'DNSRecordType', DNSRecordType,
+                      'DNSResponseType', DNSResponseType,
+                      'DNS_TTL', DNS_TTL,
+                      'ReferencedHost', ReferencedHost,
+                      'SLActualAction', SLActualAction,
+                      'SSLExpectedAction', SSLExpectedAction,
+                      'URL', URL,
+                      'EVE_Fingerprint', EVE_Fingerprint,
+                      'EVE_Process', EVE_Process,
+                      'EVE_ProcessConfidencePct', EVE_ProcessConfidencePct,
+                      'EVE_ThreatConfidencePct', EVE_ThreatConfidencePct,
+                      'EVE_ThreatConfidenceIndex', EVE_ThreatConfidenceIndex
+                  ),
+                  dynamic({})
+              )
+      ;
+      let File =
+          FTDBase
+          | where EventOriginalType == '430005'
+          | parse-kv Raw as (
+              FileDirection: string,
+              FileAction: string,
+              FileSHA256: string,
+              SHA_Disposition: string,
+              SperoDisposition: string,
+              ThreatName: string,
+              ThreatScore: string,
+              FileName: string,
+              FileType: string,
+              FileSize: string,
+              Client: string,
+              WebApplication: string,
+              FilePolicy: string,
+              FileStorageStatus: string,
+              FileSandboxStatus: string,
+              URI: string
+          ) with (pair_delimiter=',', kv_delimiter=':')
+          | project-rename
+              EventOriginalResultDetails = FileAction,
+              SrcAppName = Client,
+              ThreatOriginalRiskLevel = ThreatScore,
+              EventReportUrl = URI,
+              ThreatCategory = SHA_Disposition
+          | extend
+              ThreatRiskLevel = toint(ThreatOriginalRiskLevel)
+          | extend
+              EventType = 'EndpointNetworkSession',
+              EventResult = iff(EventOriginalResultDetails == 'Malware Block', 'Success', 'Failure'),
+              DvcAction = case(
+                  EventOriginalResultDetails == 'Malware Block', 'Deny',
+                  isnotempty(EventOriginalResultDetails), 'Allow',
+                  ''
+              ),
+              EventResultDetails = case(
+                  EventOriginalResultDetails == 'Malware Block', 'Terminated',
+                  isnotempty(EventOriginalResultDetails), 'NA',
+                  'Unknown'
+              ),
+              EventSeverity = case(
+                  EventOriginalResultDetails != 'Malware Block', 'High',
+                  isnotempty(EventOriginalResultDetails), 'Low',
+                  'Informational'
+              ),
+              EventMessage = strcat(SrcIpAddr, ':', SrcPortNumber, ' -> ', DstIpAddr, ':', DstPortNumber, ' [', FileName, ' - ', EventOriginalResultDetails, ']'),
+              SrcAppType = 'Other',
+              NetworkDirection = case(
+                  FileDirection =~ 'Download', 'Inbound',
+                  FileDirection =~ 'Upload', 'Outbound',
+                  ''
+              ),
+              AdditionalFields = iff(
+                  pack,
+                  bag_pack(
+                      'InstanceID', InstanceID,
+                      'FileDirection', FileDirection,
+                      'FileSHA256', FileSHA256,
+                      'SperoDisposition', SperoDisposition,
+                      'FileName', FileName,
+                      'FileType', FileType,
+                      'FileSize', FileSize,
+                      'WebApplication', WebApplication,
+                      'FilePolicy', FilePolicy,
+                      'FileStorageStatus', FileStorageStatus,
+                      'FileSandboxStatus', FileSandboxStatus
+                  ),
+                  dynamic({})
+              ),
+              ThreatConfidence = int(null)
+      ;
+      union Intrusion, Connections, File
+      | extend DvcIpAddr = iff(DvcIpAddr != 'Unknown IP', DvcIpAddr, '')
+      | project
+          //Common columns
+          TimeGenerated,
+          Type,
+          EventUid,
+          DvcIpAddr,
+          EventOriginalType,
+          EventStartTime,
+          DvcInboundInterface,
+          DvcOutboundInterface,
+          DvcId,
+          EventOriginalUid,
+          DvcZone,
+          DstIpAddr,
+          SrcIpAddr,
+          SrcPortNumber,
+          DstPortNumber,
+          DstZone,
+          EventEndTime,
+          EventProductVersion,
+          NetworkProtocol,
+          EventOriginalResultDetails,
+          EventMessage,
+          ThreatCategory,
+          EventResultDetails,
+          EventType,
+          EventResult,
+          DvcAction,
+          EventSeverity,
+          AdditionalFields,
+          Hostname,
+          NetworkRuleName,
+          DvcDescription,
+          EventOriginalSeverity,
+          NetworkRuleNumber,
+          ThreatName,
+          ThreatId,
+          NetworkApplicationProtocol,
+          NetworkDuration,
+          DstBytes,
+          SrcBytes,
+          DstPackets,
+          SrcPackets,
+          SrcUsername,
+          SrcAppName,
+          EventReportUrl,
+          EventSubType,
+          NetworkBytes,
+          NetworkPackets,
+          ThreatOriginalRiskLevel,
+          ThreatRiskLevel,
+          SrcAppType,
+          NetworkDirection,
+          SrcNatIpAddr,
+          SrcNatPortNumber,
+          DstNatIpAddr,
+          DstNatPortNumber,
+          ThreatConfidence
+      | extend
+          EventCount = int(1),
+          EventSchema = 'NetworkSession',
+          EventSchemaVersion = '0.2.7',
+          EventProduct = 'FTD',
+          EventVendor = 'Cisco',
+          DvcInterface = DvcInboundInterface,
+          DvcIdType = 'Other',
+          DvcOriginalAction = EventResultDetails,
+          Dvc = DvcId,
+          IpAddr = SrcIpAddr,
+          Duration = NetworkDuration,
+          Dst = DstIpAddr,
+          SrcUsernameType = case(
+              SrcUsername has '@', 'UPN',
+              SrcUsername has @'\', 'Windows',
+              SrcUsername =~ 'Not Found', '',
+              isnotempty(SrcUsername), 'Simple',
+              ''
+          ),
+          Rule = coalesce(tostring(NetworkRuleNumber), NetworkRuleName)
+  };
+  parser(
+      disabled = disabled,
+      pack = pack
+  )

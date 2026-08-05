@@ -1,0 +1,44 @@
+id: daac10bd-d842-4122-90cc-9957256f04e3
+name: "Tailscale Premium: Users generating traffic from multiple devices"
+description: Identifies users (SrcUser) generating tailnet flows from more than one distinct device in the past 24 hours. Useful for spotting account compromise (sudden new device) or unauthorised device enrollment.
+description-detailed: |
+  Identifies users (SrcUser) generating tailnet flows from more than one distinct device in the past 24 hours. Normal for a user with phone + laptop. Useful for spotting account compromise (sudden new device for a user), unauthorised device enrollment, or device sharing across users. Cross-reference NewDevicesToday against Tailscale_Devices_CL.Created to confirm whether each device is genuinely new vs long-known. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+      - Tailscale_Devices_CL
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let recent = Tailscale_Network_CL
+      | where TimeGenerated > ago(24h)
+      | where isnotempty(SrcUser)
+      | summarize
+          Devices = make_set(SrcNodeName, 20),
+          DeviceCount = dcount(SrcNodeName),
+          OsTypes = make_set(SrcOs, 10),
+          FirstFlow = min(TimeGenerated),
+          LastFlow = max(TimeGenerated),
+          Flows = count()
+        by SrcUser
+      | where DeviceCount >= 2;
+  let devicesCreatedToday = Tailscale_Devices_CL
+      | where TimeGenerated > ago(24h)
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where Created > ago(24h)
+      | distinct DeviceName;
+  recent
+  | extend NewDevicesToday = set_intersect(Devices, toscalar(devicesCreatedToday | summarize make_set(DeviceName)))
+  | extend HasNewDevice = array_length(NewDevicesToday) > 0
+  | project SrcUser, DeviceCount, Devices, OsTypes, HasNewDevice, NewDevicesToday, Flows, FirstFlow, LastFlow
+  | order by HasNewDevice desc, DeviceCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+version: 1.0.0

@@ -1,0 +1,65 @@
+id: 51c6ba55-fecd-4be0-9064-1aafc4d3e8d6
+name: Abnormal Security - User-reported email judged malicious
+description: |
+  'Creates an incident when an email a user reported to the Abnormal Security Abuse
+  Mailbox is judged malicious. Surfaces the reporter, the original recipient, and the
+  campaign so analysts can scope and remediate look-alike messages. Spam- and safe-judged
+  reports are intentionally excluded.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AbnormalSecurityPush
+    dataTypes:
+      - ABNORMAL_SECURITY_ABUSE_MAILBOX_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  ABNORMAL_SECURITY_ABUSE_MAILBOX_CL
+  | where abx_body_abx_body_reported_b == true
+  | where tolower(abx_body_abx_body_judgement_s) == "malicious"
+  | extend
+      ReporterEmail = abx_body_abx_body_reporter_address_s,
+      RecipientEmail = abx_body_abx_body_recipient_address_s,
+      Subject = abx_body_abx_body_subject_s,
+      Judgement = abx_body_abx_body_judgement_s,
+      MessageId = abx_body_abx_body_internet_message_id_s,
+      CampaignId = abx_body_abx_body_campaign_id_g
+  | project TimeGenerated, ReporterEmail, RecipientEmail, Subject, Judgement, MessageId, CampaignId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ReporterEmail
+  - entityType: MailMessage
+    fieldMappings:
+      - identifier: Recipient
+        columnName: RecipientEmail
+      - identifier: Subject
+        columnName: Subject
+      - identifier: NetworkMessageId
+        columnName: MessageId
+customDetails:
+  Judgement: Judgement
+  CampaignId: CampaignId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Abnormal Security: user-reported {{Judgement}} email ({{Subject}})"
+  alertDescriptionFormat: "An email reported by {{ReporterEmail}} was judged {{Judgement}} by Abnormal Security. Original recipient: {{RecipientEmail}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionDuration: PT5H
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

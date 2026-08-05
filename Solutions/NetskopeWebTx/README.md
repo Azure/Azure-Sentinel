@@ -9,11 +9,17 @@ This solution enables ingestion of Netskope Web Transaction logs into Microsoft 
 - **NetskopeWebTxConnector** - Codeless Connector Platform (CCP) connector using Azure Blob Storage and Event Grid
 
 ### Workbooks
-- **Netskope Web Transactions Dashboard** - Comprehensive visualization including:
+- **Netskope Web Transactions** - Comprehensive visualization including:
   - User Activity Analysis
   - Application & Category Usage
   - Geographic Traffic Analysis
   - HTTP Methods & Status Codes
+  - Client Information (OS, browser, device)
+  - Threat Protection (malware detections, severity, engine results)
+  - Endpoint Posture (device classification, OS family, Netskope client versions)
+  - Process Activity (top processes and parent processes)
+  - Identity & Authentication (authenticated users, authorization groups)
+  - Action Analysis (actions, action reasons, remote destination country)
   - SSL Errors & Bypass Events
   - Data Quality Monitoring
 
@@ -42,7 +48,7 @@ This solution enables ingestion of Netskope Web Transaction logs into Microsoft 
 4. Import the Workbook
 
 ## Log Table
-`NetskopeWebTransactions_CL`
+`NetskopeWebTransactions_CL` — ingested via the connector's Data Collection Rule (DCR) transform. A Kusto Function parser, **NetskopeWebtx**, is included to project the full Web Transaction field set with friendly names.
 
 ## Version
-1.0.0
+3.0.1

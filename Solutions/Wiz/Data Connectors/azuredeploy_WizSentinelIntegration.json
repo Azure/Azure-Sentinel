@@ -1,0 +1,147 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "description": "Provisions the RBAC required by the Wiz Microsoft Sentinel integration (ARM port of wiz-azure-sentinel-integration.sh). Deploy this INTO the resource group that hosts the Log Analytics workspace. It creates a custom role definition (assignable at the subscription) and assigns it to the Wiz service principal at that resource group, plus optionally at an existing Data Collection Endpoint in any resource group. Resource-group scoped so it can be deployed via a Deploy to Azure button, the Azure portal Build your own template editor (paste/upload), or az deployment group create. ARM cannot create the Entra service principal, so its object ID is supplied via the wizPrincipalObjectId parameter."
+    },
+    "parameters": {
+        "wizPrincipalObjectId": {
+            "type": "string",
+            "metadata": {
+                "description": "Object ID of the Wiz service principal (the enterprise application object ID, NOT the application or client ID). Find it under Microsoft Entra ID, Enterprise applications, or run: az ad sp show --id WIZ_APP_ID --query id -o tsv"
+            }
+        },
+        "customRoleName": {
+            "type": "string",
+            "defaultValue": "WizSentinelIntegrationCustomRole",
+            "metadata": {
+                "description": "Name of the custom role definition to create."
+            }
+        },
+        "dataCollectionEndpointId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional. Full resource ID of an existing Data Collection Endpoint to also assign the role at (may live in any resource group). Leave empty to skip. Format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Insights/dataCollectionEndpoints/{name}"
+            }
+        }
+    },
+    "variables": {
+        "roleDefName": "[guid(subscription().id, parameters('customRoleName'))]",
+        "roleDefId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefName'))]",
+        "roleDescription": "Wiz Custom Role For Microsoft Sentinel Integration",
+        "actions": [
+            "Microsoft.Insights/DataCollectionRules/Read",
+            "Microsoft.Insights/DataCollectionRules/Write",
+            "Microsoft.Insights/DataCollectionRules/Delete",
+            "Microsoft.OperationalInsights/workspaces/tables/read",
+            "Microsoft.OperationalInsights/workspaces/tables/write",
+            "Microsoft.OperationalInsights/workspaces/read",
+            "Microsoft.OperationalInsights/workspaces/sharedKeys/action",
+            "Microsoft.Insights/DataCollectionEndpoints/Read",
+            "Microsoft.Insights/DataCollectionEndpoints/Write"
+        ],
+        "dataActions": [
+            "Microsoft.Insights/Telemetry/Write"
+        ],
+        "dceResourceGroup": "[if(empty(parameters('dataCollectionEndpointId')), '', split(parameters('dataCollectionEndpointId'), '/')[4])]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('roleDefName')]",
+            "properties": {
+                "roleName": "[parameters('customRoleName')]",
+                "description": "[variables('roleDescription')]",
+                "type": "CustomRole",
+                "permissions": [
+                    {
+                        "actions": "[variables('actions')]",
+                        "notActions": [],
+                        "dataActions": "[variables('dataActions')]",
+                        "notDataActions": []
+                    }
+                ],
+                "assignableScopes": [
+                    "[subscription().id]",
+                    "[resourceGroup().id]"
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, parameters('wizPrincipalObjectId'), variables('roleDefName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('roleDefId')]",
+                "principalId": "[parameters('wizPrincipalObjectId')]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "condition": "[not(empty(parameters('dataCollectionEndpointId')))]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "wiz-sentinel-dce-role-assignment",
+            "resourceGroup": "[variables('dceResourceGroup')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "parameters": {
+                    "roleDefId": {
+                        "value": "[variables('roleDefId')]"
+                    },
+                    "wizPrincipalObjectId": {
+                        "value": "[parameters('wizPrincipalObjectId')]"
+                    },
+                    "dataCollectionEndpointId": {
+                        "value": "[parameters('dataCollectionEndpointId')]"
+                    }
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "roleDefId": {
+                            "type": "string"
+                        },
+                        "wizPrincipalObjectId": {
+                            "type": "string"
+                        },
+                        "dataCollectionEndpointId": {
+                            "type": "string"
+                        }
+                    },
+                    "resources": [
+                        {
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "scope": "[parameters('dataCollectionEndpointId')]",
+                            "name": "[guid(parameters('dataCollectionEndpointId'), parameters('wizPrincipalObjectId'), parameters('roleDefId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[parameters('roleDefId')]",
+                                "principalId": "[parameters('wizPrincipalObjectId')]",
+                                "principalType": "ServicePrincipal"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "customRoleDefinitionId": {
+            "type": "string",
+            "value": "[variables('roleDefId')]"
+        }
+    }
+}

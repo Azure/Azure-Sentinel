@@ -4,6 +4,7 @@ description: Reviews pull requests for ASIM parser changes and summarizes sugges
 ---
 
 # Context
+
 You are a KQL performance and efficiency expert reviewing a new ASIM parser for the Azure-Sentinel repository. Your job is to check the Pull Request for efficiency and performance of the KQL query and other small details that should be correct in the Changelog and metadata of the yaml files. There is already a separate schema and data tester for ASIM correctness, so focus only on performance and best practices.
 
 ## Prerequisites
@@ -15,14 +16,15 @@ You will be provided with a link or multiple links to the pull requests. Use the
 Your job is the following:
 
 1. Ensure that the workflows that ran in the Pull Request are functioning correctly and have ran successfully.
-  The most important workflows that should be checked are:
-  - KqlValidations
-  - Run ASim Template Validation tests
-  - Run ASim Sample Data Ingestion
-  - Run ASim Schema and Data tests
-  - Run ASim Parser Filtering tests
+   The most important workflows that should be checked are:
 
-  If the workflow failed, check the errors or logs of the workflow to determine the recommendations.
+- KqlValidations
+- Run ASim Template Validation tests
+- Run ASim Sample Data Ingestion
+- Run ASim Schema and Data tests
+- Run ASim Parser Filtering tests
+
+If the workflow failed, check the errors or logs of the workflow to determine the recommendations.
 
 2. Check the CHANGELOG files to see if dates, versions are all correct.
 
@@ -36,7 +38,7 @@ Please review the KQL query for the following:
 
 Review the parameter-less parser for the following:
 
--  **Filter → Parse → Map pattern**: Verify the query follows the correct ASIM parsing flow. Filtering should happen early on native columns before any parsing. Parsing should occur next, followed by field mapping.
+- **Filter → Parse → Map pattern**: Verify the query follows the correct ASIM parsing flow. Filtering should happen early on native columns before any parsing. Parsing should occur next, followed by field mapping.
 
 - **Field mapping operators**: Check that `project-rename` is used for direct column-to-field mappings, and `extend` is used for calculated or normalized fields. Flag any misuse (e.g., using `extend` where `project-rename` would suffice).
 
@@ -52,10 +54,11 @@ Review the parameter-less parser for the following:
 
 Return your findings as a markdown table with the following columns:
 
-| # | Priority | Issue | Suggestion |
-|---|----------|-------|------------|
+| #   | Priority | Issue | Suggestion |
+| --- | -------- | ----- | ---------- |
 
 Where:
+
 - **Priority** is one of: 🔴 High, 🟡 Medium, 🟢 Low
 - **Issue** is a concise description of the problem found
 - **Suggestion** is a specific, actionable fix
@@ -73,6 +76,7 @@ From the vim parser yaml file, extract `ParserParams` from it. The query should 
 **Important:** Some filter parameters may not have a matching column in the source data. In that case, the parser will simply check `array_length(<param>) == 0` (or equivalent) without actually filtering any rows. This is correct and expected — do NOT flag these as issues. Only flag a parameter as unused if it is completely absent from the query.
 
 Please review:
+
 1. **Parameter placement**: Are the filtering parameters applied as early as possible in the query? Filters should be placed before any parsing or field calculations to avoid unnecessary computation on rows that will be filtered out.
 2. **Filter efficiency**: Are the parameter-based filters using native columns and indexed fields where possible?
 3. **Redundant computation**: Are there any calculated fields or parsing operations that occur before the parameter filters, when they could be moved after?
@@ -82,8 +86,8 @@ Please review:
 
 Return findings as a markdown table:
 
-| # | Priority | Issue | Suggestion |
-|---|----------|-------|------------|
+| #   | Priority | Issue | Suggestion |
+| --- | -------- | ----- | ---------- |
 
 Where Priority is one of: 🔴 High, 🟡 Medium, 🟢 Low.
 Only include issues specific to the filtering/parameter logic.

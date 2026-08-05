@@ -1,0 +1,142 @@
+id: baebef19-9013-4e90-8511-92c036ca2710
+name: Multi-service network exposure followed by key and data access
+description: |
+  Identifies likely impact progression where network exposure writes across multiple cloud services are followed by secret or data access operations.
+description-detailed: |
+  This hunt prioritizes actors that weaken network posture on Key Vault, Storage, and database services, then rapidly perform key, secret, or data discovery operations in the same subscription.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - DefenseEvasion
+  - CredentialAccess
+  - Collection
+relevantTechniques:
+  - T1562.007
+  - T1552
+  - T1213
+tags:
+  - Hybrid attack
+  - Cloud exposure staging
+  - Key Vault
+  - Storage
+  - Azure DB
+  - Sequence analytics
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let SequenceWindow = 2h;
+  // Successful activity status values for AzureActivity write operations.
+  let SuccessActivityStatusValues = dynamic(["succeeded", "success"]);
+  // Exposure write operation families for Key Vault, Storage, and Azure database services.
+  let ExposureOpPrefixes = dynamic([
+    "microsoft.keyvault/vaults/write",
+    "microsoft.keyvault/vaults/accesspolicies/write",
+    "microsoft.storage/storageaccounts/write",
+    "microsoft.sql/servers/firewallrules/write",
+    "microsoft.dbforpostgresql/",
+    "microsoft.dbformysql/"
+  ]);
+  // Parent operations that can carry network exposure changes in operation properties.
+  let ExposureParentWriteOps = dynamic([
+    "microsoft.keyvault/vaults/write",
+    "microsoft.storage/storageaccounts/write",
+    "microsoft.sql/servers/write",
+    "microsoft.dbforpostgresql/flexibleservers/write",
+    "microsoft.dbformysql/flexibleservers/write"
+  ]);
+  // Action fragments that indicate network posture or access control changes.
+  let ExposureActionValues = dynamic([
+    "networkacls/write",
+    "firewallrules/write",
+    "virtualnetworkrules/write",
+    "accesspolicies/write",
+    "publicnetworkaccess/write"
+  ]);
+  // Property tokens that indicate firewall, ACL, or public access weakening.
+  let NetworkConfigSignals = dynamic([
+    "publicnetworkaccess",
+    "networkacls",
+    "defaultaction",
+    "iprules",
+    "virtualnetworkrules",
+    "bypass",
+    "firewallrules"
+  ]);
+  // Service-specific access patterns used to detect post-exposure key or data access.
+  let KeyVaultAccessActions = dynamic(["/read", "/list", "secrets", "keys"]);
+  let StorageAccessActions = dynamic(["listkeys/action", "/list", "/read"]);
+  let SqlAccessActions = dynamic(["/read", "/list"]);
+  let PostgresAccessActions = dynamic(["/read", "/list", "listkeys"]);
+  let MysqlAccessActions = dynamic(["/read", "/list", "listkeys"]);
+  // Stage 1: Detect exposure-changing writes.
+  let ExposureWrites =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress), Op = tolower(OperationNameValue),
+             ActivityStatusNorm = tolower(tostring(ActivityStatusValue)), Props = tolower(tostring(Properties_d))
+    | where ActivityStatusNorm in (SuccessActivityStatusValues)
+    | where Op has_any (ExposureOpPrefixes)
+    | where (Op has_any (ExposureActionValues))
+      or (Op in~ (ExposureParentWriteOps) and Props has_any (NetworkConfigSignals))
+    | extend ServiceFamily = case(
+        Op startswith "microsoft.keyvault/vaults/", "KeyVault",
+        Op startswith "microsoft.storage/storageaccounts/", "Storage",
+        Op startswith "microsoft.sql/servers/", "AzureSQL",
+        Op startswith "microsoft.dbforpostgresql/", "PostgreSQL",
+        Op startswith "microsoft.dbformysql/", "MySQL",
+        "Other")
+    | summarize FirstExposure=min(TimeGenerated), LastExposure=max(TimeGenerated), ExposureCount=count(),
+                ExposureOps=make_set(OperationNameValue, 30), ExposureResources=make_set(ResourceId, 30),
+                ServiceSet=make_set(ServiceFamily, 10)
+      by CallerNorm, CallerIp, SubscriptionId;
+  // Stage 2: Detect key, secret, and data access operations after exposure tampering.
+  let AccessOps =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress), Op = tolower(OperationNameValue),
+             ActivityStatusNorm = tolower(tostring(ActivityStatusValue))
+    | where ActivityStatusNorm in (SuccessActivityStatusValues)
+    | where (
+        Op has "microsoft.keyvault/vaults/" and Op has_any (KeyVaultAccessActions)
+      ) or (
+        Op has "microsoft.storage/storageaccounts/" and Op has_any (StorageAccessActions)
+      ) or (
+        Op has "microsoft.sql/servers/databases/" and Op has_any (SqlAccessActions)
+      ) or (
+        Op has "microsoft.dbforpostgresql/" and Op has_any (PostgresAccessActions)
+      ) or (
+        Op has "microsoft.dbformysql/" and Op has_any (MysqlAccessActions)
+      )
+    | summarize FirstAccess=min(TimeGenerated), LastAccess=max(TimeGenerated), AccessCount=count(),
+                AccessOps=make_set(OperationNameValue, 40), AccessResources=make_set(ResourceId, 40)
+      by CallerNorm, CallerIp, SubscriptionId;
+  // Stage 3: Correlate multi-service exposure writes with follow-on access in a tight sequence window.
+  ExposureWrites
+  | extend DistinctServiceCount = array_length(ServiceSet)
+  | where DistinctServiceCount >= 2
+  | join kind=inner AccessOps on CallerNorm, SubscriptionId, CallerIp
+  | where FirstAccess between (FirstExposure .. (LastExposure + SequenceWindow))
+  | extend CallerName = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[0]), CallerNorm),
+           CallerUPNSuffix = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[1]), "")
+  | project TimeGenerated=FirstExposure, Caller=CallerNorm, CallerIp, SubscriptionId,
+            FirstExposure, LastExposure, FirstAccess, LastAccess,
+            DistinctServiceCount, ExposureCount, AccessCount,
+            CallerName, CallerUPNSuffix,
+            ServiceSet, ExposureOps, AccessOps, ExposureResources, AccessResources
+  | order by DistinctServiceCount desc, ExposureCount desc, AccessCount desc, FirstAccess desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: CallerName
+      - identifier: UPNSuffix
+        columnName: CallerUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIp
+version: 1.0.0

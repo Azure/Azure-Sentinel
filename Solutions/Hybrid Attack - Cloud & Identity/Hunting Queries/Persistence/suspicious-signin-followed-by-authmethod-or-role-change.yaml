@@ -1,0 +1,79 @@
+id: adaf1ceb-db2d-49e9-989f-bf4116f53153
+name: Suspicious sign-in followed by auth method or role change
+description: |
+  Detects potential account takeover progression where suspicious sign-ins are followed by authentication method updates or privileged role changes.
+description-detailed: |
+  This query baselines user sign-in source context, flags suspicious first-seen sign-ins, and correlates them with high-risk Entra audit operations in a short time window.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+  - T1556
+  - T1098.003
+tags:
+  - Account takeover
+  - Authentication method tampering
+  - Role escalation
+  - Entra ID
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineSignin =
+    SigninLogs
+    | where TimeGenerated between ((StartTime - 14d) .. StartTime)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(tostring(Identity)), SrcIp = tostring(IPAddress), UA = tostring(UserAgent)
+    | summarize by IdentityNorm, SrcIp, UA;
+  let SuspiciousSignin =
+    SigninLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(tostring(Identity)),
+             UserUpn = tostring(column_ifexists("UserPrincipalName", Identity)),
+             SrcIp = tostring(IPAddress),
+             UA = tostring(UserAgent),
+             RiskFlag = tobool(column_ifexists("IsRisky", false)),
+             CAStatus = tostring(ConditionalAccessStatus)
+    | where RiskFlag == true or CAStatus in~ ("failure", "notApplied")
+    | join kind=leftanti BaselineSignin on IdentityNorm, SrcIp, UA
+    | project SigninTime=TimeGenerated, Identity, UserUpn, IdentityNorm, SrcIp, UA, CorrelationId, CAStatus, RiskFlag;
+  let HighRiskChanges =
+    AuditLogs
+    | where TimeGenerated between (StartTime .. (EndTime + 2h))
+    | extend Activity = tostring(ActivityDisplayName),
+             ActorUpn = tolower(tostring(extractjson("$.user.userPrincipalName", tostring(InitiatedBy)))),
+             ActorIp = tostring(extractjson("$.user.ipAddress", tostring(InitiatedBy)))
+    | where Activity has_any (
+        "authentication method",
+        "strong authentication",
+        "mfa",
+        "add member to role",
+        "add eligible member to role",
+        "add app role assignment"
+      )
+    | project ChangeTime=TimeGenerated, ActivityDisplayName, OperationName, CorrelationId, ActorUpn, ActorIp, Result, ResultType, TargetResources;
+  SuspiciousSignin
+  | join kind=inner HighRiskChanges on $left.IdentityNorm == $right.ActorUpn
+  | where ChangeTime between (SigninTime .. (SigninTime + 2h))
+  | project TimeGenerated=SigninTime, ChangeTime, Identity, UserUpn, SrcIp, UA, CAStatus, RiskFlag,
+            ActivityDisplayName, OperationName, Result, ResultType, TargetResources, CorrelationId
+  | order by ChangeTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Identity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+version: 1.0.0

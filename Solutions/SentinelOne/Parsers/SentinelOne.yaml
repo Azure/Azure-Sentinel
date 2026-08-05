@@ -1,8 +1,8 @@
 id: e1cb35b3-ee01-4c8f-a361-0850d0554ab6
 Function:
   Title: Parser for SentinelOne
-  Version: '1.0.1'
-  LastUpdated: '2024-11-25'
+  Version: '1.0.2'
+  LastUpdated: '2026-07-01'
 Category: Microsoft Sentinel Parser
 FunctionName: SentinelOne
 FunctionAlias: SentinelOne
@@ -423,7 +423,7 @@ FunctionQuery: |
                 RegistrationToken=column_ifexists('registrationToken_s', ''),
                 TotalAgents=column_ifexists('totalAgents_d', ''),
                 Type=column_ifexists('type_s', '');
-                union isfuzzy=true SentinelOneActivities_CL,SentinelOneAgents_CL,SentinelOneAlerts_CL,SentinelOneGroups_CL,SentinelOneThreats_CL,SentinelOneV1Empty_Union
+                union isfuzzy=true SentinelOneActivities_CL,SentinelOneAgents_CL,SentinelOneAlerts_CL,SentinelOneGroups_CL,SentinelOneThreats_CL,SentinelOneV1Empty_Union,SentinelOneV2_Empty
                 | extend 
                 ActivityType,
                 EventVendor="SentinelOne",
@@ -462,7 +462,7 @@ FunctionQuery: |
                 DataUuid=Uuid,
                 DataGroup=tostring(parse_json(todynamic(Data)).group),
                 DataRuleDescription=tostring(parse_json(todynamic(Data)).ruleDescription),
-                EventType=tostring(parse_json(todynamic(AlertInfo)).eventType),
+                EventType=tostring(parse_json(todynamic(column_ifexists('AlertInfo',''))).eventType),
                 DataRuleExpirationMode=tostring(parse_json(todynamic(Data)).ruleExpirationMode),
                 DataRuleQueryDetails=tostring(parse_json(todynamic(Data)).ruleQueryDetails),
                 DataRuleQueryType=tostring(parse_json(todynamic(Data)).ruleQueryType),
@@ -485,7 +485,7 @@ FunctionQuery: |
                 ActiveDirectoryLastUserDistinguishedName=tostring(parse_json(todynamic(ActiveDirectory)).lastUserDistinguishedName),
                 ActiveDirectoryLastUserMemberOf=tostring(parse_json(todynamic(ActiveDirectory)).lastUserMemberOf),
                 SrcDvcDomain=Domain,
-                AlertInfo=tostring(AlertInfo),
+                AlertInfo=tostring(column_ifexists('AlertInfo','')),
                 FirewallEnabled=column_ifexists('FirewallEnabled',''),
                 IsUninstalled=column_ifexists('IsUninstalled',''),
                 EncryptedApplications=column_ifexists('EncryptedApplications',''),
@@ -648,4 +648,55 @@ FunctionQuery: |
                 TotalAgents=totalAgents_d,
                 Type;
             };
-            SentinelOne_view
+            let SentinelOneAlertsV2_Empty = datatable(
+                TimeGenerated:datetime,
+                AlertId:string,
+                AlertName:string,
+                DetectedAt:datetime,
+                CreatedAt:datetime,
+                UpdatedAt:datetime,
+                Status:string,
+                Severity:string,
+                AnalystVerdict:string,
+                ExternalId:string,
+                StorylineId:string,
+                AttackSurfaces:dynamic,
+                ConfidenceLevel:string,
+                Classification:string,
+                Product:string,
+                Vendor:string,
+                AssigneeName:string,
+                AssigneeEmail:string,
+                Assets:dynamic,
+                DataSources:dynamic
+            )[];
+            let SentinelOneAlertsV2_view = view () {
+                union isfuzzy=true SentinelOneAlertsV2_CL, SentinelOneAlertsV2_Empty
+                | extend
+                EventVendor="SentinelOne",
+                EventProduct="SentinelOne"
+                | project
+                TimeGenerated,
+                EventVendor,
+                EventProduct,
+                AlertId,
+                AlertName,
+                DetectedAt,
+                AlertCreatedAt=CreatedAt,
+                AlertUpdatedAt=UpdatedAt,
+                Status,
+                Severity,
+                AnalystVerdict,
+                AlertExternalId=ExternalId,
+                StorylineId,
+                AttackSurfaces,
+                ConfidenceLevel,
+                Classification,
+                Product,
+                Vendor,
+                AssigneeName,
+                AssigneeEmail,
+                Assets,
+                DataSources;
+            };
+            union isfuzzy=true SentinelOne_view, SentinelOneAlertsV2_view
