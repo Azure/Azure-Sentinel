@@ -1,0 +1,42 @@
+# TEMPORARY workflow on the fork only: generates the ARM package for the
+# "Truvizy Threat Intelligence" solution with the repo's own V3 tool
+# (requires pwsh 7, not available on the contributor's machine). This file
+# is removed from the branch before the upstream PR is opened.
+name: package-truvizy
+on: workflow_dispatch
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: truvizy-solution
+
+      - name: Generate solution package (V3 tool)
+        shell: pwsh
+        run: |
+          Install-Module powershell-yaml -Force -Scope CurrentUser
+          $dataDir = "$PWD/Solutions/Truvizy Threat Intelligence/Data"
+          $dataFile = Get-ChildItem $dataDir -Filter 'Solution_*.json' | Select-Object -First 1
+          $d = Get-Content -Raw $dataFile.FullName | ConvertFrom-Json
+          $d.BasePath = "$PWD/Solutions/Truvizy Threat Intelligence/"
+          # First release must land at exactly 3.0.0: local mode always
+          # bumps, so seed 2.0.0 and bump major (2.0.0 -> 3.0.0).
+          $d.Version = '2.0.0'
+          $d | ConvertTo-Json -Depth 50 | Set-Content $dataFile.FullName
+          ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $dataDir -VersionMode local -VersionBump major
+          # Restore the conventional placeholder BasePath before committing
+          $d = Get-Content -Raw $dataFile.FullName | ConvertFrom-Json
+          $d.BasePath = 'C:\GitHub\Azure-Sentinel\Solutions\Truvizy Threat Intelligence\'
+          $d | ConvertTo-Json -Depth 50 | Set-Content $dataFile.FullName
+
+      - name: Commit generated package
+        run: |
+          git config user.name "tonyAZNboy"
+          git config user.email "anthonyng135@gmail.com"
+          git add "Solutions/Truvizy Threat Intelligence"
+          git commit -m "Truvizy Threat Intelligence: generated solution package (V3 tool)"
+          git push origin truvizy-solution
