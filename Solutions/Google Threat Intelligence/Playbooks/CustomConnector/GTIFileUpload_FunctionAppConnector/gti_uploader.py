@@ -4,10 +4,11 @@ from io import BytesIO
 from os import environ
 
 import requests
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.storage.blob import BlobServiceClient
 
 gti_base_url = environ.get("GTIBaseUrl", "https://www.virustotal.com")
+scope = environ.get("SCOPE", "https://monitor.azure.com//.default")
 
 
 class GTIUploader:
@@ -25,8 +26,9 @@ class GTIUploader:
 
         Uses the Function App's own managed identity (Storage Blob Data Reader role required).
         """
-        account_url = f"https://{storage_account_name}.blob.core.windows.net"
-        blob_service_client = BlobServiceClient(account_url, credential=DefaultAzureCredential())
+        domain = "blob.core.usgovcloudapi.net" if ".us" in scope else "blob.core.windows.net"
+        account_url = f"https://{storage_account_name}.{domain}"
+        blob_service_client = BlobServiceClient(account_url, credential=ManagedIdentityCredential())
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         self.log.info("Downloading blob %s/%s from %s", container_name, blob_path, storage_account_name)
         return BytesIO(blob_client.download_blob().readall())
