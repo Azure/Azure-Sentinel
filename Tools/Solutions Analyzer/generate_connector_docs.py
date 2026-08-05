@@ -1572,67 +1572,6 @@ def parse_filter_fields(filter_fields: str) -> Dict[str, List[str]]:
     return dict(criteria_by_table)
 
 
-def write_source_collector_rows(f, *sources: Dict[str, str], omit_source_vendor: bool = False) -> None:
-    """Write Source/Collector vendor & product rows into an open Attribute|Value
-    metadata table. Values are read from the first mapping that provides them
-    (e.g. connectors.csv reference, then the raw entry). Semicolon-separated
-    vendor/product lists are rendered comma-separated, and the derivation basis
-    is appended as an italic note; a `publisher_fallback` basis is flagged as
-    low confidence.
-
-    When ``omit_source_vendor`` is True the Source Vendor row is suppressed
-    (the caller has merged it into a combined "Publisher / Vendor" row because
-    the source vendor is identical to the publisher).
-    """
-    def pick(field: str) -> str:
-        for src in sources:
-            if src and (src.get(field, '') or '').strip():
-                return (src.get(field, '') or '').strip()
-        return ''
-
-    def basis_note(basis: str) -> str:
-        if not basis:
-            return ''
-        if basis == 'publisher_fallback':
-            return f" *(basis: {basis} — low confidence)*"
-        return f" *(basis: {basis})*"
-
-    source_vendor = pick('source_vendor')
-    source_product = pick('source_product')
-    collector_vendor = pick('collector_vendor')
-    collector_product = pick('collector_product')
-    source_basis = pick('source_vendor_basis')
-    collector_basis = pick('collector_vendor_basis')
-    source_product_basis = pick('source_product_basis')
-    source_event_type = pick('source_event_type')
-
-    if source_vendor and not omit_source_vendor:
-        f.write(f"| **Source Vendor** | {source_vendor.replace(';', ', ')}{basis_note(source_basis)} |\n")
-    if source_product:
-        f.write(f"| **Source Product** | {source_product.replace(';', ', ')}{basis_note(source_product_basis)} |\n")
-    if source_event_type:
-        f.write(f"| **Event Type** | {source_event_type.replace(';', ', ')} |\n")
-    if collector_vendor:
-        f.write(f"| **Collector Vendor** | {collector_vendor.replace(';', ', ')}{basis_note(collector_basis)} |\n")
-    if collector_product:
-        f.write(f"| **Collector Product** | {collector_product.replace(';', ', ')} |\n")
-
-
-def _norm_vendor_for_compare(name: str) -> str:
-    """Lowercase + strip trailing company suffixes so 'Microsoft Corporation'
-    and 'Microsoft' compare equal when deciding whether the source vendor is
-    just the publisher."""
-    n = (name or '').strip().lower().rstrip('.').strip()
-    for suffix in (' corporation', ' corp', ' inc', ' incorporated', ' llc',
-                   ' ltd', ' limited', ' gmbh', ' co', ' sa', ' ag', ' plc'):
-        if n.endswith(suffix):
-            n = n[: -len(suffix)].strip().rstrip(',').strip()
-    return n
-
-
-
-
-
 def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[str, str]], 
                        relative_path: str = "../tables/", filter_fields: str = "",
                        include_transforms: bool = True, include_ingestion_api: bool = True,
@@ -4952,26 +4891,6 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             category = table_ref.get('category', '')
             if category:
                 attributes.append(('Category', category))
-
-            # Source & collector vendor/product (projected from feeding connectors).
-            _sv = (table_ref.get('source_vendor', '') or '').strip()
-            _sp = (table_ref.get('source_product', '') or '').strip()
-            _cv = (table_ref.get('collector_vendor', '') or '').strip()
-            _cp = (table_ref.get('collector_product', '') or '').strip()
-            _svb = (table_ref.get('source_vendor_basis', '') or '').strip()
-            _cvb = (table_ref.get('collector_vendor_basis', '') or '').strip()
-            _spb = (table_ref.get('source_product_basis', '') or '').strip()
-            _set = (table_ref.get('source_event_type', '') or '').strip()
-            if _sv:
-                attributes.append(('Source Vendor', _sv.replace(';', ', ') + (f" *(basis: {_svb})*" if _svb else '')))
-            if _sp:
-                attributes.append(('Source Product', _sp.replace(';', ', ') + (f" *(basis: {_spb})*" if _spb else '')))
-            if _set:
-                attributes.append(('Event Type', _set.replace(';', ', ')))
-            if _cv:
-                attributes.append(('Collector Vendor', _cv.replace(';', ', ') + (f" *(basis: {_cvb})*" if _cvb else '')))
-            if _cp:
-                attributes.append(('Collector Product', _cp.replace(';', ', ')))
             
             # Custom Log V1 flag
             is_clv1 = table_ref.get('is_clv1', '').lower() == 'true'
@@ -5806,23 +5725,9 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             f.write(f"| **Connector ID** | `{connector_id}` |\n")
             
             publisher = first_entry.get('connector_publisher', '')
-            # If the derived source vendor is just the publisher (single value,
-            # same name), don't list it twice — merge into one "Publisher / Vendor"
-            # row and suppress the separate Source Vendor row.
-            _sv = (connector_ref.get('source_vendor', '') or first_entry.get('source_vendor', '')).strip()
-            _merge_pub_vendor = bool(
-                publisher and _sv and ';' not in _sv
-                and _norm_vendor_for_compare(_sv) == _norm_vendor_for_compare(publisher)
-            )
-            if _merge_pub_vendor:
-                f.write(f"| **Publisher / Vendor** | {publisher} |\n")
-            elif publisher:
+            if publisher:
                 f.write(f"| **Publisher** | {publisher} |\n")
-
-            # Source & collector vendor/product (derived by the mapper's resolver;
-            # basis records how confident the derivation is).
-            write_source_collector_rows(f, connector_ref, first_entry, omit_source_vendor=_merge_pub_vendor)
-
+            
             # Solutions
             solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
             f.write(f"| **Used in Solutions** | {solutions_list} |\n")
@@ -5984,8 +5889,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                           solution_deps: List[Dict[str, str]] = None,
                           all_solutions_connectors: Dict[str, List[Dict[str, str]]] = None,
                           connectors_reference: Dict[str, Dict[str, str]] = None,
-                          tables_reference: Dict[str, Dict[str, str]] = None,
-                          solutions_reference: Dict[str, Dict[str, str]] = None) -> None:
+                          tables_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate individual solution documentation page.
     
     Args:
@@ -6016,8 +5920,6 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         connectors_reference = {}
     if tables_reference is None:
         tables_reference = {}
-    if solutions_reference is None:
-        solutions_reference = {}
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -6112,12 +6014,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         categories = metadata.get('solution_categories', '')
         if categories:
             f.write(f"| **Categories** | {categories} |\n")
-
-        # Source & collector vendor/product rolled up from the solution's connectors
-        # (low-confidence fallback contributions dropped when a stronger vendor exists).
-        solution_ref = solutions_reference.get(solution_name, {})
-        write_source_collector_rows(f, solution_ref)
-
+        
         version = metadata.get('solution_version', '')
         if version:
             f.write(f"| **Version** | {version} |\n")
@@ -9730,13 +9627,6 @@ def main() -> None:
                         # Merge is_clv1 from mapper output
                         if row.get('is_clv1', ''):
                             tables_reference[table_name]['is_clv1'] = row['is_clv1']
-                        # Merge source/collector vendor & product fields (mapper-derived;
-                        # absent from the Azure Monitor tables_reference.csv)
-                        for _vf in ('source_vendor', 'source_product', 'collector_vendor',
-                                    'collector_product', 'source_vendor_basis', 'collector_vendor_basis',
-                                    'source_product_basis', 'source_event_type'):
-                            if row.get(_vf, ''):
-                                tables_reference[table_name][_vf] = row[_vf]
         # The mapper's tables.csv is the authoritative real-table list: it emits a
         # row for every genuine table (including reference-only tables like
         # AKSAudit) but excludes parser names mis-listed as tables in
@@ -10150,7 +10040,7 @@ def main() -> None:
         solution_content = content_items_by_solution.get(solution_name, [])
         solution_table_types = solution_table_content_types.get(solution_name, {})
         sol_deps = solution_dependencies.get(solution_name, [])
-        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution, connectors_reference, tables_reference, solutions_reference)
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution, connectors_reference, tables_reference)
     
     # Generate individual table pages with content item references
     # Build parser-to-table mappings for table pages

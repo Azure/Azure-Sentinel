@@ -17,7 +17,6 @@ The default file lives at `Tools/Solutions Analyzer/solution_analyzer_overrides.
 
 - **Set `collection_method` to AMA** for tables that the analyzer cannot infer otherwise (e.g., `Syslog`, `CommonSecurityLog`).
 - **Apply category labels** by table-name pattern (e.g., `.*AWS.*` → category `AWS`). The raw `category` value feeds the computed `category_primary` taxonomy; to pin the normalized value directly, override `category_primary` (e.g., `Table,<pattern>,category_primary,Cloud`).
-- **Set source/collector vendor & product** on connectors or tables via `source_vendor`, `source_product`, `collector_vendor`, `collector_product` (e.g., `Connector,SAP.*,source_vendor,SAP` for SAP-family connectors; `Connector,SecurityBridge.*,collector_vendor,SecurityBridge` for a forwarding intermediary). Connector-level source/collector values are projected onto the tables they feed; table-level overrides win over projection.
 - **Mark a solution or connector deprecated** when description-based detection misses it.
 - **Redirect the marketplace lookup** for a solution whose live offer differs from its `SolutionMetadata.json` by overriding `solution_publisher_id` and/or `solution_offer_id` (see below).
 - **Inject a synthetic connector** for solutions whose connector definition isn't standard JSON in `Data Connectors/` (e.g., SAP).
@@ -27,7 +26,7 @@ The default file lives at `Tools/Solutions Analyzer/solution_analyzer_overrides.
 
 | Column | Description |
 |--------|-------------|
-| `Entity` | Entity type to match: `table`, `connector`, `solution`, or `synthetic_connector` (case insensitive). Additional **derivation entities** drive source/collector vendor resolution — see [Source/collector derivation entities](#sourcecollector-derivation-entities) |
+| `Entity` | Entity type to match: `table`, `connector`, `solution`, or `synthetic_connector` (case insensitive) |
 | `Pattern` | Regex pattern matched (full-match, case insensitive) against the entity's key field — `table_name`, `connector_id`, or `solution_name`. For `synthetic_connector`, the pattern is the solution folder name |
 | `Field` | Field to override. For `synthetic_connector`, must be one of: `connector_id` (required, starts a new connector group), `title`, `publisher`, `description`, `tables`, `instruction_steps`, `permissions` |
 | `Value` | New value. For `tables` (synthetic connectors), use a semicolon-separated list |
@@ -82,31 +81,6 @@ synthetic_connector,SAP,tables,ABAPAuditLog_CL;ABAPChangeDocsLog_CL,
 ```
 
 > Synthetic connectors are only injected if no connector with the same ID was discovered. They appear in [`connectors.csv`](connectors.md) with `connector_files = synthetic_connector_override`.
-
-### Source/collector derivation entities
-
-The `source_vendor`, `source_product`, `collector_vendor`, and `collector_product` fields are populated by a tiered, fully data-driven resolver. Beyond direct `connector`/`table` field overrides, the following entities supply the vendor/product knowledge (precedence policy lives in code — see [`connectors.md` › Source & collector vendor/product derivation](connectors.md#source--collector-vendorproduct-derivation)):
-
-| Entity | `Pattern` matches | Purpose |
-|---|---|---|
-| `connector_publisher` | the connector's **publisher value** | Map a publisher to `source_vendor`/`source_product`. Value may be `${connector_publisher}` to copy the publisher through. |
-| `connector_publisher_fallback` | the connector's publisher value | Low-precedence publisher map (e.g. `Microsoft.*` → `Microsoft`), applied only after name patterns fail. |
-| `solution_author` | the connector's solution author name | Fallback source vendor when publisher is Microsoft-ish/absent. |
-| `connector_name_pattern` | connector id / title / solution name | Name-based source or collector vendor/product (e.g. `.*AWS.*` → `Amazon`). |
-| `domain_vendor` | a **domain label** (second-level domain) found in the connector description | Maps a vendor's domain (e.g. `cyberark` from `docs.cyberark.com`) to a canonical `source_vendor`. Drives the evidence tier that recovers the real vendor of Microsoft-published third-party connectors. |
-| `collector_pattern` | connector id / title / solution name | Forwarder/collector registry → `collector_vendor`/`collector_product` (Cribl, Logstash, NXLog, Fluentd, SAP forwarders). |
-| `table_name_pattern` | a table name | Fills a table's `source_*`/`collector_*` when it has no feeding connector to project from (e.g. SAP ABAP tables). |
-| `vendor_alias` | a vendor **value** token | Normalizes each resolved vendor to a canonical form (e.g. `Crowdstrike` → `CrowdStrike`, `Amazon Web Services` → `Amazon`). The `Field` column is unused but must be non-empty (rows with an empty `Field` are skipped at load). |
-
-**Value DSL:** a `Value` of `${column}` copies that column's value from the matched row; any other value is a literal. Derivation entities are consumed only by the resolver — the generic override pass ignores them.
-
-```csv
-Entity,Pattern,Field,Value,Comment
-connector_publisher,.+,source_vendor,${connector_publisher},Derive source vendor from the publisher value
-connector_name_pattern,.*AWS.*,source_vendor,Amazon,AWS connectors emit Amazon telemetry
-collector_pattern,.*Cribl.*,collector_vendor,Cribl,Cribl Stream forwards third-party telemetry
-vendor_alias,Crowdstrike,source_vendor,CrowdStrike,Canonicalize casing
-```
 
 See [`map_solutions_connectors_tables.md` › Override System](../map_solutions_connectors_tables.md#override-system) for further details.
 

@@ -199,16 +199,7 @@ See the script documentation for details:
 
 ## Version History
 
-### v9.9 - In-solution override flag for misclassified published connectors
-
-**Source and collector vendor/product fields (`connectors.csv`, `tables.csv`, `solutions.csv`, `solution_analyzer_overrides.csv`):**
-- Added four new columns to `connectors.csv`, `tables.csv`, and `solutions.csv`: `source_vendor`, `source_product`, `collector_vendor`, `collector_product`, plus two provenance columns `source_vendor_basis` and `collector_vendor_basis`. `source_*` names the vendor/product of the system that generated the events; `collector_*` names the intermediary that collected/forwarded them, populated only when it differs from the source (otherwise blank); `*_basis` records how each vendor value was derived.
-- **Data-driven derivation engine.** Connector `source_vendor`/`source_product` are resolved by a tiered, fully override-driven resolver (`resolve_source_collector_fields`): explicit connector override → `event_vendor`/`event_product` ground-truth seed → connector publisher value → solution author → connector name pattern → publisher fallback (e.g. Microsoft). The **precedence policy lives in code**; **all vendor/product knowledge lives in `solution_analyzer_overrides.csv`**. This lifted `source_vendor` coverage from ~14% (event-seed only) to 100% of connectors (640/640).
-- **Solution-level rollup with low-confidence handling.** `solutions.csv` rolls the four fields up from each solution's connectors (`rollup_solution_source_collector_fields`): the de-duplicated union of the connector values, with a `mixed`-aware `*_basis`. The low-confidence publisher fallback now records the distinct basis `publisher_fallback` (previously merged into `publisher`), and such contributions are **dropped from the solution rollup whenever a higher-confidence vendor exists**, so a generic Microsoft fallback no longer turns a single-vendor solution into an apparent multi-vendor one. Result: 419/421 solutions with connectors resolve to a single `source_vendor` (deterministic); only 2 are genuinely multi-vendor.
-- **New override derivation entities** consumed only by the resolver: `connector_publisher` (matches the publisher *value*, supports the `${column}` value DSL to copy a column through), `connector_publisher_fallback`, `solution_author`, `connector_name_pattern`, `collector_pattern` (forwarder registry: Cribl, Logstash, NXLog, Fluentd, SAP forwarders), `table_name_pattern` (for feeder-less tables), and `vendor_alias` (canonicalizes vendor tokens to prevent fragmentation, e.g. `Crowdstrike` → `CrowdStrike`, `Amazon Web Services` → `Amazon`, `Palo Alto` → `Palo Alto Networks`).
-- On tables, all four fields are projected as the union of the feeding connectors' values after connector resolution; table-level overrides win over projection, and `table_name_pattern` rules fill synthetic-connector-fed tables (e.g. SAP ABAP) that have no projectable feeder.
-- **Detail pages.** Connector, table, and solution detail pages now display the source/collector vendor & product (with the derivation basis, and a "low confidence" note for `publisher_fallback`) in their metadata tables.
-- Direct `Connector,…,source_vendor,…` / `collector_vendor` overrides remain supported. Seeded SAP overrides mark SAP-family connectors as `source_vendor=SAP` and tag the SecurityBridge/Onapsis/Pathlock forwarders as collectors, enabling a derived "SAP" roll-up over `source_vendor`.
+### v9.11 - Parser, table discovery, and mapping accuracy
 
 **Unifying ASIM parser deduplication and dual-variant parser pages:**
 - Unifying (union) parser deduplication now happens at **CSV generation** in `map_solutions_connectors_tables.py` (root cause), not just in the display layer: `asim_parsers.csv` no longer emits a separate row for the `im`/`vim` (filtering) variant of each unifying parser, keeping only the `ASim` (parameter-less) row. The dropped variant is preserved on the surviving `ASim` row via two new columns, `filtering_parser_name` and `filtering_equivalent_builtin`. Pairing is by `(schema, action)` so the irregular `RegistryEvent` and three-way `ProcessEvent` (base/Create/Terminate) cases pair correctly.
@@ -235,6 +226,21 @@ See the script documentation for details:
   - `DnsEvents`, `DnsInventory`, `AMA_DNS` → [DNS AMA Fields Reference](https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields)
   - All other tables → [Data Source Schema Reference](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference) (general reference)
 - Schema References section appears in the Table of Contents for easy navigation.
+
+### v9.10 - Schema reference documentation links for table pages
+
+**Schema references section added to table documentation:**
+- Each generated table page now includes a "Schema References" section with official Microsoft Learn documentation links for field/column information.
+- **Specific schema documentation** is provided for well-documented tables (e.g., SecurityAlert for security alerts, DnsEvents/DnsInventory for DNS via AMA) with dedicated reference pages.
+- **General data source schema reference** is provided for all other tables as a fallback.
+- The mapping is configurable via the `TABLE_SCHEMA_REFERENCES` dictionary in `generate_connector_docs.py`, allowing easy addition of new table-specific references.
+- Current mappings include:
+  - `SecurityAlert` → [Security Alert Schema](https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema)
+  - `DnsEvents`, `DnsInventory`, `AMA_DNS` → [DNS AMA Fields Reference](https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields)
+  - All other tables → [Data Source Schema Reference](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference) (general reference)
+- Schema References section appears in the Table of Contents for easy navigation.
+
+### v9.9 - In-solution override flag for misclassified published connectors
 
 **Internal Sentinel table suppression for connector mappings:**
 - `map_solutions_connectors_tables.py` now suppresses connector→table mapping edges for tables classified as internal in `tables_reference.csv` (`category` includes `Internal` or `collection_method` is `Internal`).
