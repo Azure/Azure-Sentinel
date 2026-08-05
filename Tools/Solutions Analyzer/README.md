@@ -216,16 +216,9 @@ See the script documentation for details:
 **Ingestion API pipe-escaping on connector pages (`connectors` pages):**
 - Multi-value `ingestion_api` values (pipe-joined, e.g. `Log Ingestion API|Undetermined`) are now split into one Markdown link per API and joined with an escaped ` \| ` so they render correctly in the connector page table instead of breaking the Markdown table layout (`get_ingestion_api_link()` now escapes `|`, matching `get_collection_method_link()`), and the pipe-joined reason text is rendered with `; ` separators.
 
-**Schema reference documentation links for table pages:**
-- Each generated table page now includes a "Schema References" section with official Microsoft Learn documentation links for field/column information.
-- **Specific schema documentation** is provided for well-documented tables (e.g., SecurityAlert for security alerts, DnsEvents/DnsInventory for DNS via AMA) with dedicated reference pages.
-- **General data source schema reference** is provided for all other tables as a fallback.
-- The mapping is configurable via the `TABLE_SCHEMA_REFERENCES` dictionary in `generate_connector_docs.py`, allowing easy addition of new table-specific references.
-- Current mappings include:
-  - `SecurityAlert` → [Security Alert Schema](https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema)
-  - `DnsEvents`, `DnsInventory`, `AMA_DNS` → [DNS AMA Fields Reference](https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields)
-  - All other tables → [Data Source Schema Reference](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference) (general reference)
-- Schema References section appears in the Table of Contents for easy navigation.
+**Parser names no longer surface as phantom tables:**
+- Content mappings that contain a known parser function name instead of a physical table now resolve that parser recursively to its underlying tables before the mapping and table CSVs are written. The rewritten mapping records the originating function in `source_parser`.
+- The resolver preserves genuine tables that share a parser name, including `*_CL` custom logs, self-referential parsers, and tables documented by Azure Monitor or Defender XDR. Parser functions with no physical-table expansion are removed rather than emitted as empty phantom table pages.
 
 ### v9.10 - Schema reference documentation links for table pages
 

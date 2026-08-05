@@ -841,6 +841,10 @@ When a connector references a parser function (e.g., `ASimDns`):
 4. Maps the parser name to the discovered tables
 5. Replaces parser reference with actual tables in the output
 
+After content items are collected, a final parser-name cleanup also checks `content_tables_mapping.csv` candidates against the parser records written to `parsers.csv` and `asim_parsers.csv`. A known parser token that is not a physical table is recursively expanded to its underlying tables, and each rewritten mapping records the function in `source_parser`. The cleanup prevents unresolved parser calls from producing phantom rows in `tables.csv` and phantom table documentation pages.
+
+The cleanup preserves a token as a real table when it is a `*_CL` custom log, the parser reads a same-named table, or Azure Monitor or Defender XDR reference data documents it as a table. A pure parser alias with no physical-table expansion is removed from the table mappings.
+
 ### Connector Table Source Priority
 
 For each connector, tables are gathered from several sources. The most authoritative source for what a connector *ingests* is its Data Collection Rule (DCR) and table-definition companion files, so the analyzer applies the following priority:

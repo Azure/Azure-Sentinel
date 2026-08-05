@@ -6,9 +6,9 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 640 | 197 | 30.8% |
-| Content Items | 6755 | 2532 | 37.5% |
-| ASIM Parsers | 201 | 121 | 60.2% |
+| Connectors | 672 | 200 | 29.8% |
+| Content Items | 6990 | 2574 | 36.8% |
+| ASIM Parsers | 210 | 125 | 59.5% |
 
 ## Filter Field Patterns Found
 
@@ -16,26 +16,27 @@ The following table.field combinations were detected in queries:
 
 | Table.Field | Occurrences |
 |-------------|-------------|
-| DeviceProcessEvents.ProcessCommandLine | 342 |
-| CommonSecurityLog.DeviceVendor | 296 |
-| CommonSecurityLog.DeviceProduct | 221 |
+| DeviceProcessEvents.ProcessCommandLine | 343 |
+| CommonSecurityLog.DeviceVendor | 301 |
+| CommonSecurityLog.DeviceProduct | 229 |
 | _Computed.type | 208 |
-| CommonSecurityLog.DeviceEventClassID | 180 |
-| CloudAppEvents.ActionType | 178 |
+| CommonSecurityLog.DeviceEventClassID | 186 |
+| CloudAppEvents.ActionType | 180 |
 | AWSCloudTrail.EventName | 163 |
-| Syslog.SyslogMessage | 141 |
+| SecurityEvent.EventID | 148 |
+| Syslog.SyslogMessage | 144 |
 | SecurityRecommendation.RecommendationDisplayName | 129 |
-| SecurityEvent.EventID | 127 |
+| AuditLogs.OperationName | 110 |
 | DeviceEvents.ActionType | 109 |
-| AuditLogs.OperationName | 105 |
 | _Computed.RecommendationName | 97 |
 | EmailEvents.EmailDirection | 94 |
 | _Computed.Action | 94 |
 | AzureActivity.OperationName | 91 |
-| AzureDiagnostics.Category | 82 |
+| AzureDiagnostics.Category | 87 |
+| DeviceProcessEvents.InitiatingProcessFileName | 81 |
 | SecurityIncident.Title | 81 |
 | AzureDiagnostics.msg_s | 80 |
-| DeviceProcessEvents.InitiatingProcessFileName | 80 |
+| AzureActivity.OperationNameValue | 72 |
 | OfficeActivity.Operation | 69 |
 | SecurityAlert.AlertName | 69 |
 | DeviceNetworkEvents.RemoteUrl | 67 |
@@ -44,10 +45,9 @@ The following table.field combinations were detected in queries:
 | EmailEvents.ThreatTypes | 60 |
 | CommonSecurityLog.DeviceAction | 55 |
 | OfficeActivity.OfficeWorkload | 54 |
-| AzureActivity.OperationNameValue | 52 |
 | DeviceFileCertificateInfo.Signer | 52 |
 | DeviceNetworkEvents.InitiatingProcessVersionInfoCompanyName | 51 |
-| Syslog.ProcessName | 50 |
+| Syslog.ProcessName | 51 |
 | _Computed.AccountName | 50 |
 | SecurityEvent.CommandLine | 49 |
 | DeviceProcessEvents.ProcessVersionInfoCompanyName | 48 |
@@ -57,7 +57,7 @@ The following table.field combinations were detected in queries:
 | SecurityIncident.AdditionalData | 46 |
 | _Computed.Techniques | 45 |
 | EmailEvents.DetectionMethods | 44 |
-| SigninLogs.ResultType | 41 |
+| SigninLogs.ResultType | 42 |
 | EmailEvents.OrgLevelPolicy | 40 |
 | AzureDiagnostics.ResourceType | 39 |
 | Event.Source | 37 |
@@ -68,32 +68,35 @@ The following table.field combinations were detected in queries:
 | SecurityAlert.ProductName | 32 |
 | W3CIISLog.cIP | 32 |
 | _Computed.Workbook | 31 |
+| AzureActivity.ActivityStatusValue | 30 |
 | CommonSecurityLog.Message | 30 |
 | DeviceFileEvents.FolderPath | 30 |
 | DeviceNetworkEvents.InitiatingProcessVersionInfoProductName | 30 |
 | SecurityAlert.ProviderName | 29 |
+| SecurityEvent.EventData | 29 |
 | _Computed.IndicatorType | 29 |
-| AzureActivity.ActivityStatusValue | 28 |
 | EmailEvents.DeliveryAction | 28 |
 | OfficeActivity.Parameters | 28 |
+| _Computed.ObjectName | 28 |
 | _Computed.Policy | 28 |
-| AzureDiagnostics.ResourceProvider | 26 |
+| AzureDiagnostics.ResourceProvider | 27 |
 | MessageEvents.IsExternalThread | 26 |
 | MessageEvents.IsOwnedThread | 26 |
+| SecurityEvent.AccountType | 25 |
+| SigninLogs.OperationName | 25 |
 | Syslog.Facility | 25 |
 | _Computed.complianceControlId | 25 |
 | Event.RenderedDescription | 24 |
-| SecurityEvent.AccountType | 24 |
 | SecurityEvent.Process | 24 |
+| ThreatIntelIndicators.ObservableKey | 24 |
 | _Im_NetworkSession.Type | 24 |
 | AlertInfo.Title | 23 |
 | BehaviorAnalytics.ActivityType | 23 |
 | DeviceNetworkEvents.InitiatingProcessFileName | 23 |
 | Event.EventLog | 23 |
-| SigninLogs.OperationName | 23 |
 | DeviceProcessEvents.InitiatingProcessParentFileName | 22 |
 | GCPAuditLogs.MethodName | 22 |
-| ThreatIntelIndicators.ObservableKey | 22 |
+| _Computed.Status | 22 |
 | DeviceFileEvents.InitiatingProcessCommandLine | 21 |
 | CommonSecurityLog.DestinationUserPrivileges | 20 |
 | DeviceNetworkEvents.ActionType | 20 |
@@ -104,7 +107,6 @@ The following table.field combinations were detected in queries:
 | SigninLogs.AppDisplayName | 19 |
 | _Computed.Name | 19 |
 | _Computed.Severity | 19 |
-| _Computed.Status | 19 |
 | _Computed.result | 19 |
 | AuditLogs.LoggedByService | 18 |
 | BehaviorAnalytics.ActivityInsights | 18 |
@@ -135,6 +137,8 @@ The following table.field combinations were detected in queries:
 | _Computed.EventResult | 14 |
 | AzureActivity.CategoryValue | 13 |
 | GCPAuditLogs.ServiceName | 13 |
+| SecurityEvent.Activity | 13 |
+| AADServicePrincipalSignInLogs.OperationName | 12 |
 | AWSSecurityHubFindings.ComplianceStatus | 12 |
 | AWSSecurityHubFindings.RecordState | 12 |
 | AzureDiagnostics.Message | 12 |
@@ -145,6 +149,7 @@ The following table.field combinations were detected in queries:
 | SecurityAlert.AlertType | 12 |
 | ThreatIntelligenceIndicator.SourceSystem | 12 |
 | _Computed.DstIpAddr | 12 |
+| _Computed.SrcUsername | 12 |
 | _Computed.Type | 12 |
 | _Computed.UserName | 12 |
 | _Computed.action | 12 |
@@ -153,15 +158,16 @@ The following table.field combinations were detected in queries:
 | SecurityIncident.ModifiedBy | 11 |
 | Usage.DataType | 11 |
 | W3CIISLog.csUriQuery | 11 |
+| WindowsEvent.Provider | 11 |
+| _Computed.ObjectName_e | 11 |
 | _Computed.Statement | 11 |
 | AzureActivity.ActivitySubstatusValue | 10 |
 | CommonSecurityLog.ApplicationProtocol | 10 |
 | CommonSecurityLog.DestinationPort | 10 |
 | IdentityDirectoryEvents.ActionType | 10 |
 | SigninLogs.AuthenticationRequirement | 10 |
-| WindowsEvent.Provider | 10 |
+| StorageBlobLogs.CallerIpAddress | 10 |
 | _Computed.FindingCategory | 10 |
-| _Computed.SrcUsername | 10 |
 | _Computed.index_name | 10 |
 | _Computed.name | 10 |
 | AWSCloudTrail.EventSource | 9 |
@@ -173,10 +179,10 @@ The following table.field combinations were detected in queries:
 | SecurityEvent.NewValue | 9 |
 | _Computed.AssignedRoles | 9 |
 | _Computed.DeviceCustomString4Label | 9 |
+| _Computed.EventData | 9 |
 | _Computed.FirstSubcategory | 9 |
 | _Computed.LogMessage | 9 |
 | _Computed.ParentProcessName | 9 |
-| AADServicePrincipalSignInLogs.OperationName | 8 |
 | AuditLogs.TargetResources | 8 |
 | CommonSecurityLog.Protocol | 8 |
 | CommonSecurityLog.SourceUserName | 8 |
@@ -187,7 +193,6 @@ The following table.field combinations were detected in queries:
 | SecurityAlert.SystemAlertId | 8 |
 | SecurityEvent.ParentProcessName | 8 |
 | _Computed.DeviceCustomString5Label | 8 |
-| _Computed.EventData | 8 |
 | _Computed.Initiator | 8 |
 | _Computed.Result | 8 |
 | _Computed.RoleAssigneeName | 8 |
@@ -195,6 +200,7 @@ The following table.field combinations were detected in queries:
 | _Computed.extensions | 8 |
 | _Computed.scope | 8 |
 | AuditLogs.Identity | 7 |
+| AzureActivity.Caller | 7 |
 | BehaviorAnalytics.EventSource | 7 |
 | CommonSecurityLog.DestinationIP | 7 |
 | DeviceNetworkEvents.InitiatingProcessCommandLine | 7 |
@@ -209,7 +215,9 @@ The following table.field combinations were detected in queries:
 | _Computed.DeviceCustomString3Label | 7 |
 | _Computed.DvcAction | 7 |
 | _Computed.FileName | 7 |
+| _Computed.NewValue | 7 |
 | _Computed.Outcome | 7 |
+| _Computed.PropName | 7 |
 | _Computed.ResultType | 7 |
 | _Computed.TableName | 7 |
 | _Computed.ThreatType | 7 |
@@ -239,9 +247,9 @@ The following table.field combinations were detected in queries:
 | _Computed.DeviceCustomString6Label | 6 |
 | _Computed.DstZone | 6 |
 | _Computed.EntityType | 6 |
+| _Computed.GroupName | 6 |
 | _Computed.LogSeverity | 6 |
 | _Computed.NewRole | 6 |
-| _Computed.ObjectName | 6 |
 | _Computed.ObjectType | 6 |
 | _Computed.PhishMethods | 6 |
 | _Computed.Standard | 6 |
@@ -252,11 +260,11 @@ The following table.field combinations were detected in queries:
 | _Computed.complianceStandardId | 6 |
 | _Computed.detection | 6 |
 | _Computed.temp_targetipport | 6 |
+| AADServicePrincipalSignInLogs.ResultType | 5 |
 | AGWFirewallLogs.Action | 5 |
 | AWSCloudTrail.UserIdentityType | 5 |
 | AlertInfo.ActionType | 5 |
 | AzureActivity.ActivityStatus | 5 |
-| AzureActivity.Caller | 5 |
 | CommonSecurityLog.DeviceCustomString1Label | 5 |
 | DataverseActivity.UserId | 5 |
 | DeviceEvents.InitiatingProcessFileName | 5 |
@@ -273,7 +281,9 @@ The following table.field combinations were detected in queries:
 | SecurityAlert.Tactics | 5 |
 | SecurityEvent.RelativeTargetName | 5 |
 | SecurityEvent.SubjectUserName | 5 |
+| SecurityIncident.Severity | 5 |
 | SentinelHealth.SentinelResourceType | 5 |
+| Syslog.CollectorHostName | 5 |
 | _ASim_FileEvent.EventType | 5 |
 | _ASim_RegistryEvent.EventType | 5 |
 | _Computed.AccountType | 5 |
@@ -284,10 +294,13 @@ The following table.field combinations were detected in queries:
 | _Computed.IsHotwordAnomalyOnStatement | 5 |
 | _Computed.Level | 5 |
 | _Computed.LogSource1 | 5 |
-| _Computed.Message | 5 |
 | _Computed.NetworkDirection | 5 |
 | _Computed.NetworkProtocol | 5 |
+| _Computed.ObjectClass | 5 |
+| _Computed.ObjectFullName | 5 |
+| _Computed.OldValue | 5 |
 | _Computed.PlaybookName | 5 |
+| _Computed.Priority | 5 |
 | _Computed.ProcessCommandLine | 5 |
 | _Computed.RoleName | 5 |
 | _Computed.SubStatus | 5 |
@@ -297,7 +310,7 @@ The following table.field combinations were detected in queries:
 | _Computed.newValue | 5 |
 | _Computed.resourceSource | 5 |
 | _Computed.service | 5 |
-| AADServicePrincipalSignInLogs.ResultType | 4 |
+| ASimNetworkSessionLogs.EventProduct | 4 |
 | AuditLogs.ResultReason | 4 |
 | AzureActivity.Authorization | 4 |
 | AzureActivity.Level | 4 |
@@ -332,16 +345,17 @@ The following table.field combinations were detected in queries:
 | SecurityEvent.TargetAccount | 4 |
 | SecurityIncident.Labels | 4 |
 | SecurityIncident.Owner | 4 |
-| SecurityIncident.Severity | 4 |
 | SecurityNestedRecommendation.RemediationDescription | 4 |
 | SecurityRegulatoryCompliance.State | 4 |
 | SigninLogs.ConditionalAccessStatus | 4 |
 | SigninLogs.NetworkLocationDetails | 4 |
+| Syslog.SourceSystem | 4 |
 | _ASim_RegistryEvent.RegistryValueData | 4 |
 | _Computed.AdminAuditLogEnabledValue | 4 |
 | _Computed.ClientIP | 4 |
 | _Computed.Creator | 4 |
 | _Computed.DayNumberofWeek | 4 |
+| _Computed.DayOfWeek | 4 |
 | _Computed.DeviceCustomDate1Label | 4 |
 | _Computed.DeviceSecurityStatus | 4 |
 | _Computed.DnsResponseCode | 4 |
@@ -349,16 +363,15 @@ The following table.field combinations were detected in queries:
 | _Computed.EventOriginalSeverity | 4 |
 | _Computed.InitiatingAppName | 4 |
 | _Computed.IsVolumeAnomalyOnVal | 4 |
+| _Computed.LastThreeChars | 4 |
 | _Computed.LogonType | 4 |
 | _Computed.MaturityLevel | 4 |
+| _Computed.Message | 4 |
 | _Computed.NewDomainValue | 4 |
-| _Computed.NewValue | 4 |
-| _Computed.OldValue | 4 |
 | _Computed.OperatingSystem | 4 |
 | _Computed.Parameters | 4 |
 | _Computed.PermissionGrant | 4 |
 | _Computed.PermissionType | 4 |
-| _Computed.Priority | 4 |
 | _Computed.ProductName | 4 |
 | _Computed.Reason | 4 |
 | _Computed.RuleName | 4 |
@@ -382,7 +395,6 @@ The following table.field combinations were detected in queries:
 | _Computed.vulnerability_category | 4 |
 | _Im_ProcessEvent.CommandLine | 4 |
 | AADNonInteractiveUserSignInLogs.ResultType | 3 |
-| ASimNetworkSessionLogs.EventProduct | 3 |
 | ASimNetworkSessionSonicWallFirewall.NetworkDirection | 3 |
 | AWSCloudTrail.UserAgent | 3 |
 | AWSSecurityHubFindings.AwsSecurityFindingGeneratorId | 3 |
@@ -408,11 +420,11 @@ The following table.field combinations were detected in queries:
 | Perf.CounterName | 3 |
 | PowerPlatformAdminActivity.EventOriginalType | 3 |
 | SecurityEvent.Account | 3 |
-| SecurityEvent.Activity | 3 |
 | SecurityIncident.Classification | 3 |
 | SecurityIncident.Tasks | 3 |
 | SigninLogs.ResourceIdentity | 3 |
 | SigninLogs.RiskLevelAggregated | 3 |
+| StorageBlobLogs.StatusCode | 3 |
 | Update.UpdateState | 3 |
 | W3CIISLog.csMethod | 3 |
 | W3CIISLog.csUserAgent | 3 |
@@ -445,6 +457,8 @@ The following table.field combinations were detected in queries:
 | _Computed.Permissions | 3 |
 | _Computed.Principal | 3 |
 | _Computed.Sev | 3 |
+| _Computed.SeverityLevel | 3 |
+| _Computed.SignalStrength | 3 |
 | _Computed.Spam | 3 |
 | _Computed.Tactic | 3 |
 | _Computed.ThreatField | 3 |
@@ -463,6 +477,9 @@ The following table.field combinations were detected in queries:
 | AADManagedIdentitySignInLogs.ResultType | 2 |
 | ADXTableDetails.TableName | 2 |
 | ASimAuditEventLogs.EventVendor | 2 |
+| ASimDnsActivityLogs.EventProduct | 2 |
+| ASimNetworkSessionLogs.EventType | 2 |
+| ASimNetworkSessionLogs.EventVendor | 2 |
 | ASimNetworkSessionSonicWallFirewall.EventResult | 2 |
 | ASimNetworkSessionSonicWallFirewall.SrcZone | 2 |
 | AWSCloudTrail.ErrorMessage | 2 |
@@ -533,6 +550,7 @@ The following table.field combinations were detected in queries:
 | SecurityRecommendation.RecommendationName | 2 |
 | SigninLogs.RiskLevelDuringSignIn | 2 |
 | SigninLogs.RiskState | 2 |
+| StorageBlobLogs.UserAgentHeader | 2 |
 | Syslog.Computer | 2 |
 | UrlClickEvents.IsClickedThrough | 2 |
 | UrlClickEvents.Workload | 2 |
@@ -553,14 +571,19 @@ The following table.field combinations were detected in queries:
 | _Computed.ActorUsernameType | 2 |
 | _Computed.AlertAmount | 2 |
 | _Computed.ApplicationProtocol | 2 |
+| _Computed.AttributeValue | 2 |
+| _Computed.AuthenticationType | 2 |
 | _Computed.Caller | 2 |
 | _Computed.CallerIPAddress | 2 |
+| _Computed.CallerType | 2 |
+| _Computed.ChangeAction | 2 |
 | _Computed.ChangedGroups | 2 |
 | _Computed.ChangedRoles | 2 |
 | _Computed.CommandLineArgs | 2 |
 | _Computed.CommenterName | 2 |
 | _Computed.Computer | 2 |
 | _Computed.ConditionalAccessResult | 2 |
+| _Computed.ConfigCategory | 2 |
 | _Computed.ConsentFull | 2 |
 | _Computed.DMARC | 2 |
 | _Computed.DestinationPort | 2 |
@@ -579,6 +602,7 @@ The following table.field combinations were detected in queries:
 | _Computed.Entities | 2 |
 | _Computed.EventOriginalSubType | 2 |
 | _Computed.EventOriginalType | 2 |
+| _Computed.ExpirySeconds | 2 |
 | _Computed.FROMSAM | 2 |
 | _Computed.FieldType | 2 |
 | _Computed.FileNameLower | 2 |
@@ -593,7 +617,6 @@ The following table.field combinations were detected in queries:
 | _Computed.MFAUsed | 2 |
 | _Computed.New | 2 |
 | _Computed.NewProcessName | 2 |
-| _Computed.ObjectClass | 2 |
 | _Computed.ObjectServer | 2 |
 | _Computed.ObservableKey | 2 |
 | _Computed.Old | 2 |
@@ -601,18 +624,17 @@ The following table.field combinations were detected in queries:
 | _Computed.OperationType | 2 |
 | _Computed.PanOSIsClienttoServer | 2 |
 | _Computed.PanOSIsSaaSApplication | 2 |
+| _Computed.ParamName | 2 |
 | _Computed.ParamType | 2 |
+| _Computed.ParamValue | 2 |
 | _Computed.PasswordResult | 2 |
 | _Computed.Permission | 2 |
 | _Computed.PermissionGroups | 2 |
 | _Computed.Phish | 2 |
-| _Computed.Port | 2 |
 | _Computed.Principal_aws | 2 |
 | _Computed.Process | 2 |
-| _Computed.PropName | 2 |
 | _Computed.Properties_entity | 2 |
 | _Computed.ProtectionStatusRank | 2 |
-| _Computed.PublishedStatus | 2 |
 | _Computed.Pupdated | 2 |
 | _Computed.QueryType | 2 |
 | _Computed.RecipientEmailAddress | 2 |
@@ -621,16 +643,15 @@ The following table.field combinations were detected in queries:
 | _Computed.RemoteIPRanges | 2 |
 | _Computed.RequestMethod | 2 |
 | _Computed.ResultCode | 2 |
+| _Computed.RiskLevel | 2 |
 | _Computed.RoleAssignment | 2 |
 | _Computed.Roles | 2 |
 | _Computed.SPF | 2 |
-| _Computed.Scheme | 2 |
 | _Computed.SecurityControlId | 2 |
 | _Computed.SensitivityLabel | 2 |
 | _Computed.SensorHealthState | 2 |
 | _Computed.SentinelEnabled | 2 |
 | _Computed.ServiceName | 2 |
-| _Computed.SeverityLevel | 2 |
 | _Computed.SilverfortMfaResponse | 2 |
 | _Computed.SmishingAlertSeverity | 2 |
 | _Computed.SourceType | 2 |
@@ -646,7 +667,9 @@ The following table.field combinations were detected in queries:
 | _Computed.Tag | 2 |
 | _Computed.Target | 2 |
 | _Computed.TargetAccount | 2 |
+| _Computed.TargetProperty | 2 |
 | _Computed.TargetSid | 2 |
+| _Computed.TargetType | 2 |
 | _Computed.TargetUserId | 2 |
 | _Computed.ThreatConfidence_Score | 2 |
 | _Computed.ThreatLevel_s | 2 |
@@ -668,6 +691,7 @@ The following table.field combinations were detected in queries:
 | _Computed.direction | 2 |
 | _Computed.dlp_verdict | 2 |
 | _Computed.gcat | 2 |
+| _Computed.host | 2 |
 | _Computed.httpMethod_s | 2 |
 | _Computed.id_s | 2 |
 | _Computed.identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g | 2 |
@@ -695,11 +719,11 @@ The following table.field combinations were detected in queries:
 | _Computed.xamzacl | 2 |
 | _Im_ProcessEvent.Process | 2 |
 | AADNonInteractiveUserSignInLogs.AppDisplayName | 1 |
+| AADServicePrincipalSignInLogs.ConditionalAccessStatus | 1 |
 | ASimAgentEventLogs.EventProduct | 1 |
 | ASimAgentEventLogs.EventType | 1 |
 | ASimAgentEventLogs.EventVendor | 1 |
 | ASimAuditEventLogs.EventProduct | 1 |
-| ASimDnsActivityLogs.EventProduct | 1 |
 | ASimDnsActivityLogs.EventResult | 1 |
 | ASimDnsActivityLogs.EventResultDetails | 1 |
 | ASimDnsActivityLogs.EventType | 1 |
@@ -707,8 +731,6 @@ The following table.field combinations were detected in queries:
 | ASimNetworkSessionLogs.DstIpAddr | 1 |
 | ASimNetworkSessionLogs.DstPortNumber | 1 |
 | ASimNetworkSessionLogs.DvcAction | 1 |
-| ASimNetworkSessionLogs.EventType | 1 |
-| ASimNetworkSessionLogs.EventVendor | 1 |
 | ASimNetworkSessionLogs.SrcIpAddr | 1 |
 | ASimNetworkSessionSonicWallFirewall.DstIpAddr | 1 |
 | ASimNetworkSessionSonicWallFirewall.DstPortNumber | 1 |
@@ -717,8 +739,6 @@ The following table.field combinations were detected in queries:
 | ASimNetworkSessionSonicWallFirewall.EventOriginalType | 1 |
 | ASimNetworkSessionSonicWallFirewall.NetworkProtocol | 1 |
 | ASimProcessEventLogs.Type | 1 |
-| ASimRegistryEventLogs.EventProduct | 1 |
-| ASimRegistryEventLogs.EventVendor | 1 |
 | ASimRegistryEventLogs_CL.EventProduct | 1 |
 | ASimRegistryEventLogs_CL.EventVendor | 1 |
 | ASimWebSessionLogs.EventType | 1 |
@@ -823,7 +843,6 @@ The following table.field combinations were detected in queries:
 | PurviewDataSensitivityLogs.SourceRegion | 1 |
 | QualysKnowledgeBase.Patchable | 1 |
 | SecurityAlert.VendorName | 1 |
-| SecurityEvent.EventData | 1 |
 | SecurityEvent.LogonTypeName | 1 |
 | SecurityEvent.MandatoryLabel | 1 |
 | SecurityEvent.ObjectValueName | 1 |
@@ -861,6 +880,7 @@ The following table.field combinations were detected in queries:
 | _Computed.AccessRights | 1 |
 | _Computed.Account | 1 |
 | _Computed.ActingProcessFileName | 1 |
+| _Computed.ActionTaken | 1 |
 | _Computed.ActiveAnalytics_Table | 1 |
 | _Computed.ActivityStatusValue | 1 |
 | _Computed.ActivitySubstatusValue | 1 |
@@ -872,11 +892,13 @@ The following table.field combinations were detected in queries:
 | _Computed.AlertType | 1 |
 | _Computed.Alerts_7d | 1 |
 | _Computed.Alerts_90d | 1 |
+| _Computed.Analytic_Name | 1 |
 | _Computed.AppId | 1 |
 | _Computed.Application | 1 |
 | _Computed.AssignedAnalyst | 1 |
+| _Computed.AttributeLDAP | 1 |
 | _Computed.AttributeLDAPDisplayName | 1 |
-| _Computed.AttributeValue | 1 |
+| _Computed.AttributeValueDescription | 1 |
 | _Computed.AuthSucceeded | 1 |
 | _Computed.AvIsEngineUpToDate | 1 |
 | _Computed.AvIsPlatformUpToDate | 1 |
@@ -888,8 +910,11 @@ The following table.field combinations were detected in queries:
 | _Computed.CAResult | 1 |
 | _Computed.CNCDetected | 1 |
 | _Computed.CallTrace | 1 |
+| _Computed.CallerNorm | 1 |
 | _Computed.CallerObjectId | 1 |
 | _Computed.CaptureATPVerdict | 1 |
+| _Computed.CfgAction | 1 |
+| _Computed.Change | 1 |
 | _Computed.ChangeType | 1 |
 | _Computed.CleanProcessCommandLine | 1 |
 | _Computed.ClientAuthMethod | 1 |
@@ -909,7 +934,6 @@ The following table.field combinations were detected in queries:
 | _Computed.Current | 1 |
 | _Computed.CyjaxIndustryType | 1 |
 | _Computed.DACLS | 1 |
-| _Computed.DayOfWeek | 1 |
 | _Computed.DefenderTamp | 1 |
 | _Computed.DestAddress | 1 |
 | _Computed.DestPort | 1 |
@@ -923,6 +947,7 @@ The following table.field combinations were detected in queries:
 | _Computed.DeviceRiskLevel | 1 |
 | _Computed.DisableControlledFolderAccess | 1 |
 | _Computed.DomainAdded | 1 |
+| _Computed.Dow | 1 |
 | _Computed.DriveLetterOrShare | 1 |
 | _Computed.DstHostname | 1 |
 | _Computed.DstPort | 1 |
@@ -962,7 +987,6 @@ The following table.field combinations were detected in queries:
 | _Computed.GCPUserUPN | 1 |
 | _Computed.GroupBy | 1 |
 | _Computed.GroupKey | 1 |
-| _Computed.GroupName | 1 |
 | _Computed.GuestAlerts | 1 |
 | _Computed.HostType | 1 |
 | _Computed.Host_Type | 1 |
@@ -979,7 +1003,6 @@ The following table.field combinations were detected in queries:
 | _Computed.InitiatingProcessFileName | 1 |
 | _Computed.Insp | 1 |
 | _Computed.InstallStatus | 1 |
-| _Computed.InstructionsRaw | 1 |
 | _Computed.InvitedUserPrincipalName | 1 |
 | _Computed.IpAddress | 1 |
 | _Computed.IsApplicable | 1 |
@@ -1004,13 +1027,13 @@ The following table.field combinations were detected in queries:
 | _Computed.NewE2ESetting | 1 |
 | _Computed.NewUserType | 1 |
 | _Computed.NumberOfLines | 1 |
+| _Computed.ObjectTier | 1 |
 | _Computed.ObjectValueName | 1 |
 | _Computed.OldComplianceState | 1 |
 | _Computed.OldDnsSecState | 1 |
 | _Computed.OldE2ESetting | 1 |
 | _Computed.OldUserType | 1 |
 | _Computed.OnboardingStatus | 1 |
-| _Computed.OperationId | 1 |
 | _Computed.OriginalDomain | 1 |
 | _Computed.OverallRisk | 1 |
 | _Computed.PackedString | 1 |
@@ -1024,6 +1047,7 @@ The following table.field combinations were detected in queries:
 | _Computed.Parentgroup | 1 |
 | _Computed.Parsed_EntityType | 1 |
 | _Computed.Patchable | 1 |
+| _Computed.PatternType | 1 |
 | _Computed.PipeName | 1 |
 | _Computed.PolicyName | 1 |
 | _Computed.PoolType | 1 |
@@ -1038,13 +1062,14 @@ The following table.field combinations were detected in queries:
 | _Computed.ResultText | 1 |
 | _Computed.Result_status | 1 |
 | _Computed.Risk | 1 |
+| _Computed.RiskAssessmentRiskLevel | 1 |
 | _Computed.RiskIndicators | 1 |
-| _Computed.RiskLevel | 1 |
+| _Computed.RiskLevelAggregated | 1 |
 | _Computed.SLA_Evaluated | 1 |
 | _Computed.SOCRecommendation_Table | 1 |
 | _Computed.ScDeleteDefend | 1 |
 | _Computed.SchTasks | 1 |
-| _Computed.Scope | 1 |
+| _Computed.Scopes | 1 |
 | _Computed.SecurityImplication | 1 |
 | _Computed.SecurityImplications | 1 |
 | _Computed.SentinelSolutionState | 1 |
@@ -1060,6 +1085,7 @@ The following table.field combinations were detected in queries:
 | _Computed.StartUpExclusionPath | 1 |
 | _Computed.StatusCode | 1 |
 | _Computed.StatusDescription | 1 |
+| _Computed.SubStatusNorm | 1 |
 | _Computed.SubType | 1 |
 | _Computed.Substring | 1 |
 | _Computed.Superseded | 1 |
@@ -1072,13 +1098,14 @@ The following table.field combinations were detected in queries:
 | _Computed.TargetUPN_oldValue | 1 |
 | _Computed.TargetUserPrincipalName | 1 |
 | _Computed.TargetUserType | 1 |
+| _Computed.TargetUser_alternateId | 1 |
 | _Computed.TargetUsername | 1 |
-| _Computed.ThreatAction | 1 |
 | _Computed.ThreatEvents | 1 |
 | _Computed.ThreatFamilyName | 1 |
 | _Computed.ThreatLevel | 1 |
 | _Computed.ThreatName_ | 1 |
 | _Computed.ThreatSev | 1 |
+| _Computed.ThreatStatus | 1 |
 | _Computed.Toggle | 1 |
 | _Computed.TrainingStatus | 1 |
 | _Computed.TransformKQL | 1 |
@@ -1091,8 +1118,10 @@ The following table.field combinations were detected in queries:
 | _Computed.Username | 1 |
 | _Computed.VMOperation | 1 |
 | _Computed.Velocity | 1 |
+| _Computed.WorkflowName | 1 |
 | _Computed._UrlHost | 1 |
 | _Computed._UtmAction | 1 |
+| _Computed._hostNoPort | 1 |
 | _Computed.accId | 1 |
 | _Computed.aclProtocol | 1 |
 | _Computed.any_is_dest_internal_ip | 1 |
@@ -1120,7 +1149,6 @@ The following table.field combinations were detected in queries:
 | _Computed.file_ext | 1 |
 | _Computed.groupCategory | 1 |
 | _Computed.hasBoth | 1 |
-| _Computed.host | 1 |
 | _Computed.hostName | 1 |
 | _Computed.id_applicationName_s | 1 |
 | _Computed.ident_s | 1 |
@@ -1161,17 +1189,15 @@ The following table.field combinations were detected in queries:
 | _Computed.recipients | 1 |
 | _Computed.recommendationType | 1 |
 | _Computed.res_context | 1 |
-| _Computed.risk_assessment_risk_level_s | 1 |
-| _Computed.risk_level_s | 1 |
 | _Computed.ruleAction | 1 |
 | _Computed.ruleInfo_severity_s | 1 |
+| _Computed.scheme | 1 |
 | _Computed.selectedTopic | 1 |
 | _Computed.severity_s | 1 |
 | _Computed.snapshot | 1 |
 | _Computed.source_node_type | 1 |
 | _Computed.spf_status | 1 |
 | _Computed.srchwvendor | 1 |
-| _Computed.status_s | 1 |
 | _Computed.techniques | 1 |
 | _Computed.temp_action | 1 |
 | _Computed.test | 1 |
@@ -1232,13 +1258,14 @@ The following fields are extracted from queries:
 
 ## Connectors with Filter Fields
 
-Total: 197 connectors
+Total: 200 connectors
 
 | Connector ID | Title | Filter Fields | File |
 |--------------|-------|---------------|------|
 | AIVectraDetect | [Deprecated] Vectra AI Detect via Legacy Agent | CommonSecurityLog.DeviceEventClassID == "hsc"  \|  CommonSecurityLog.DeviceEventClassID !in "health,audit,campaigns,hsc,asc"  \|  CommonSecurityLog.DeviceProduct == "X Series"  \|  CommonSecurityLog.DeviceVendor == "Vectra Networks"  \|  _Computed.status != "Other" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Vectra%20AI%20Detect/Data%20Connectors/AIVectraDetect.json) |
 | AIVectraDetectAma | [Deprecated] Vectra AI Detect via AMA | CommonSecurityLog.DeviceEventClassID == "hsc"  \|  CommonSecurityLog.DeviceEventClassID !in "health,audit,campaigns,hsc,asc"  \|  CommonSecurityLog.DeviceProduct =~ "X Series"  \|  CommonSecurityLog.DeviceVendor =~ "Vectra Networks"  \|  _Computed.status != "Other" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Vectra%20AI%20Detect/Data%20Connectors/template_AIVectraDetectAma.json) |
 | ASimDnsActivityLogs | Windows DNS Events via AMA | ASimDnsActivityLogs.EventProduct == "DNS Server"  \|  ASimDnsActivityLogs.EventResult == "Failure"  \|  ASimDnsActivityLogs.EventResultDetails == "NXDOMAIN"  \|  ASimDnsActivityLogs.EventType == "Query"  \|  ASimDnsActivityLogs.EventVendor == "Microsoft" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_ASimDnsActivityLogs.JSON) |
+| AkamaiSIEMConnector | Akamai Security Events (via Codeless Connector Framework) | CommonSecurityLog.DeviceProduct == "akamai_siem"  \|  CommonSecurityLog.DeviceVendor == "Akamai" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Akamai%20DDOS%20Protection/Data%20Connectors/AkamaiDDOSProtection_CCF/AkamaiDDOSProtection_ConnectorDefinition.json) |
 | AkamaiSecurityEvents | [Deprecated] Akamai Security Events via Legacy Agent | CommonSecurityLog.DeviceProduct == "akamai_siem"  \|  CommonSecurityLog.DeviceVendor == "Akamai" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Akamai%20Security%20Events/Data%20Connectors/Connector_CEF_Akamai.json) |
 | AkamaiSecurityEventsAma | [Deprecated] Akamai Security Events via AMA | CommonSecurityLog.DeviceProduct =~ "akamai_siem"  \|  CommonSecurityLog.DeviceVendor =~ "Akamai" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Akamai%20Security%20Events/Data%20Connectors/template_AkamaiSecurityEventsAMA.json) |
 | AristaAwakeSecurity | [Deprecated] Awake Security via Legacy Agent | CommonSecurityLog.DeviceProduct == "Awake Security"  \|  CommonSecurityLog.DeviceVendor == "Arista Networks" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Data%20Connectors/Connector_AristaAwakeSecurity_CEF.json) |
@@ -1275,7 +1302,7 @@ Total: 197 connectors
 | CiscoFirepowerEStreamerAma | [Deprecated] Cisco Firepower eStreamer via AMA | CommonSecurityLog.Activity == "File Malware Event"  \|  CommonSecurityLog.DestinationPort == "80"  \|  CommonSecurityLog.DeviceAction != "Allow"  \|  CommonSecurityLog.DeviceProduct =~ "Firepower"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Firepower%20EStreamer/Data%20Connectors/template_CiscoFirepowerEStreamerAMA.json) |
 | CiscoISE | [Deprecated] Cisco Identity Services Engine | Syslog.ProcessName has_any "CISE,CSCO" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ISE/Data%20Connectors/Connector_Cisco_ISE.json) |
 | CiscoMeraki | [Deprecated] Cisco Meraki | _Computed.Action == "block"  \|  _Computed.EventOriginalType == "IDS Alert"  \|  _Computed.LogType in "bridge_anyconnect_client_vpn_firewall,cellular_firewall,firewall,flows,vpn_firewall"  \|  _Computed.LogType !contains "firewall"  \|  _Computed.LogType !contains "flows"  \|  _Computed.LogType !in "urls,airmarshal_events,security_event,ids-alerts,events"  \|  _Computed.LogType has "airmarshal_events"  \|  _Computed.LogType has "events"  \|  _Computed.LogType has "flows"  \|  _Computed.LogType has "ids-alerts"  \|  _Computed.LogType has "security_event"  \|  _Computed.LogType has "urls"  \|  _Computed.LogType has_any "flows"  \|  _Computed.NetworkProtocol has "tcp"  \|  _Computed.NetworkProtocol has "udp"  \|  _Computed.Priority in "1,2,3,4" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/Connector_Syslog_CiscoMeraki.json) |
-| CiscoMerakiMultiRule | Cisco Meraki (using REST API) | ASimNetworkSessionLogs.EventProduct == "Meraki"  \|  ASimNetworkSessionLogs.EventVendor == "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json) |
+| CiscoMerakiConnector | Cisco Meraki Events (using REST API) (via Codeless Connector | ASimNetworkSessionLogs.EventProduct == "Meraki"  \|  ASimNetworkSessionLogs.EventType == "Notable"  \|  ASimNetworkSessionLogs.EventVendor == "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/CiscoMeraki_ConnectorDefinition.json) |
 | CiscoMerakiNativePoller | Cisco Meraki (using REST API) | _Computed.Action == "block"  \|  _Computed.EventOriginalType == "IDS Alert"  \|  _Computed.LogType in "bridge_anyconnect_client_vpn_firewall,cellular_firewall,firewall,flows,vpn_firewall"  \|  _Computed.LogType !contains "firewall"  \|  _Computed.LogType !contains "flows"  \|  _Computed.LogType !in "urls,airmarshal_events,security_event,ids-alerts,events"  \|  _Computed.LogType has "airmarshal_events"  \|  _Computed.LogType has "events"  \|  _Computed.LogType has "flows"  \|  _Computed.LogType has "ids-alerts"  \|  _Computed.LogType has "security_event"  \|  _Computed.LogType has "urls"  \|  _Computed.LogType has_any "flows"  \|  _Computed.NetworkProtocol has "tcp"  \|  _Computed.NetworkProtocol has "udp"  \|  _Computed.Priority in "1,2,3,4" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
 | CiscoSEG | [Deprecated] Cisco Secure Email Gateway via Legacy Agent | CommonSecurityLog.DeviceEventClassID =~ "ESA_CONSOLIDATED_LOG_EVENT" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/Connector_Cisco_SEG_CEF.json) |
 | CiscoSEGAma | [Deprecated] Cisco Secure Email Gateway via AMA | CommonSecurityLog.DeviceEventClassID =~ "ESA_CONSOLIDATED_LOG_EVENT"  \|  CommonSecurityLog.DeviceProduct =~ "ESA_CONSOLIDATED_LOG_EVENT"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/template_CiscoSEGAMA.json) |
@@ -1353,6 +1380,7 @@ Total: 197 connectors
 | InfobloxCloudDataConnector | [Deprecated] Infoblox Cloud Data Connector via Legacy Agent | CommonSecurityLog.AdditionalExtensions has_cs "InfobloxRPZ=APP_"  \|  CommonSecurityLog.AdditionalExtensions has_cs "InfobloxRPZ=CAT_"  \|  CommonSecurityLog.DeviceEventClassID == "DHCP-LEASE-CREATE"  \|  CommonSecurityLog.DeviceEventClassID has_cs "DNS"  \|  CommonSecurityLog.DeviceEventClassID has_cs "RPZ"  \|  CommonSecurityLog.DeviceProduct == "Data Connector"  \|  CommonSecurityLog.DeviceVendor == "Infoblox"  \|  _Computed.ThreatLevel_Score == "0" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20Cloud%20Data%20Connector/Data%20Connectors/InfobloxCloudDataConnector.json) |
 | InfobloxCloudDataConnectorAma | [Recommended] Infoblox Cloud Data Connector via AMA | CommonSecurityLog.AdditionalExtensions has_cs "InfobloxRPZ=APP_"  \|  CommonSecurityLog.AdditionalExtensions has_cs "InfobloxRPZ=CAT_"  \|  CommonSecurityLog.DeviceEventClassID == "DHCP-LEASE-CREATE"  \|  CommonSecurityLog.DeviceEventClassID has_cs "Audit"  \|  CommonSecurityLog.DeviceEventClassID has_cs "DHCP"  \|  CommonSecurityLog.DeviceEventClassID has_cs "DNS"  \|  CommonSecurityLog.DeviceEventClassID has_cs "RPZ"  \|  CommonSecurityLog.DeviceEventClassID has_cs "Service"  \|  CommonSecurityLog.DeviceProduct =~ "Data Connector"  \|  CommonSecurityLog.DeviceVendor =~ "Infoblox"  \|  _Computed.ThreatLevel_Score == "0" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Data%20Connectors/InfobloxCEFDataConnector/template_InfobloxCloudDataConnectorAma.JSON) |
 | InfobloxNIOS | [Deprecated] Infoblox NIOS | Syslog.SyslogMessage !has "response:"  \|  Syslog.SyslogMessage has_all "client" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Data%20Connectors/Connector_Syslog_Infoblox.json) |
+| InfobloxSOCInsightsConnector | Infoblox SOC Insights (via Codeless Connector Framework) | _Computed.Priority in "CRITICAL,HIGH,INFO,LOW,MEDIUM" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20SOC%20Insights/Data%20Connectors/InfobloxSOCInsights_CCF/InfobloxSOCInsights_ConnectorDefinition.json) |
 | InfobloxSOCInsightsDataConnector_AMA | [Recommended] Infoblox SOC Insight Data Connector via AMA | CommonSecurityLog.DeviceEventClassID =~ "BloxOne-InsightsNotification-Log"  \|  CommonSecurityLog.DeviceProduct =~ "Data Connector"  \|  CommonSecurityLog.DeviceVendor =~ "Infoblox"  \|  _Computed.ThreatConfidence_Score in "0,1,2"  \|  _Computed.ThreatLevel_Score in "0,1,2" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Data%20Connectors/InfobloxSOCInsights/InfobloxSOCInsightsDataConnector_AMA.json) |
 | InfobloxSOCInsightsDataConnector_Legacy | [Deprecated] Infoblox SOC Insight Data Connector via Legacy  | CommonSecurityLog.DeviceEventClassID == "BloxOne-InsightsNotification-Log"  \|  CommonSecurityLog.DeviceProduct == "Data Connector"  \|  CommonSecurityLog.DeviceVendor == "Infoblox"  \|  _Computed.ThreatConfidence_Score in "0,1,2"  \|  _Computed.ThreatLevel_Score in "0,1,2" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Data%20Connectors/InfobloxSOCInsights/InfobloxSOCInsightsDataConnector_Legacy.json) |
 | IoT | Microsoft Defender for IoT | SecurityAlert.ProductName == "Azure Security Center for IoT" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Data%20Connector/template_IoT.JSON) |
@@ -1369,7 +1397,7 @@ Total: 197 connectors
 | MicrosoftDefenderAdvancedThreatProtection | Microsoft Defender for Endpoint | SecurityAlert.ProviderName == "MDATP" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftDefenderForEndpoint/Data%20Connectors/template_MicrosoftDefenderAdvancedThreatProtection.JSON) |
 | MicrosoftDefenderForCloudTenantBased | Tenant-based Microsoft Defender for Cloud | SecurityAlert.ProductName == "Azure Security Center" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Data%20Connectors/MicrosoftDefenderForCloudTenantBased.json) |
 | MicrosoftSysmonForLinux | [Deprecated] Microsoft Sysmon For Linux | Syslog.ProcessName == "sysmon" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux/Data%20Connectors/SysmonForLinux.json) |
-| MicrosoftThreatProtection | Microsoft Defender XDR | DeviceRegistryEvents.ActionType == "RegistryValueSet"  \|  SecurityAlert.ProductName in "Azure Advanced Threat Protection,Microsoft 365 Defender,Microsoft Cloud App Security,Microsoft Defender Advanced Threat Protection,Office 365 Advanced Threat Protection" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Data%20Connectors/MicrosoftThreatProtection.JSON) |
+| MicrosoftThreatProtection | Microsoft Defender XDR | DeviceRegistryEvents.ActionType == "RegistryValueSet"  \|  SecurityAlert.ProductName in "Azure Advanced Threat Protection,Microsoft 365 Defender,Microsoft Cloud App Security,Microsoft Defender Advanced Threat Protection,Microsoft Defender XDR,Office 365 Advanced Threat Protection" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Data%20Connectors/MicrosoftThreatProtection.JSON) |
 | NasuniEdgeAppliance | [Deprecated] Nasuni Edge Appliance | Syslog.Facility != "cron" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Nasuni/Data%20Connectors/Nasuni%20Data%20Connector.json) |
 | Netwrix | [Deprecated] Netwrix Auditor via Legacy Agent | CommonSecurityLog.DeviceVendor == "Netwrix" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netwrix%20Auditor/Data%20Connectors/Connector_NetwrixAuditor.json) |
 | NetwrixAma | [Deprecated] Netwrix Auditor via AMA | CommonSecurityLog.DeviceVendor =~ "Netwrix" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netwrix%20Auditor/Data%20Connectors/template_NetwrixAuditorAMA.json) |
@@ -1399,6 +1427,7 @@ Total: 197 connectors
 | QualysKbConnector | Qualys Knowledge Base (via Codeless Connector Framework) | QualysKnowledgeBase.Patchable in "0,1" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Qualys%20VM%20Knowledgebase/Data%20Connectors/QualysKB_ccf/QualysKB_ConnectorDefinition.json) |
 | RadiflowIsid | Radiflow iSID via AMA | CommonSecurityLog.DeviceProduct =~ "iSID"  \|  CommonSecurityLog.DeviceVendor =~ "radiflow" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Radiflow/Data%20Connectors/RadiflowIsid.json) |
 | RidgeBotDataConnector | [Deprecated] RIDGEBOT - data connector for Microsoft Sentine | CommonSecurityLog.DeviceEventClassID == "4001"  \|  CommonSecurityLog.DeviceVendor == "RidgeSecurity" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
+| SAPLogServ | SAP LogServ (RISE), S/4HANA Cloud private edition | ASimDnsActivityLogs.EventProduct in "AzureVNet,BIND,SAP Web Dispatcher"  \|  Syslog.CollectorHostName == "SAPLogServ"  \|  WindowsEvent.Provider startswith "Microsoft" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Data%20Connectors/SAPLogServ.json) |
 | SemperisDSP | Semperis Directory Services Protector | SecurityEvent.EventID in "9208,9211,9212"  \|  SecurityEvent.EventSourceName == "Semperis-DSP-Security" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 | SilverfortAma | Silverfort Admin Console | CommonSecurityLog.DeviceEventClassID == "NewIncident"  \|  CommonSecurityLog.DeviceProduct == "Admin Console"  \|  CommonSecurityLog.DeviceProduct has "Admin Console"  \|  CommonSecurityLog.DeviceVendor == "Silverfort"  \|  CommonSecurityLog.DeviceVendor has "Silverfort"  \|  CommonSecurityLog.Message has "UserBruteForce" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
 | SlashNextFunctionApp | SlashNext Function App | AzureDiagnostics.Resource == "SlashnextFunctionApp"  \|  AzureMetrics.MetricName == "FunctionExecutionCount" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/DataConnectors/SlashNext_FunctionApp.json) |
@@ -1426,7 +1455,7 @@ Total: 197 connectors
 | WireX_Systems_NFPAma | [Deprecated] WireX Network Forensics Platform via AMA | CommonSecurityLog.ApplicationProtocol in "DNS,HTTP,TDS"  \|  CommonSecurityLog.DeviceProduct =~ "WireX NFP"  \|  CommonSecurityLog.DeviceVendor =~ "WireX" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WireX%20Network%20Forensics%20Platform/Data%20Connectors/template_WireXsystemsNFPAMA.json) |
 | WithSecureElementsViaConnector | [Deprecated] WithSecure Elements via Connector | CommonSecurityLog.DeviceVendor == "WithSecure™" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaConnector/Data%20Connectors/WithSecureElementsViaConnector.json) |
 | WorkdayCCPDefinition | Workday User Activity | ASimAuditEventLogs.EventProduct == "Workday" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workday/Data%20Connectors/Workday_ccp/Workday_DataConnectorDefinition.json) |
-| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 (via Codeless Connector | ASimRegistryEventLogs.EventProduct == "Carbon Black Cloud"  \|  ASimRegistryEventLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_DataConnectorDefinition.json) |
+| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 (via Codeless Connector | ASimNetworkSessionLogs.EventProduct == "Carbon Black Cloud"  \|  ASimNetworkSessionLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_DataConnectorDefinition.json) |
 | iboss | [Deprecated] iboss via Legacy Agent | CommonSecurityLog.AdditionalExtensions !contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/iboss_cef.json) |
 | ibossAma | iboss via AMA | CommonSecurityLog.AdditionalExtensions contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/template_ibossAMA.json) |
 | illusiveAttackManagementSystem | [Deprecated] Illusive Platform via Legacy Agent | CommonSecurityLog.DeviceEventClassID in "illusive:access,illusive:login,illusive:suspicious"  \|  CommonSecurityLog.DeviceProduct == "illusive"  \|  CommonSecurityLog.DeviceVendor == "illusive"  \|  CommonSecurityLog.Message !contains "hasForensics"  \|  CommonSecurityLog.SourceHostName != "Failed to obtain" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Data%20Connectors/illusive%20Attack%20Management%20System.json) |
@@ -1436,7 +1465,7 @@ Total: 197 connectors
 
 ## Content Items with Filter Fields
 
-Total: 2532 content items
+Total: 2574 content items
 
 ### 
 
@@ -1444,11 +1473,6 @@ Total: 2532 content items
 |------|------|---------------|------|
 | analytic_rule | Suspicious VM Instance Creation Activity Detected | GCPAuditLogs.MethodName endswith "instances.insert"  \|  GCPAuditLogs.ServiceName == "compute.googleapis.com"  \|  SecurityAlert.AlertSeverity has_any "Medium"  \|  SecurityAlert.ProductName in "Azure Active Directory,Azure Active Directory Identity Protection,Microsoft 365 Defender,Microsoft Cloud App Security,Microsoft Defender ATP,Microsoft Defender Advanced Threat Protection"  \|  _Computed.GCPUserIp != "private"  \|  _Computed.GCPUserUPN !has "gserviceaccount.com"  \|  _Computed.VMOperation == "insert" | MultipleDataSources/SuspiciousVMInstanceCreationActivity.yaml |
 | hunting_query | 7-zip-prep-for-exfiltration | DeviceProcessEvents.ProcessCommandLine contains "ProgramData\\pst" | Microsoft 365 Defender/Exfiltration/7-zip-prep-for-exfiltration.yaml |
-| hunting_query | A365 AI Agents - HTTP Requests to Non-HTTPS Endpoi | _Computed.Scheme != "https" | AI Agents/A365 Connector/AIAgentsHTTPNonHTTPS.yaml |
-| hunting_query | A365 AI Agents - HTTP Requests to Non-standard Por | _Computed.Port != "443" | AI Agents/A365 Connector/AIAgentsHTTPNonStandardPorts.yaml |
-| hunting_query | A365 AI Agents - Publicly Shared | _Computed.Scope == "public" | AI Agents/A365 Connector/AIAgentsPubliclyShared.yaml |
-| hunting_query | A365 AI Agents - Published Agents with Short Instr | _Computed.PublishedStatus == "Published" | AI Agents/A365 Connector/AIAgentsShortInstructions.yaml |
-| hunting_query | A365 AI Agents - Published Agents without Instruct | _Computed.PublishedStatus == "Published" | AI Agents/A365 Connector/AIAgentsNoInstructions.yaml |
 | hunting_query | AD Account Lockout | SecurityEvent.EventID == "4740" | SecurityEvent/ADAccountLockouts.yaml |
 | hunting_query | AD FS Database Local SQL Statements | Event.EventID == "33205"  \|  Event.EventLog =~ "Application"  \|  Event.RenderedDescription has_all "database_name:AdfsConfigurationV4"  \|  Event.Source == "MSSQL$MICROSOFT##WID" | SecurityEvent/ADFSDBLocalSqlStatements.yaml |
 | hunting_query | ADFSDomainTrustMods[Nobelium] | CloudAppEvents.ActionType in~ "Set domain authentication.,Set federation settings on domain."  \|  _Computed.newDomainValue has "Federated" | Microsoft 365 Defender/Defense evasion/ADFSDomainTrustMods[Nobelium].yaml |
@@ -1492,6 +1516,7 @@ Total: 2532 content items
 | hunting_query | BEC - File sharing tactics - OneDrive or SharePoin | CloudAppEvents.ActionType in "AddedToSecureLink,SecureLinkCreated"  \|  CloudAppEvents.Application in "Microsoft OneDrive for Business,Microsoft SharePoint Online"  \|  _Computed.TypeofUserSharedWith == "Guest" | Microsoft 365 Defender/Email and Collaboration Queries/Hunting/BEC - File sharing tactics - OneDrive or SharePoint.yaml |
 | hunting_query | Backup deletion | DeviceProcessEvents.ProcessCommandLine has "delete"  \|  DeviceProcessEvents.ProcessCommandLine has "shadowcopy" | Microsoft 365 Defender/Ransomware/Backup deletion.yaml |
 | hunting_query | Bad email percentage of Inbound emails | EmailEvents.EmailDirection == "Inbound" | Microsoft 365 Defender/Email and Collaboration Queries/General/Bad email percentage - Inbound emails.yaml |
+| hunting_query | BadUSB LOLBIN execution via certutil (HID injectio | DeviceProcessEvents.InitiatingProcessFileName =~ "explorer.exe"  \|  DeviceProcessEvents.ProcessCommandLine has "certutil" | MultipleDataSources/BadUSBCertutilLOLBIN.yaml |
 | hunting_query | Base64 Detector and Decoder | _Computed.SplitLaunchString matchesregex "^[A-Za-z0-9+/]{50,}[=]{0,2}$" | Microsoft 365 Defender/Execution/Base64 Detector and Decoder.yaml |
 | hunting_query | Base64encodePEFile | DeviceProcessEvents.ProcessCommandLine contains "TVqQAAMAAAAEAAA" | Microsoft 365 Defender/Execution/Base64encodePEFile.yaml |
 | hunting_query | Baseline Comparison | DeviceFileEvents.ActionType == "PowerShellCommand" | Microsoft 365 Defender/General queries/Baseline Comparison.yaml |
@@ -1513,12 +1538,6 @@ Total: 2532 content items
 | hunting_query | Connection to Rare DNS Hosts | DeviceNetworkEvents.RemoteUrl contains "." | Microsoft 365 Defender/Command and Control/Connection to Rare DNS Hosts.yaml |
 | hunting_query | Connectivity Failures by Device | DeviceNetworkEvents.ActionType == "ConnectionFailed" | Microsoft 365 Defender/Troubleshooting/Connectivity Failures by Device.yaml |
 | hunting_query | Connectivity Failures by Domain | DeviceNetworkEvents.ActionType == "ConnectionFailed" | Microsoft 365 Defender/Troubleshooting/Connectivity Failures by Domain.yaml |
-| hunting_query | Copilot Studio AI Agents - Dormant Author Authenti | CloudAppEvents.ActionType == "CopilotInteraction" | AI Agents/Copilot Studio Connector/DormantAuthorAuthenticationAIAgents.yaml |
-| hunting_query | Copilot Studio AI Agents - HTTP Requests to Non-HT | _Computed.Scheme != "https" | AI Agents/Copilot Studio Connector/AIAgentsHTTPNonHTTPS.yaml |
-| hunting_query | Copilot Studio AI Agents - HTTP Requests to Non-st | _Computed.Port != "443" | AI Agents/Copilot Studio Connector/AIAgentsHTTPNonStandardPorts.yaml |
-| hunting_query | Copilot Studio AI Agents - Published Dormant (30d) | CloudAppEvents.ActionType == "CopilotInteraction" | AI Agents/Copilot Studio Connector/PublishedDormantAIAgents.yaml |
-| hunting_query | Copilot Studio AI Agents - Published Generative Or | _Computed.InstructionsRaw has "instructions" | AI Agents/Copilot Studio Connector/AIAgentsGenerativeOrchestrationNoInstructions.yaml |
-| hunting_query | Copilot Studio AI Agents - Sending email to AI con | _Computed.OperationId == "SendEmailV2" | AI Agents/Copilot Studio Connector/AIAgentsEmailAIControlledInputs.yaml |
 | hunting_query | Create account | DeviceProcessEvents.InitiatingProcessFileName =~ "net.exe"  \|  DeviceProcessEvents.ProcessCommandLine !contains "/add"  \|  DeviceProcessEvents.ProcessCommandLine !contains "/domain"  \|  _Computed.CreatedOnLocalMachine == "0" | Microsoft 365 Defender/Persistence/Create account.yaml |
 | hunting_query | Create account (1) | DeviceEvents.AccountName !~ "administrator"  \|  DeviceEvents.AccountName endswith "or"  \|  DeviceEvents.AccountName startswith "ad"  \|  DeviceEvents.ActionType == "UserAccountCreated" | Microsoft 365 Defender/Persistence/Create account (1).yaml |
 | hunting_query | Create new user with known DEV-0270 username and p | _Computed.password in "P@ssw0rd1234,_AS_@1394" | Microsoft 365 Defender/Ransomware/DEV-0270/Create new user with known DEV-0270 username and password.yaml |
@@ -1542,6 +1561,7 @@ Total: 2532 content items
 | hunting_query | Devices with Log4j vulnerability alerts and additi | AlertEvidence.DeviceId == "4" | Microsoft 365 Defender/Campaigns/Log4J/Devices with Log4j vulnerability alerts and additional other alert related context.yaml |
 | hunting_query | Disable Controlled Folders | DeviceProcessEvents.InitiatingProcessFileName =~ "cmd.exe" | Microsoft 365 Defender/Campaigns/Macaw Ransomware/Disable Controlled Folders.yaml |
 | hunting_query | Discover hosts doing possible network scans | DeviceNetworkEvents.RemoteIP startswith "172.16"  \|  DeviceNetworkEvents.RemoteIP startswith "192.168" | Microsoft 365 Defender/Discovery/Discover hosts doing possible network scans.yaml |
+| hunting_query | Display Name - Helpdesk theme impersonation attack | CloudAppEvents.ActionType == "TeamsImpersonationDetected" | Microsoft 365 Defender/Email and Collaboration Queries/Spoof and Impersonation/Helpdesk theme impersonation attack detection.yaml |
 | hunting_query | Display Name - Spoof and Impersonation | EmailEvents.DeliveryAction == "Delivered"  \|  EmailEvents.EmailDirection == "Inbound"  \|  EmailEvents.OrgLevelAction != "Block"  \|  EmailEvents.SenderDisplayName contains "Microsoft"  \|  EmailEvents.UserLevelAction != "Block" | Microsoft 365 Defender/Email and Collaboration Queries/Spoof and Impersonation/Display Name - Spoof and Impersonation.yaml |
 | hunting_query | Distribution from remote location | AlertInfo.Title == "File dropped and launched from remote location" | Microsoft 365 Defender/Ransomware/Distribution from remote location.yaml |
 | hunting_query | Doc attachment with link to download | DeviceEvents.ActionType == "BrowserLaunchedToOpenUrl" | Microsoft 365 Defender/Delivery/Doc attachment with link to download.yaml |
@@ -2801,7 +2821,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
-| playbook | Check Point EM - Importer (Alerts → Sentinel Incid | _Computed.severity in "critical,high,low,medium,very_high" | [Sync/CPEM_InboundSync/azuredeploy.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Check%20Point%20Cyberint%20Alerts/Playbooks/Sync/CPEM_InboundSync/azuredeploy.json) |
+| playbook | Check Point EM - Importer (Alerts → SecurityAlert  | _Computed.severity in "critical,high,low,medium,very_high" | [Sync/CPEM_InboundSync/azuredeploy.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Check%20Point%20Cyberint%20Alerts/Playbooks/Sync/CPEM_InboundSync/azuredeploy.json) |
 
 ### Cisco ETD
 
@@ -3043,7 +3063,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
-| workbook | DigitalShadows | _Computed.risk_assessment_risk_level_s in "high,low,medium,none,very-high,very-low"  \|  _Computed.risk_level_s in "high,low,medium,none,very-high,very-low"  \|  _Computed.status != "True"  \|  _Computed.status_s in "closed,open,rejected,resolved" | [DigitalShadows.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Workbooks/DigitalShadows.json) |
+| workbook | DigitalShadows | _Computed.RiskAssessmentRiskLevel in "high,low,medium,none,very-high,very-low"  \|  _Computed.RiskLevel in "high,low,medium,none,very-high,very-low"  \|  _Computed.Status in "closed,open,rejected,resolved"  \|  _Computed.Status != "True"  \|  _Computed.status != "True" | [DigitalShadows.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Workbooks/DigitalShadows.json) |
 
 ### Dynatrace
 
@@ -3248,6 +3268,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
+| analytic_rule | GTI Relevance System Alert - Incident by Alert ID | _Computed.SeverityLevel in "CRITICAL,HIGH,LOW,MEDIUM" | [RelevanceSystemAlerts/GTI_RelevanceSystemAlerts_IncidentByAlertId.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Threat%20Intelligence/Analytic%20Rules/RelevanceSystemAlerts/GTI_RelevanceSystemAlerts_IncidentByAlertId.yaml) |
 | analytic_rule | Google Threat Intelligence - Threat Hunting Domain | ThreatIntelIndicators.ObservableKey == "domain-name:value"  \|  ThreatIntelIndicators.SourceSystem == "Google Threat Intelligence" | [ThreatHunting/ThreatHuntDomain.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Threat%20Intelligence/Analytic%20Rules/ThreatHunting/ThreatHuntDomain.yaml) |
 | analytic_rule | Google Threat Intelligence - Threat Hunting Hash | ThreatIntelIndicators.ObservableKey contains "file:hashes"  \|  ThreatIntelIndicators.SourceSystem == "Google Threat Intelligence" | [ThreatHunting/ThreatHuntHash.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Threat%20Intelligence/Analytic%20Rules/ThreatHunting/ThreatHuntHash.yaml) |
 | analytic_rule | Google Threat Intelligence - Threat Hunting IP | ThreatIntelIndicators.ObservableKey == "ipv4-addr:value"  \|  ThreatIntelIndicators.SourceSystem == "Google Threat Intelligence" | [ThreatHunting/ThreatHuntIp.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Threat%20Intelligence/Analytic%20Rules/ThreatHunting/ThreatHuntIp.yaml) |
@@ -3300,6 +3321,30 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | workbook | HIPAACompliance | AzureDiagnostics.Category == "AzureFirewallNetworkRule"  \|  AzureDiagnostics.Category =~ "SQLSecurityAuditEvents"  \|  DeviceNetworkEvents.ActionType == "ConnectionSuccess"  \|  DeviceProcessEvents.ProcessCommandLine has "Set-MpPreference"  \|  SecurityEvent.EventID in "4624,4625"  \|  SigninLogs.AuthenticationRequirement == "multiFactorAuthentication"  \|  _Computed.BatExclusion == "Found"  \|  _Computed.BootTampering == "Found"  \|  _Computed.DefenderTamp == "Found"  \|  _Computed.DisableControlledFolderAccess == "Found"  \|  _Computed.EntityType == "host"  \|  _Computed.ExeExclusion == "Found"  \|  _Computed.NetshFirewallTampering == "Found"  \|  _Computed.OnboardingStatus in "Can be onboarded,Insufficient info"  \|  _Computed.ScDeleteDefend == "Found"  \|  _Computed.SchTasks == "Found"  \|  _Computed.SensorHealthState contains "Active"  \|  _Computed.SensorHealthState contains "Inactive"  \|  _Computed.Severity in "High,Low,Medium"  \|  _Computed.StartUpExclusionPath == "Found"  \|  _Computed.TrainingStatus =~ "Completed" | [HIPAACompliance.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HIPAA%20Compliance/Workbooks/HIPAACompliance.json) |
+
+### Hybrid Attack - Cloud & Identity
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| hunting_query | Azure Network Configuration Tampered by Compromise | AzureActivity.ActivityStatusValue == "Success"  \|  AzureActivity.Caller contains "@"  \|  AzureActivity.OperationNameValue =~ "Microsoft.Authorization/roleAssignments/delete"  \|  AzureActivity.OperationNameValue contains "WebApplicationFirewall"  \|  AzureActivity.OperationNameValue contains "azureFirewall"  \|  AzureActivity.OperationNameValue contains "firewallPolicies"  \|  AzureActivity.OperationNameValue contains "networkSecurityGroup"  \|  AzureActivity.OperationNameValue contains "roleAssignments"  \|  AzureActivity.OperationNameValue contains "routeTable"  \|  AzureActivity.OperationNameValue contains "routes/"  \|  AzureActivity.OperationNameValue contains "subnets"  \|  AzureActivity.OperationNameValue contains "virtualNetworkGateway"  \|  _Computed.CallerType == "ServicePrincipal"  \|  _Computed.ChangeAction == "Delete" | [DefenseEvasion/NetworkSecurityControlTampering.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/DefenseEvasion/NetworkSecurityControlTampering.yaml) |
+| hunting_query | Azure Storage Access via AccountKey or SAS Token f | StorageBlobLogs.CallerIpAddress startswith "10."  \|  StorageBlobLogs.CallerIpAddress startswith "127."  \|  StorageBlobLogs.CallerIpAddress startswith "169.254."  \|  StorageBlobLogs.CallerIpAddress startswith "172."  \|  StorageBlobLogs.CallerIpAddress startswith "192.168."  \|  StorageBlobLogs.StatusCode in "200,206"  \|  StorageBlobLogs.UserAgentHeader contains "rubrik" | [Exfiltration/StorageAccessFirstSeenExternalIP.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Exfiltration/StorageAccessFirstSeenExternalIP.yaml) |
+| hunting_query | Azure Storage Bulk Download via AccountKey or SAS  | StorageBlobLogs.CallerIpAddress startswith "10."  \|  StorageBlobLogs.CallerIpAddress startswith "127."  \|  StorageBlobLogs.CallerIpAddress startswith "169.254."  \|  StorageBlobLogs.CallerIpAddress startswith "172."  \|  StorageBlobLogs.CallerIpAddress startswith "192.168."  \|  StorageBlobLogs.StatusCode in "200,206"  \|  StorageBlobLogs.UserAgentHeader contains "rubrik"  \|  _Computed.AuthenticationType in "AccountKey,DSas,SAS" | [Exfiltration/StorageBulkDownloadAccountKeySAS.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Exfiltration/StorageBulkDownloadAccountKeySAS.yaml) |
+| hunting_query | CVE Exploitation Indicators on Network Appliance ( | CommonSecurityLog.DeviceEventClassID == "0100044547"  \|  CommonSecurityLog.DeviceProduct != "Cortex XDR"  \|  CommonSecurityLog.DeviceProduct !has "ASM"  \|  CommonSecurityLog.DeviceVendor =~ "Fortinet" | [InitialAccess/CVEExploitationOnNetworkAppliance3P.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/InitialAccess/CVEExploitationOnNetworkAppliance3P.yaml) |
+| hunting_query | Credential Stuffing or Password Spray on VPN or Fi | _Computed.PatternType in "A - Credential Stuffing,B - Password Spray" | [InitialAccess/CredentialStuffingSprayOnVPN3P.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/InitialAccess/CredentialStuffingSprayOnVPN3P.yaml) |
+| hunting_query | Cross-subscription and resource-group enumeration  | _Computed.CallerNorm contains "@"  \|  _Computed.SubStatusNorm has "ok" | [Discovery/cross-subscription-and-rg-enumeration-sweep.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Discovery/cross-subscription-and-rg-enumeration-sweep.yaml) |
+| hunting_query | Email Forwarding Rule Created to External Address | CloudAppEvents.ActionType in "New-InboxRule,Set-InboxRule,Set-Mailbox"  \|  _Computed.ParamName in "DeliverToMailboxAndForward,ForwardAsAttachmentTo,ForwardTo,ForwardingAddress,ForwardingSmtpAddress,RedirectTo"  \|  _Computed.ParamValue !~ "False" | [Exfiltration/EmailForwardingRuleToExternal.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Exfiltration/EmailForwardingRuleToExternal.yaml) |
+| hunting_query | Federated Identity Provider Added to Tenant | SigninLogs.OperationName in "Set domain authentication,Set federation settings on domain"  \|  _Computed.RiskLevelAggregated in "high,medium" | [Persistence/FederatedIdentityProviderAddedToTenant.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Persistence/FederatedIdentityProviderAddedToTenant.yaml) |
+| hunting_query | Kerberoast burst followed by cloud sign-in | SecurityEvent.EventID == "4769" | [LateralMovement/kerberoast-followed-by-cloud-signin.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/LateralMovement/kerberoast-followed-by-cloud-signin.yaml) |
+| hunting_query | Kubernetes daemonset or cronjob by non-automation  | AzureDiagnostics.Category has "kube-audit" | [Persistence/k8s-daemonset-cronjob-by-nonautomation-identity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Persistence/k8s-daemonset-cronjob-by-nonautomation-identity.yaml) |
+| hunting_query | Kubernetes first-seen control-plane writer | AzureDiagnostics.Category =~ "kube-audit" | [InitialAccess/k8s-first-seen-control-plane-writer.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/InitialAccess/k8s-first-seen-control-plane-writer.yaml) |
+| hunting_query | Kubernetes secret enumeration followed by pod exec | AzureDiagnostics.Category has "kube-audit" | [CredentialAccess/k8s-secret-enumeration-followed-by-exec.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/CredentialAccess/k8s-secret-enumeration-followed-by-exec.yaml) |
+| hunting_query | MFA Method Added on Risky Account | SigninLogs.OperationName in "Admin deleted security info,Admin registered security info,Admin updated security info,User changed default security info,User deleted security info,User registered security info,User updated security info" | [Persistence/MFAMethodAddedRiskyAccount.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Persistence/MFAMethodAddedRiskyAccount.yaml) |
+| hunting_query | Multi-Mailbox Access by Single IP via Cloud App Pe | CloudAppEvents.ActionType == "MailItemsAccessed"  \|  ThreatIntelIndicators.ObservableKey == "ipv4-addr:value" | [Exfiltration/MultiMailboxAccessBySingleIP.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Exfiltration/MultiMailboxAccessBySingleIP.yaml) |
+| hunting_query | Post-Auth Config Change on Network Appliance (3P) | CommonSecurityLog.DeviceEventClassID in "0100044547,111010,44547"  \|  CommonSecurityLog.DeviceEventClassID =~ "CONFIG"  \|  CommonSecurityLog.DeviceEventClassID has_any "111007,111008,111010"  \|  CommonSecurityLog.DeviceProduct has_any "ASA,FTD,Firepower"  \|  CommonSecurityLog.DeviceProduct startswith "FortiGate"  \|  CommonSecurityLog.DeviceVendor in~ "Cisco,Fortinet,Palo Alto Networks"  \|  _Computed.CfgAction in "Add,Delete,Edit"  \|  _Computed.ConfigCategory in "A - Firewall Policy,B - Local User/Admin,C - Auth/Identity Config,D - VPN/Routing/Interface"  \|  _Computed.ConfigCategory != "Other Config"  \|  _Computed.SignalStrength startswith "Critical"  \|  _Computed.SignalStrength startswith "High"  \|  _Computed.SignalStrength startswith "Medium" | [InitialAccess/PostAuthConfigChangeOnAppliance3P.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/InitialAccess/PostAuthConfigChangeOnAppliance3P.yaml) |
+| hunting_query | Secret Added to Dormant Service Principal | AuditLogs.OperationName == "Add service principal credentials" | [Persistence/SecretAddedDormantServicePrincipal.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Persistence/SecretAddedDormantServicePrincipal.yaml) |
+| hunting_query | Service principal Conditional Access anomaly | AADServicePrincipalSignInLogs.ConditionalAccessStatus in~ "failure,notApplied"  \|  AADServicePrincipalSignInLogs.ResultType in~ "0,Success" | [Persistence/service-principal-conditional-access-anomaly.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Persistence/service-principal-conditional-access-anomaly.yaml) |
+| hunting_query | Suspicious OAuth App Consent Granting Sensitive Pe | AuditLogs.OperationName in "Add app role assignment to service principal,Add delegated permission grant,Consent to application"  \|  _Computed.PropName in "AppRole.Value,ConsentContext.OnBehalfOfAll,DelegatedPermissionGrant.Scope,ServicePrincipal.AppId,ServicePrincipal.DisplayName,ServicePrincipal.ObjectID" | [Exfiltration/SuspiciousOAuthConsentSensitivePermissions.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Hunting%20Queries/Exfiltration/SuspiciousOAuthConsentSensitivePermissions.yaml) |
+| workbook | HybridAttack-Cloud&Identity | AADServicePrincipalSignInLogs.OperationName in "Add app role assignment to service principal,Add delegated permission grant,Add service principal credentials,Admin deleted security info,Admin registered security info,Admin updated security info,Consent to application,GetBlob,ListBlobs,ListBlobsHierarchySegment,ListContainersSegment,Set domain authentication,Set federation settings on domain,User changed default security info,User deleted security info,User registered security info,User updated security info"  \|  AADServicePrincipalSignInLogs.OperationName has_any "clusterrolebindings,rolebindings"  \|  AADServicePrincipalSignInLogs.OperationName has_any "cronjobs,daemonsets"  \|  AADServicePrincipalSignInLogs.OperationName has_any "cronjobs/create,daemonsets/create"  \|  AzureActivity.ActivityStatusValue == "Success"  \|  AzureActivity.Caller contains "@"  \|  AzureActivity.OperationNameValue =~ "Microsoft.Authorization/roleAssignments/delete"  \|  AzureActivity.OperationNameValue contains "WebApplicationFirewall"  \|  AzureActivity.OperationNameValue contains "azureFirewall"  \|  AzureActivity.OperationNameValue contains "firewallPolicies"  \|  AzureActivity.OperationNameValue contains "networkSecurityGroup"  \|  AzureActivity.OperationNameValue contains "roleAssignments"  \|  AzureActivity.OperationNameValue contains "routeTable"  \|  AzureActivity.OperationNameValue contains "routes/"  \|  AzureActivity.OperationNameValue contains "subnets"  \|  AzureActivity.OperationNameValue contains "virtualNetworkGateway"  \|  AzureDiagnostics.Category =~ "kube-audit"  \|  AzureDiagnostics.Category has "kube-audit"  \|  CloudAppEvents.ActionType in "MailItemsAccessed,New-InboxRule,Set-InboxRule,Set-Mailbox"  \|  CommonSecurityLog.DeviceEventClassID == "0100044547"  \|  CommonSecurityLog.DeviceProduct != "Cortex XDR"  \|  CommonSecurityLog.DeviceProduct !has "ASM"  \|  CommonSecurityLog.DeviceVendor =~ "Fortinet"  \|  SecurityEvent.EventID == "4769"  \|  StorageBlobLogs.StatusCode in "200,206"  \|  ThreatIntelIndicators.ObservableKey == "ipv4-addr:value"  \|  _Computed.ActionTaken in "Blocked ✓,⚠️ Allowed"  \|  _Computed.AuthenticationType in "AccountKey,DSas,SAS"  \|  _Computed.CallerType == "ServicePrincipal"  \|  _Computed.ChangeAction == "Delete"  \|  _Computed.ParamName in "DeliverToMailboxAndForward,ForwardAsAttachmentTo,ForwardTo,ForwardingAddress,ForwardingSmtpAddress,RedirectTo"  \|  _Computed.ParamValue !~ "False"  \|  _Computed.PropName in "AppRole.Value,ConsentContext.OnBehalfOfAll,DelegatedPermissionGrant.Scope,ServicePrincipal.AppId,ServicePrincipal.DisplayName,ServicePrincipal.ObjectID" | [HybridAttack-Cloud&Identity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/Workbooks/HybridAttack-Cloud%26Identity.json) |
 
 ### IllumioSaaS
 
@@ -3394,7 +3439,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | analytic_rule | Lookout - Critical Smishing and Phishing Alerts (v | _Computed.DeviceRiskLevel == "High"  \|  _Computed.DeviceSecurityStatus in "THREATS_HIGH,THREATS_LOW,THREATS_MEDIUM"  \|  _Computed.ImpersonationRisk != "Generic Phishing"  \|  _Computed.SmishingAlertSeverity in "CRITICAL,HIGH,LOW,MEDIUM"  \|  _Computed.SmishingAlertType in "CREDENTIAL_HARVESTING,FRAUD_DETECTION,MALICIOUS_LINK,PHISHING_DETECTION" | [LookoutSmishingAlertV2.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Analytic%20Rules/LookoutSmishingAlertV2.yaml) |
 | analytic_rule | Lookout - Device Compliance and Security Status Ch | _Computed.DeviceComplianceStatus in "Non-Compliant,Partial"  \|  _Computed.DevicePlatform in "ANDROID,IOS,UNKNOWN"  \|  _Computed.DeviceSecurityStatus in "THREATS_HIGH,THREATS_LOW,THREATS_MEDIUM" | [LookoutDeviceComplianceV2.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Analytic%20Rules/LookoutDeviceComplianceV2.yaml) |
 | analytic_rule | Lookout - High Severity Mobile Threats Detected (v | _Computed.DeviceComplianceStatus in "Non-Compliant,Partial"  \|  _Computed.DeviceSecurityStatus in "THREATS_HIGH,THREATS_LOW,THREATS_MEDIUM"  \|  _Computed.ThreatSeverity in "CRITICAL,HIGH,LOW,MEDIUM" | [LookoutThreatEventV2.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Analytic%20Rules/LookoutThreatEventV2.yaml) |
-| workbook | LookoutEvents | _Computed.ThreatAction == "DETECTED"  \|  _Computed.ThreatSeverity in "HIGH,LOW,MEDIUM" | [LookoutEvents.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Workbooks/LookoutEvents.json) |
+| workbook | LookoutEvents | _Computed.ThreatSeverity in "HIGH,LOW,MEDIUM"  \|  _Computed.ThreatStatus in "ACTIVE,OPEN" | [LookoutEvents.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Workbooks/LookoutEvents.json) |
 | workbook | LookoutEventsV2 | _Computed.ActorType in "ADMIN_USER,SYSTEM,USER"  \|  _Computed.AuditAttributeChanges has "LOW"  \|  _Computed.AuditAttributeChanges has "admin"  \|  _Computed.AuditAttributeChanges has "auto_quarantine_enabled"  \|  _Computed.AuditAttributeChanges has "compliance_enforcement"  \|  _Computed.AuditAttributeChanges has "false"  \|  _Computed.AuditAttributeChanges has "privilege"  \|  _Computed.AuditAttributeChanges has "threat_response_level"  \|  _Computed.AuditType in "POLICY_CHANGE,SECURITY_SETTING_CHANGE,USER_MANAGEMENT"  \|  _Computed.DeviceActivationStatus == "INACTIVE"  \|  _Computed.DeviceSecurityStatus in "THREATS_HIGH,THREATS_LOW,THREATS_MEDIUM"  \|  _Computed.OverallRisk in "Critical,High"  \|  _Computed.SecurityImplication in "Auto-Quarantine Disabled,Compliance Enforcement Disabled,Privilege Changes,Threat Response Weakened"  \|  _Computed.SmishingAlertDescription has "CEO"  \|  _Computed.SmishingAlertDescription has "IT"  \|  _Computed.SmishingAlertDescription has "bank"  \|  _Computed.SmishingAlertDescription has "delivery"  \|  _Computed.SmishingAlertDescription has "executive"  \|  _Computed.SmishingAlertDescription has "financial"  \|  _Computed.SmishingAlertDescription has "package"  \|  _Computed.SmishingAlertDescription has "support"  \|  _Computed.SmishingAlertSeverity in "CRITICAL,HIGH"  \|  _Computed.ThreatEvents == "0"  \|  _Computed.ThreatSev in "CRITICAL,HIGH"  \|  _Computed.ThreatSeverity in "CRITICAL,HIGH,LOW,MEDIUM" | [LookoutEventsV2.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Workbooks/LookoutEventsV2.json) |
 | workbook | LookoutIOAInvestigationDashboard | _Computed.AuditType == "ADMIN_LOGIN"  \|  _Computed.log_type in "AUDIT,DEVICE,SMISHING_ALERT,THREAT" | [LookoutIOAInvestigationDashboard.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Workbooks/LookoutIOAInvestigationDashboard.json) |
 | workbook | LookoutSecurityInvestigationDashboard | _Computed.ThreatSeverity in "CRITICAL,HIGH" | [LookoutSecurityInvestigationDashboard.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Workbooks/LookoutSecurityInvestigationDashboard.json) |
@@ -3476,6 +3521,31 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | workbook | ExchangeOnline | OfficeActivity.ExternalAccess == "True"  \|  OfficeActivity.OfficeWorkload == "Exchange"  \|  OfficeActivity.Operation in "Add-MailboxPermission,MailboxLogin,Remove-MailboxPermission,Set-Mailbox,UpdateFolderPermissions"  \|  OfficeActivity.Operation contains "HardDelete"  \|  OfficeActivity.UserType == "Admin" | [ExchangeOnline.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20365/Workbooks/ExchangeOnline.json) |
 | workbook | Office365 | OfficeActivity.ExternalAccess == "True"  \|  OfficeActivity.OfficeWorkload in "Exchange,OneDrive,SharePoint"  \|  OfficeActivity.Operation in "FileDownloaded,FileUploaded,MailboxLogin"  \|  OfficeActivity.Operation contains "File"  \|  OfficeActivity.Operation contains "Folder"  \|  OfficeActivity.Operation contains "add"  \|  OfficeActivity.Operation contains "create"  \|  OfficeActivity.Operation contains "delete"  \|  OfficeActivity.Operation contains "group"  \|  OfficeActivity.Operation contains "update"  \|  OfficeActivity.Operation contains "user"  \|  OfficeActivity.UserType == "Admin" | [Office365.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20365/Workbooks/Office365.json) |
 | workbook | SharePointAndOneDrive | OfficeActivity.OfficeWorkload in "OneDrive,SharePoint" | [SharePointAndOneDrive.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20365/Workbooks/SharePointAndOneDrive.json) |
+
+### Microsoft Active Directory Tier Model
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| analytic_rule | PROD (TM001.1) - GROUP - Added to Group Outside th | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "OperationType"  \|  SecurityEvent.EventID == "5136"  \|  _Computed.GroupName != "Allowed RODC Password Replication Group"  \|  _Computed.GroupName != "Protected Users" | [TM001_GROUPAddedToGroupOutsideTheObjectTierLevel.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM001_GROUPAddedToGroupOutsideTheObjectTierLevel.yaml) |
+| analytic_rule | PROD (TM002.1) - OBJECT - Created or Deleted a Tie | SecurityEvent.EventID in "5137,5141"  \|  _Computed.ObjectClass !has "msFVE-RecoveryInformation"  \|  _Computed.ObjectClass !has "organizationalUnit" | [TM002_OBJECTCreatedOrDeletedATierLevelObject.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM002_OBJECTCreatedOrDeletedATierLevelObject.yaml) |
+| analytic_rule | PROD (TM003.1) - OBJECT - Moved or Recovered a Tie | SecurityEvent.EventID in "5138,5139" | [TM003_OBJECTMovedOrRecoveredATierLevelAccount.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM003_OBJECTMovedOrRecoveredATierLevelAccount.yaml) |
+| analytic_rule | PROD (TM004.1) - OBJECT - Enabled, Disabled, Unloc | SecurityEvent.EventData has "AttributeLDAPDisplayName"  \|  SecurityEvent.EventData has "AttributeValue"  \|  SecurityEvent.EventData has "OperationType"  \|  SecurityEvent.EventID == "5136" | [TM004_OBJECTEnabledDisabledUnlockedOrPasswordResetOfATierLevelObje.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM004_OBJECTEnabledDisabledUnlockedOrPasswordResetOfATierLevelObje.yaml) |
+| analytic_rule | PROD (TM005.1) - GPO - Linked, Unlinked, or Enforc | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has ";0]"  \|  SecurityEvent.EventData has ";1]"  \|  SecurityEvent.EventData has ";2]"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.LastThreeChars in ";0,;1,;2"  \|  _Computed.ObjectName has "Domain Controllers"  \|  _Computed.ObjectName has "Tier 0"  \|  _Computed.ObjectName has "Tier 1"  \|  _Computed.ObjectName has "Tier 2"  \|  _Computed.ObjectName has "Tier Model Administration"  \|  _Computed.ObjectName has "Tier Model Computer Quarantine" | [TM005_GPOLinkedUnlinkedOrEnforcedAtTierLevelOU.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM005_GPOLinkedUnlinkedOrEnforcedAtTierLevelOU.yaml) |
+| analytic_rule | PROD (TM006.1) - ACL - Modified at Tier Level OU | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.ObjectName has "Domain Controllers"  \|  _Computed.ObjectName has "Tier 0"  \|  _Computed.ObjectName has "Tier 1"  \|  _Computed.ObjectName has "Tier 2"  \|  _Computed.ObjectName has "Tier Model Administration"  \|  _Computed.ObjectName has "Tier Model Computer Quarantine" | [TM006_ACLModifiedAtTierLevelOU.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM006_ACLModifiedAtTierLevelOU.yaml) |
+| analytic_rule | PROD (TM007.1) - OU - Created or Deleted at Tier L | SecurityEvent.EventID in "5137,5141"  \|  _Computed.ObjectName has "Domain Controllers"  \|  _Computed.ObjectName has "Tier 0"  \|  _Computed.ObjectName has "Tier 1"  \|  _Computed.ObjectName has "Tier 2"  \|  _Computed.ObjectName has "Tier Model Administration"  \|  _Computed.ObjectName has "Tier Model Computer Quarantine" | [TM007_OUCreatedOrDeletedAtTierLevel.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM007_OUCreatedOrDeletedAtTierLevel.yaml) |
+| analytic_rule | PROD (TM008.1) - GPO - Linked, Unlinked, or Enforc | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has ";0]"  \|  SecurityEvent.EventData has ";1]"  \|  SecurityEvent.EventData has ";2]"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.LastThreeChars in ";0,;1,;2"  \|  _Computed.ObjectName startswith "DC="  \|  _Computed.ObjectName startswith "dc=" | [TM008_GPOLinkedUnlinkedOrEnforcedAtRootOfDomain.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM008_GPOLinkedUnlinkedOrEnforcedAtRootOfDomain.yaml) |
+| analytic_rule | PROD (TM009.1) - ACL - Modified at Root of the Dom | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.ObjectName startswith "DC="  \|  _Computed.ObjectName startswith "dc=" | [TM009_ACLModifiedAtRootOfTheDomain.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM009_ACLModifiedAtRootOfTheDomain.yaml) |
+| analytic_rule | PROD (TM010.1) - BITLOCKER - Stored Bitlocker Reco | SecurityEvent.EventID == "5137"  \|  _Computed.ObjectClass has "msFVE-RecoveryInformation"  \|  _Computed.ObjectFullName has "Domain Controllers"  \|  _Computed.ObjectFullName has "Tier 0"  \|  _Computed.ObjectFullName has "Tier 1"  \|  _Computed.ObjectFullName has "Tier Model Administration"  \|  _Computed.ObjectFullName has "Tier Model Computer Quarantine" | [TM010_BITLOCKERStoredBitlockerRecoveryKeyToTierLevelComputerObject.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM010_BITLOCKERStoredBitlockerRecoveryKeyToTierLevelComputerObject.yaml) |
+| analytic_rule | PROD (TM011.1) - LAPS - Tier Level Computer Object | SecurityEvent.AccountType == "User"  \|  SecurityEvent.EventID == "5136"  \|  _Computed.AttributeLDAP has "msLAPS-PasswordExpirationTime"  \|  _Computed.ObjectName_e has "Domain Controllers"  \|  _Computed.ObjectName_e has "Tier 0"  \|  _Computed.ObjectName_e has "Tier 1"  \|  _Computed.ObjectName_e has "Tier Model Administration"  \|  _Computed.ObjectName_e has "Tier Model Computer Quarantine" | [TM011_LAPSTierLevelComputerObjectLAPSPasswordExpirationTimeSetManu.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM011_LAPSTierLevelComputerObjectLAPSPasswordExpirationTimeSetManu.yaml) |
+| analytic_rule | PROD (TM012.1) - GPO - Enforced Outside of Tier Mo | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has ";0]"  \|  SecurityEvent.EventData has ";1]"  \|  SecurityEvent.EventData has ";2]"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.AttributeValueDescription == "Enforced"  \|  _Computed.LastThreeChars in ";0,;1,;2" | [TM012_GPOEnforcedOutsideOfTierModel.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM012_GPOEnforcedOutsideOfTierModel.yaml) |
+| analytic_rule | PROD (TM013.1) - OU - Block Inheritance was Enable | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.AttributeValue in "0,1" | [TM013_OUBlockInheritanceWasEnabledOnAnOU.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM013_OUBlockInheritanceWasEnabledOnAnOU.yaml) |
+| analytic_rule | PROD (TM014.1) - GPO - Linked, Unlinked, or Enforc | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has ";0]"  \|  SecurityEvent.EventData has ";1]"  \|  SecurityEvent.EventData has ";2]"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136"  \|  _Computed.LastThreeChars in ";0,;1,;2" | [TM014_GPOLinkedUnlinkedOrEnforcedAtTheADSiteLevel.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM014_GPOLinkedUnlinkedOrEnforcedAtTheADSiteLevel.yaml) |
+| analytic_rule | PROD (TM015.1) - ACL - Modified at KRBTGT or Admin | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "<Data Name="  \|  SecurityEvent.EventID == "5136" | [TM015_ACLModifiedAtKRBTGTOrAdminSDHolderObjectLevel.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM015_ACLModifiedAtKRBTGTOrAdminSDHolderObjectLevel.yaml) |
+| analytic_rule | PROD (TM016.1) - GROUP - Added to Well-Known or Ti | SecurityEvent.EventID == "5136"  \|  _Computed.EventData has "OperationType"  \|  _Computed.GroupName has "Tier 0"  \|  _Computed.GroupName has "Tier 1"  \|  _Computed.GroupName has "Tier 2"  \|  _Computed.ObjectName_e has "Tier 0"  \|  _Computed.ObjectName_e has "Tier 1"  \|  _Computed.ObjectName_e has "Tier 2" | [TM016_GROUPAddedToWellKnownOrTierModelGroup.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM016_GROUPAddedToWellKnownOrTierModelGroup.yaml) |
+| analytic_rule | PROD (TM017.1) - GROUP - Tier 0 Added to Allow ROD | SecurityEvent.Activity has "modified"  \|  SecurityEvent.EventData has "OperationType"  \|  SecurityEvent.EventData matchesregex "(?i)CN=Allowed RODC Password Replication Group,CN=Users"  \|  SecurityEvent.EventID == "5136"  \|  _Computed.ObjectName_e has "Tier 0"  \|  _Computed.ObjectName_e has "Tier 1"  \|  _Computed.ObjectName_e has "Tier 2"  \|  _Computed.ObjectTier == "Tier 0" | [TM017_GROUPTier0AddedToAllowRODCPasswordReplicationGroup.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM017_GROUPTier0AddedToAllowRODCPasswordReplicationGroup.yaml) |
+| analytic_rule | PROD (TM018.1) - DOMAIN - Child Domain promoted wi | SecurityEvent.EventData has "CN=Partitions,CN=Configuration"  \|  SecurityEvent.EventID == "5137" | [TM018_DOMAINChildDomainPromotedWithinTheForest.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM018_DOMAINChildDomainPromotedWithinTheForest.yaml) |
+| analytic_rule | PROD (TM019.1) - TRUST - A new AD Trust has been e | SecurityEvent.EventData has "CN=System"  \|  SecurityEvent.EventID == "5137" | [TM019_TRUSTANewADTrustHasBeenEstablished.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Analytic%20Rules/TM019_TRUSTANewADTrustHasBeenEstablished.yaml) |
+| workbook | MicrosoftADTierModel | SecurityIncident.Severity in "High,Informational,Low,Medium"  \|  _Computed.Analytic_Name startswith "PROD (TM" | [MicrosoftADTierModel.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/Workbooks/MicrosoftADTierModel.json) |
 
 ### Microsoft Business Applications
 
@@ -3984,6 +4054,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | analytic_rule | MFA Fatigue (OKTA) | _Computed.totalattempts == "0" | [MFAFatigue.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Analytic%20Rules/MFAFatigue.yaml) |
+| analytic_rule | User Session Impersonation(Okta) | _Computed.TargetUser_alternateId != "unknown" | [UserSessionImpersonation.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Analytic%20Rules/UserSessionImpersonation.yaml) |
 
 ### Onapsis Platform
 
@@ -4014,6 +4085,12 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | workbook | PCIDSSCompliance | AzureMetrics.MetricName == "DataProcessed"  \|  SecurityEvent.Activity has "privileged"  \|  SecurityEvent.Activity has_any "An account failed to log on"  \|  SecurityEvent.SubjectUserName !has "$" | [PCIDSSCompliance.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PCI%20DSS%20Compliance/Workbooks/PCIDSSCompliance.json) |
+
+### PRODAFT USTA - Account Takeover Prevention
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| analytic_rule | PRODAFT USTA - Compromised credential used in succ | SigninLogs.ResultType == "0" | [CompromisedCredentialUsedInSignin.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PRODAFT%20USTA%20-%20Account%20Takeover%20Prevention/Analytic%20Rules/CompromisedCredentialUsedInSignin.yaml) |
 
 ### Palo Alto - XDR (Cortex)
 
@@ -4146,27 +4223,26 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
-| analytic_rule | BTP - Build Work Zone unauthorized access and role | _Computed.LogMessage contains "All roles"  \|  _Computed.LogMessage contains "All roles for providerId"  \|  _Computed.LogMessage contains "All users"  \|  _Computed.LogMessage contains "All users for providerId"  \|  _Computed.LogMessage contains "Unauthorized access"  \|  _Computed.LogMessage contains "Unauthorized access to the oData service"  \|  _Computed.LogMessage contains "assignments were removed"  \|  _Computed.LogMessage contains "deleted"  \|  _Computed.LogMessage has_any "Unauthorized access to the oData service" | [BTP - Build Work Zone unauthorized access and role tampering.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Build%20Work%20Zone%20unauthorized%20access%20and%20role%20tampering.yaml) |
-| analytic_rule | BTP - Cloud Identity Service application configura | _Computed.action in "create,delete,update"  \|  _Computed.objectType == "ssoDomain"  \|  _Computed.state == "successful" | [BTP - Cloud Identity Service application configuration monitor.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Identity%20Service%20application%20configuration%20monitor.yaml) |
-| analytic_rule | BTP - Cloud Integration JDBC data source changes | _Computed.action in "PasswordDelete,PasswordStore"  \|  _Computed.objectType == "Data Source" | [BTP - Cloud Integration JDBC data source changes.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20JDBC%20data%20source%20changes.yaml) |
-| analytic_rule | BTP - Cloud Integration access policy tampering | _Computed.action in "Change,Create,Delete"  \|  _Computed.objectType in "Access Policy,Artifact Reference" | [BTP - Cloud Integration access policy tampering.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20access%20policy%20tampering.yaml) |
-| analytic_rule | BTP - Cloud Integration artifact deployment | _Computed.Actor has "@"  \|  _Computed.objectType in "Deployment,Undeployment" | [BTP - Cloud Integration artifact deployment.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20artifact%20deployment.yaml) |
-| analytic_rule | BTP - Cloud Integration package import or transpor | _Computed.action contains "Import"  \|  _Computed.action contains "Transport"  \|  _Computed.action endswith "Completed"  \|  _Computed.action endswith "Started" | [BTP - Cloud Integration package import or transport.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20package%20import%20or%20transport.yaml) |
-| analytic_rule | BTP - Cloud Integration tampering with security ma | _Computed.action in "Change,Create,Delete,PasswordDelete,PasswordStore,PasswordUpdate,Update"  \|  _Computed.objectType == "Credential"  \|  _Computed.objectType != "Credential" | [BTP - Cloud Integration tampering with security material.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20tampering%20with%20security%20material.yaml) |
-| analytic_rule | BTP - Malware detected in BAS dev space | _Computed.Message has "malware" | [BTP - Malware detected in BAS dev space.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Malware%20detected%20in%20BAS%20dev%20space.yaml) |
-| analytic_rule | BTP - Mass user deletion in SAP Cloud Identity Ser | _Computed.action == "delete"  \|  _Computed.objectType == "authorization" | [BTP - Mass user deletion in Cloud Identity Service.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Mass%20user%20deletion%20in%20Cloud%20Identity%20Service.yaml) |
-| analytic_rule | BTP - Trust and authorization Identity Provider mo | _Computed.CrudType in "CREATE,DELETE,UPDATE" | [BTP - Trust and authorization Identity Provider monitor.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Trust%20and%20authorization%20Identity%20Provider%20monitor.yaml) |
-| analytic_rule | BTP - User added to Cloud Identity Service privile | _Computed.action == "grantPermissions"  \|  _Computed.changedAttribute == "authorizations"  \|  _Computed.state == "successful" | [BTP - User added to privileged Administrators list.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20User%20added%20to%20privileged%20Administrators%20list.yaml) |
+| analytic_rule | SAP BTP - Build Work Zone unauthorized access and  | _Computed.LogMessage contains "All roles"  \|  _Computed.LogMessage contains "All roles for providerId"  \|  _Computed.LogMessage contains "All users"  \|  _Computed.LogMessage contains "All users for providerId"  \|  _Computed.LogMessage contains "Unauthorized access"  \|  _Computed.LogMessage contains "Unauthorized access to the oData service"  \|  _Computed.LogMessage contains "assignments were removed"  \|  _Computed.LogMessage contains "deleted"  \|  _Computed.LogMessage has_any "Unauthorized access to the oData service" | [BTP - Build Work Zone unauthorized access and role tampering.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Build%20Work%20Zone%20unauthorized%20access%20and%20role%20tampering.yaml) |
+| analytic_rule | SAP BTP - Cloud Identity Service application confi | _Computed.action in "create,delete,update"  \|  _Computed.objectType == "ssoDomain"  \|  _Computed.state == "successful" | [BTP - Cloud Identity Service application configuration monitor.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Identity%20Service%20application%20configuration%20monitor.yaml) |
+| analytic_rule | SAP BTP - Cloud Integration JDBC data source chang | _Computed.action in "PasswordDelete,PasswordStore"  \|  _Computed.objectType == "Data Source" | [BTP - Cloud Integration JDBC data source changes.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20JDBC%20data%20source%20changes.yaml) |
+| analytic_rule | SAP BTP - Cloud Integration access policy tamperin | _Computed.action in "Change,Create,Delete"  \|  _Computed.objectType in "Access Policy,Artifact Reference" | [BTP - Cloud Integration access policy tampering.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20access%20policy%20tampering.yaml) |
+| analytic_rule | SAP BTP - Cloud Integration artifact deployment | _Computed.Actor has "@"  \|  _Computed.objectType in "Deployment,Undeployment" | [BTP - Cloud Integration artifact deployment.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20artifact%20deployment.yaml) |
+| analytic_rule | SAP BTP - Cloud Integration package import or tran | _Computed.action contains "Import"  \|  _Computed.action contains "Transport"  \|  _Computed.action endswith "Completed"  \|  _Computed.action endswith "Started" | [BTP - Cloud Integration package import or transport.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20package%20import%20or%20transport.yaml) |
+| analytic_rule | SAP BTP - Cloud Integration tampering with securit | _Computed.action in "Change,Create,Delete,PasswordDelete,PasswordStore,PasswordUpdate,Update"  \|  _Computed.objectType == "Credential"  \|  _Computed.objectType != "Credential" | [BTP - Cloud Integration tampering with security material.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Cloud%20Integration%20tampering%20with%20security%20material.yaml) |
+| analytic_rule | SAP BTP - Mass user deletion in Cloud Identity Ser | _Computed.action == "delete"  \|  _Computed.objectType == "authorization" | [BTP - Mass user deletion in Cloud Identity Service.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Mass%20user%20deletion%20in%20Cloud%20Identity%20Service.yaml) |
+| analytic_rule | SAP BTP - Trust and authorization Identity Provide | _Computed.CrudType in "CREATE,DELETE,UPDATE" | [BTP - Trust and authorization Identity Provider monitor.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Trust%20and%20authorization%20Identity%20Provider%20monitor.yaml) |
+| analytic_rule | SAP BTP - User added to Cloud Identity Service pri | _Computed.action == "grantPermissions"  \|  _Computed.changedAttribute == "authorizations"  \|  _Computed.state == "successful" | [BTP - User added to privileged Administrators list.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20User%20added%20to%20privileged%20Administrators%20list.yaml) |
 | workbook | SAPBTPActivity | SecurityAlert.Entities has "SAP BTP" | [SAPBTPActivity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Workbooks/SAPBTPActivity.json) |
 
 ### SAP LogServ
 
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
-| analytic_rule | SAP LogServ - HANA DB - Assign Admin Authorization | _Computed.audit_action__col_13 =~ "GRANT PRIVILEGE"  \|  _Computed.privilege_name__col_17 contains "ADMIN" | [SAPLogServ-AssignAdminAuthorizations.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AssignAdminAuthorizations.yaml) |
-| analytic_rule | SAP LogServ - HANA DB - Audit Trail Policy Changes | _Computed.audit_action__col_13 contains "AUDIT POLICY" | [SAPLogServ-AuditTrailPolicyChanges.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AuditTrailPolicyChanges.yaml) |
-| analytic_rule | SAP LogServ - HANA DB - Deactivation of Audit Trai | _Computed.audit_action__col_13 contains "AUDIT CONFIGURATION"  \|  _Computed.new_value__col_26 =~ "false"  \|  _Computed.parameter__col_24 =~ "global_auditing_state" | [SAPLogServ-DeactivationofAuditTrail.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-DeactivationofAuditTrail.yaml) |
-| analytic_rule | SAP LogServ - HANA DB - User Admin actions | _Computed.audit_action__col_13 in~ "ALTER USER,CREATE USER,DROP SCHEMA,DROP USER" | [SAPLogServ-UserAdminActions.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-UserAdminActions.yaml) |
+| analytic_rule | SAP LogServ - HANA DB - Assign Admin Authorization | Syslog.CollectorHostName == "SAPLogServ"  \|  Syslog.SourceSystem == "HANADB"  \|  _Computed.audit_action__col_13 =~ "GRANT PRIVILEGE"  \|  _Computed.privilege_name__col_17 contains "ADMIN" | [SAPLogServ-AssignAdminAuthorizations.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AssignAdminAuthorizations.yaml) |
+| analytic_rule | SAP LogServ - HANA DB - Audit Trail Policy Changes | Syslog.CollectorHostName == "SAPLogServ"  \|  Syslog.SourceSystem == "HANADB"  \|  _Computed.audit_action__col_13 contains "AUDIT POLICY" | [SAPLogServ-AuditTrailPolicyChanges.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AuditTrailPolicyChanges.yaml) |
+| analytic_rule | SAP LogServ - HANA DB - Deactivation of Audit Trai | Syslog.CollectorHostName == "SAPLogServ"  \|  Syslog.SourceSystem == "HANADB"  \|  _Computed.audit_action__col_13 contains "AUDIT CONFIGURATION"  \|  _Computed.new_value__col_26 =~ "false"  \|  _Computed.parameter__col_24 =~ "global_auditing_state" | [SAPLogServ-DeactivationofAuditTrail.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-DeactivationofAuditTrail.yaml) |
+| analytic_rule | SAP LogServ - HANA DB - User Admin actions | Syslog.CollectorHostName == "SAPLogServ"  \|  Syslog.SourceSystem == "HANADB"  \|  _Computed.audit_action__col_13 in~ "ALTER USER,CREATE USER,DROP SCHEMA,DROP USER" | [SAPLogServ-UserAdminActions.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-UserAdminActions.yaml) |
 
 ### SOC Handbook
 
@@ -4179,7 +4255,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | workbook | AzureSentinelSecurityAlerts | _Computed.Entity_Type in "SrvSvcSessionEntry,account,alerts,azure-resource,cloud-application,dns,file,filehash,host,host-logon-session,ip,malware,network-connection,process,registry-key,registry-value,security-group,url" | [AzureSentinelSecurityAlerts.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/AzureSentinelSecurityAlerts.json) |
 | workbook | IncidentOverview | SecurityAlert.ProductName == "Azure Sentinel"  \|  SecurityIncident.ModifiedBy != "Incident created from alert"  \|  _Computed.Field in "AlertNames,AlertsCount,AlertsType,Bookmarks,Classification,ClassificationComment,ClassificationReason,IncidentCreated,Labels,Owner,Products,Severity,Status,Title" | [IncidentOverview.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/IncidentOverview.json) |
 | workbook | InvestigationInsights | AuditLogs.AdditionalDetails contains "fraud"  \|  AzureActivity.OperationName == "Consent to application"  \|  AzureActivity.OperationName =~ "Disable Strong Authentication"  \|  AzureActivity.OperationName contains "password"  \|  DnsEvents.ResultCode == "0"  \|  OfficeActivity.Operation in~ "New-InboxRule,Set-Mailbox"  \|  SecurityBaseline.AnalyzeResult == "Failed"  \|  SecurityEvent.AccountType != "Computer"  \|  SecurityEvent.AccountType != "Machine"  \|  SecurityEvent.ErrorCode == "500121"  \|  SecurityEvent.EventID in "1102,4624,4625,4688,4719,4720,4723,4724,4768,4771,4776"  \|  SecurityEvent.TargetAccount !contains "NT AUTHORITY"  \|  SecurityEvent.TargetAccount !endswith "$"  \|  SigninLogs.AppDisplayName == "Windows Sign In"  \|  Update.UpdateState != "Installed"  \|  _Computed.Field in "AlertNames,AlertsCount,AlertsType,Bookmarks,Comments,IncidentCreated,Labels,Owner,Products,Severity,Status,Title"  \|  _Computed.FieldType in~ "ForwardTo,ForwardingSmtpAddress"  \|  _Computed.ParamType =~ "ForwardTo"  \|  _Computed.Severity in "High,Informational,Medium"  \|  _Computed.Type in "account,host,ip,url" | [InvestigationInsights.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/InvestigationInsights.json) |
-| workbook | MITREAttack | _Computed.Tactic in "Collection,CredentialAccess,DefenseEvasion,Discovery,Execution,Exfiltration,Impact,InitialAccess,LateralMovement,Persistence,PrivilegeEscalation,Reconnaissance" | [MITREAttack.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/MITREAttack.json) |
+| workbook | MITREAttack | _Computed.Tactic in "Collection,CredentialAccess,DefenseEvasion,DefenseImpairment,Discovery,Execution,Exfiltration,Impact,InitialAccess,LateralMovement,Persistence,PrivilegeEscalation,Reconnaissance,ResourceDevelopment,Stealth" | [MITREAttack.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/MITREAttack.json) |
 | workbook | SecurityOperationsEfficiency | SecurityIncident.ModifiedBy !in "Alert Grouping,Fusion,Incident created from alert" | [SecurityOperationsEfficiency.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/SecurityOperationsEfficiency.json) |
 | workbook | SecurityStatus | _Computed.Location == "OnPremise" | [SecurityStatus.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/SecurityStatus.json) |
 | workbook | SentinelCentral | SecurityAlert.DisplayName has "Incident"  \|  SecurityAlert.DisplayName has "Investigation"  \|  SecurityAlert.DisplayName has "Security operations efficiency" | [SentinelCentral.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Handbook/Workbooks/SentinelCentral.json) |
@@ -4387,6 +4463,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | Bulk role assignments performed by the same actor  | SigninLogs.OperationName =~ "Add member to role." | [MultipleDataSources/BulkRoleAssignmentsInShortWindow.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/BulkRoleAssignmentsInShortWindow.yaml) |
 | hunting_query | Check critical ports opened to the entire internet | AzureDiagnostics.Category == "NetworkSecurityGroupEvent"  \|  AzureDiagnostics.conditions_destinationPortRange_s in "0-65535,137,137-137,138,138-138,139,139-139,1521,1521-1521,161,161-161,20,20-20,21,21-21,22,22-22,2483,2483-2483,25,25-25,27017,27017-27017,3020,3020-3020,3306,3306-3306,3389,3389-3389,389,389-389,445,445-445,53,53-53,5432,5432-5432"  \|  AzureDiagnostics.conditions_sourceIP_s in "0.0.0.0/0,0.0.0.0/0,0.0.0.0/0"  \|  AzureDiagnostics.conditions_sourcePortRange_s == "0-65535"  \|  AzureDiagnostics.direction_s == "In" | [AzureDiagnostics/CriticalPortsOpened.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AzureDiagnostics/CriticalPortsOpened.yaml) |
 | hunting_query | Conditional Access policy disabled or deleted | AuditLogs.OperationName in~ "Delete conditional access policy,Update conditional access policy" | [AuditLogs/ConditionalAccessPolicyDisabledOrDeleted.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/ConditionalAccessPolicyDisabledOrDeleted.yaml) |
+| hunting_query | Conditional Access policy exclusion added | AuditLogs.OperationName =~ "Update conditional access policy"  \|  _Computed.NewValue has "exclude"  \|  _Computed.OldValue has "exclude"  \|  _Computed.PropName !~ "State"  \|  _Computed.PropName has "Condition" | [AuditLogs/ConditionalAccessPolicyExclusionAdded.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/ConditionalAccessPolicyExclusionAdded.yaml) |
 | hunting_query | Consent to Application discovery | AuditLogs.OperationName == "Consent to application"  \|  AuditLogs.OperationName != "Consent to application"  \|  _Computed.scope !contains "openid"  \|  _Computed.scope !in "user_impersonation,User.Read" | [AuditLogs/ConsentToApplicationDiscovery.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/ConsentToApplicationDiscovery.yaml) |
 | hunting_query | Detect beacon like pattern based on repetitive tim | WireData.RemotePortNumber != "0" | [WireData/WireDataBeacon.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/WireData/WireDataBeacon.yaml) |
 | hunting_query | Device code authentication from unseen autonomous  | SigninLogs.AuthenticationDetails has "deviceCode"  \|  SigninLogs.ResultType == "0" | [MultipleDataSources/DeviceCodeSignInFromUnseenASN.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/DeviceCodeSignInFromUnseenASN.yaml) |
@@ -4430,6 +4507,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | MDI_Objects_Moving_OUs | IdentityDirectoryEvents.ActionType == "Account Path changed" | [Microsoft 365 Defender/Discovery/MDI_Objects_Moving_OUs.YAML](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/Microsoft%20365%20Defender/Discovery/MDI_Objects_Moving_OUs.YAML) |
 | hunting_query | MFA Spamming | SigninLogs.AuthenticationRequirement == "multiFactorAuthentication"  \|  _Computed.AuthResult in "MFA denied; user declined the authentication,MFA denied; user did not respond to mobile app notification,MFA successfully completed" | [SigninLogs/MFASpamming.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/SigninLogs/MFASpamming.yaml) |
 | hunting_query | MFA method registered from an IP address not seen  | SigninLogs.OperationName =~ "User registered security info" | [MultipleDataSources/MFARegistrationFromUnseenIP.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/MFARegistrationFromUnseenIP.yaml) |
+| hunting_query | Member or owner added to a role-assignable group w | AuditLogs.OperationName in~ "Add group,Add member to group,Add owner to group" | [AuditLogs/MemberAddedToNewRoleAssignableGroup.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/MemberAddedToNewRoleAssignableGroup.yaml) |
 | hunting_query | Multiple large queries made by user | LAQueryLogs.ResponseRowCount == "10001" | [LAQueryLogs/MultipleLargeQueriesByUser.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/LAQueryLogs/MultipleLargeQueriesByUser.yaml) |
 | hunting_query | New ServicePrincipal running queries | LAQueryLogs.AADEmail !contains "@"  \|  LAQueryLogs.RequestClientApp != "AppAnalytics"  \|  LAQueryLogs.ResponseCode == "200" | [LAQueryLogs/NewServicePrincipalRunningQueries.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/LAQueryLogs/NewServicePrincipalRunningQueries.yaml) |
 | hunting_query | New client running queries | LAQueryLogs.ResponseCode == "200" | [LAQueryLogs/NewClientRunningQueries.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/LAQueryLogs/NewClientRunningQueries.yaml) |
@@ -4448,6 +4526,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | Rare User Agent strings | W3CIISLog.cIP !startswith "127."  \|  W3CIISLog.cIP !startswith "::"  \|  W3CIISLog.cIP !startswith "fe80"  \|  W3CIISLog.csUserAgent !in~ "-,MSRPC" | [W3CIISLog/RareUserAgentStrings.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/W3CIISLog/RareUserAgentStrings.yaml) |
 | hunting_query | RareDNSLookupWithDataTransfer | CommonSecurityLog.DeviceVendor == "Palo Alto Networks" | [MultipleDataSources/RareDNSLookupWithDataTransfer.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/RareDNSLookupWithDataTransfer.yaml) |
 | hunting_query | Raw IP Address Used as URL Domain | EmailEvents.DeliveryAction == "Delivered"  \|  EmailEvents.EmailDirection == "Inbound" | [Microsoft 365 Defender/Email and Collaboration Queries/Phish/IP-as-URL-Domain-Detection.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/Microsoft%20365%20Defender/Email%20and%20Collaboration%20Queries/Phish/IP-as-URL-Domain-Detection.yaml) |
+| hunting_query | Role-assignable group created | AuditLogs.OperationName =~ "Add group"  \|  _Computed.NewValue has "isAssignableToRole"  \|  _Computed.NewValue has "true"  \|  _Computed.PropName has "IsAssignableToRole" | [AuditLogs/RoleAssignableGroupCreated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/RoleAssignableGroupCreated.yaml) |
 | hunting_query | Same IP address with multiple csUserAgent | W3CIISLog.cIP != "::1"  \|  W3CIISLog.cIP !startswith "127."  \|  W3CIISLog.cIP !startswith "192.168."  \|  W3CIISLog.cIP !startswith "::"  \|  W3CIISLog.cIP !startswith "fe80"  \|  W3CIISLog.scStatus !startswith "20"  \|  W3CIISLog.scStatus !startswith "30" | [W3CIISLog/ClientIPwithManyUserAgents.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/W3CIISLog/ClientIPwithManyUserAgents.yaml) |
 | hunting_query | Service principal credential added by user granted | AuditLogs.OperationName in~ "Add member to role,Add member to role.,Add service principal credentials,Update application - Certificates and secrets management" | [AuditLogs/FreshRoleGrantedActorSpCredentialAdded.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/FreshRoleGrantedActorSpCredentialAdded.yaml) |
 | hunting_query | Service principal credential addition by non-histo | AuditLogs.OperationName in~ "Add service principal credentials,Update application - Certificates and secrets management" | [AuditLogs/ServicePrincipalCredentialAdditionByNonHistoricalActor.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AuditLogs/ServicePrincipalCredentialAdditionByNonHistoricalActor.yaml) |
@@ -4506,6 +4585,17 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | Suspicious crytocurrency mining related threat act | Syslog.Facility == "user"  \|  Syslog.SyslogMessage has "AUOMS_EXECVE" | [CryptoThreatActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Hunting%20Queries/CryptoThreatActivity.yaml) |
 | workbook | LinuxMachines | _Computed.SeverityLevel in "alert,crit,emerg" | [LinuxMachines.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Workbooks/LinuxMachines.json) |
 
+### Tailscale (CCF)
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| analytic_rule | Tailscale: OAuth client or API key created with wr | _Computed.Scopes contains ":write" | [TailscaleOAuthClientCreatedWithWriteScopes.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Analytic%20Rules/TailscaleOAuthClientCreatedWithWriteScopes.yaml) |
+| hunting_query | Tailscale Premium: Network flows outside business  | _Computed.Dow in "0,6" | [TailscalePremiumOffHoursFlows.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Hunting%20Queries/TailscalePremiumOffHoursFlows.yaml) |
+| hunting_query | Tailscale: Off-hours configuration changes | _Computed.DayOfWeek in "0,6" | [TailscaleOffHoursConfigChanges.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Hunting%20Queries/TailscaleOffHoursConfigChanges.yaml) |
+| hunting_query | Tailscale: Split-DNS per-domain change history | _Computed.Change != "unchanged" | [TailscaleSplitDnsPerDomainChanges.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Hunting%20Queries/TailscaleSplitDnsPerDomainChanges.yaml) |
+| workbook | TailscalePremiumOperations | _Computed.DayOfWeek in "0,6"  \|  _Computed.ExpirySeconds == "0"  \|  _Computed.TargetProperty has_any "DNS_NAMESERVERS"  \|  _Computed.TargetType == "NODE" | [TailscalePremiumOperations.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Workbooks/TailscalePremiumOperations.json) |
+| workbook | TailscaleStandardOperations | _Computed.DayOfWeek in "0,6"  \|  _Computed.ExpirySeconds == "0"  \|  _Computed.TargetProperty has_any "DNS_NAMESERVERS"  \|  _Computed.TargetType == "NODE" | [TailscaleStandardOperations.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tailscale%20%28CCF%29/Workbooks/TailscaleStandardOperations.json) |
+
 ### Tanium
 
 | Type | Name | Filter Fields | File |
@@ -4543,32 +4633,32 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | analytic_rule | TI Map Domain Entity to DeviceNetworkEvents | DeviceNetworkEvents.ActionType !has "ConnectionFailed"  \|  _Computed.IndicatorType == "domain-name" | [DomainEntity_DeviceNetworkEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_DeviceNetworkEvents_Updated.yaml) |
+| analytic_rule | TI Map Domain entity to EmailUrlInfo | EmailEvents.DeliveryAction !has "Blocked" | [DomainEntity_EmailUrlInfo_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_EmailUrlInfo_Updated.yaml) |
+| analytic_rule | TI Map Domain entity to PaloAlto | CommonSecurityLog.DeviceAction !~ "block-url"  \|  CommonSecurityLog.DeviceEventClassID =~ "url"  \|  CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks" | [DomainEntity_PaloAlto.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_PaloAlto.yaml) |
+| analytic_rule | TI Map Domain entity to PaloAlto CommonSecurityLog | CommonSecurityLog.DeviceEventClassID =~ "url" | [DomainEntity_CommonSecurityLog.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_CommonSecurityLog.yaml) |
+| analytic_rule | TI Map Email entity to AzureActivity | _Computed.IndicatorType == "email-addr" | [EmailEntity_AzureActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_AzureActivity.yaml) |
+| analytic_rule | TI Map Email entity to Cloud App Events | _Computed.IndicatorType == "email-addr" | [EmailEntity_CloudAppEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_CloudAppEvents_Updated.yaml) |
+| analytic_rule | TI Map Email entity to OfficeActivity | _Computed.IndicatorType == "email-addr" | [EmailEntity_OfficeActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_OfficeActivity.yaml) |
+| analytic_rule | TI Map Email entity to PaloAlto CommonSecurityLog | CommonSecurityLog.ApplicationProtocol in "pop3,smtp"  \|  CommonSecurityLog.DeviceEventClassID == "wildfire"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks"  \|  _Computed.IndicatorType == "email-addr" | [EmailEntity_PaloAlto.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_PaloAlto.yaml) |
+| analytic_rule | TI Map Email entity to SecurityAlert | _Computed.Entitytype =~ "account"  \|  _Computed.IndicatorType == "email-addr" | [EmailEntity_SecurityAlert.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SecurityAlert.yaml) |
+| analytic_rule | TI Map Email entity to SecurityEvent | _Computed.IndicatorType == "email-addr" | [EmailEntity_SecurityEvent.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SecurityEvent.yaml) |
+| analytic_rule | TI Map Email entity to SigninLogs | _Computed.IndicatorType == "email-addr" | [EmailEntity_SigninLogs.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SigninLogs.yaml) |
+| analytic_rule | TI Map File Hash to DeviceFileEvents Event | _Computed.IndicatorType == "file" | [FileHashEntity_DeviceFileEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/FileHashEntity_DeviceFileEvents_Updated.yaml) |
+| analytic_rule | TI Map File Hash to Security Event | _Computed.IndicatorType == "file" | [FileHashEntity_SecurityEvent.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/FileHashEntity_SecurityEvent.yaml) |
 | analytic_rule | TI Map IP Entity to Azure SQL Security Audit Event | AzureDiagnostics.Category == "SQLSecurityAuditEvents"  \|  AzureDiagnostics.ResourceProvider == "MICROSOFT.SQL" | [IPEntity_AzureSQL.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_AzureSQL.yaml) |
 | analytic_rule | TI Map IP Entity to DeviceNetworkEvents | DeviceNetworkEvents.ActionType !has "ConnectionFailed"  \|  _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [IPEntity_DeviceNetworkEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_DeviceNetworkEvents_Updated.yaml) |
 | analytic_rule | TI Map IP Entity to DnsEvents | DnsEvents.SubType =~ "LookupQuery" | [IPEntity_DnsEvents.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_DnsEvents.yaml) |
 | analytic_rule | TI Map IP Entity to Duo Security | _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [IPEntity_DuoSecurity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_DuoSecurity.yaml) |
 | analytic_rule | TI Map IP Entity to W3CIISLog | W3CIISLog.cIP !startswith "127."  \|  W3CIISLog.cIP !startswith "::"  \|  W3CIISLog.cIP !startswith "fe80" | [IPEntity_W3CIISLog.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_W3CIISLog.yaml) |
+| analytic_rule | TI Map IP entity to Azure Key Vault logs | AzureDiagnostics.ResourceType =~ "VAULTS" | [IPEntity_AzureKeyVault.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_AzureKeyVault.yaml) |
+| analytic_rule | TI Map IP entity to GitHub_CL | _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [Threat Intel Matches to GitHub Audit Logs.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/Threat%20Intel%20Matches%20to%20GitHub%20Audit%20Logs.yaml) |
+| analytic_rule | TI Map IP entity to Workday(ASimAuditEventLogs) | ASimAuditEventLogs.EventVendor == "Workday"  \|  _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [IPEntity_Workday_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_Workday_Updated.yaml) |
 | analytic_rule | TI Map URL Entity to AuditLogs | _Computed.IndicatorType == "url" | [URLEntity_AuditLogs.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_AuditLogs.yaml) |
 | analytic_rule | TI Map URL Entity to DeviceNetworkEvents | DeviceNetworkEvents.ActionType !has "ConnectionFailed"  \|  _Computed.IndicatorType == "url" | [URLEntity_DeviceNetworkEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_DeviceNetworkEvents_Updated.yaml) |
 | analytic_rule | TI Map URL Entity to PaloAlto Data | CommonSecurityLog.DeviceAction !~ "block-url"  \|  CommonSecurityLog.DeviceEventClassID =~ "url"  \|  CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks"  \|  _Computed.IndicatorType == "url" | [URLEntity_PaloAlto.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_PaloAlto.yaml) |
 | analytic_rule | TI Map URL Entity to SecurityAlert Data | _Computed.IndicatorType == "url" | [URLEntity_SecurityAlerts.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_SecurityAlerts.yaml) |
 | analytic_rule | TI Map URL Entity to Syslog Data | _Computed.IndicatorType == "url" | [URLEntity_Syslog.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_Syslog.yaml) |
-| analytic_rule | TI map Domain entity to EmailUrlInfo | EmailEvents.DeliveryAction !has "Blocked" | [DomainEntity_EmailUrlInfo_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_EmailUrlInfo_Updated.yaml) |
-| analytic_rule | TI map Domain entity to PaloAlto | CommonSecurityLog.DeviceAction !~ "block-url"  \|  CommonSecurityLog.DeviceEventClassID =~ "url"  \|  CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks" | [DomainEntity_PaloAlto.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_PaloAlto.yaml) |
-| analytic_rule | TI map Domain entity to PaloAlto CommonSecurityLog | CommonSecurityLog.DeviceEventClassID =~ "url" | [DomainEntity_CommonSecurityLog.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/DomainEntity_CommonSecurityLog.yaml) |
-| analytic_rule | TI map Email entity to AzureActivity | _Computed.IndicatorType == "email-addr" | [EmailEntity_AzureActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_AzureActivity.yaml) |
-| analytic_rule | TI map Email entity to Cloud App Events | _Computed.IndicatorType == "email-addr" | [EmailEntity_CloudAppEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_CloudAppEvents_Updated.yaml) |
-| analytic_rule | TI map Email entity to OfficeActivity | _Computed.IndicatorType == "email-addr" | [EmailEntity_OfficeActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_OfficeActivity.yaml) |
-| analytic_rule | TI map Email entity to PaloAlto CommonSecurityLog | CommonSecurityLog.ApplicationProtocol in "pop3,smtp"  \|  CommonSecurityLog.DeviceEventClassID == "wildfire"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks"  \|  _Computed.IndicatorType == "email-addr" | [EmailEntity_PaloAlto.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_PaloAlto.yaml) |
-| analytic_rule | TI map Email entity to SecurityAlert | _Computed.Entitytype =~ "account"  \|  _Computed.IndicatorType == "email-addr" | [EmailEntity_SecurityAlert.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SecurityAlert.yaml) |
-| analytic_rule | TI map Email entity to SecurityEvent | _Computed.IndicatorType == "email-addr" | [EmailEntity_SecurityEvent.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SecurityEvent.yaml) |
-| analytic_rule | TI map Email entity to SigninLogs | _Computed.IndicatorType == "email-addr" | [EmailEntity_SigninLogs.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/EmailEntity_SigninLogs.yaml) |
-| analytic_rule | TI map File Hash to DeviceFileEvents Event | _Computed.IndicatorType == "file" | [FileHashEntity_DeviceFileEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/FileHashEntity_DeviceFileEvents_Updated.yaml) |
-| analytic_rule | TI map File Hash to Security Event | _Computed.IndicatorType == "file" | [FileHashEntity_SecurityEvent.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/FileHashEntity_SecurityEvent.yaml) |
-| analytic_rule | TI map IP entity to Azure Key Vault logs | AzureDiagnostics.ResourceType =~ "VAULTS" | [IPEntity_AzureKeyVault.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_AzureKeyVault.yaml) |
-| analytic_rule | TI map IP entity to GitHub_CL | _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [Threat Intel Matches to GitHub Audit Logs.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/Threat%20Intel%20Matches%20to%20GitHub%20Audit%20Logs.yaml) |
-| analytic_rule | TI map IP entity to Workday(ASimAuditEventLogs) | ASimAuditEventLogs.EventVendor == "Workday"  \|  _Computed.IndicatorType in "ipv4-addr,ipv6-addr,network-traffic" | [IPEntity_Workday_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/IPEntity_Workday_Updated.yaml) |
-| analytic_rule | TI map URL entity to Cloud App Events | _Computed.IndicatorType == "url" | [URLEntity_CloudAppEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_CloudAppEvents_Updated.yaml) |
+| analytic_rule | TI Map URL entity to Cloud App Events | _Computed.IndicatorType == "url" | [URLEntity_CloudAppEvents_Updated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Analytic%20Rules/URLEntity_CloudAppEvents_Updated.yaml) |
 | hunting_query | TI Map File Entity to OfficeActivity Event | _Computed.IndicatorType == "file" | [FileEntity_OfficeActivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Hunting%20Queries/FileEntity_OfficeActivity.yaml) |
 | hunting_query | TI Map File Entity to Security Event | SecurityEvent.EventID in "4648,4673,4688,8002"  \|  _Computed.IndicatorType == "file" | [FileEntity_SecurityEvent.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Hunting%20Queries/FileEntity_SecurityEvent.yaml) |
 | hunting_query | TI Map File Entity to Syslog Event | _Computed.IndicatorType == "file" | [FileEntity_Syslog.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Hunting%20Queries/FileEntity_Syslog.yaml) |
@@ -4716,6 +4806,12 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | Possible webshell drop | DeviceFileEvents.ActionType in "FileCreated,FileModified,FileRenamed" | [Possible webshell drop.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Web%20Shells%20Threat%20Protection/Hunting%20Queries/Possible%20webshell%20drop.yaml) |
 | hunting_query | UMWorkerProcess Creating Webshell | DeviceFileEvents.InitiatingProcessFileName == "UMWorkerProcess.exe" | [umworkerprocess-creating-webshell.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Web%20Shells%20Threat%20Protection/Hunting%20Queries/umworkerprocess-creating-webshell.yaml) |
 | hunting_query | Webshell Detection | W3CIISLog.csMethod == "GET"  \|  W3CIISLog.csReferer has "whoami"  \|  W3CIISLog.csUriQuery has "whoami"  \|  W3CIISLog.csUriStem has "whoami" | [PotentialWebshell.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Web%20Shells%20Threat%20Protection/Hunting%20Queries/PotentialWebshell.yaml) |
+
+### Whisper
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| workbook | IncidentEnrichmentAudit | AzureDiagnostics.ResourceProvider == "MICROSOFT.LOGIC"  \|  _Computed.Status in "Failed,Succeeded"  \|  _Computed.WorkflowName has "Whisper" | [IncidentEnrichmentAudit.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Whisper/Workbooks/IncidentEnrichmentAudit.json) |
 
 ### Windows Firewall
 
@@ -4884,7 +4980,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 ## ASIM Parsers with Filter Fields
 
-Total: 121 parsers
+Total: 125 parsers
 
 ### AuditEvent Schema
 
@@ -4912,6 +5008,7 @@ Total: 121 parsers
 | ASimAuthenticationBarracudaWAF | Barracuda WAF | CommonSecurityLog.DeviceProduct in "WAAS,WAF"  \|  CommonSecurityLog.DeviceVendor startswith "Barracuda" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationBarracudaWAF.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationBarracudaWAF.yaml) |
 | ASimAuthenticationCiscoASA | Cisco Adaptive Security Applia | CommonSecurityLog.DeviceProduct == "ASA"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco"  \|  _Computed.TargetUsername == "*****" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoASA.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoASA.yaml) |
 | ASimAuthenticationCiscoDNAC | Cisco DNAC | Syslog.ProcessName == "DNAC"  \|  Syslog.SyslogMessage has "LOGIN_USER_EVENT"  \|  Syslog.SyslogMessage has "LOGOFF_USER_EVENT" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoDNAC.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoDNAC.yaml) |
+| ASimAuthenticationCiscoFTD | Cisco FTD | Syslog.SyslogMessage has "Accepted password"  \|  Syslog.SyslogMessage has "Failed password"  \|  Syslog.SyslogMessage startswith "%FTD-5-199017" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoFTD.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoFTD.yaml) |
 | ASimAuthenticationCiscoIOS | Cisco IOS | Syslog.SyslogMessage has "%SEC_LOGIN-4-LOGIN_FAILED"  \|  Syslog.SyslogMessage has "%SEC_LOGIN-5-LOGIN_SUCCESS"  \|  Syslog.SyslogMessage has "%SYS-6-LOGOUT" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoIOS.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoIOS.yaml) |
 | ASimAuthenticationCiscoISE | Cisco ISE | Syslog.ProcessName has_any "CISE,CSCO" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoISE.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoISE.yaml) |
 | ASimAuthenticationCiscoISEAdministrator | Cisco ISE Administrator | Syslog.ProcessName has "CISE_Administrative_and_Operational_Audit"  \|  Syslog.SyslogMessage has "Administrator-Login" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoISEAdministrator.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoISEAdministrator.yaml) |
@@ -4924,6 +5021,7 @@ Total: 121 parsers
 | ASimAuthenticationPaloAltoCortexDataLake | Palo Alto Cortex Data Lake | CommonSecurityLog.DeviceEventClassID == "AUTH"  \|  CommonSecurityLog.DeviceProduct == "LF"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks"  \|  _Computed.EventMessage has "Invalid Certificate"  \|  _Computed.FieldDeviceCustomNumber1 in "1,2,3" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationPaloAltoCortexDataLake.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationPaloAltoCortexDataLake.yaml) |
 | ASimAuthenticationPaloAltoGlobalProtect | Palo Alto PAN-OS GlobalProtect | CommonSecurityLog.DeviceEventClassID == "GLOBALPROTECT"  \|  CommonSecurityLog.DeviceProduct == "PAN-OS"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks"  \|  _Computed.EventResult == "Success"  \|  _Computed.PanOSAuthMethod in~ "Cookie,Kerberos,LDAP,RADIUS,SAML,TACACS+,certificate,local-database"  \|  _Computed.PanOSEventID in~ "gateway-auth,gateway-connected,gateway-login,gateway-logout,portal-auth,portal-prelogin"  \|  _Computed.PanOSEventStatus in~ "failure,success" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationPaloAltoGlobalProtect.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationPaloAltoGlobalProtect.yaml) |
 | ASimAuthenticationPaloAltoPanOS | Palo Alto PAN-OS | CommonSecurityLog.DeviceEventClassID startswith "auth"  \|  CommonSecurityLog.DeviceProduct == "PAN-OS"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks"  \|  _Computed.EventResult in "Failure,Success" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationPaloAltoPanOS.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationPaloAltoPanOS.yaml) |
+| ASimAuthenticationPaloAltoPrismaCloud | Palo Alto Prisma Cloud Compute | Syslog.ProcessName == "Twistlock-Console" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationPaloAltoPrismaCloud.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationPaloAltoPrismaCloud.yaml) |
 | ASimAuthenticationSshd | OpenSSH | Syslog.ProcessName == "sshd"  \|  Syslog.SyslogMessage has "Failed"  \|  Syslog.SyslogMessage has "but this does not map back to the address"  \|  Syslog.SyslogMessage has "key RSA"  \|  Syslog.SyslogMessage has "publickey"  \|  Syslog.SyslogMessage startswith "Accepted"  \|  Syslog.SyslogMessage startswith "Failed"  \|  Syslog.SyslogMessage startswith "Invalid user"  \|  Syslog.SyslogMessage startswith "Nasty PTR record"  \|  Syslog.SyslogMessage startswith "Timeout"  \|  Syslog.SyslogMessage startswith "message repeated"  \|  Syslog.SyslogMessage startswith "reverse mapping checking getaddrinfo for" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationSshd.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationSshd.yaml) |
 | ASimAuthenticationSu | su | Syslog.ProcessName == "su"  \|  Syslog.SyslogMessage has_all "pam_unix(su"  \|  Syslog.SyslogMessage startswith "FAILED SU"  \|  Syslog.SyslogMessage startswith "Successful su for" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationSu.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationSu.yaml) |
 | ASimAuthenticationSudo | sudo | Syslog.ProcessName == "sudo"  \|  Syslog.SyslogMessage has "COMMAND="  \|  Syslog.SyslogMessage has "TTY="  \|  Syslog.SyslogMessage has "USER="  \|  Syslog.SyslogMessage has "incorrect password attempts"  \|  Syslog.SyslogMessage has "session closed for user"  \|  Syslog.SyslogMessage has "user NOT in sudoers" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationSudo.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationSudo.yaml) |
@@ -4979,6 +5077,7 @@ Total: 121 parsers
 | ASimNetworkSessionCheckPointFirewall | CheckPointFirewall | CommonSecurityLog.DeviceProduct =~ "VPN-1 & FireWall-1"  \|  _Computed.inzone in "External,Internal,Local"  \|  _Computed.outzone in "External,Internal,Local" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCheckPointFirewall.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCheckPointFirewall.yaml) |
 | ASimNetworkSessionCheckPointSmartDefense | CheckPointSmartDefense | CommonSecurityLog.DeviceProduct == "SmartDefense"  \|  CommonSecurityLog.DeviceVendor == "Check Point"  \|  _Computed.CommunicationDirection in "0,1"  \|  _Computed.DeviceCustomString1Label == "Threat Prevention Rule Name"  \|  _Computed.DeviceCustomString2Label == "Protection ID"  \|  _Computed.DeviceCustomString3Label == "Protection Type"  \|  _Computed.DeviceCustomString4Label in "Protection Name,Threat Prevention Rule ID"  \|  _Computed.DvcAction == "Allow"  \|  _Computed.FlexNumber1Label == "Confidence"  \|  _Computed.FlexNumber2Label == "Performance Impact"  \|  _Computed.FlexString2Label == "Attack Information" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCheckpointSmartDefense.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCheckpointSmartDefense.yaml) |
 | ASimNetworkSessionCiscoASA | CiscoASA | CommonSecurityLog.DeviceEventClassID in "106001,106002,106006,106007,106010,106012,106013,106014,106015,106016,106017,106018,106020,106021,106022,106023,106100,302013,302014,302015,302016,302020,302021,710002,710003,710004,710005"  \|  CommonSecurityLog.DeviceProduct == "ASA"  \|  CommonSecurityLog.DeviceVendor == "Cisco"  \|  _Computed.EventResult == "Success" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCiscoASA.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoASA.yaml) |
+| ASimNetworkSessionCiscoFTD | Cisco FTD | CommonSecurityLog.DeviceEventClassID in "430001,430002,430003,430005,430007"  \|  CommonSecurityLog.DeviceProduct == "FTD"  \|  CommonSecurityLog.DeviceVendor == "Cisco"  \|  _Computed.SrcUsername =~ "Not Found"  \|  _Computed.SrcUsername has "@" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCiscoFTD.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoFTD.yaml) |
 | ASimNetworkSessionCiscoFirepower | Cisco Firepower | CommonSecurityLog.DeviceEventClassID has "INTRUSION:400"  \|  CommonSecurityLog.DeviceEventClassID has "PV:112"  \|  CommonSecurityLog.DeviceEventClassID has "RNA:1003:1"  \|  CommonSecurityLog.DeviceEventClassID has_any "INTRUSION:400,PV:112,RNA:1003:1"  \|  CommonSecurityLog.DeviceProduct == "Firepower"  \|  CommonSecurityLog.DeviceVendor == "Cisco"  \|  _Computed.DstIpAddr contains "."  \|  _Computed.DstIpAddr contains ":"  \|  _Computed.NetworkProtocol == "ICMP" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCiscoFirepower.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoFirepower.yaml) |
 | ASimNetworkSessionCiscoISE | Cisco ISE | Syslog.ProcessName has_any "CISE,CSCO" | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCiscoISE.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoISE.yaml) |
 | ASimNetworkSessionCiscoMeraki | Cisco Meraki | _Computed.EventResult == "Failure"  \|  _Computed.temp_srcipport has "." | [Parsers\ASimNetworkSession\Parsers\ASimNetworkSessionCiscoMeraki.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoMeraki.yaml) |
@@ -5042,6 +5141,7 @@ Total: 121 parsers
 
 | Parser Name | Product | Filter Fields | File |
 |-------------|---------|---------------|------|
+| ASimWebSessionAWSWAF | AWS WAF | _Computed._hostNoPort contains ":"  \|  _Computed.host startswith "["  \|  _Computed.scheme in~ "http,https" | [Parsers\ASimWebSession\Parsers\ASimWebSessionAWSWAF.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/Parsers/ASimWebSessionAWSWAF.yaml) |
 | ASimWebSessionBarracudaCEF | Barracuda WAF | CommonSecurityLog.DeviceProduct in "WAAS,WAF"  \|  CommonSecurityLog.DeviceVendor startswith "Barracuda" | [Parsers\ASimWebSession\Parsers\ASimWebSessionBarracudaCEF.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/Parsers/ASimWebSessionBarracudaCEF.yaml) |
 | ASimWebSessionCiscoFirepower | Cisco Firepower | CommonSecurityLog.DeviceEventClassID in "File:500:1,FileMalware:502:1,FireAMP:125:1"  \|  CommonSecurityLog.DeviceEventClassID has "File:500:1"  \|  CommonSecurityLog.DeviceEventClassID has "FileMalware:502:1"  \|  CommonSecurityLog.DeviceProduct == "Firepower"  \|  CommonSecurityLog.DeviceVendor == "Cisco"  \|  _Computed.Disposition =~ "Malware"  \|  _Computed.Disposition !~ "Malware"  \|  _Computed.DstIpAddr has "."  \|  _Computed.DstIpAddr has ":"  \|  _Computed.DvcAction in "Allow,Deny" | [Parsers\ASimWebSession\Parsers\ASimWebSessionCiscoFirepower.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/Parsers/ASimWebSessionCiscoFirepower.yaml) |
 | ASimWebSessionCiscoMeraki | Cisco Meraki | _Computed.DvcAction in "Allow,Deny"  \|  _Computed.LogType == "urls"  \|  _Computed.Src has "."  \|  _Computed.disposition == "malicious"  \|  _Computed.dst has "." | [Parsers\ASimWebSession\Parsers\ASimWebSessionCiscoMeraki.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/Parsers/ASimWebSessionCiscoMeraki.yaml) |
