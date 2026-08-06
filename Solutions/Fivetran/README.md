@@ -13,10 +13,6 @@ using an Entra ID app registration; nothing polls Fivetran.
 | Data Collection Rule (ARM) | `Data Connectors/Fivetran_CCF/Fivetran_DCR.json` |
 | Data connector tile | `Data Connectors/Fivetran_CCF/Fivetran_DataConnector.json` |
 | Parser (KQL function `Fivetran`) | `Parsers/Fivetran.yaml` |
-| ASIM Authentication parser (parameterless) | `Parsers/ASimAuthenticationFivetran.yaml` |
-| ASIM Authentication parser (filtering) | `Parsers/vimAuthenticationFivetran.yaml` |
-| ASIM AuditEvent parser (parameterless) | `Parsers/ASimAuditEventFivetran.yaml` |
-| ASIM AuditEvent parser (filtering) | `Parsers/vimAuditEventFivetran.yaml` |
 | Analytics rule - ingestion gap (Defense Evasion / T1562) | `Analytic Rules/FivetranIngestionGap.yaml` |
 | Analytics rule - auth failures (Credential Access / T1110) | `Analytic Rules/FivetranAuthFailures.yaml` |
 | Hunting query - SEVERE spike | `Hunting Queries/FivetranSevereSpike.yaml` |
@@ -54,6 +50,13 @@ triggered Azure Function reads the lake parquet and ingests it into typed Sentin
 tables (`Fivetran_AuditTrail_CL`, `Fivetran_Platform_CL`), with an ASIM AuditEvent
 parser and hunting query. It is documented IaC (not part of this Content Hub package)
 because it depends on a customer-owned ADLS Gen2 lake.
+
+## ASIM normalization
+
+ASIM parsers are not part of this solution package. They are contributed to the
+shared `Parsers/ASimAuditEvent/Parsers/` and
+`Parsers/ASimAuthentication/Parsers/` folders so the `Im*` and
+`imAuditEvent` union parsers pick them up.
 
 ## Prerequisites (customer)
 
