@@ -10,12 +10,12 @@ description-detailed: |
   Joins privileged accounts from the Microsoft 365 Defender IdentityInfo
   table (AssignedRoles / PrivilegedEntraPimRoles) against SigninLogs,
   keeping only successful logons whose ConditionalAccessStatus is not
-  'success'. Status values such as 'notApplied', 'notEnabled' or 'failure'
-  indicate the sign-in was not gated by an applied CA policy. Review
-  whether a policy intended to cover privileged roles is misconfigured,
-  out of scope, or disabled (compare with the ConditionalAccessPolicyDisabled
-  family of hunting queries in Hunting Queries/AuditLogs), and prioritize
-  accounts that also authenticate without MFA (AuthenticationRequirement =
+  'success' (including empty/null, notApplied, notEnabled, or failure).
+  Review whether a policy intended to cover privileged roles is
+  misconfigured, out of scope, or disabled (compare with the
+  ConditionalAccessPolicyDisabled family of hunting queries in
+  Hunting Queries/AuditLogs), and prioritize accounts that also
+  authenticate without MFA (AuthenticationRequirement =
   singleFactorAuthentication).
   References:
   - https://learn.microsoft.com/entra/identity/conditional-access/overview
@@ -35,11 +35,11 @@ query: |
   let timeframe = 30d;
   let PrivilegedUsers = IdentityInfo
   | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
-  | project AccountObjectId, AccountUpn;
+  | summarize arg_max(TimeGenerated, AccountUpn) by AccountObjectId;
   SigninLogs
   | where TimeGenerated > ago(timeframe)
   | where ResultType == "0"
-  | where isnotempty(ConditionalAccessStatus)
+  | extend ConditionalAccessStatus = coalesce(ConditionalAccessStatus, "notEvaluated")
   | where ConditionalAccessStatus !~ "success"
   | join kind=inner PrivilegedUsers on $left.UserId == $right.AccountObjectId
   | extend
@@ -51,13 +51,12 @@ query: |
       LastSeen = max(TimeGenerated),
       ConditionalAccessStatuses = make_set(ConditionalAccessStatus),
       AuthRequirements = make_set(AuthenticationRequirement),
-      IPAddresses = make_set(IPAddress)
+      LastIP = tostring(arg_max(TimeGenerated, IPAddress))
       by UserPrincipalName, AccountName, AccountUPNSuffix, UserId, AccountUpn, AppDisplayName
-  | extend FirstIP = tostring(IPAddresses[0])
   | project
       UserPrincipalName, AccountName, AccountUPNSuffix, AccountUpn,
       SignInAttempts, FirstSeen, LastSeen, ConditionalAccessStatuses,
-      AuthRequirements, FirstIP, AppDisplayName
+      AuthRequirements, LastIP, AppDisplayName
   | sort by SignInAttempts desc
 entityMappings:
   - entityType: Account
@@ -73,8 +72,8 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: FirstIP
-version: 1.0.0
+        columnName: LastIP
+version: 1.0.1
 metadata:
   source:
     kind: Community

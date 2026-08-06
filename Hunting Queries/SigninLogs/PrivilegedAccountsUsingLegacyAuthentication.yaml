@@ -1,12 +1,13 @@
 id: 06184800-6d66-46ce-aabd-7e17e9cf3fb0
 name: Privileged identities authenticating via legacy protocols
 description: |
-  Identifies successful legacy-protocol sign-ins (IMAP, POP, SMTP,
-  ActiveSync, Exchange Web Services) by accounts that hold directory or
-  PIM roles. Legacy authentication bypasses modern Conditional Access
-  controls and MFA in most configurations, so a tenant may be licensed
-  for Entra ID P2 and Defender yet leave its highest-privilege accounts
-  reachable through unmanaged clients.
+  Identifies successful legacy-protocol sign-ins (Exchange ActiveSync,
+  IMAP4, POP3, SMTP Auth, MAPI over HTTP, and other legacy clients) by
+  accounts that hold directory or PIM roles. Legacy authentication
+  bypasses modern Conditional Access controls and MFA in most
+  configurations, so a tenant may be licensed for Entra ID P2 and
+  Defender yet leave its highest-privilege accounts reachable through
+  unmanaged clients.
 description-detailed: |
   Joins privileged accounts from IdentityInfo (AssignedRoles /
   PrivilegedEntraPimRoles) against SigninLogs where ClientAppUsed matches
@@ -36,16 +37,21 @@ relevantTechniques:
 query: |
   let timeframe = 30d;
   let LegacyProtocols = dynamic([
-      "IMAP", "POP", "SMTP", "ActiveSync", "ExchangeWebServices",
-      "Autodiscover", "OWA"
+      "Exchange ActiveSync",
+      "IMAP4",
+      "MAPI over HTTP",
+      "POP3",
+      "SMTP Auth",
+      "Authenticated SMTP",
+      "Other clients"
   ]);
   let PrivilegedUsers = IdentityInfo
   | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
-  | project AccountObjectId, AccountUpn;
+  | summarize arg_max(TimeGenerated, AccountUpn) by AccountObjectId;
   SigninLogs
   | where TimeGenerated > ago(timeframe)
   | where ResultType == "0"
-  | where ClientAppUsed has_any (LegacyProtocols)
+  | where ClientAppUsed in~ (LegacyProtocols)
   | join kind=inner PrivilegedUsers on $left.UserId == $right.AccountObjectId
   | extend
       AccountName = tostring(split(UserPrincipalName, "@")[0]),
@@ -56,13 +62,12 @@ query: |
       LastSeen = max(TimeGenerated),
       ClientApps = make_set(ClientAppUsed),
       AuthRequirements = make_set(AuthenticationRequirement),
-      IPAddresses = make_set(IPAddress)
+      LastIP = tostring(arg_max(TimeGenerated, IPAddress))
       by UserPrincipalName, AccountName, AccountUPNSuffix, UserId, AccountUpn, AppDisplayName
-  | extend FirstIP = tostring(IPAddresses[0])
   | project
       UserPrincipalName, AccountName, AccountUPNSuffix, AccountUpn,
       SignInAttempts, FirstSeen, LastSeen, ClientApps, AuthRequirements,
-      FirstIP, AppDisplayName
+      LastIP, AppDisplayName
   | sort by SignInAttempts desc
 entityMappings:
   - entityType: Account
@@ -78,8 +83,8 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: FirstIP
-version: 1.0.0
+        columnName: LastIP
+version: 1.0.1
 metadata:
   source:
     kind: Community

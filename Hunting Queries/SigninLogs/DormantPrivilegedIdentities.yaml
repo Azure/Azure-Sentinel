@@ -2,11 +2,11 @@ id: 0a70fd03-6f58-4df3-ab39-f9d123d538cd
 name: Dormant privileged identities with no recent sign-ins
 description: |
   Finds enabled identity objects that hold directory roles or Entra PIM
-  roles but have not performed a successful interactive sign-in in the
-  last 90 days. These accounts remain licensed and enabled yet unmanaged,
-  a common 'licensed but minimally configured' gap: an attacker who
-  obtains or reuses these credentials inherits the group's privilege
-  without triggering new role-assignment audit events.
+  roles but have not performed a successful sign-in in the last 90 days.
+  These accounts remain licensed and enabled yet unmanaged, a common
+  'licensed but minimally configured' gap: an attacker who obtains or
+  reuses these credentials inherits the group's privilege without
+  triggering new role-assignment audit events.
 description-detailed: |
   Leverages the Microsoft 365 Defender IdentityInfo table, which exposes
   assigned and PIM-eligible roles, BlastRadius and account enablement
@@ -31,13 +31,13 @@ relevantTechniques:
   - T1078.004
 query: |
   let lookback = 90d;
-  let noSigninSince = 1d;
   IdentityInfo
+  | summarize arg_max(TimeGenerated, *) by AccountObjectId
   | where IsAccountEnabled == true
   | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
   | join kind=leftanti (
       SigninLogs
-      | where TimeGenerated > ago(noSigninSince)
+      | where TimeGenerated > ago(lookback)
       | where ResultType == "0"
       | project AccountObjectId = UserId
   ) on AccountObjectId
@@ -45,7 +45,7 @@ query: |
       AccountName = tostring(split(AccountUpn, "@")[0]),
       AccountUPNSuffix = tostring(split(AccountUpn, "@")[1])
   | project
-      AccountUpn, AccountName, AccountUPNSuffix, AccountDisplayName,
+      AccountObjectId, AccountUpn, AccountName, AccountUPNSuffix, AccountDisplayName,
       BlastRadius, AssignedRoles, PrivilegedEntraPimRoles,
       Department, JobTitle
   | sort by BlastRadius desc
@@ -58,7 +58,9 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
-version: 1.0.0
+      - identifier: AadUserId
+        columnName: AccountObjectId
+version: 1.0.1
 metadata:
   source:
     kind: Community
