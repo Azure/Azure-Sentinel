@@ -2,7 +2,7 @@
 
 ## Version 1.0.0
 
-- (2026-08-06) Added entity key columns and AdditionalEntities column to support available event entities
+- (2026-08-06) Added EntityKey, AdditionalIds, and AdditionalEntities columns for entity querying
 
 ## Version 0.4.0
 
