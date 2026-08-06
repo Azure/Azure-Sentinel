@@ -1,0 +1,52 @@
+id: c2f4a6e1-4b7d-4c0a-9d2e-7a1b3c5d9e02
+name: Fivetran Platform - Sensitive AUDIT_TRAIL changes (ASIM AuditEvent)
+description: |
+  'ASIM-normalised hunting query over the Fivetran Platform Connector AUDIT_TRAIL table
+  (Fivetran_AuditTrail_CL) using the ASimAuditEventFivetranAuditTrail parser. Surfaces
+  high-impact administrative changes: deletions of connections/destinations, role and
+  role-permission changes, team/membership changes, and account edits. Because the source
+  is the fully structured AUDIT_TRAIL (not free-text log messages), Actor (user_id),
+  Object (resource id/type) and old/new values are exact. Review for unexpected actors,
+  out-of-hours changes, or bursts of destructive operations. The parser dedupes lake
+  compaction re-emits by audit id. Once added to the imAuditEvent unifying parser this
+  logic also runs cross-source.'
+requiredDataConnectors:
+  - connectorId: FivetranPlatform
+    dataTypes:
+      - Fivetran_AuditTrail_CL
+tactics:
+  - Impact
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1531
+  - T1098
+  - T1562
+query: |
+  ASimAuditEventFivetranAuditTrail
+  | where EventType in ('Delete', 'Disable')
+      or TargetAppName has_any ('role', 'destination', 'connection', 'account', 'membership', 'team', 'user')
+  | project
+      TimeGenerated,
+      EventType,
+      Operation,
+      Object,
+      ObjectType,
+      ActorUserId,
+      ActorUsername,
+      TargetAppName,
+      OldValue,
+      NewValue,
+      EventOriginalUid,
+      EventMessage
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ActorUsername
+  - entityType: CloudResource
+    fieldMappings:
+      - identifier: Name
+        columnName: Object
+version: 1.0.0

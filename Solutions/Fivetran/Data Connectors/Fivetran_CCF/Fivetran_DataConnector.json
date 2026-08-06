@@ -1,0 +1,95 @@
+{
+  "id": "Fivetran",
+  "title": "Fivetran Platform Logs",
+  "publisher": "Michael Woods",
+  "descriptionMarkdown": "Ingests Fivetran platform and connector logs into Microsoft Sentinel via the Azure Monitor Logs Ingestion API (DCR-based custom table). Fivetran PUSHES its own logs to a Data Collection Rule using an Entra ID app; this tile shows connection status and provides sample queries. It does not itself move data - ingestion is driven by Fivetran plus the DCR.",
+  "graphQueries": [
+    {
+      "metricName": "Total Fivetran log events received",
+      "legend": "Fivetran_CL",
+      "baseQuery": "Fivetran_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All Fivetran log events (latest first)",
+      "query": "Fivetran_CL\n| sort by TimeGenerated desc"
+    },
+    {
+      "description": "Errors and warnings only",
+      "query": "Fivetran_CL\n| where Level in (\"SEVERE\", \"WARNING\")\n| sort by TimeGenerated desc"
+    },
+    {
+      "description": "Event volume by level over time",
+      "query": "Fivetran_CL\n| summarize count() by Level, bin(TimeGenerated, 1h)"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "Fivetran_CL",
+      "lastDataReceivedQuery": "Fivetran_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "Fivetran_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Register an Entra ID app for Fivetran",
+      "description": "In Microsoft Entra ID > App registrations, create an app and a client secret. Record the Application (Client) ID, Directory (Tenant) ID and secret value."
+    },
+    {
+      "title": "2. Create the custom table, DCE and DCR",
+      "description": "Deploy Fivetran_CL (columns TimeGenerated, Level, CreatedAt, Message) and a Data Collection Rule with stream Custom-Fivetran_CL and transform `source | extend TimeGenerated = CreatedAt`. See the michaelwoods-fivetran skill azure-setup.md."
+    },
+    {
+      "title": "3. Grant the app access to the DCR",
+      "description": "Assign the Entra app the Monitoring Metrics Publisher role on the DCR."
+    },
+    {
+      "title": "4. Configure Fivetran",
+      "description": "In Fivetran's external-log (Azure Monitor) setup form, choose the Logs Ingestion API mode and enter the Client ID, Tenant ID, Client secret, Logs Ingestion URI (or DCR logIngestion endpoint), DCR immutableId and stream name Custom-Fivetran_CL. Click Save & Test."
+    }
+  ],
+  "metadata": {
+    "id": "138ff805-42c0-4c6c-b687-df18187a20fe",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": { "kind": "community" },
+    "author": { "name": "Michael Woods" },
+    "support": { "name": "Michael Woods", "tier": "developer" }
+  }
+}
