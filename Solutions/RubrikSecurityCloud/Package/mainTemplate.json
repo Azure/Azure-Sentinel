@@ -36988,13 +36988,44 @@
             "title": "Rubrik DSPM Violation Remediation",
             "description": "Incident-triggered playbook that remediates Rubrik Security Cloud (RSC) DSPM violations. Branches on eventType: for SecurityViolation it retrieves the violation, exports the violation-files CSV and the remediation-actions log (create -> poll Download Bar -> download bytes -> upload to a blob container -> generate SAS link), lists the violation file hits, quarantines each file via the RubrikQuarantineFiles sub-playbook, notifies the file owner in Teams, and marks the violation REMEDIATED only when every quarantine succeeded. For ClassificationResultsAvailable (no DSPM license) it runs a reduced flow: list file hits (objectId + snapshotId) -> quarantine -> notify. Both flows write a final comment to the Sentinel incident.",
             "prerequisites": [
-              "Deploy the RubrikCustomConnector (Microsoft.Web/customApis) first; this playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
-              "Deploy the RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) before this playbook; it is called once per file to quarantine and must return { status, newLocation }.",
-              "An Azure Key Vault holding the RSC service-account credentials in secrets 'Rubrik-AS-Int-ClientId' and 'Rubrik-AS-Int-ClientSecret'.",
-              "An Azure Storage account and blob container for the exported CSV/log files (SecurityViolation flow only).",
-              "A Microsoft Teams team and channel for owner notifications.",
-              "An analytics rule that maps the Rubrik event fields into incident Custom Details (eventType, objectId, objectName, objectType, seriesId, eventName, snapshotId)."
+              "1. The Rubrik Security Cloud solution should be configured to connect to Rubrik Security Cloud API end points using a Service Account with a role that includes the privileges to read and update policy violations.",
+              "2. The Rubrik custom connector (RubrikCustomConnector) needs to be deployed prior to the deployment of this playbook, in the same resource group and region. This playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
+              "3. The RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) must be deployed before this playbook; it is called once per file to quarantine and returns { status, newLocation }.",
+              "4. Store Service account credentials in Key Vault and obtain the Key Vault name and tenantId.",
+              "a. Create a Key Vault with a unique name.",
+              "b. Go to KeyVault -> secrets, click Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively.",
+              "5. An Azure Storage account and an EXISTING blob container are required for the exported CSV/log files (SecurityViolation flow only).",
+              "6. A Microsoft Teams team and channel are required for owner notifications.",
+              "7. Configure an analytics rule that maps the Rubrik event fields into incident Custom Details (eventType, objectId, objectName, objectType, seriesId, eventName, snapshotId)."
             ],
+            "postDeployment": [
+              "**a. Authorize connections**",
+              "Once deployment is complete, authorize each connection.",
+              "1. Go to your logic app -> API connections -> Select the connection resource (RubrikCustomConnector, Microsoft Teams, and Azure Blob Storage).",
+              "2. Go to General -> edit API connection.",
+              "3. Click Authorize.",
+              "4. Sign in.",
+              "5. Click Save.",
+              "6. Repeat steps for each connection. The Azure Blob Storage account used must have write access to StorageContainerName (used to upload the CSV/log and create the read-only SAS link).",
+              "**b. Assign Role to comment on and update incidents**",
+              "1. Go to Log Analytics Workspace -> <your workspace> -> Access Control -> Add.",
+              "2. Add role assignment.",
+              "3. Assignment type: Job function roles.",
+              "4. Role: Microsoft Sentinel Responder.",
+              "5. Members: select managed identity for assigned access to and add your logic app as member.",
+              "6. Click on review + assign.",
+              "**c. Add Access policy in Key Vault**",
+              "Add an access policy for the playbook's managed identity to read the RSC service-account secrets.",
+              "1. Go to logic app -> <your logic app> -> Identity -> System assigned managed identity and copy the Object (principal) ID.",
+              "2. Go to keyvaults -> <your keyvault> -> Access policies -> Create.",
+              "3. Select Get on secrets permissions. Click next.",
+              "4. In the principal section, search by the copied object ID. Click next.",
+              "5. Click review + create.",
+              "**d. Configurations in Microsoft Sentinel**",
+              "1. Deploy the RubrikQuarantineFiles sub-playbook first and set RubrikQuarantineFilesPlaybookName to its Logic App name; it must exist in the same resource group and expose an HTTP Request trigger returning { status, newLocation }.",
+              "2. In Microsoft Sentinel, configure the automation rules to trigger this playbook on the relevant DSPM incidents (playbooks do not auto-attach)."
+            ],
+            "lastUpdateTime": "2026-08-05T00:00:00Z",
             "tags": [
               "Microsoft Sentinel",
               "Incident",
@@ -37003,39 +37034,13 @@
               "Remediation",
               "Quarantine"
             ],
-            "postDeployment": [
-              "Grant the Logic App system-assigned managed identity the 'Microsoft Sentinel Responder' role on the Sentinel workspace (comment on and update incidents).",
-              "Grant the Logic App managed identity 'Key Vault Secrets User' (or an access policy with Get on secrets) on the Key Vault named by KeyVaultName.",
-              "Authorize the RubrikCustomConnector API connection (used for the /api/client_token authentication call).",
-              "Authorize (sign in to) the Microsoft Teams API connection so the owner-notification card can be posted.",
-              "Authorize the Azure Blob Storage API connection (StorageAccountName). The account used by that connection must have write access to StorageContainerName; the connection is used to upload the CSV/log and to create the read-only SAS link.",
-              "Deploy the RubrikQuarantineFiles sub-playbook and set RubrikQuarantineFilesPlaybookName to its Logic App name; it must exist in the same resource group and expose an HTTP Request trigger returning { status, newLocation }.",
-              "Create a Microsoft Sentinel automation rule to run this playbook on the relevant DSPM incidents (playbooks do not auto-attach)."
-            ],
-            "releaseNotes": [
-              {
-                "version": "1.2.0",
-                "title": "Rubrik DSPM Violation Remediation",
-                "notes": [
-                  "Hardened the Download Snapshot Results CSV and Download Remediation Log flows. Validate the incident-supplied Object Name (case-insensitive), Resource ID, and Snapshot ID against the policyViolation and hard-fail on mismatch. Locate the exported file in allUserFiles by object-name filename pattern (spaces replaced with hyphens for the CSV) in addition to file type and post-start-time, and fail the export (non-fatal) when more than one file matches after the action start time. Fixed the remediation-log filter to match REMEDIATION_ACTIONS_LOG_CSV instead of SNAPSHOT_RESULTS_CSV. CSV export-trigger failure is now non-fatal (matches the remediation-log path); every download failure/edge case sets a descriptive link message so the final incident comment never shows a blank link. Download links in the incident comment are now rendered as the raw URL instead of an HTML anchor tag so they redirect correctly. Hardened createdAt comparison to use ticks()."
-                ]
-              },
-              {
-                "version": "1.1.0",
-                "title": "Rubrik DSPM Violation Remediation",
-                "notes": [
-                  "Added physicalHost to the per-file records sent to RubrikQuarantineFiles so the NTFS (WINDOWS_FILESHARE) branch can resolve the Microsoft Defender for Endpoint device. physicalHost is captured once from the DSPM violation (resourceMetadata.metadata.physicalHost) and stamped onto every file. Removed the ONEDRIVE fallback when selecting a file's objectType, so an unknown objectType is no longer coerced to ONEDRIVE (the child returns NotImplemented instead)."
-                ]
-              },
-              {
-                "version": "1.0.0",
-                "title": "Rubrik DSPM Violation Remediation",
-                "notes": [
-                  "Initial version. Handles SecurityViolation (full flow) and ClassificationResultsAvailable (reduced flow)."
-                ]
-              }
-            ],
-            "lastUpdateTime": "2026-07-22T00:00:00Z"
+            "releaseNotes": {
+              "version": "1.2.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -38221,10 +38226,9 @@
               }
             },
             "SearchRegion": {
-              "defaultValue": "IND",
               "type": "string",
               "metadata": {
-                "description": "ISO 3166-1 region code REQUIRED by Microsoft Graph /search/query for application (app-only) permissions. Must match the tenant's data location (e.g. NAM, EUR, GBR, APC, AUS, CAN, IND, JPN). Without it Graph returns 'Region is required when request with application permission.'"
+                "description": "REQUIRED. ISO 3166-1 region code required by Microsoft Graph /search/query for application (app-only) permissions. Must match the tenant's data location (e.g. NAM, EUR, GBR, APC, AUS, CAN, IND, JPN). Without it Graph returns 'Region is required when request with application permission.'"
               }
             }
           },
@@ -38516,9 +38520,26 @@
                         ]
                       }
                     },
-                    "Initialize_MDE_Access_Token": {
+                    "Initialize_Matched_Folder": {
                       "runAfter": {
                         "Initialize_Matched_Resource": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Matched_Folder",
+                            "type": "object",
+                            "value": "[variables('TemplateEmptyObject')]"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_MDE_Access_Token": {
+                      "runAfter": {
+                        "Initialize_Matched_Folder": [
                           "Succeeded"
                         ]
                       },
@@ -38819,7 +38840,7 @@
                                   {
                                     "type": "TextBlock",
                                     "wrap": true,
-                                    "text": "Enter the quarantine folder name. @{length(coalesce(triggerBody()?['files'], json('[]')))} file(s) will be moved into a folder with this name inside each file owner's OneDrive (the folder is created if it does not exist)."
+                                    "text": "Enter the quarantine folder name. @{length(coalesce(triggerBody()?['files'], json('[]')))} file(s) will be moved into a folder with this name in the same drive (OneDrive or SharePoint document library) where each file is located. The folder is created in that drive if it does not already exist."
                                   },
                                   {
                                     "type": "Input.Text",
@@ -39056,7 +39077,7 @@
                                             "type": "SetVariable",
                                             "inputs": {
                                               "name": "Matched_Resource",
-                                              "value": "@coalesce(first(body('Filter_matching_hits'))?['resource'], first(coalesce(first(first(body('Parse_search_result')?['value'])?['hitsContainers'])?['hits'], json('[]')))?['resource'], json('{}'))"
+                                              "value": "@coalesce(first(body('Filter_matching_hits'))?['resource'], json('{}'))"
                                             }
                                           },
                                           "If_file_found": {
@@ -39079,89 +39100,31 @@
                                               ]
                                             },
                                             "actions": {
-                                              "Resolve_or_create_folder": {
-                                                "type": "Http",
+                                              "Reset_Matched_Folder": {
+                                                "type": "SetVariable",
                                                 "inputs": {
-                                                  "method": "PATCH",
-                                                  "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/root:/@{encodeURIComponent(variables('Quarantine_Folder_Name'))}:",
-                                                  "headers": {
-                                                    "Authorization": "Bearer @{variables('Access_Token')}",
-                                                    "Content-Type": "application/json"
-                                                  },
-                                                  "body": {
-                                                    "@@microsoft.graph.conflictBehavior": "replace"
-                                                  }
+                                                  "name": "Matched_Folder",
+                                                  "value": "[variables('TemplateEmptyObject')]"
                                                 }
                                               },
-                                              "Append_result_folder_failed": {
+                                              "Get_quarantine_folder": {
                                                 "runAfter": {
-                                                  "Resolve_or_create_folder": [
-                                                    "Failed",
-                                                    "TimedOut"
-                                                  ]
-                                                },
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                  "name": "Results",
-                                                  "value": {
-                                                    "filename": "@items('For_each_file')?['filename']",
-                                                    "status": "Failed",
-                                                    "newLocation": "[variables('blanks')]",
-                                                    "error": "Found the file but failed to resolve/create the quarantine folder in its OneDrive (Graph status @{coalesce(outputs('Resolve_or_create_folder')?['statusCode'], 'none')}). @{string(coalesce(body('Resolve_or_create_folder'), ''))}"
-                                                  }
-                                                }
-                                              },
-                                              "Parse_folder": {
-                                                "runAfter": {
-                                                  "Resolve_or_create_folder": [
-                                                    "Succeeded"
-                                                  ]
-                                                },
-                                                "type": "ParseJson",
-                                                "inputs": {
-                                                  "content": "@body('Resolve_or_create_folder')",
-                                                  "schema": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "id": {
-                                                        "type": "string"
-                                                      },
-                                                      "name": {
-                                                        "type": "string"
-                                                      },
-                                                      "parentReference": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "driveId": {
-                                                            "type": "string"
-                                                          }
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              },
-                                              "Download_file_content": {
-                                                "runAfter": {
-                                                  "Parse_folder": [
+                                                  "Reset_Matched_Folder": [
                                                     "Succeeded"
                                                   ]
                                                 },
                                                 "type": "Http",
                                                 "inputs": {
                                                   "method": "GET",
-                                                  "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}/content",
+                                                  "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/root:/@{encodeURIComponent(variables('Quarantine_Folder_Name'))}:",
                                                   "headers": {
                                                     "Authorization": "Bearer @{variables('Access_Token')}"
-                                                  },
-                                                  "redirect": {
-                                                    "count": 0
                                                   }
                                                 }
                                               },
-                                              "Check_Download_file_content": {
+                                              "If_folder_exists": {
                                                 "runAfter": {
-                                                  "Download_file_content": [
+                                                  "Get_quarantine_folder": [
                                                     "Succeeded",
                                                     "Failed",
                                                     "TimedOut"
@@ -39171,163 +39134,394 @@
                                                 "expression": {
                                                   "and": [
                                                     {
-                                                      "or": [
-                                                        {
-                                                          "less": [
-                                                            "@coalesce(outputs('Download_file_content')?['statusCode'], 0)",
-                                                            200
-                                                          ]
-                                                        },
-                                                        {
-                                                          "greaterOrEquals": [
-                                                            "@coalesce(outputs('Download_file_content')?['statusCode'], 0)",
-                                                            300
-                                                          ]
-                                                        }
+                                                      "greaterOrEquals": [
+                                                        "@coalesce(outputs('Get_quarantine_folder')?['statusCode'], 0)",
+                                                        200
+                                                      ]
+                                                    },
+                                                    {
+                                                      "less": [
+                                                        "@coalesce(outputs('Get_quarantine_folder')?['statusCode'], 0)",
+                                                        300
                                                       ]
                                                     },
                                                     {
                                                       "not": {
                                                         "equals": [
-                                                          "@outputs('Download_file_content')?['statusCode']",
-                                                          302
+                                                          "@trim(coalesce(body('Get_quarantine_folder')?['id'], ''))",
+                                                          ""
                                                         ]
                                                       }
                                                     }
                                                   ]
                                                 },
                                                 "actions": {
-                                                  "Append_result_download_failed": {
-                                                    "type": "AppendToArrayVariable",
+                                                  "Set_Matched_Folder_existing": {
+                                                    "type": "SetVariable",
                                                     "inputs": {
-                                                      "name": "Results",
-                                                      "value": {
-                                                        "filename": "@items('For_each_file')?['filename']",
-                                                        "status": "Failed",
-                                                        "newLocation": "[variables('blanks')]",
-                                                        "error": "Found the file but failed to download its content from OneDrive (Graph status @{coalesce(outputs('Download_file_content')?['statusCode'], 'none')})."
-                                                      }
+                                                      "name": "Matched_Folder",
+                                                      "value": "@body('Get_quarantine_folder')"
                                                     }
                                                   }
                                                 },
                                                 "else": {
                                                   "actions": {
-                                                    "Fetch_download_url": {
+                                                    "Create_quarantine_folder": {
                                                       "type": "Http",
                                                       "inputs": {
-                                                        "method": "GET",
-                                                        "uri": "@{if(equals(outputs('Download_file_content')?['statusCode'], 302), coalesce(outputs('Download_file_content')?['headers']?['Location'], outputs('Download_file_content')?['headers']?['location']), concat(variables('Graph_Base_URL'), '/v1.0/drives/', encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId']), '/items/', encodeURIComponent(variables('Matched_Resource')?['id']), '/content'))}"
-                                                      }
-                                                    },
-                                                    "Append_result_fetch_failed": {
-                                                      "runAfter": {
-                                                        "Fetch_download_url": [
-                                                          "Failed",
-                                                          "TimedOut"
-                                                        ]
-                                                      },
-                                                      "type": "AppendToArrayVariable",
-                                                      "inputs": {
-                                                        "name": "Results",
-                                                        "value": {
-                                                          "filename": "@items('For_each_file')?['filename']",
-                                                          "status": "Failed",
-                                                          "newLocation": "[variables('blanks')]",
-                                                          "error": "Found the file but failed to fetch its content from the OneDrive download URL (status @{coalesce(outputs('Fetch_download_url')?['statusCode'], 'none')})."
-                                                        }
-                                                      }
-                                                    },
-                                                    "Upload_file": {
-                                                      "runAfter": {
-                                                        "Fetch_download_url": [
-                                                          "Succeeded"
-                                                        ]
-                                                      },
-                                                      "type": "Http",
-                                                      "inputs": {
-                                                        "method": "PUT",
-                                                        "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(body('Parse_folder')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(body('Parse_folder')?['id'])}:/@{encodeURIComponent(items('For_each_file')?['filename'])}:/content",
+                                                        "method": "POST",
+                                                        "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/root/children",
                                                         "headers": {
                                                           "Authorization": "Bearer @{variables('Access_Token')}",
-                                                          "Content-Type": "application/octet-stream"
+                                                          "Content-Type": "application/json"
                                                         },
-                                                        "body": "@body('Fetch_download_url')"
-                                                      }
-                                                    },
-                                                    "Append_result_upload_failed": {
-                                                      "runAfter": {
-                                                        "Upload_file": [
-                                                          "Failed",
-                                                          "TimedOut"
-                                                        ]
-                                                      },
-                                                      "type": "AppendToArrayVariable",
-                                                      "inputs": {
-                                                        "name": "Results",
-                                                        "value": {
-                                                          "filename": "@items('For_each_file')?['filename']",
-                                                          "status": "Failed",
-                                                          "newLocation": "[variables('blanks')]",
-                                                          "error": "Downloaded the file but failed to upload it to the quarantine folder (Graph status @{coalesce(outputs('Upload_file')?['statusCode'], 'none')}). Source NOT deleted. @{string(coalesce(body('Upload_file'), ''))}"
+                                                        "body": {
+                                                          "name": "@{variables('Quarantine_Folder_Name')}",
+                                                          "@@microsoft.graph.conflictBehavior": "fail"
                                                         }
                                                       }
                                                     },
-                                                    "Parse_upload": {
+                                                    "If_folder_created": {
                                                       "runAfter": {
-                                                        "Upload_file": [
-                                                          "Succeeded"
-                                                        ]
-                                                      },
-                                                      "type": "ParseJson",
-                                                      "inputs": {
-                                                        "content": "@body('Upload_file')",
-                                                        "schema": {
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "id": {
-                                                              "type": "string"
-                                                            },
-                                                            "name": {
-                                                              "type": "string"
-                                                            },
-                                                            "webUrl": {
-                                                              "type": "string"
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    },
-                                                    "Delete_source_file": {
-                                                      "runAfter": {
-                                                        "Parse_upload": [
-                                                          "Succeeded"
-                                                        ]
-                                                      },
-                                                      "type": "Http",
-                                                      "inputs": {
-                                                        "method": "DELETE",
-                                                        "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}",
-                                                        "headers": {
-                                                          "Authorization": "Bearer @{variables('Access_Token')}"
-                                                        }
-                                                      }
-                                                    },
-                                                    "Append_result_success": {
-                                                      "runAfter": {
-                                                        "Delete_source_file": [
+                                                        "Create_quarantine_folder": [
                                                           "Succeeded",
                                                           "Failed",
                                                           "TimedOut"
                                                         ]
                                                       },
-                                                      "type": "AppendToArrayVariable",
-                                                      "inputs": {
-                                                        "name": "Results",
-                                                        "value": {
-                                                          "filename": "@items('For_each_file')?['filename']",
-                                                          "status": "Success",
-                                                          "newLocation": "@body('Parse_upload')?['webUrl']",
-                                                          "error": "@if(and(greaterOrEquals(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 200), less(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 300)), '', concat('Uploaded to quarantine but failed to delete the source (Graph status ', string(coalesce(outputs('Delete_source_file')?['statusCode'], 'none')), '); delete manually.'))"
+                                                      "type": "If",
+                                                      "expression": {
+                                                        "and": [
+                                                          {
+                                                            "greaterOrEquals": [
+                                                              "@coalesce(outputs('Create_quarantine_folder')?['statusCode'], 0)",
+                                                              200
+                                                            ]
+                                                          },
+                                                          {
+                                                            "less": [
+                                                              "@coalesce(outputs('Create_quarantine_folder')?['statusCode'], 0)",
+                                                              300
+                                                            ]
+                                                          },
+                                                          {
+                                                            "not": {
+                                                              "equals": [
+                                                                "@trim(coalesce(body('Create_quarantine_folder')?['id'], ''))",
+                                                                ""
+                                                              ]
+                                                            }
+                                                          }
+                                                        ]
+                                                      },
+                                                      "actions": {
+                                                        "Set_Matched_Folder_created": {
+                                                          "type": "SetVariable",
+                                                          "inputs": {
+                                                            "name": "Matched_Folder",
+                                                            "value": "@body('Create_quarantine_folder')"
+                                                          }
+                                                        }
+                                                      },
+                                                      "else": {
+                                                        "actions": {
+                                                          "Append_result_folder_failed": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                              "name": "Results",
+                                                              "value": {
+                                                                "filename": "@items('For_each_file')?['filename']",
+                                                                "status": "Failed",
+                                                                "newLocation": "[variables('blanks')]",
+                                                                "error": "Found the file but failed to resolve or create the quarantine folder in its OneDrive (lookup status @{coalesce(outputs('Get_quarantine_folder')?['statusCode'], 'none')}, create status @{coalesce(outputs('Create_quarantine_folder')?['statusCode'], 'none')}). Source NOT deleted. @{string(coalesce(body('Create_quarantine_folder'), ''))}"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "If_folder_ready": {
+                                                "runAfter": {
+                                                  "If_folder_exists": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "If",
+                                                "expression": {
+                                                  "and": [
+                                                    {
+                                                      "not": {
+                                                        "equals": [
+                                                          "@trim(coalesce(variables('Matched_Folder')?['id'], ''))",
+                                                          ""
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                },
+                                                "actions": {
+                                                  "Parse_folder": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                      "content": "@variables('Matched_Folder')",
+                                                      "schema": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "id": {
+                                                            "type": "string"
+                                                          },
+                                                          "name": {
+                                                            "type": "string"
+                                                          },
+                                                          "parentReference": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "driveId": {
+                                                                "type": "string"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "Download_file_content": {
+                                                    "runAfter": {
+                                                      "Parse_folder": [
+                                                        "Succeeded"
+                                                      ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                      "method": "GET",
+                                                      "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}/content",
+                                                      "headers": {
+                                                        "Authorization": "Bearer @{variables('Access_Token')}"
+                                                      },
+                                                      "redirect": {
+                                                        "count": 0
+                                                      }
+                                                    }
+                                                  },
+                                                  "Check_Download_file_content": {
+                                                    "runAfter": {
+                                                      "Download_file_content": [
+                                                        "Succeeded",
+                                                        "Failed",
+                                                        "TimedOut"
+                                                      ]
+                                                    },
+                                                    "type": "If",
+                                                    "expression": {
+                                                      "and": [
+                                                        {
+                                                          "or": [
+                                                            {
+                                                              "less": [
+                                                                "@coalesce(outputs('Download_file_content')?['statusCode'], 0)",
+                                                                200
+                                                              ]
+                                                            },
+                                                            {
+                                                              "greaterOrEquals": [
+                                                                "@coalesce(outputs('Download_file_content')?['statusCode'], 0)",
+                                                                300
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "not": {
+                                                            "equals": [
+                                                              "@outputs('Download_file_content')?['statusCode']",
+                                                              302
+                                                            ]
+                                                          }
+                                                        }
+                                                      ]
+                                                    },
+                                                    "actions": {
+                                                      "Append_result_download_failed": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                          "name": "Results",
+                                                          "value": {
+                                                            "filename": "@items('For_each_file')?['filename']",
+                                                            "status": "Failed",
+                                                            "newLocation": "[variables('blanks')]",
+                                                            "error": "Found the file but failed to download its content from OneDrive (Graph status @{coalesce(outputs('Download_file_content')?['statusCode'], 'none')})."
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "else": {
+                                                      "actions": {
+                                                        "Fetch_download_url": {
+                                                          "type": "Http",
+                                                          "inputs": {
+                                                            "method": "GET",
+                                                            "uri": "@{if(equals(outputs('Download_file_content')?['statusCode'], 302), coalesce(outputs('Download_file_content')?['headers']?['Location'], outputs('Download_file_content')?['headers']?['location']), concat(variables('Graph_Base_URL'), '/v1.0/drives/', encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId']), '/items/', encodeURIComponent(variables('Matched_Resource')?['id']), '/content'))}"
+                                                          }
+                                                        },
+                                                        "Append_result_fetch_failed": {
+                                                          "runAfter": {
+                                                            "Fetch_download_url": [
+                                                              "Failed",
+                                                              "TimedOut"
+                                                            ]
+                                                          },
+                                                          "type": "AppendToArrayVariable",
+                                                          "inputs": {
+                                                            "name": "Results",
+                                                            "value": {
+                                                              "filename": "@items('For_each_file')?['filename']",
+                                                              "status": "Failed",
+                                                              "newLocation": "[variables('blanks')]",
+                                                              "error": "Found the file but failed to fetch its content from the OneDrive download URL (status @{coalesce(outputs('Fetch_download_url')?['statusCode'], 'none')})."
+                                                            }
+                                                          }
+                                                        },
+                                                        "Upload_file": {
+                                                          "runAfter": {
+                                                            "Fetch_download_url": [
+                                                              "Succeeded"
+                                                            ]
+                                                          },
+                                                          "type": "Http",
+                                                          "inputs": {
+                                                            "method": "PUT",
+                                                            "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(body('Parse_folder')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(body('Parse_folder')?['id'])}:/@{encodeURIComponent(items('For_each_file')?['filename'])}:/content",
+                                                            "headers": {
+                                                              "Authorization": "Bearer @{variables('Access_Token')}",
+                                                              "Content-Type": "application/octet-stream"
+                                                            },
+                                                            "body": "@body('Fetch_download_url')"
+                                                          }
+                                                        },
+                                                        "Append_result_upload_failed": {
+                                                          "runAfter": {
+                                                            "Upload_file": [
+                                                              "Failed",
+                                                              "TimedOut"
+                                                            ]
+                                                          },
+                                                          "type": "AppendToArrayVariable",
+                                                          "inputs": {
+                                                            "name": "Results",
+                                                            "value": {
+                                                              "filename": "@items('For_each_file')?['filename']",
+                                                              "status": "Failed",
+                                                              "newLocation": "[variables('blanks')]",
+                                                              "error": "Downloaded the file but failed to upload it to the quarantine folder (Graph status @{coalesce(outputs('Upload_file')?['statusCode'], 'none')}). Source NOT deleted. @{string(coalesce(body('Upload_file'), ''))}"
+                                                            }
+                                                          }
+                                                        },
+                                                        "Parse_upload": {
+                                                          "runAfter": {
+                                                            "Upload_file": [
+                                                              "Succeeded"
+                                                            ]
+                                                          },
+                                                          "type": "ParseJson",
+                                                          "inputs": {
+                                                            "content": "@body('Upload_file')",
+                                                            "schema": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "id": {
+                                                                  "type": "string"
+                                                                },
+                                                                "name": {
+                                                                  "type": "string"
+                                                                },
+                                                                "webUrl": {
+                                                                  "type": "string"
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "If_upload_valid": {
+                                                          "runAfter": {
+                                                            "Parse_upload": [
+                                                              "Succeeded"
+                                                            ]
+                                                          },
+                                                          "type": "If",
+                                                          "expression": {
+                                                            "and": [
+                                                              {
+                                                                "greaterOrEquals": [
+                                                                  "@coalesce(outputs('Upload_file')?['statusCode'], 0)",
+                                                                  200
+                                                                ]
+                                                              },
+                                                              {
+                                                                "less": [
+                                                                  "@coalesce(outputs('Upload_file')?['statusCode'], 0)",
+                                                                  300
+                                                                ]
+                                                              },
+                                                              {
+                                                                "not": {
+                                                                  "equals": [
+                                                                    "@trim(coalesce(body('Parse_upload')?['id'], ''))",
+                                                                    ""
+                                                                  ]
+                                                                }
+                                                              }
+                                                            ]
+                                                          },
+                                                          "actions": {
+                                                            "Delete_source_file": {
+                                                              "type": "Http",
+                                                              "inputs": {
+                                                                "method": "DELETE",
+                                                                "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}",
+                                                                "headers": {
+                                                                  "Authorization": "Bearer @{variables('Access_Token')}"
+                                                                }
+                                                              }
+                                                            },
+                                                            "Append_result_success": {
+                                                              "runAfter": {
+                                                                "Delete_source_file": [
+                                                                  "Succeeded",
+                                                                  "Failed",
+                                                                  "TimedOut"
+                                                                ]
+                                                              },
+                                                              "type": "AppendToArrayVariable",
+                                                              "inputs": {
+                                                                "name": "Results",
+                                                                "value": {
+                                                                  "filename": "@items('For_each_file')?['filename']",
+                                                                  "status": "Success",
+                                                                  "newLocation": "@body('Parse_upload')?['webUrl']",
+                                                                  "error": "@if(and(greaterOrEquals(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 200), less(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 300)), '', concat('Uploaded to quarantine but failed to delete the source (Graph status ', string(coalesce(outputs('Delete_source_file')?['statusCode'], 'none')), '); delete manually.'))"
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "else": {
+                                                            "actions": {
+                                                              "Append_result_upload_unconfirmed": {
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                  "name": "Results",
+                                                                  "value": {
+                                                                    "filename": "@items('For_each_file')?['filename']",
+                                                                    "status": "Failed",
+                                                                    "newLocation": "[variables('blanks')]",
+                                                                    "error": "Upload to the quarantine folder could not be confirmed (Graph status @{coalesce(outputs('Upload_file')?['statusCode'], 'none')}, no item id returned). Source NOT deleted."
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     }
@@ -39378,7 +39572,7 @@
                                   "type": "SetVariable",
                                   "inputs": {
                                     "name": "Overall_Status",
-                                    "value": "@if(equals(length(body('Filter_failed_results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), length(variables('Results'))), 'Failed', 'PartialSuccess'))"
+                                    "value": "@if(equals(length(variables('Results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), length(variables('Results'))), 'Failed', 'PartialSuccess')))"
                                   }
                                 },
                                 "Set_Failure_Message_from_results": {
@@ -39503,6 +39697,41 @@
                                     "name": "Overall_Status",
                                     "value": "Failed"
                                   }
+                                },
+                                "Response_mde_auth_failed": {
+                                  "runAfter": {
+                                    "Set_Overall_Status_mde_auth_failed": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "Response",
+                                  "kind": "Http",
+                                  "inputs": {
+                                    "statusCode": 200,
+                                    "headers": {
+                                      "Content-Type": "application/json"
+                                    },
+                                    "body": {
+                                      "status": "Failed",
+                                      "results": "@variables('Results')",
+                                      "error": "@variables('Failure_Message')"
+                                    }
+                                  }
+                                },
+                                "Terminate_mde_auth_failed": {
+                                  "runAfter": {
+                                    "Response_mde_auth_failed": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "Terminate",
+                                  "inputs": {
+                                    "runStatus": "Failed",
+                                    "runError": {
+                                      "code": "MdeAuthFailed",
+                                      "message": "@variables('Failure_Message')"
+                                    }
+                                  }
                                 }
                               },
                               "else": {
@@ -39560,9 +39789,45 @@
                                           "value": false
                                         }
                                       },
-                                      "If_physical_host_provided": {
+                                      "Reset_MDE_Machine_Id": {
                                         "runAfter": {
                                           "Reset_Ntfs_File_Handled": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                          "name": "MDE_Machine_Id",
+                                          "value": "@null"
+                                        }
+                                      },
+                                      "Reset_File_Sha1": {
+                                        "runAfter": {
+                                          "Reset_MDE_Machine_Id": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                          "name": "File_Sha1",
+                                          "value": "@null"
+                                        }
+                                      },
+                                      "Reset_MDE_Action_Id": {
+                                        "runAfter": {
+                                          "Reset_File_Sha1": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                          "name": "MDE_Action_Id",
+                                          "value": "@null"
+                                        }
+                                      },
+                                      "If_physical_host_provided": {
+                                        "runAfter": {
+                                          "Reset_MDE_Action_Id": [
                                             "Succeeded"
                                           ]
                                         },
@@ -39613,7 +39878,7 @@
                                         "type": "Http",
                                         "inputs": {
                                           "method": "GET",
-                                          "uri": "@{variables('MDE_Base_URL')}/api/machines?$filter=computerDnsName eq '@{items('For_each_ntfs_file')?['physicalHost']}'",
+                                          "uri": "@{variables('MDE_Base_URL')}/api/machines?$filter=computerDnsName eq '@{replace(coalesce(items('For_each_ntfs_file')?['physicalHost'], ''), '''', '''''')}'",
                                           "headers": {
                                             "Authorization": "Bearer @{variables('MDE_Access_Token')}"
                                           }
@@ -39698,33 +39963,12 @@
                                           }
                                         }
                                       },
-                                      "Run_advanced_hunting_for_sha1": {
+                                      "If_not_yet_handled": {
                                         "runAfter": {
                                           "Check_Get_MDE_Machine": [
                                             "Succeeded"
                                           ]
                                         },
-                                        "type": "Http",
-                                        "inputs": {
-                                          "method": "POST",
-                                          "uri": "@{variables('MDE_Base_URL')}/api/advancedqueries/run",
-                                          "headers": {
-                                            "Authorization": "Bearer @{variables('MDE_Access_Token')}",
-                                            "Content-Type": "application/json"
-                                          },
-                                          "body": {
-                                            "Query": "DeviceFileEvents | where DeviceId == '@{variables('MDE_Machine_Id')}' and FileName == '@{items('For_each_ntfs_file')?['filename']}' and isnotempty(SHA1) | top 1 by Timestamp desc | project SHA1"
-                                          }
-                                        }
-                                      },
-                                      "Check_advanced_hunting": {
-                                        "runAfter": {
-                                          "Run_advanced_hunting_for_sha1": [
-                                            "Succeeded",
-                                            "Failed",
-                                            "TimedOut"
-                                          ]
-                                        },
                                         "type": "If",
                                         "expression": {
                                           "and": [
@@ -39733,270 +39977,306 @@
                                                 "@variables('Ntfs_File_Handled')",
                                                 false
                                               ]
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Run_advanced_hunting_for_sha1": {
+                                            "type": "Http",
+                                            "inputs": {
+                                              "method": "POST",
+                                              "uri": "@{variables('MDE_Base_URL')}/api/advancedqueries/run",
+                                              "headers": {
+                                                "Authorization": "Bearer @{variables('MDE_Access_Token')}",
+                                                "Content-Type": "application/json"
+                                              },
+                                              "body": {
+                                                "Query": "DeviceFileEvents | where DeviceId == '@{replace(coalesce(variables('MDE_Machine_Id'), ''), '''', '''''')}' and FileName == '@{replace(coalesce(items('For_each_ntfs_file')?['filename'], ''), '''', '''''')}' and isnotempty(SHA1) | top 1 by Timestamp desc | project SHA1"
+                                              }
+                                            }
+                                          },
+                                          "Check_advanced_hunting": {
+                                            "runAfter": {
+                                              "Run_advanced_hunting_for_sha1": [
+                                                "Succeeded",
+                                                "Failed",
+                                                "TimedOut"
+                                              ]
                                             },
-                                            {
-                                              "or": [
-                                                {
-                                                  "less": [
-                                                    "@coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 0)",
-                                                    200
-                                                  ]
-                                                },
-                                                {
-                                                  "greaterOrEquals": [
-                                                    "@coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 0)",
-                                                    300
-                                                  ]
-                                                },
+                                            "type": "If",
+                                            "expression": {
+                                              "and": [
                                                 {
                                                   "equals": [
-                                                    "@trim(coalesce(first(coalesce(body('Run_advanced_hunting_for_sha1')?['Results'], json('[]')))?['SHA1'], ''))",
-                                                    ""
+                                                    "@variables('Ntfs_File_Handled')",
+                                                    false
+                                                  ]
+                                                },
+                                                {
+                                                  "or": [
+                                                    {
+                                                      "less": [
+                                                        "@coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 0)",
+                                                        200
+                                                      ]
+                                                    },
+                                                    {
+                                                      "greaterOrEquals": [
+                                                        "@coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 0)",
+                                                        300
+                                                      ]
+                                                    },
+                                                    {
+                                                      "equals": [
+                                                        "@trim(coalesce(first(coalesce(body('Run_advanced_hunting_for_sha1')?['Results'], json('[]')))?['SHA1'], ''))",
+                                                        ""
+                                                      ]
+                                                    }
                                                   ]
                                                 }
                                               ]
-                                            }
-                                          ]
-                                        },
-                                        "actions": {
-                                          "Append_result_ntfs_sha1_not_found": {
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                              "name": "Results",
-                                              "value": {
-                                                "filename": "@items('For_each_ntfs_file')?['filename']",
-                                                "status": "Failed",
-                                                "newLocation": "[variables('blanks')]",
-                                                "error": "Could not resolve a SHA1 for the file via MDE advanced hunting (status @{coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 'none')}). The file may not have been observed by MDE on host '@{items('For_each_ntfs_file')?['physicalHost']}'; not quarantined."
-                                              }
-                                            }
-                                          },
-                                          "Set_Handled_sha1_not_found": {
-                                            "runAfter": {
-                                              "Append_result_ntfs_sha1_not_found": [
-                                                "Succeeded"
-                                              ]
                                             },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                              "name": "Ntfs_File_Handled",
-                                              "value": true
-                                            }
-                                          }
-                                        },
-                                        "else": {
-                                          "actions": {
-                                            "Set_File_Sha1": {
-                                              "type": "SetVariable",
-                                              "inputs": {
-                                                "name": "File_Sha1",
-                                                "value": "@{first(coalesce(body('Run_advanced_hunting_for_sha1')?['Results'], json('[]')))?['SHA1']}"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "Create_stop_and_quarantine": {
-                                        "runAfter": {
-                                          "Check_advanced_hunting": [
-                                            "Succeeded"
-                                          ]
-                                        },
-                                        "type": "Http",
-                                        "inputs": {
-                                          "method": "POST",
-                                          "uri": "@{variables('MDE_Base_URL')}/api/machines/@{encodeURIComponent(variables('MDE_Machine_Id'))}/StopAndQuarantineFile",
-                                          "headers": {
-                                            "Authorization": "Bearer @{variables('MDE_Access_Token')}",
-                                            "Content-Type": "application/json"
-                                          },
-                                          "body": {
-                                            "Comment": "Rubrik DSPM violation quarantine: @{items('For_each_ntfs_file')?['filename']}",
-                                            "Sha1": "@{variables('File_Sha1')}"
-                                          }
-                                        }
-                                      },
-                                      "Check_create_stop_and_quarantine": {
-                                        "runAfter": {
-                                          "Create_stop_and_quarantine": [
-                                            "Succeeded",
-                                            "Failed",
-                                            "TimedOut"
-                                          ]
-                                        },
-                                        "type": "If",
-                                        "expression": {
-                                          "and": [
-                                            {
-                                              "equals": [
-                                                "@variables('Ntfs_File_Handled')",
-                                                false
-                                              ]
-                                            },
-                                            {
-                                              "or": [
-                                                {
-                                                  "less": [
-                                                    "@coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 0)",
-                                                    200
-                                                  ]
-                                                },
-                                                {
-                                                  "greaterOrEquals": [
-                                                    "@coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 0)",
-                                                    300
-                                                  ]
-                                                },
-                                                {
-                                                  "equals": [
-                                                    "@trim(coalesce(body('Create_stop_and_quarantine')?['id'], ''))",
-                                                    ""
-                                                  ]
+                                            "actions": {
+                                              "Append_result_ntfs_sha1_not_found": {
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                  "name": "Results",
+                                                  "value": {
+                                                    "filename": "@items('For_each_ntfs_file')?['filename']",
+                                                    "status": "Failed",
+                                                    "newLocation": "[variables('blanks')]",
+                                                    "error": "Could not resolve a SHA1 for the file via MDE advanced hunting (status @{coalesce(outputs('Run_advanced_hunting_for_sha1')?['statusCode'], 'none')}). The file may not have been observed by MDE on host '@{items('For_each_ntfs_file')?['physicalHost']}'; not quarantined."
+                                                  }
                                                 }
-                                              ]
-                                            }
-                                          ]
-                                        },
-                                        "actions": {
-                                          "Append_result_ntfs_quarantine_create_failed": {
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                              "name": "Results",
-                                              "value": {
-                                                "filename": "@items('For_each_ntfs_file')?['filename']",
-                                                "status": "Failed",
-                                                "newLocation": "[variables('blanks')]",
-                                                "error": "Failed to create the MDE StopAndQuarantineFile action (status @{coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 'none')}). @{string(coalesce(body('Create_stop_and_quarantine'), ''))}"
+                                              },
+                                              "Set_Handled_sha1_not_found": {
+                                                "runAfter": {
+                                                  "Append_result_ntfs_sha1_not_found": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                  "name": "Ntfs_File_Handled",
+                                                  "value": true
+                                                }
                                               }
-                                            }
-                                          },
-                                          "Set_Handled_create_failed": {
-                                            "runAfter": {
-                                              "Append_result_ntfs_quarantine_create_failed": [
-                                                "Succeeded"
-                                              ]
                                             },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                              "name": "Ntfs_File_Handled",
-                                              "value": true
-                                            }
-                                          }
-                                        },
-                                        "else": {
-                                          "actions": {
-                                            "Set_Quarantine_Action_Id": {
-                                              "type": "SetVariable",
-                                              "inputs": {
-                                                "name": "MDE_Action_Id",
-                                                "value": "@{body('Create_stop_and_quarantine')?['id']}"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "Until_action_complete": {
-                                        "runAfter": {
-                                          "Check_create_stop_and_quarantine": [
-                                            "Succeeded"
-                                          ]
-                                        },
-                                        "type": "Until",
-                                        "expression": "@or(equals(variables('Ntfs_File_Handled'), true), not(contains(json('[\"Pending\",\"InProgress\"]'), coalesce(body('Get_action_status')?['status'], 'Pending'))))",
-                                        "limit": {
-                                          "count": 30,
-                                          "timeout": "PT5M"
-                                        },
-                                        "actions": {
-                                          "Wait_5_seconds": {
-                                            "type": "Wait",
-                                            "inputs": {
-                                              "interval": {
-                                                "count": 5,
-                                                "unit": "Second"
+                                            "else": {
+                                              "actions": {
+                                                "Set_File_Sha1": {
+                                                  "type": "SetVariable",
+                                                  "inputs": {
+                                                    "name": "File_Sha1",
+                                                    "value": "@{first(coalesce(body('Run_advanced_hunting_for_sha1')?['Results'], json('[]')))?['SHA1']}"
+                                                  }
+                                                }
                                               }
                                             }
                                           },
-                                          "Get_action_status": {
+                                          "Create_stop_and_quarantine": {
                                             "runAfter": {
-                                              "Wait_5_seconds": [
+                                              "Check_advanced_hunting": [
                                                 "Succeeded"
                                               ]
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                              "method": "GET",
-                                              "uri": "@{variables('MDE_Base_URL')}/api/machineactions/@{encodeURIComponent(variables('MDE_Action_Id'))}",
+                                              "method": "POST",
+                                              "uri": "@{variables('MDE_Base_URL')}/api/machines/@{encodeURIComponent(variables('MDE_Machine_Id'))}/StopAndQuarantineFile",
                                               "headers": {
-                                                "Authorization": "Bearer @{variables('MDE_Access_Token')}"
+                                                "Authorization": "Bearer @{variables('MDE_Access_Token')}",
+                                                "Content-Type": "application/json"
+                                              },
+                                              "body": {
+                                                "Comment": "Rubrik DSPM violation quarantine: @{items('For_each_ntfs_file')?['filename']}",
+                                                "Sha1": "@{variables('File_Sha1')}"
                                               }
                                             }
-                                          }
-                                        }
-                                      },
-                                      "If_quarantine_succeeded": {
-                                        "runAfter": {
-                                          "Until_action_complete": [
-                                            "Succeeded",
-                                            "Failed",
-                                            "TimedOut"
-                                          ]
-                                        },
-                                        "type": "If",
-                                        "expression": {
-                                          "and": [
-                                            {
-                                              "equals": [
-                                                "@variables('Ntfs_File_Handled')",
-                                                false
+                                          },
+                                          "Check_create_stop_and_quarantine": {
+                                            "runAfter": {
+                                              "Create_stop_and_quarantine": [
+                                                "Succeeded",
+                                                "Failed",
+                                                "TimedOut"
                                               ]
                                             },
-                                            {
-                                              "equals": [
-                                                "@coalesce(body('Get_action_status')?['status'], '')",
-                                                "Succeeded"
+                                            "type": "If",
+                                            "expression": {
+                                              "and": [
+                                                {
+                                                  "equals": [
+                                                    "@variables('Ntfs_File_Handled')",
+                                                    false
+                                                  ]
+                                                },
+                                                {
+                                                  "or": [
+                                                    {
+                                                      "less": [
+                                                        "@coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 0)",
+                                                        200
+                                                      ]
+                                                    },
+                                                    {
+                                                      "greaterOrEquals": [
+                                                        "@coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 0)",
+                                                        300
+                                                      ]
+                                                    },
+                                                    {
+                                                      "equals": [
+                                                        "@trim(coalesce(body('Create_stop_and_quarantine')?['id'], ''))",
+                                                        ""
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
                                               ]
-                                            }
-                                          ]
-                                        },
-                                        "actions": {
-                                          "Append_result_ntfs_success": {
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                              "name": "Results",
-                                              "value": {
-                                                "filename": "@items('For_each_ntfs_file')?['filename']",
-                                                "status": "Success",
-                                                "newLocation": "MDE quarantine on @{items('For_each_ntfs_file')?['physicalHost']}",
-                                                "error": "[variables('blanks')]"
+                                            },
+                                            "actions": {
+                                              "Append_result_ntfs_quarantine_create_failed": {
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                  "name": "Results",
+                                                  "value": {
+                                                    "filename": "@items('For_each_ntfs_file')?['filename']",
+                                                    "status": "Failed",
+                                                    "newLocation": "[variables('blanks')]",
+                                                    "error": "Failed to create the MDE StopAndQuarantineFile action (status @{coalesce(outputs('Create_stop_and_quarantine')?['statusCode'], 'none')}). @{string(coalesce(body('Create_stop_and_quarantine'), ''))}"
+                                                  }
+                                                }
+                                              },
+                                              "Set_Handled_create_failed": {
+                                                "runAfter": {
+                                                  "Append_result_ntfs_quarantine_create_failed": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                  "name": "Ntfs_File_Handled",
+                                                  "value": true
+                                                }
+                                              }
+                                            },
+                                            "else": {
+                                              "actions": {
+                                                "Set_Quarantine_Action_Id": {
+                                                  "type": "SetVariable",
+                                                  "inputs": {
+                                                    "name": "MDE_Action_Id",
+                                                    "value": "@{body('Create_stop_and_quarantine')?['id']}"
+                                                  }
+                                                }
                                               }
                                             }
-                                          }
-                                        },
-                                        "else": {
-                                          "actions": {
-                                            "Append_result_ntfs_quarantine_incomplete": {
-                                              "type": "If",
-                                              "expression": {
-                                                "and": [
-                                                  {
-                                                    "equals": [
-                                                      "@variables('Ntfs_File_Handled')",
-                                                      false
-                                                    ]
+                                          },
+                                          "Until_action_complete": {
+                                            "runAfter": {
+                                              "Check_create_stop_and_quarantine": [
+                                                "Succeeded"
+                                              ]
+                                            },
+                                            "type": "Until",
+                                            "expression": "@or(equals(variables('Ntfs_File_Handled'), true), not(contains(json('[\"Pending\",\"InProgress\"]'), coalesce(body('Get_action_status')?['status'], 'Pending'))))",
+                                            "limit": {
+                                              "count": 30,
+                                              "timeout": "PT5M"
+                                            },
+                                            "actions": {
+                                              "Wait_5_seconds": {
+                                                "type": "Wait",
+                                                "inputs": {
+                                                  "interval": {
+                                                    "count": 5,
+                                                    "unit": "Second"
                                                   }
-                                                ]
+                                                }
                                               },
+                                              "Get_action_status": {
+                                                "runAfter": {
+                                                  "Wait_5_seconds": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                  "method": "GET",
+                                                  "uri": "@{variables('MDE_Base_URL')}/api/machineactions/@{encodeURIComponent(variables('MDE_Action_Id'))}",
+                                                  "headers": {
+                                                    "Authorization": "Bearer @{variables('MDE_Access_Token')}"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "If_quarantine_succeeded": {
+                                            "runAfter": {
+                                              "Until_action_complete": [
+                                                "Succeeded",
+                                                "Failed",
+                                                "TimedOut"
+                                              ]
+                                            },
+                                            "type": "If",
+                                            "expression": {
+                                              "and": [
+                                                {
+                                                  "equals": [
+                                                    "@variables('Ntfs_File_Handled')",
+                                                    false
+                                                  ]
+                                                },
+                                                {
+                                                  "equals": [
+                                                    "@coalesce(body('Get_action_status')?['status'], '')",
+                                                    "Succeeded"
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            "actions": {
+                                              "Append_result_ntfs_success": {
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                  "name": "Results",
+                                                  "value": {
+                                                    "filename": "@items('For_each_ntfs_file')?['filename']",
+                                                    "status": "Success",
+                                                    "newLocation": "MDE quarantine on @{items('For_each_ntfs_file')?['physicalHost']}",
+                                                    "error": "[variables('blanks')]"
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "else": {
                                               "actions": {
-                                                "Append_result_ntfs_incomplete_inner": {
-                                                  "type": "AppendToArrayVariable",
-                                                  "inputs": {
-                                                    "name": "Results",
-                                                    "value": {
-                                                      "filename": "@items('For_each_ntfs_file')?['filename']",
-                                                      "status": "Failed",
-                                                      "newLocation": "[variables('blanks')]",
-                                                      "error": "MDE StopAndQuarantineFile action did not succeed within the timeout (final status @{coalesce(body('Get_action_status')?['status'], 'Unknown')})."
+                                                "Append_result_ntfs_quarantine_incomplete": {
+                                                  "type": "If",
+                                                  "expression": {
+                                                    "and": [
+                                                      {
+                                                        "equals": [
+                                                          "@variables('Ntfs_File_Handled')",
+                                                          false
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  "actions": {
+                                                    "Append_result_ntfs_incomplete_inner": {
+                                                      "type": "AppendToArrayVariable",
+                                                      "inputs": {
+                                                        "name": "Results",
+                                                        "value": {
+                                                          "filename": "@items('For_each_ntfs_file')?['filename']",
+                                                          "status": "Failed",
+                                                          "newLocation": "[variables('blanks')]",
+                                                          "error": "MDE StopAndQuarantineFile action did not succeed within the timeout (final status @{coalesce(body('Get_action_status')?['status'], 'Unknown')})."
+                                                        }
+                                                      }
                                                     }
                                                   }
                                                 }
@@ -40028,7 +40308,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                       "name": "Overall_Status",
-                                      "value": "@if(equals(length(variables('Results')), 0), 'Failed', if(equals(length(body('Filter_failed_results_ntfs')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), length(variables('Results'))), 'Failed', 'PartialSuccess')))"
+                                      "value": "@if(equals(length(variables('Results')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), length(variables('Results'))), 'Failed', 'PartialSuccess')))"
                                     }
                                   },
                                   "Set_Failure_Message_ntfs": {
@@ -40207,61 +40487,63 @@
           ],
           "metadata": {
             "title": "Rubrik Quarantine Files",
-            "description": "Child (HTTP Request-triggered) playbook that quarantines a BATCH of files. The caller (RubrikViolationRemediation) passes the whole files array in a single call; this playbook iterates internally so the sub-playbook is triggered once per incident instead of once per file. It branches on objectType into exactly three paths: ONEDRIVE, NTFS, and default. A single app registration (client id/secret read from Key Vault, tenant id from TenantId) is used for BOTH Microsoft Graph and Microsoft Defender for Endpoint (MDE) because both are Microsoft APIs on the same tenant; only the OAuth2 token scope differs per branch. ONEDRIVE (objectType containing ONEDRIVE, or equal to O365_SITE / O365_ONEDRIVE / O365_MAILBOX) is quarantined via Microsoft Graph (scope https://graph.microsoft.com/.default): the analyst is asked ONCE (per run) for a quarantine folder NAME via a Teams Adaptive Card, and each file is moved (search -> download -> upload to the resolved folder -> delete source only after a confirmed upload). NTFS (objectType WINDOWS_FILESHARE) is quarantined via MDE (scope https://api.securitycenter.microsoft.com/.default): the device is resolved by physicalHost (computerDnsName), each file's SHA1 is resolved via MDE advanced hunting (DeviceFileEvents by device + filename), a StopAndQuarantineFile machine action is created and polled (up to 30 attempts, 5s apart) at /api/machineactions/{id}; if the SHA1 cannot be resolved or the quarantine action fails, that file is recorded as Failed and the batch continues (no machine isolation). The default branch returns NotImplemented with the error 'not a valid objectType for quarantine'. Every API call is status-checked; auth-phase failures short-circuit and terminate the run; per-file failures are captured per file. Returns { status, results: [ { filename, status, newLocation, error } ] }.",
+            "description": "This playbook is an HTTP Request-triggered child playbook that quarantines a batch of files reported by a Rubrik Security Cloud DSPM violation. It is called by the RubrikDSPMViolationRemediation playbook with the whole files array in a single call and iterates internally, so it runs once per incident instead of once per file. It branches on objectType into three paths: ONEDRIVE files are quarantined via Microsoft Graph (the analyst is asked once per run for a quarantine folder name via a Teams Adaptive Card, then each file is searched, downloaded, uploaded to the resolved folder, and the source deleted only after a confirmed upload); NTFS (WINDOWS_FILESHARE) files are quarantined via Microsoft Defender for Endpoint (the device is resolved by physicalHost, each file's SHA1 is resolved via advanced hunting, and a StopAndQuarantineFile machine action is created and polled); any other objectType returns NotImplemented. A single app registration (client id/secret in Key Vault) authenticates both Microsoft Graph and MDE; only the OAuth2 token scope differs per branch. The playbook returns { status, results: [ { filename, status, newLocation, error } ] } to the caller.",
             "prerequisites": [
-              "A SINGLE Azure AD app registration used for BOTH Microsoft Graph and Microsoft Defender for Endpoint. It needs Microsoft Graph APPLICATION permissions Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All AND WindowsDefenderATP (Microsoft Defender for Endpoint) APPLICATION permissions Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All (all admin-consented). Its client id and client secret are stored in Key Vault.",
-              "A Key Vault holding the app credentials in the secrets named by GraphClientIdSecretName and GraphClientSecretSecretName (these same credentials authenticate both Graph and MDE).",
-              "A Microsoft Teams team and channel for the folder-name Adaptive Card (used by the ONEDRIVE branch only).",
-              "For NTFS quarantine: the target file shares must be hosted on devices onboarded to Microsoft Defender for Endpoint, reachable by their physicalHost / computerDnsName.",
-              "The caller invokes this playbook with body { objectType, files: [ { filename, filePath, ownerUpn, objectType, physicalHost } ] }. For NTFS, physicalHost is REQUIRED per file (the MDE-onboarded host that stores the file share)."
+              "1. A single Azure AD app registration is used for BOTH Microsoft Graph and Microsoft Defender for Endpoint. Grant it (all admin-consented):",
+              "a. Microsoft Graph APPLICATION permissions: Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All.",
+              "b. WindowsDefenderATP (Microsoft Defender for Endpoint) APPLICATION permissions: Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All.",
+              "2. Store the app registration credentials in Key Vault and obtain the Key Vault name and tenantId.",
+              "a. Create a Key Vault with a unique name.",
+              "b. Go to KeyVault -> secrets, click Generate/import and create the secrets named by GraphClientIdSecretName and GraphClientSecretSecretName (defaults 'Graph-App-ClientId' and 'Graph-App-ClientSecret') for storing client_id and client_secret respectively. These same credentials authenticate both Graph and MDE.",
+              "NOTE: Make sure the Permission model in the Access Configuration of the Key Vault is set to 'Vault access policy'. If not, change it to 'Vault access policy'.",
+              "3. For the ONEDRIVE branch, a Microsoft Teams team and channel are required for the folder-name Adaptive Card.",
+              "4. For the NTFS branch, the target file shares must be hosted on devices onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
+              "5. This playbook is a prerequisite for the RubrikDSPMViolationRemediation playbook and must be deployed first, in the same resource group. RubrikDSPMViolationRemediation calls this playbook as a sub-playbook (via its RubrikQuarantineFilesPlaybookName parameter) once per incident to quarantine the violation files."
             ],
+            "postDeployment": [
+              "**a. Authorize connections**",
+              "Once deployment is complete, authorize each connection.",
+              "1. Go to your logic app -> API connections -> Select the Teams connection resource.",
+              "2. Go to General -> edit API connection.",
+              "3. Click Authorize.",
+              "4. Sign in.",
+              "5. Click Save.",
+              "6. The Key Vault connection uses the managed identity and does not require an interactive sign-in.",
+              "**b. Assign Role to comment on and update incidents (if the caller requires it)**",
+              "1. Go to Log Analytics Workspace -> <your workspace> -> Access Control -> Add.",
+              "2. Add role assignment.",
+              "3. Assignment type: Job function roles.",
+              "4. Role: Microsoft Sentinel Responder.",
+              "5. Members: select managed identity for assigned access to and add your logic app as member.",
+              "6. Click on review + assign.",
+              "**c. Add Access policy in Key Vault**",
+              "Add an access policy for the playbook's managed identity to read the app-registration secrets.",
+              "1. Go to logic app -> <your logic app> -> Identity -> System assigned managed identity and copy the Object (principal) ID.",
+              "2. Go to keyvaults -> <your keyvault> -> Access policies -> Create.",
+              "3. Select Get on secrets permissions. Click next.",
+              "4. In the principal section, search by the copied object ID. Click next.",
+              "5. Click review + create.",
+              "**d. Grant the app registration API permissions**",
+              "1. In Entra ID -> App registrations -> <your app> -> API permissions, add the Microsoft Graph and WindowsDefenderATP application permissions listed in the prerequisites and grant admin consent.",
+              "2. For the NTFS branch, ensure the file-share hosts are onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
+              "**e. Configurations in Microsoft Sentinel**",
+              "1. This playbook has an HTTP Request trigger and is invoked by RubrikDSPMViolationRemediation; it does not attach directly to an automation rule.",
+              "2. Deploy this playbook before RubrikDSPMViolationRemediation. When deploying RubrikDSPMViolationRemediation, set its RubrikQuarantineFilesPlaybookName parameter to this Logic App's name so it can call this sub-playbook."
+            ],
+            "lastUpdateTime": "2026-08-05T00:00:00Z",
             "tags": [
               "Microsoft Sentinel",
               "Rubrik",
               "DSPM",
-              "Quarantine",
-              "Microsoft Graph",
-              "Child Playbook"
+              "Quarantine"
             ],
-            "postDeployment": [
-              "Grant the Logic App managed identity Key Vault Secrets User (or an access policy with Get on secrets) on the Key Vault named by KeyVaultName.",
-              "Create/point ONE app registration used for both Microsoft services and store its client id/secret in Key Vault under GraphClientIdSecretName / GraphClientSecretSecretName. Grant it Microsoft Graph app permissions Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All AND WindowsDefenderATP app permissions Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All, all admin-consented.",
-              "Authorize (sign in to) the Microsoft Teams API connection so the folder-name card can be posted and awaited (ONEDRIVE branch).",
-              "For NTFS quarantine, ensure the file-share hosts are onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
-              "This playbook has an HTTP Request trigger; the caller RubrikViolationRemediation references it by RubrikQuarantineFilesPlaybookName and must be in the same resource group.",
-              "objectType routing: ONEDRIVE (contains ONEDRIVE, or equals O365_SITE / O365_ONEDRIVE / O365_MAILBOX) -> Microsoft Graph move; NTFS (WINDOWS_FILESHARE) -> MDE StopAndQuarantineFile; anything else -> NotImplemented ('not a valid objectType for quarantine')."
-            ],
-            "releaseNotes": [
-              {
-                "version": "3.0.0",
-                "title": "Rubrik Quarantine Files",
-                "notes": [
-                  "Added a real NTFS quarantine flow via Microsoft Defender for Endpoint (MDE): resolve device by physicalHost, resolve each file SHA1 via MDE advanced hunting, create a StopAndQuarantineFile machine action and poll /api/machineactions/{id} (30 x 5s). No machine-isolation fallback: on SHA1-miss or action failure the file is recorded Failed and the batch continues. Reworked objectType routing to exactly three branches (ONEDRIVE / NTFS / default) and removed the previous default fallback to ONEDRIVE; unknown objectTypes now return NotImplemented with 'not a valid objectType for quarantine'. The same app registration authenticates both Graph and MDE; only the token scope differs."
-                ]
-              },
-              {
-                "version": "2.2.0",
-                "title": "Rubrik Quarantine Files",
-                "notes": [
-                  "Fixed wrong-file quarantine when the same filename exists in multiple OneDrive locations: the Graph /search hits are now disambiguated by filePath (owner drive + parent folder) before download/upload/delete, so the exact file at the reported location is moved and its source removed. Download no longer follows the Graph 302 with the bearer token; it fetches bytes from the returned Location URL."
-                ]
-              },
-              {
-                "version": "2.1.0",
-                "title": "Rubrik Quarantine Files",
-                "notes": [
-                  "Added full API status-code handling: every Key Vault, Graph token, and per-file Graph call now stores a failure message on any non-200 status, returns a Failed response to the parent playbook, and terminates this playbook as Failed."
-                ]
-              },
-              {
-                "version": "2.0.0",
-                "title": "Rubrik Quarantine Files",
-                "notes": [
-                  "Batch input (files array, single call). OAuth2 client-credentials Graph auth via Key Vault. Folder NAME prompt via user-posted Teams Adaptive Card; path-based folder resolution."
-                ]
-              }
-            ],
-            "lastUpdateTime": "2026-07-22T00:00:00Z"
+            "releaseNotes": {
+              "version": "3.0.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -41709,10 +41991,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RubrikSecurityCloudAzureFunctions",
                     "dataTypes": [
                       "RubrikAnomalyData"
-                    ]
+                    ],
+                    "connectorId": "RubrikSecurityCloudAzureFunctions"
                   }
                 ],
                 "tactics": [
@@ -41725,10 +42007,10 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "ObjectType": "ObjectType",
                   "ObjectId": "ObjectId",
-                  "ClusterIdentifier": "ClusterId",
                   "ClusterName": "ClusterName",
+                  "ObjectType": "ObjectType",
+                  "ClusterIdentifier": "ClusterId",
                   "ObjectName": "ObjectName"
                 },
                 "incidentConfiguration": {
@@ -41815,10 +42097,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RubrikSecurityCloudAzureFunctions",
                     "dataTypes": [
                       "RubrikEventsData"
-                    ]
+                    ],
+                    "connectorId": "RubrikSecurityCloudAzureFunctions"
                   }
                 ],
                 "tactics": [
@@ -41831,27 +42113,27 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "Summary": "Summary",
+                  "Url": "Url",
                   "ClusterIdentifier": "ClusterId",
                   "ObjectName": "ObjectName",
-                  "Url": "Url",
                   "ObjectType": "ObjectType",
-                  "EventName": "EventName",
-                  "ObjectId": "ObjectId"
+                  "ObjectId": "ObjectId",
+                  "Summary": "Summary",
+                  "EventName": "EventName"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "ThreatMonitoring Found {{count_}} {{eventname}} Matches for {{ObjectName}}"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "lookbackDuration": "P7D",
+                    "enabled": true,
                     "groupByCustomDetails": [
                       "ObjectName",
                       "ObjectId"
                     ],
-                    "enabled": true,
-                    "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "lookbackDuration": "P7D"
+                    "reopenClosedIncident": false
                   },
                   "createIncident": true
                 }
@@ -41936,10 +42218,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RubrikSecurityCloudAzureFunctions",
                     "dataTypes": [
                       "RubrikViolationData"
-                    ]
+                    ],
+                    "connectorId": "RubrikSecurityCloudAzureFunctions"
                   }
                 ],
                 "tactics": [
@@ -41952,30 +42234,30 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
+                  "EventType": "Class",
                   "Summary": "Summary",
                   "EventTimestamp": "EventTimestamp",
-                  "SnapshotId": "SnapshotId",
-                  "EventName": "EventName",
                   "ObjectName": "ObjectName",
-                  "Severity": "Severity",
                   "ObjectType": "ObjectType",
                   "ObjectId": "ObjectId",
-                  "EventType": "Class"
+                  "SnapshotId": "SnapshotId",
+                  "EventName": "EventName",
+                  "Severity": "Severity"
                 },
                 "alertDetailsOverride": {
+                  "alertSeverityColumnName": "NewSeverity",
                   "alertDisplayNameFormat": "{{Class}} event occurred for object {{ObjectName}} with type {{ObjectType}}",
-                  "alertDescriptionFormat": "{{Summary}}",
-                  "alertSeverityColumnName": "NewSeverity"
+                  "alertDescriptionFormat": "{{Summary}}"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "lookbackDuration": "P7D",
+                    "enabled": true,
                     "groupByCustomDetails": [
                       "ObjectId"
                     ],
-                    "enabled": true,
-                    "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "lookbackDuration": "P7D"
+                    "reopenClosedIncident": false
                   },
                   "createIncident": true
                 }
@@ -42060,10 +42342,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RubrikSecurityCloudAzureFunctions",
                     "dataTypes": [
                       "RubrikViolationData"
-                    ]
+                    ],
+                    "connectorId": "RubrikSecurityCloudAzureFunctions"
                   }
                 ],
                 "tactics": [
@@ -42076,30 +42358,30 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
+                  "EventType": "Class",
                   "Summary": "Summary",
                   "EventTimestamp": "EventTimestamp",
-                  "EventName": "EventName",
-                  "ObjectName": "ObjectName",
                   "ViolationId": "SeriesId",
-                  "Severity": "Severity",
+                  "ObjectName": "ObjectName",
                   "ObjectType": "ObjectType",
                   "ObjectId": "ObjectId",
-                  "EventType": "Class"
+                  "EventName": "EventName",
+                  "Severity": "Severity"
                 },
                 "alertDetailsOverride": {
+                  "alertSeverityColumnName": "NewSeverity",
                   "alertDisplayNameFormat": "{{Class}} event occurred for object {{ObjectName}} with type {{ObjectType}}",
-                  "alertDescriptionFormat": "{{Summary}}",
-                  "alertSeverityColumnName": "NewSeverity"
+                  "alertDescriptionFormat": "{{Summary}}"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "lookbackDuration": "P7D",
+                    "enabled": true,
                     "groupByCustomDetails": [
                       "ViolationId"
                     ],
-                    "enabled": true,
-                    "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "lookbackDuration": "P7D"
+                    "reopenClosedIncident": false
                   },
                   "createIncident": true
                 }
@@ -42184,14 +42466,14 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RubrikSecurityCloudAzureFunctions",
                     "dataTypes": [
                       "RubrikViolationData"
-                    ]
+                    ],
+                    "connectorId": "RubrikSecurityCloudAzureFunctions"
                   }
                 ],
                 "tactics": [
-                  "CredentialAccess"
+                  "InitialAccess"
                 ],
                 "techniques": [
                   "T1078"
@@ -42200,30 +42482,30 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
+                  "EventType": "Class",
                   "Summary": "Summary",
                   "EventTimestamp": "EventTimestamp",
-                  "EventName": "EventName",
-                  "ObjectName": "ObjectName",
                   "ViolationId": "SeriesId",
-                  "Severity": "Severity",
+                  "ObjectName": "ObjectName",
                   "ObjectType": "ObjectType",
                   "ObjectId": "ObjectId",
-                  "EventType": "Class"
+                  "EventName": "EventName",
+                  "Severity": "Severity"
                 },
                 "alertDetailsOverride": {
+                  "alertSeverityColumnName": "NewSeverity",
                   "alertDisplayNameFormat": "{{Class}} event occurred for object {{ObjectName}} with type {{ObjectType}}",
-                  "alertDescriptionFormat": "{{Summary}}",
-                  "alertSeverityColumnName": "NewSeverity"
+                  "alertDescriptionFormat": "{{Summary}}"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "lookbackDuration": "P7D",
+                    "enabled": true,
                     "groupByCustomDetails": [
                       "ViolationId"
                     ],
-                    "enabled": true,
-                    "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "lookbackDuration": "P7D"
+                    "reopenClosedIncident": false
                   },
                   "createIncident": true
                 }

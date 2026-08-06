@@ -3,33 +3,59 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "Rubrik Quarantine Files",
-    "description": "Child (HTTP Request-triggered) playbook that quarantines a BATCH of files. The caller (RubrikViolationRemediation) passes the whole files array in a single call; this playbook iterates internally so the sub-playbook is triggered once per incident instead of once per file. It branches on objectType into exactly three paths: ONEDRIVE, NTFS, and default. A single app registration (client id/secret read from Key Vault, tenant id from TenantId) is used for BOTH Microsoft Graph and Microsoft Defender for Endpoint (MDE) because both are Microsoft APIs on the same tenant; only the OAuth2 token scope differs per branch. ONEDRIVE (objectType containing ONEDRIVE, or equal to O365_SITE / O365_ONEDRIVE / O365_MAILBOX) is quarantined via Microsoft Graph (scope https://graph.microsoft.com/.default): the analyst is asked ONCE (per run) for a quarantine folder NAME via a Teams Adaptive Card, and each file is moved (search -> download -> upload to the resolved folder -> delete source only after a confirmed upload). NTFS (objectType WINDOWS_FILESHARE) is quarantined via MDE (scope https://api.securitycenter.microsoft.com/.default): the device is resolved by physicalHost (computerDnsName), each file's SHA1 is resolved via MDE advanced hunting (DeviceFileEvents by device + filename), a StopAndQuarantineFile machine action is created and polled (up to 30 attempts, 5s apart) at /api/machineactions/{id}; if the SHA1 cannot be resolved or the quarantine action fails, that file is recorded as Failed and the batch continues (no machine isolation). The default branch returns NotImplemented with the error 'not a valid objectType for quarantine'. Every API call is status-checked; auth-phase failures short-circuit and terminate the run; per-file failures are captured per file. Returns { status, results: [ { filename, status, newLocation, error } ] }.",
+    "description": "This playbook is an HTTP Request-triggered child playbook that quarantines a batch of files reported by a Rubrik Security Cloud DSPM violation. It is called by the RubrikDSPMViolationRemediation playbook with the whole files array in a single call and iterates internally, so it runs once per incident instead of once per file. It branches on objectType into three paths: ONEDRIVE files are quarantined via Microsoft Graph (the analyst is asked once per run for a quarantine folder name via a Teams Adaptive Card, then each file is searched, downloaded, uploaded to the resolved folder, and the source deleted only after a confirmed upload); NTFS (WINDOWS_FILESHARE) files are quarantined via Microsoft Defender for Endpoint (the device is resolved by physicalHost, each file's SHA1 is resolved via advanced hunting, and a StopAndQuarantineFile machine action is created and polled); any other objectType returns NotImplemented. A single app registration (client id/secret in Key Vault) authenticates both Microsoft Graph and MDE; only the OAuth2 token scope differs per branch. The playbook returns { status, results: [ { filename, status, newLocation, error } ] } to the caller.",
     "prerequisites": [
-      "A SINGLE Azure AD app registration used for BOTH Microsoft Graph and Microsoft Defender for Endpoint. It needs Microsoft Graph APPLICATION permissions Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All AND WindowsDefenderATP (Microsoft Defender for Endpoint) APPLICATION permissions Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All (all admin-consented). Its client id and client secret are stored in Key Vault.",
-      "A Key Vault holding the app credentials in the secrets named by GraphClientIdSecretName and GraphClientSecretSecretName (these same credentials authenticate both Graph and MDE).",
-      "A Microsoft Teams team and channel for the folder-name Adaptive Card (used by the ONEDRIVE branch only).",
-      "For NTFS quarantine: the target file shares must be hosted on devices onboarded to Microsoft Defender for Endpoint, reachable by their physicalHost / computerDnsName.",
-      "The caller invokes this playbook with body { objectType, files: [ { filename, filePath, ownerUpn, objectType, physicalHost } ] }. For NTFS, physicalHost is REQUIRED per file (the MDE-onboarded host that stores the file share)."
+      "1. A single Azure AD app registration is used for BOTH Microsoft Graph and Microsoft Defender for Endpoint. Grant it (all admin-consented):",
+      "a. Microsoft Graph APPLICATION permissions: Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All.",
+      "b. WindowsDefenderATP (Microsoft Defender for Endpoint) APPLICATION permissions: Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All.",
+      "2. Store the app registration credentials in Key Vault and obtain the Key Vault name and tenantId.",
+      "a. Create a Key Vault with a unique name.",
+      "b. Go to KeyVault -> secrets, click Generate/import and create the secrets named by GraphClientIdSecretName and GraphClientSecretSecretName (defaults 'Graph-App-ClientId' and 'Graph-App-ClientSecret') for storing client_id and client_secret respectively. These same credentials authenticate both Graph and MDE.",
+      "NOTE: Make sure the Permission model in the Access Configuration of the Key Vault is set to 'Vault access policy'. If not, change it to 'Vault access policy'.",
+      "3. For the ONEDRIVE branch, a Microsoft Teams team and channel are required for the folder-name Adaptive Card.",
+      "4. For the NTFS branch, the target file shares must be hosted on devices onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
+      "5. This playbook is a prerequisite for the RubrikDSPMViolationRemediation playbook and must be deployed first, in the same resource group. RubrikDSPMViolationRemediation calls this playbook as a sub-playbook (via its RubrikQuarantineFilesPlaybookName parameter) once per incident to quarantine the violation files."
     ],
-    "entities": [],
-    "tags": ["Microsoft Sentinel", "Rubrik", "DSPM", "Quarantine", "Microsoft Graph", "Child Playbook"],
-    "support": { "tier": "community" },
-    "author": { "name": "Rubrik" },
     "postDeployment": [
-      "Grant the Logic App managed identity Key Vault Secrets User (or an access policy with Get on secrets) on the Key Vault named by KeyVaultName.",
-      "Create/point ONE app registration used for both Microsoft services and store its client id/secret in Key Vault under GraphClientIdSecretName / GraphClientSecretSecretName. Grant it Microsoft Graph app permissions Files.ReadWrite.All, Sites.ReadWrite.All, User.Read.All AND WindowsDefenderATP app permissions Machine.ReadWrite.All (or Machine.StopAndQuarantine) and AdvancedQuery.Read.All, all admin-consented.",
-      "Authorize (sign in to) the Microsoft Teams API connection so the folder-name card can be posted and awaited (ONEDRIVE branch).",
-      "For NTFS quarantine, ensure the file-share hosts are onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
-      "This playbook has an HTTP Request trigger; the caller RubrikViolationRemediation references it by RubrikQuarantineFilesPlaybookName and must be in the same resource group.",
-      "objectType routing: ONEDRIVE (contains ONEDRIVE, or equals O365_SITE / O365_ONEDRIVE / O365_MAILBOX) -> Microsoft Graph move; NTFS (WINDOWS_FILESHARE) -> MDE StopAndQuarantineFile; anything else -> NotImplemented ('not a valid objectType for quarantine')."
+      "**a. Authorize connections**",
+      "Once deployment is complete, authorize each connection.",
+      "1. Go to your logic app -> API connections -> Select the Teams connection resource.",
+      "2. Go to General -> edit API connection.",
+      "3. Click Authorize.",
+      "4. Sign in.",
+      "5. Click Save.",
+      "6. The Key Vault connection uses the managed identity and does not require an interactive sign-in.",
+      "**b. Assign Role to comment on and update incidents (if the caller requires it)**",
+      "1. Go to Log Analytics Workspace -> <your workspace> -> Access Control -> Add.",
+      "2. Add role assignment.",
+      "3. Assignment type: Job function roles.",
+      "4. Role: Microsoft Sentinel Responder.",
+      "5. Members: select managed identity for assigned access to and add your logic app as member.",
+      "6. Click on review + assign.",
+      "**c. Add Access policy in Key Vault**",
+      "Add an access policy for the playbook's managed identity to read the app-registration secrets.",
+      "1. Go to logic app -> <your logic app> -> Identity -> System assigned managed identity and copy the Object (principal) ID.",
+      "2. Go to keyvaults -> <your keyvault> -> Access policies -> Create.",
+      "3. Select Get on secrets permissions. Click next.",
+      "4. In the principal section, search by the copied object ID. Click next.",
+      "5. Click review + create.",
+      "**d. Grant the app registration API permissions**",
+      "1. In Entra ID -> App registrations -> <your app> -> API permissions, add the Microsoft Graph and WindowsDefenderATP application permissions listed in the prerequisites and grant admin consent.",
+      "2. For the NTFS branch, ensure the file-share hosts are onboarded to Microsoft Defender for Endpoint and resolvable by their physicalHost / computerDnsName.",
+      "**e. Configurations in Microsoft Sentinel**",
+      "1. This playbook has an HTTP Request trigger and is invoked by RubrikDSPMViolationRemediation; it does not attach directly to an automation rule.",
+      "2. Deploy this playbook before RubrikDSPMViolationRemediation. When deploying RubrikDSPMViolationRemediation, set its RubrikQuarantineFilesPlaybookName parameter to this Logic App's name so it can call this sub-playbook."
     ],
-    "releaseNotes": [
-      { "version": "3.0.0", "title": "Rubrik Quarantine Files", "notes": ["Added a real NTFS quarantine flow via Microsoft Defender for Endpoint (MDE): resolve device by physicalHost, resolve each file SHA1 via MDE advanced hunting, create a StopAndQuarantineFile machine action and poll /api/machineactions/{id} (30 x 5s). No machine-isolation fallback: on SHA1-miss or action failure the file is recorded Failed and the batch continues. Reworked objectType routing to exactly three branches (ONEDRIVE / NTFS / default) and removed the previous default fallback to ONEDRIVE; unknown objectTypes now return NotImplemented with 'not a valid objectType for quarantine'. The same app registration authenticates both Graph and MDE; only the token scope differs."] },
-      { "version": "2.2.0", "title": "Rubrik Quarantine Files", "notes": ["Fixed wrong-file quarantine when the same filename exists in multiple OneDrive locations: the Graph /search hits are now disambiguated by filePath (owner drive + parent folder) before download/upload/delete, so the exact file at the reported location is moved and its source removed. Download no longer follows the Graph 302 with the bearer token; it fetches bytes from the returned Location URL."] },
-      { "version": "2.1.0", "title": "Rubrik Quarantine Files", "notes": ["Added full API status-code handling: every Key Vault, Graph token, and per-file Graph call now stores a failure message on any non-200 status, returns a Failed response to the parent playbook, and terminates this playbook as Failed."] },
-      { "version": "2.0.0", "title": "Rubrik Quarantine Files", "notes": ["Batch input (files array, single call). OAuth2 client-credentials Graph auth via Key Vault. Folder NAME prompt via user-posted Teams Adaptive Card; path-based folder resolution."] }
-    ],
-    "lastUpdateTime": "2026-07-22T00:00:00Z"
+    "lastUpdateTime": "2026-08-05T00:00:00.000Z",
+    "entities": [],
+    "tags": [ "Microsoft Sentinel", "Rubrik", "DSPM", "Quarantine" ],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Rubrik"
+    }
   },
   "parameters": {
     "PlaybookName": {
@@ -64,9 +90,8 @@
       "metadata": { "description": "Key Vault secret name holding the Graph app registration client secret." }
     },
     "SearchRegion": {
-      "defaultValue": "IND",
       "type": "string",
-      "metadata": { "description": "ISO 3166-1 region code REQUIRED by Microsoft Graph /search/query for application (app-only) permissions. Must match the tenant's data location (e.g. NAM, EUR, GBR, APC, AUS, CAN, IND, JPN). Without it Graph returns 'Region is required when request with application permission.'" }
+      "metadata": { "description": "REQUIRED. ISO 3166-1 region code required by Microsoft Graph /search/query for application (app-only) permissions. Must match the tenant's data location (e.g. NAM, EUR, GBR, APC, AUS, CAN, IND, JPN). Without it Graph returns 'Region is required when request with application permission.'" }
     }
   },
   "variables": {
@@ -254,8 +279,17 @@
                 ]
               }
             },
-            "Initialize_MDE_Access_Token": {
+            "Initialize_Matched_Folder": {
               "runAfter": { "Initialize_Matched_Resource": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Matched_Folder", "type": "object", "value": {} }
+                ]
+              }
+            },
+            "Initialize_MDE_Access_Token": {
+              "runAfter": { "Initialize_Matched_Folder": ["Succeeded"] },
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
@@ -409,7 +443,7 @@
                         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                         "body": [
                           { "type": "TextBlock", "weight": "Bolder", "size": "Medium", "wrap": true, "text": "Rubrik DSPM Quarantine" },
-                          { "type": "TextBlock", "wrap": true, "text": "Enter the quarantine folder name. @{length(coalesce(triggerBody()?['files'], json('[]')))} file(s) will be moved into a folder with this name inside each file owner's OneDrive (the folder is created if it does not exist)." },
+                          { "type": "TextBlock", "wrap": true, "text": "Enter the quarantine folder name. @{length(coalesce(triggerBody()?['files'], json('[]')))} file(s) will be moved into a folder with this name in the same drive (OneDrive or SharePoint document library) where each file is located. The folder is created in that drive if it does not already exist." },
                           { "type": "Input.Text", "id": "quarantineFolderName", "label": "Quarantine folder name", "placeholder": "e.g. Quarantine", "isRequired": true, "errorMessage": "Please enter a folder name." }
                         ],
                         "actions": [ { "type": "Action.Submit", "title": "Confirm" } ]
@@ -567,7 +601,7 @@
                                           "type": "SetVariable",
                                           "inputs": {
                                             "name": "Matched_Resource",
-                                            "value": "@coalesce(first(body('Filter_matching_hits'))?['resource'], first(coalesce(first(first(body('Parse_search_result')?['value'])?['hitsContainers'])?['hits'], json('[]')))?['resource'], json('{}'))"
+                                            "value": "@coalesce(first(body('Filter_matching_hits'))?['resource'], json('{}'))"
                                           }
                                         },
                                         "If_file_found": {
@@ -579,40 +613,108 @@
                                             ]
                                           },
                                           "actions": {
-                                            "Resolve_or_create_folder": {
+                                            "Reset_Matched_Folder": {
                                               "runAfter": {},
+                                              "type": "SetVariable",
+                                              "inputs": { "name": "Matched_Folder", "value": {} }
+                                            },
+                                            "Get_quarantine_folder": {
+                                              "runAfter": { "Reset_Matched_Folder": ["Succeeded"] },
                                               "type": "Http",
                                               "inputs": {
-                                                "method": "PATCH",
+                                                "method": "GET",
                                                 "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/root:/@{encodeURIComponent(variables('Quarantine_Folder_Name'))}:",
-                                                "headers": {
-                                                  "Authorization": "Bearer @{variables('Access_Token')}",
-                                                  "Content-Type": "application/json"
-                                                },
-                                                "body": {
-                                                  "folder": {},
-                                                  "@@microsoft.graph.conflictBehavior": "replace"
+                                                "headers": { "Authorization": "Bearer @{variables('Access_Token')}" }
+                                              }
+                                            },
+                                            "If_folder_exists": {
+                                              "runAfter": { "Get_quarantine_folder": ["Succeeded", "Failed", "TimedOut"] },
+                                              "type": "If",
+                                              "expression": {
+                                                "and": [
+                                                  { "greaterOrEquals": ["@coalesce(outputs('Get_quarantine_folder')?['statusCode'], 0)", 200] },
+                                                  { "less": ["@coalesce(outputs('Get_quarantine_folder')?['statusCode'], 0)", 300] },
+                                                  { "not": { "equals": ["@trim(coalesce(body('Get_quarantine_folder')?['id'], ''))", ""] } }
+                                                ]
+                                              },
+                                              "actions": {
+                                                "Set_Matched_Folder_existing": {
+                                                  "runAfter": {},
+                                                  "type": "SetVariable",
+                                                  "inputs": { "name": "Matched_Folder", "value": "@body('Get_quarantine_folder')" }
+                                                }
+                                              },
+                                              "else": {
+                                                "actions": {
+                                                  "Create_quarantine_folder": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                      "method": "POST",
+                                                      "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/root/children",
+                                                      "headers": {
+                                                        "Authorization": "Bearer @{variables('Access_Token')}",
+                                                        "Content-Type": "application/json"
+                                                      },
+                                                      "body": {
+                                                        "name": "@{variables('Quarantine_Folder_Name')}",
+                                                        "folder": {},
+                                                        "@@microsoft.graph.conflictBehavior": "fail"
+                                                      }
+                                                    }
+                                                  },
+                                                  "If_folder_created": {
+                                                    "runAfter": { "Create_quarantine_folder": ["Succeeded", "Failed", "TimedOut"] },
+                                                    "type": "If",
+                                                    "expression": {
+                                                      "and": [
+                                                        { "greaterOrEquals": ["@coalesce(outputs('Create_quarantine_folder')?['statusCode'], 0)", 200] },
+                                                        { "less": ["@coalesce(outputs('Create_quarantine_folder')?['statusCode'], 0)", 300] },
+                                                        { "not": { "equals": ["@trim(coalesce(body('Create_quarantine_folder')?['id'], ''))", ""] } }
+                                                      ]
+                                                    },
+                                                    "actions": {
+                                                      "Set_Matched_Folder_created": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": { "name": "Matched_Folder", "value": "@body('Create_quarantine_folder')" }
+                                                      }
+                                                    },
+                                                    "else": {
+                                                      "actions": {
+                                                        "Append_result_folder_failed": {
+                                                          "runAfter": {},
+                                                          "type": "AppendToArrayVariable",
+                                                          "inputs": {
+                                                            "name": "Results",
+                                                            "value": {
+                                                              "filename": "@items('For_each_file')?['filename']",
+                                                              "status": "Failed",
+                                                              "newLocation": "",
+                                                              "error": "Found the file but failed to resolve or create the quarantine folder in its OneDrive (lookup status @{coalesce(outputs('Get_quarantine_folder')?['statusCode'], 'none')}, create status @{coalesce(outputs('Create_quarantine_folder')?['statusCode'], 'none')}). Source NOT deleted. @{string(coalesce(body('Create_quarantine_folder'), ''))}"
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
                                                 }
                                               }
                                             },
-                                            "Append_result_folder_failed": {
-                                              "runAfter": { "Resolve_or_create_folder": ["Failed", "TimedOut"] },
-                                              "type": "AppendToArrayVariable",
-                                              "inputs": {
-                                                "name": "Results",
-                                                "value": {
-                                                  "filename": "@items('For_each_file')?['filename']",
-                                                  "status": "Failed",
-                                                  "newLocation": "",
-                                                  "error": "Found the file but failed to resolve/create the quarantine folder in its OneDrive (Graph status @{coalesce(outputs('Resolve_or_create_folder')?['statusCode'], 'none')}). @{string(coalesce(body('Resolve_or_create_folder'), ''))}"
-                                                }
-                                              }
-                                            },
+                                            "If_folder_ready": {
+                                              "runAfter": { "If_folder_exists": ["Succeeded"] },
+                                              "type": "If",
+                                              "expression": {
+                                                "and": [
+                                                  { "not": { "equals": ["@trim(coalesce(variables('Matched_Folder')?['id'], ''))", ""] } }
+                                                ]
+                                              },
+                                              "actions": {
                                             "Parse_folder": {
-                                              "runAfter": { "Resolve_or_create_folder": ["Succeeded"] },
+                                              "runAfter": {},
                                               "type": "ParseJson",
                                               "inputs": {
-                                                "content": "@body('Resolve_or_create_folder')",
+                                                "content": "@variables('Matched_Folder')",
                                                 "schema": {
                                                   "type": "object",
                                                   "properties": {
@@ -724,30 +826,63 @@
                                                       }
                                                     }
                                                   },
-                                                  "Delete_source_file": {
+                                                  "If_upload_valid": {
                                                     "runAfter": { "Parse_upload": ["Succeeded"] },
-                                                    "type": "Http",
-                                                    "inputs": {
-                                                      "method": "DELETE",
-                                                      "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}",
-                                                      "headers": { "Authorization": "Bearer @{variables('Access_Token')}" }
-                                                    }
-                                                  },
-                                                  "Append_result_success": {
-                                                    "runAfter": { "Delete_source_file": ["Succeeded", "Failed", "TimedOut"] },
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                      "name": "Results",
-                                                      "value": {
-                                                        "filename": "@items('For_each_file')?['filename']",
-                                                        "status": "Success",
-                                                        "newLocation": "@body('Parse_upload')?['webUrl']",
-                                                        "error": "@if(and(greaterOrEquals(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 200), less(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 300)), '', concat('Uploaded to quarantine but failed to delete the source (Graph status ', string(coalesce(outputs('Delete_source_file')?['statusCode'], 'none')), '); delete manually.'))"
+                                                    "type": "If",
+                                                    "expression": {
+                                                      "and": [
+                                                        { "greaterOrEquals": ["@coalesce(outputs('Upload_file')?['statusCode'], 0)", 200] },
+                                                        { "less": ["@coalesce(outputs('Upload_file')?['statusCode'], 0)", 300] },
+                                                        { "not": { "equals": ["@trim(coalesce(body('Parse_upload')?['id'], ''))", ""] } }
+                                                      ]
+                                                    },
+                                                    "actions": {
+                                                      "Delete_source_file": {
+                                                        "runAfter": {},
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                          "method": "DELETE",
+                                                          "uri": "@{variables('Graph_Base_URL')}/v1.0/drives/@{encodeURIComponent(variables('Matched_Resource')?['parentReference']?['driveId'])}/items/@{encodeURIComponent(variables('Matched_Resource')?['id'])}",
+                                                          "headers": { "Authorization": "Bearer @{variables('Access_Token')}" }
+                                                        }
+                                                      },
+                                                      "Append_result_success": {
+                                                        "runAfter": { "Delete_source_file": ["Succeeded", "Failed", "TimedOut"] },
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                          "name": "Results",
+                                                          "value": {
+                                                            "filename": "@items('For_each_file')?['filename']",
+                                                            "status": "Success",
+                                                            "newLocation": "@body('Parse_upload')?['webUrl']",
+                                                            "error": "@if(and(greaterOrEquals(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 200), less(coalesce(outputs('Delete_source_file')?['statusCode'], 0), 300)), '', concat('Uploaded to quarantine but failed to delete the source (Graph status ', string(coalesce(outputs('Delete_source_file')?['statusCode'], 'none')), '); delete manually.'))"
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "else": {
+                                                      "actions": {
+                                                        "Append_result_upload_unconfirmed": {
+                                                          "runAfter": {},
+                                                          "type": "AppendToArrayVariable",
+                                                          "inputs": {
+                                                            "name": "Results",
+                                                            "value": {
+                                                              "filename": "@items('For_each_file')?['filename']",
+                                                              "status": "Failed",
+                                                              "newLocation": "",
+                                                              "error": "Upload to the quarantine folder could not be confirmed (Graph status @{coalesce(outputs('Upload_file')?['statusCode'], 'none')}, no item id returned). Source NOT deleted."
+                                                            }
+                                                          }
+                                                        }
                                                       }
                                                     }
                                                   }
                                                 }
                                               }
+                                            }
+                                              },
+                                              "else": { "actions": {} }
                                             }
                                           },
                                           "else": {
@@ -784,7 +919,7 @@
                         "Set_Overall_Status_from_results": {
                           "runAfter": { "Filter_failed_results": ["Succeeded"] },
                           "type": "SetVariable",
-                          "inputs": { "name": "Overall_Status", "value": "@if(equals(length(body('Filter_failed_results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), length(variables('Results'))), 'Failed', 'PartialSuccess'))" }
+                          "inputs": { "name": "Overall_Status", "value": "@if(equals(length(variables('Results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), 0), 'Success', if(equals(length(body('Filter_failed_results')), length(variables('Results'))), 'Failed', 'PartialSuccess')))" }
                         },
                         "Set_Failure_Message_from_results": {
                           "runAfter": { "Set_Overall_Status_from_results": ["Succeeded"] },
@@ -850,6 +985,25 @@
                           "runAfter": { "Set_Failure_Message_mde_auth": ["Succeeded"] },
                           "type": "SetVariable",
                           "inputs": { "name": "Overall_Status", "value": "Failed" }
+                        },
+                        "Response_mde_auth_failed": {
+                          "runAfter": { "Set_Overall_Status_mde_auth_failed": ["Succeeded"] },
+                          "type": "Response",
+                          "kind": "Http",
+                          "inputs": {
+                            "statusCode": 200,
+                            "headers": { "Content-Type": "application/json" },
+                            "body": {
+                              "status": "Failed",
+                              "results": "@variables('Results')",
+                              "error": "@variables('Failure_Message')"
+                            }
+                          }
+                        },
+                        "Terminate_mde_auth_failed": {
+                          "runAfter": { "Response_mde_auth_failed": ["Succeeded"] },
+                          "type": "Terminate",
+                          "inputs": { "runStatus": "Failed", "runError": { "code": "MdeAuthFailed", "message": "@variables('Failure_Message')" } }
                         }
                       },
                       "else": {
@@ -885,8 +1039,23 @@
                                 "type": "SetVariable",
                                 "inputs": { "name": "Ntfs_File_Handled", "value": false }
                               },
-                              "If_physical_host_provided": {
+                              "Reset_MDE_Machine_Id": {
                                 "runAfter": { "Reset_Ntfs_File_Handled": ["Succeeded"] },
+                                "type": "SetVariable",
+                                "inputs": { "name": "MDE_Machine_Id", "value": "@null" }
+                              },
+                              "Reset_File_Sha1": {
+                                "runAfter": { "Reset_MDE_Machine_Id": ["Succeeded"] },
+                                "type": "SetVariable",
+                                "inputs": { "name": "File_Sha1", "value": "@null" }
+                              },
+                              "Reset_MDE_Action_Id": {
+                                "runAfter": { "Reset_File_Sha1": ["Succeeded"] },
+                                "type": "SetVariable",
+                                "inputs": { "name": "MDE_Action_Id", "value": "@null" }
+                              },
+                              "If_physical_host_provided": {
+                                "runAfter": { "Reset_MDE_Action_Id": ["Succeeded"] },
                                 "type": "If",
                                 "expression": {
                                   "and": [
@@ -920,7 +1089,7 @@
                                 "type": "Http",
                                 "inputs": {
                                   "method": "GET",
-                                  "uri": "@{variables('MDE_Base_URL')}/api/machines?$filter=computerDnsName eq '@{items('For_each_ntfs_file')?['physicalHost']}'",
+                                  "uri": "@{variables('MDE_Base_URL')}/api/machines?$filter=computerDnsName eq '@{replace(coalesce(items('For_each_ntfs_file')?['physicalHost'], ''), '''', '''''')}'",
                                   "headers": { "Authorization": "Bearer @{variables('MDE_Access_Token')}" }
                                 }
                               },
@@ -967,8 +1136,17 @@
                                   }
                                 }
                               },
-                              "Run_advanced_hunting_for_sha1": {
+                              "If_not_yet_handled": {
                                 "runAfter": { "Check_Get_MDE_Machine": ["Succeeded"] },
+                                "type": "If",
+                                "expression": {
+                                  "and": [
+                                    { "equals": ["@variables('Ntfs_File_Handled')", false] }
+                                  ]
+                                },
+                                "actions": {
+                              "Run_advanced_hunting_for_sha1": {
+                                "runAfter": {},
                                 "type": "Http",
                                 "inputs": {
                                   "method": "POST",
@@ -978,7 +1156,7 @@
                                     "Content-Type": "application/json"
                                   },
                                   "body": {
-                                    "Query": "DeviceFileEvents | where DeviceId == '@{variables('MDE_Machine_Id')}' and FileName == '@{items('For_each_ntfs_file')?['filename']}' and isnotempty(SHA1) | top 1 by Timestamp desc | project SHA1"
+                                    "Query": "DeviceFileEvents | where DeviceId == '@{replace(coalesce(variables('MDE_Machine_Id'), ''), '''', '''''')}' and FileName == '@{replace(coalesce(items('For_each_ntfs_file')?['filename'], ''), '''', '''''')}' and isnotempty(SHA1) | top 1 by Timestamp desc | project SHA1"
                                   }
                                 }
                               },
@@ -1160,6 +1338,8 @@
                                   }
                                 }
                               }
+                                }
+                              }
                             }
                           },
                           "Filter_failed_results_ntfs": {
@@ -1173,7 +1353,7 @@
                           "Set_Overall_Status_ntfs": {
                             "runAfter": { "Filter_failed_results_ntfs": ["Succeeded"] },
                             "type": "SetVariable",
-                            "inputs": { "name": "Overall_Status", "value": "@if(equals(length(variables('Results')), 0), 'Failed', if(equals(length(body('Filter_failed_results_ntfs')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), length(variables('Results'))), 'Failed', 'PartialSuccess')))" }
+                            "inputs": { "name": "Overall_Status", "value": "@if(equals(length(variables('Results')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), 0), 'Success', if(equals(length(body('Filter_failed_results_ntfs')), length(variables('Results'))), 'Failed', 'PartialSuccess')))" }
                           },
                           "Set_Failure_Message_ntfs": {
                             "runAfter": { "Set_Overall_Status_ntfs": ["Succeeded"] },

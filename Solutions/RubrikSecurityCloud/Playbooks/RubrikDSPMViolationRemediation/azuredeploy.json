@@ -5,32 +5,54 @@
     "title": "Rubrik DSPM Violation Remediation",
     "description": "Incident-triggered playbook that remediates Rubrik Security Cloud (RSC) DSPM violations. Branches on eventType: for SecurityViolation it retrieves the violation, exports the violation-files CSV and the remediation-actions log (create -> poll Download Bar -> download bytes -> upload to a blob container -> generate SAS link), lists the violation file hits, quarantines each file via the RubrikQuarantineFiles sub-playbook, notifies the file owner in Teams, and marks the violation REMEDIATED only when every quarantine succeeded. For ClassificationResultsAvailable (no DSPM license) it runs a reduced flow: list file hits (objectId + snapshotId) -> quarantine -> notify. Both flows write a final comment to the Sentinel incident.",
     "prerequisites": [
-      "Deploy the RubrikCustomConnector (Microsoft.Web/customApis) first; this playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
-      "Deploy the RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) before this playbook; it is called once per file to quarantine and must return { status, newLocation }.",
-      "An Azure Key Vault holding the RSC service-account credentials in secrets 'Rubrik-AS-Int-ClientId' and 'Rubrik-AS-Int-ClientSecret'.",
-      "An Azure Storage account and blob container for the exported CSV/log files (SecurityViolation flow only).",
-      "A Microsoft Teams team and channel for owner notifications.",
-      "An analytics rule that maps the Rubrik event fields into incident Custom Details (eventType, objectId, objectName, objectType, seriesId, eventName, snapshotId)."
+      "1. The Rubrik Security Cloud solution should be configured to connect to Rubrik Security Cloud API end points using a Service Account with a role that includes the privileges to read and update policy violations.",
+      "2. The Rubrik custom connector (RubrikCustomConnector) needs to be deployed prior to the deployment of this playbook, in the same resource group and region. This playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
+      "3. The RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) must be deployed before this playbook; it is called once per file to quarantine and returns { status, newLocation }.",
+      "4. Store Service account credentials in Key Vault and obtain the Key Vault name and tenantId.",
+      "a. Create a Key Vault with a unique name.",
+      "b. Go to KeyVault -> secrets, click Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively.",
+      "5. An Azure Storage account and an EXISTING blob container are required for the exported CSV/log files (SecurityViolation flow only).",
+      "6. A Microsoft Teams team and channel are required for owner notifications.",
+      "7. Configure an analytics rule that maps the Rubrik event fields into incident Custom Details (eventType, objectId, objectName, objectType, seriesId, eventName, snapshotId)."
     ],
-    "entities": [],
-    "tags": ["Microsoft Sentinel", "Incident", "Rubrik", "DSPM", "Remediation", "Quarantine"],
-    "support": { "tier": "community" },
-    "author": { "name": "Rubrik" },
     "postDeployment": [
-      "Grant the Logic App system-assigned managed identity the 'Microsoft Sentinel Responder' role on the Sentinel workspace (comment on and update incidents).",
-      "Grant the Logic App managed identity 'Key Vault Secrets User' (or an access policy with Get on secrets) on the Key Vault named by KeyVaultName.",
-      "Authorize the RubrikCustomConnector API connection (used for the /api/client_token authentication call).",
-      "Authorize (sign in to) the Microsoft Teams API connection so the owner-notification card can be posted.",
-      "Authorize the Azure Blob Storage API connection (StorageAccountName). The account used by that connection must have write access to StorageContainerName; the connection is used to upload the CSV/log and to create the read-only SAS link.",
-      "Deploy the RubrikQuarantineFiles sub-playbook and set RubrikQuarantineFilesPlaybookName to its Logic App name; it must exist in the same resource group and expose an HTTP Request trigger returning { status, newLocation }.",
-      "Create a Microsoft Sentinel automation rule to run this playbook on the relevant DSPM incidents (playbooks do not auto-attach)."
+      "**a. Authorize connections**",
+      "Once deployment is complete, authorize each connection.",
+      "1. Go to your logic app -> API connections -> Select the connection resource (RubrikCustomConnector, Microsoft Teams, and Azure Blob Storage).",
+      "2. Go to General -> edit API connection.",
+      "3. Click Authorize.",
+      "4. Sign in.",
+      "5. Click Save.",
+      "6. Repeat steps for each connection. The Azure Blob Storage account used must have write access to StorageContainerName (used to upload the CSV/log and create the read-only SAS link).",
+      "**b. Assign Role to comment on and update incidents**",
+      "1. Go to Log Analytics Workspace -> <your workspace> -> Access Control -> Add.",
+      "2. Add role assignment.",
+      "3. Assignment type: Job function roles.",
+      "4. Role: Microsoft Sentinel Responder.",
+      "5. Members: select managed identity for assigned access to and add your logic app as member.",
+      "6. Click on review + assign.",
+      "**c. Add Access policy in Key Vault**",
+      "Add an access policy for the playbook's managed identity to read the RSC service-account secrets.",
+      "1. Go to logic app -> <your logic app> -> Identity -> System assigned managed identity and copy the Object (principal) ID.",
+      "2. Go to keyvaults -> <your keyvault> -> Access policies -> Create.",
+      "3. Select Get on secrets permissions. Click next.",
+      "4. In the principal section, search by the copied object ID. Click next.",
+      "5. Click review + create.",
+      "**d. Configurations in Microsoft Sentinel**",
+      "1. Deploy the RubrikQuarantineFiles sub-playbook first and set RubrikQuarantineFilesPlaybookName to its Logic App name; it must exist in the same resource group and expose an HTTP Request trigger returning { status, newLocation }.",
+      "2. In Microsoft Sentinel, configure the automation rules to trigger this playbook on the relevant DSPM incidents (playbooks do not auto-attach)."
     ],
-    "releaseNotes": [
-      { "version": "1.2.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Hardened the Download Snapshot Results CSV and Download Remediation Log flows. Validate the incident-supplied Object Name (case-insensitive), Resource ID, and Snapshot ID against the policyViolation and hard-fail on mismatch. Locate the exported file in allUserFiles by object-name filename pattern (spaces replaced with hyphens for the CSV) in addition to file type and post-start-time, and fail the export (non-fatal) when more than one file matches after the action start time. Fixed the remediation-log filter to match REMEDIATION_ACTIONS_LOG_CSV instead of SNAPSHOT_RESULTS_CSV. CSV export-trigger failure is now non-fatal (matches the remediation-log path); every download failure/edge case sets a descriptive link message so the final incident comment never shows a blank link. Download links in the incident comment are now rendered as the raw URL instead of an HTML anchor tag so they redirect correctly. Hardened createdAt comparison to use ticks()."] },
-      { "version": "1.1.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Added physicalHost to the per-file records sent to RubrikQuarantineFiles so the NTFS (WINDOWS_FILESHARE) branch can resolve the Microsoft Defender for Endpoint device. physicalHost is captured once from the DSPM violation (resourceMetadata.metadata.physicalHost) and stamped onto every file. Removed the ONEDRIVE fallback when selecting a file's objectType, so an unknown objectType is no longer coerced to ONEDRIVE (the child returns NotImplemented instead)."] },
-      { "version": "1.0.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Initial version. Handles SecurityViolation (full flow) and ClassificationResultsAvailable (reduced flow)."] }
-    ],
-    "lastUpdateTime": "2026-07-22T00:00:00Z"
+    "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
+    "lastUpdateTime": "2026-08-05T00:00:00.000Z",
+    "entities": [],
+    "tags": [ "Microsoft Sentinel", "Incident", "Rubrik", "DSPM", "Remediation", "Quarantine" ],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Rubrik"
+    }
   },
   "parameters": {
     "PlaybookName": {
