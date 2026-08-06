@@ -1,6 +1,6 @@
 # Azure Sentinel Solutions — PR Validation Guide
 
-This guide covers all GitHub Actions validation checks that run on pull requests targeting the `master` branch. Use it to **quickly understand what failed, why it failed, and how to fix it**.
+This guide covers all GitHub Actions validation checks that run on Pull Requests targeting the `master` branch. Use it to **quickly understand what failed, why it failed, and how to fix it**.
 
 ---
 
@@ -12,7 +12,7 @@ This guide covers all GitHub Actions validation checks that run on pull requests
 | 2 | [Scan Secrets in Commit](#2-scan-secrets-in-commit) | `scan-secrets` |
 | 3 | [Solution Validations](#3-solution-validations) | `SolutionValidations` |
 | 4 | [Validate Classic App Insights](#4-validate-classic-app-insights) | `validateClassicAppInsights` |
-| 5 | [Validate Hyperlinks in PR](#5-validate-hyperlinks-in-pr) | `validate-pr-links` |
+| 5 | [Validate Hyperlinks in Pull Request](#5-validate-hyperlinks-in-pr) | `validate-pr-links` |
 | 6 | [Validate Parameter Fields Type](#6-validate-parameter-fields-type) | `validate-field-types` |
 | 7 | [Workbook Metadata Validations](#7-workbook-metadata-validations) | `WorkbooksValidations` |
 | 8 | [Workbook Template Validations](#8-workbook-template-validations) | `WorkbooksTemplateValidations` |
@@ -168,7 +168,7 @@ Every match that is **not exactly** `sanitized@sanitized.com` causes failure. Th
 
 ### What It Checks
 
-Scans the git diff between the PR base commit and the PR head for **verified (live/active)** secrets or credentials. Only secrets confirmed live by TruffleHog's verification engine will block the PR. Inactive, revoked, or pattern-only matches will **NOT** block.
+Scans the git diff between the Pull Request base commit and the Pull Request head for **verified (live/active)** secrets or credentials. Only secrets confirmed live by TruffleHog's verification engine will block the Pull Request. Inactive, revoked, or pattern-only matches will **NOT** block.
 
 **Exclusions:** File paths listed in `.script/SecretScanning/Excludepathlist`
 
@@ -184,8 +184,8 @@ File: <path>
 ```
 
 **Resolution:**
-1. **Immediately revoke/rotate** the exposed credential at its source (AWS IAM, Azure Portal, GitHub Settings → Tokens)
-2. Remove or replace the secret in code with an environment variable reference, Key Vault link, or placeholder
+1. **Immediately revoke/rotate** the exposed credential at its source (AWS IAM, Azure Portal, GitHub Settings → Tokens).
+2. Remove or replace the secret in code with an environment variable reference, Key Vault link, or placeholder.
 
 | ❌ BAD | ✅ GOOD |
 |--------|---------|
@@ -199,10 +199,10 @@ File: <path>
 **Error Message:**
 ```
 Found verified result
-Commit: <sha> (an earlier commit in the PR, not HEAD)
+Commit: <sha> (an earlier commit in the Pull Request, not HEAD)
 ```
 
-**Resolution:** TruffleHog scans **ALL commits** in the PR — even if you removed the secret in a later commit, the original commit is still flagged.
+**Resolution:** TruffleHog scans **ALL commits** in the Pull Request — even if you removed the secret in a later commit, the original commit is still flagged.
 
 Use `git rebase -i` to squash or amend the offending commit, removing the secret from history entirely. Then force-push the cleaned branch.
 
@@ -235,9 +235,9 @@ File: certs/server.key
 ```
 
 **Resolution:**
-- Remove the private key file from the PR
+- Remove the private key file from the Pull Request
 - Add `*.key`, `*.pem` patterns to `.gitignore`
-- If the key was for a real service, **regenerate** the certificate/key pair immediately
+- If the key was for a real service, **regenerate** the certificate/key pair immediately.
 
 ---
 
@@ -272,7 +272,7 @@ File: docs/setup-guide.md
 BASE and HEAD commits are the same. TruffleHog won't scan anything
 ```
 
-**Resolution:** Ensure your PR branch has at least one commit ahead of master.
+**Resolution:** Ensure your Pull Request branch has at least one commit ahead of master.
 
 ---
 
@@ -716,7 +716,7 @@ Error Occured in validateClassicAppInsights script. Error Details: ConvertFrom-J
 Error occurred in ReadFileContent. Error details: <message>
 ```
 
-**Resolution:** The script could not read or access a file on disk. This is typically an infrastructure issue (file path resolution, permission, or disk error). Re-run the workflow. If persistent, verify the file path is correct and the file exists in the PR branch.
+**Resolution:** The script could not read or access a file on disk. This is typically an infrastructure issue (file path resolution, permission, or disk error). Re-run the workflow. If persistent, verify the file path is correct and the file exists in the Pull Request branch.
 
 | ❌ BAD | ✅ GOOD |
 |--------|---------|
@@ -763,7 +763,7 @@ Error Occured in validateClassicAppInsights script. Error Details: <message>
 
 ---
 
-## 5. Validate Hyperlinks in PR
+## 5. Validate Hyperlinks in Pull Request
 
 **GitHub Job:** `validate-pr-links`  
 **Script:** `.script/package-automation/hyperlink-validation.ps1`
@@ -1152,7 +1152,7 @@ The workbook <path> has been modified but the version has not been incremented
 
 | ❌ BAD | ✅ GOOD |
 |--------|---------|
-| `"version": "1.0.0"` (same as before PR) | `"version": "1.1.0"` (incremented) |
+| `"version": "1.0.0"` (same as before Pull Request) | `"version": "1.1.0"` (incremented) |
 
 ---
 
@@ -1253,7 +1253,7 @@ Use the character offset from the error message to locate the exact position.
 
 ### What It Checks
 
-Validates that all modified or newly added `.yaml`/`.yml` files in the PR are **syntactically valid** YAML. Applies to ALL directories — no folder restriction.
+Validates that all modified or newly added `.yaml`/`.yml` files in the Pull Request are **syntactically valid** YAML. Applies to ALL directories — no folder restriction.
 
 > This checks YAML syntax only — not content semantics.
 
@@ -1442,7 +1442,7 @@ Error: Process completed with exit code 1
 | Validation | Files Checked | Filter |
 |-----------|--------------|--------|
 | Sample Data | `**/Sample Data/*.json` | Added + Modified |
-| Scan Secrets | All files in PR diff | All commits in PR |
+| Scan Secrets | All files in Pull Request diff | All commits in Pull Request |
 | Solution Validations | `Solutions/**/*.json` | Added + Modified |
 | Classic App Insights | `Solutions/**/azuredeploy*.json`, `DataConnectors/**/azuredeploy*.json` | Added only |
 | Hyperlinks | `Solutions/**/*` | Added + Modified (excluding certain extensions) |
