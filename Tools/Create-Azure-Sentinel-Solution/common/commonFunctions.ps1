@@ -2627,7 +2627,10 @@ function GenerateAlertRule($file, $contentResourceDetails) {
         }
     }
     else {
-        $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
+        $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
+        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+        }
     }
 
     if (!$yaml.severity) {

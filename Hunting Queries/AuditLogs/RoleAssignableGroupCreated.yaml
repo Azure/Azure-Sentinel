@@ -1,0 +1,91 @@
+id: 745c2179-a7db-4185-90c1-b33d78c5a6ac
+name: Role-assignable group created
+description: |
+  Identifies creation of a new Entra ID role-assignable group, a rare and tightly-permissioned event that can be a precursor to privilege escalation via later membership and role assignment changes.
+description-detailed: |
+  Group role-assignability (isAssignableToRole set to true) can only be set
+  when a group is created; Microsoft Entra ID does not allow converting an
+  existing group into a role-assignable one afterward, and creating one
+  requires the actor to hold at least the Privileged Role Administrator role.
+  By design there is no legitimate high-volume use of this event in a
+  well-run tenant, and a maximum of 500 role-assignable groups are permitted
+  per tenant, so every match here is inherently rare and should map to a
+  known change.
+  An attacker who has obtained Privileged Role Administrator or Global
+  Administrator access can create a role-assignable group with an innocuous
+  display name, then add members or owners to it and later assign a directory
+  role to the group. Because role-assignable groups exist specifically so that
+  group membership grants a role, standard "Add member to role" monitoring
+  never fires for the accounts that gain access this way; the group creation
+  and its membership changes are the only audit signal. See the companion
+  hunting query for member and owner additions shortly after creation.
+  Analysts should confirm the creation aligns with a documented change and
+  check which accounts currently hold the Privileged Role Administrator role.
+  References:
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/groups-concept
+  - https://attack.mitre.org/techniques/T1098/003/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1098.003
+query: |
+  let timeframe = 14d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "GroupManagement"
+  | where OperationName =~ "Add group"
+  | where Result =~ "success"
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | extend PropName = tostring(ModProp.displayName)
+  | extend NewValue = tostring(ModProp.newValue)
+  | where PropName has "IsAssignableToRole" or NewValue has "isAssignableToRole"
+  | where NewValue has "true"
+  | extend GroupName = tostring(TargetResources[0].displayName)
+  | extend GroupId   = tostring(TargetResources[0].id)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      GroupName,
+      GroupId,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
