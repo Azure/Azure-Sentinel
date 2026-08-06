@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.6       | 06-08-2026                     | Added action_by field to CCF DCR. |
 | 3.1.5       | 09-07-2026                     | Updated **Parser** and **CCF Data Connector** DCR. |
 | 3.1.4       | 13-04-2026                     | Deprecate Box Events (using Azure Function) |
 | 3.1.3       | 24-03-2026                     | Rename to Box Events (via Codeless Connector Framework) |
