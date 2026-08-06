@@ -1,0 +1,328 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Microsoft Active Directory Tier Model - Automation Rules",
+    "description": "Deploys the 5 automation rules used by the Microsoft Active Directory Tier Model solution. These rules tag Tier Model incidents and automatically adjust severity/status (downgrade or close) for expected, low-value activity so the SOC can focus on the incidents that matter. Conditions match on the (TMxxx.1) tag in the incident title, so no analytic-rule IDs need to be supplied.",
+    "prerequisites": [
+      "1. Microsoft Sentinel must be enabled on the target Log Analytics workspace.",
+      "2. Install the Microsoft Active Directory Tier Model solution and enable its analytic rules first."
+    ],
+    "postDeployment": [
+      "1. Verify the 5 automation rules appear under Microsoft Sentinel > Automation.",
+      "2. Confirm the analytic rules are active so incidents carry the (TMxxx.1) title tag."
+    ],
+    "author": {
+      "name": "Microsoft"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace with Microsoft Sentinel enabled."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/automationRules",
+      "apiVersion": "2024-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9e57c302-4784-4677-83e8-42b7f5d5f475')]",
+      "properties": {
+        "displayName": "PROD (TM000.1) - TAGGING - Tier Model Incidents",
+        "order": 1,
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "(TM0"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "labels": [
+                {
+                  "labelName": "TIERMODEL",
+                  "labelType": "User"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/automationRules",
+      "apiVersion": "2024-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b0c000f6-8822-448d-9ca7-f01872fd8feb')]",
+      "properties": {
+        "displayName": "PROD (TM002.1) - OBJECT - Created or Deleted a Tier Level Object",
+        "order": 2,
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "(TM002.1)"
+                ]
+              }
+            },
+            {
+              "conditionType": "Boolean",
+              "conditionProperties": {
+                "operator": "Or",
+                "innerConditions": [
+                  {
+                    "conditionType": "Property",
+                    "conditionProperties": {
+                      "propertyName": "IncidentTitle",
+                      "operator": "Contains",
+                      "propertyValues": [
+                        "computer"
+                      ]
+                    }
+                  },
+                  {
+                    "conditionType": "Property",
+                    "conditionProperties": {
+                      "propertyName": "IncidentTitle",
+                      "operator": "Contains",
+                      "propertyValues": [
+                        "user"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "deleted"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "severity": "Informational"
+            }
+          },
+          {
+            "order": 2,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "status": "Closed",
+              "classification": "Undetermined",
+              "classificationComment": "Keeping track of any objects delete within the Tier Model, closing alert as Informational."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/automationRules",
+      "apiVersion": "2024-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6839cca7-22d8-4004-ba90-d54a0d30ae56')]",
+      "properties": {
+        "displayName": "PROD (TM004.1) - OBJECT - Enabled, Disabled, Unlocked, or Password Reset of a Tier Level Object",
+        "order": 3,
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "(TM004.1)"
+                ]
+              }
+            },
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "Tier 1",
+                  "Tier 2",
+                  "Disabled"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "severity": "Low"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/automationRules",
+      "apiVersion": "2024-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ba7dc69b-34dd-429c-b142-dc99f5431b9c')]",
+      "properties": {
+        "displayName": "PROD (TM007.1) - OU - Created or Deleted at Tier Level",
+        "order": 4,
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "(TM007.1)"
+                ]
+              }
+            },
+            {
+              "conditionType": "PropertyArray",
+              "conditionProperties": {
+                "arrayType": "CustomDetails",
+                "arrayConditionType": "AnyItem",
+                "itemConditions": [
+                  {
+                    "conditionType": "PropertyArray",
+                    "conditionProperties": {
+                      "arrayType": "CustomDetailValues",
+                      "arrayConditionType": "AnyItem",
+                      "itemConditions": [
+                        {
+                          "conditionType": "Property",
+                          "conditionProperties": {
+                            "propertyName": "IncidentCustomDetailsValue",
+                            "operator": "Contains",
+                            "propertyValues": [
+                              "Tier 1 Member Servers",
+                              "Tier 2 End-User"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "conditionType": "Property",
+                    "conditionProperties": {
+                      "propertyName": "IncidentCustomDetailsKey",
+                      "operator": "Equals",
+                      "propertyValues": [
+                        "EventData"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "NotContains",
+                "propertyValues": [
+                  "Tier 0"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "severity": "Informational"
+            }
+          },
+          {
+            "order": 2,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "status": "Closed",
+              "classification": "Undetermined",
+              "classificationComment": "Information alert generated to track creation and deletion of OUs. Member Servers and End-User Tier Model OU will get new OUs created often. These incidents will still be tagged and tracked."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/automationRules",
+      "apiVersion": "2024-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/050759ec-f52f-4d1f-9bd7-ccd2e0167943')]",
+      "properties": {
+        "displayName": "PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object",
+        "order": 5,
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "(TM010.1)"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "ModifyProperties",
+            "actionConfiguration": {
+              "status": "Closed",
+              "classification": "Undetermined",
+              "classificationComment": "Informational Tier Model alert automatically closed as part of reporting and tracking."
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

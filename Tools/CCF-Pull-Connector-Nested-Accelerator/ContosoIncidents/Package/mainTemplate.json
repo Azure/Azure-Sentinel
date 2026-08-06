@@ -1,0 +1,703 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for ContosoIncidents"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "ContosoIncidents",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "microsoft-sentinel.ccf-pull-connector-nested-accelerator",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "ContosoIncidentsConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "ContosoIncidentsConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpoint1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Contoso Incidents (CCF Nested API Accelerator)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "ContosoIncidentsConnector",
+                  "title": "Contoso Incidents (CCF Nested API Accelerator)",
+                  "publisher": "Contoso",
+                  "descriptionMarkdown": "The **Contoso Incidents** connector demonstrates the CCF nested API polling pattern. It chains two REST API calls: a list endpoint that returns incident identifiers, followed by a detail endpoint called once per identifier. Deploy the included mock Contoso Incident API (Azure Function App) to observe the nested polling pattern end-to-end without a real data source.",
+                  "graphQueriesTableName": "ContosoIncidents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Incidents ingested",
+                      "legend": "ContosoIncidents_CL",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All ingested incidents",
+                      "query": "ContosoIncidents_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "High and Critical severity incidents",
+                      "query": "ContosoIncidents_CL\n| where Severity in ('Critical', 'High')\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Active incidents",
+                      "query": "ContosoIncidents_CL\n| where Status == 'Active'\n| project TimeGenerated, IncidentId, Title, Severity, AffectedUser, SourceIp"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ContosoIncidents_CL",
+                      "lastDataReceivedQuery": "ContosoIncidents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ContosoIncidents_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1d)"
+                      ]
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions on the Log Analytics workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Contoso Mock API",
+                        "description": "The Contoso Mock API Function App must be deployed before configuring this connector. After deployment, retrieve the Function App API key to use in Step 2."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "STEP 1 — Deploy the Contoso Mock API",
+                      "description": "Deploy the Azure Function App that serves as the mock Contoso Incident API:\n\n1. Deploy `MockApi/azuredeploy_MockApi.json` to a new resource group.\n2. Zip the `MockApi/` folder and run:\n```\naz functionapp deployment source config-zip --name <functionAppName> --resource-group <rg> --src contosoapi.zip\n```\n3. Retrieve the Function App API key:\n```\naz functionapp keys list --name <functionAppName> --resource-group <rg> --query functionKeys.default -o tsv\n```\n4. Note the `mockApiBaseUrl` deployment output (e.g. `https://contosomockapiXXXX.azurewebsites.net/api`).\n\nSee the [accelerator README](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/CCF-Pull-Connector-Nested-Accelerator) for detailed steps or use GitHub Copilot agent mode with `agent-instructions.md` for fully automated deployment."
+                    },
+                    {
+                      "title": "STEP 2 — Connect to the Contoso Mock API",
+                      "description": "Enter the Mock API base URL and Function App API key, then click **Connect**.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Mock API Base URL",
+                            "placeholder": "https://contosomockapiXXXX.azurewebsites.net/api",
+                            "type": "text",
+                            "name": "mockApiBaseUrl"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Function App API Key",
+                            "placeholder": "Enter your Function App API key",
+                            "type": "password",
+                            "name": "ApiKey"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "connect",
+                            "name": "connect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "azuresentinelpartner@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "ContosoIncidents-DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpoint1')]",
+                "streamDeclarations": {
+                  "Custom-ContosoIncidents_CL": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "incidentId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "affectedUser",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sourceIp",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "sentinel-workspace"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-ContosoIncidents_CL"
+                    ],
+                    "destinations": [
+                      "sentinel-workspace"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, IncidentId = ['incidentId'], Title = ['title'], Severity = ['severity'], Status = ['status'], AffectedUser = ['affectedUser'], SourceIp = ['sourceIp']",
+                    "outputStream": "Custom-ContosoIncidents_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ContosoIncidents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "ContosoIncidents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Ingestion timestamp, set to the time the record was received by the data collection endpoint."
+                    },
+                    {
+                      "name": "IncidentId",
+                      "type": "string",
+                      "description": "Unique identifier of the incident (e.g. INC-001)."
+                    },
+                    {
+                      "name": "Title",
+                      "type": "string",
+                      "description": "Short description of the incident."
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string",
+                      "description": "Incident severity: Critical, High, Medium, or Low."
+                    },
+                    {
+                      "name": "Status",
+                      "type": "string",
+                      "description": "Current status of the incident: Active, Investigating, Resolved, or Closed."
+                    },
+                    {
+                      "name": "AffectedUser",
+                      "type": "string",
+                      "description": "UPN of the user associated with the incident."
+                    },
+                    {
+                      "name": "SourceIp",
+                      "type": "string",
+                      "description": "Source IP address associated with the incident."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "ContosoIncidentsConnector",
+          "title": "Contoso Incidents (CCF Nested API Accelerator)",
+          "publisher": "Contoso",
+          "descriptionMarkdown": "The **Contoso Incidents** connector demonstrates the CCF nested API polling pattern. It chains two REST API calls: a list endpoint that returns incident identifiers, followed by a detail endpoint called once per identifier. Deploy the included mock Contoso Incident API (Azure Function App) to observe the nested polling pattern end-to-end without a real data source.",
+          "graphQueriesTableName": "ContosoIncidents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Incidents ingested",
+              "legend": "ContosoIncidents_CL",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All ingested incidents",
+              "query": "ContosoIncidents_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "High and Critical severity incidents",
+              "query": "ContosoIncidents_CL\n| where Severity in ('Critical', 'High')\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Active incidents",
+              "query": "ContosoIncidents_CL\n| where Status == 'Active'\n| project TimeGenerated, IncidentId, Title, Severity, AffectedUser, SourceIp"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ContosoIncidents_CL",
+              "lastDataReceivedQuery": "ContosoIncidents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ContosoIncidents_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1d)"
+              ]
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions on the Log Analytics workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Contoso Mock API",
+                "description": "The Contoso Mock API Function App must be deployed before configuring this connector. After deployment, retrieve the Function App API key to use in Step 2."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "STEP 1 — Deploy the Contoso Mock API",
+              "description": "Deploy the Azure Function App that serves as the mock Contoso Incident API:\n\n1. Deploy `MockApi/azuredeploy_MockApi.json` to a new resource group.\n2. Zip the `MockApi/` folder and run:\n```\naz functionapp deployment source config-zip --name <functionAppName> --resource-group <rg> --src contosoapi.zip\n```\n3. Retrieve the Function App API key:\n```\naz functionapp keys list --name <functionAppName> --resource-group <rg> --query functionKeys.default -o tsv\n```\n4. Note the `mockApiBaseUrl` deployment output (e.g. `https://contosomockapiXXXX.azurewebsites.net/api`).\n\nSee the [accelerator README](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/CCF-Pull-Connector-Nested-Accelerator) for detailed steps or use GitHub Copilot agent mode with `agent-instructions.md` for fully automated deployment."
+            },
+            {
+              "title": "STEP 2 — Connect to the Contoso Mock API",
+              "description": "Enter the Mock API base URL and Function App API key, then click **Connect**.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Mock API Base URL",
+                    "placeholder": "https://contosomockapiXXXX.azurewebsites.net/api",
+                    "type": "text",
+                    "name": "mockApiBaseUrl"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Function App API Key",
+                    "placeholder": "Enter your Function App API key",
+                    "type": "password",
+                    "name": "ApiKey"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "connect",
+                    "name": "connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "azuresentinelpartner@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Contoso Incidents (CCF Nested API Accelerator)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Contoso Incidents (CCF Nested API Accelerator)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "mockApiBaseUrl": {
+              "defaultValue": "mockApiBaseUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ApiKey": {
+              "defaultValue": "ApiKey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "azuresentinelpartner@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'ContosoIncidents', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "ContosoIncidentsConnector",
+                "dataType": "ContosoIncidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-ContosoIncidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('ApiKey')]",
+                  "ApiKeyName": "x-functions-key"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('mockApiBaseUrl'),'/incidents')]",
+                  "httpMethod": "GET",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "startTime",
+                  "endTimeAttributeName": "endTime",
+                  "headers": {
+                    "Accept": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.incidents"
+                  ],
+                  "format": "json"
+                },
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "fetchIncidentDetails",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project incidentId = res.incidentId"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "fetchIncidentDetails": {
+                    "shouldJoinNestedData": false,
+                    "request": {
+                      "httpMethod": "GET",
+                      "apiEndpoint": "[[concat(parameters('mockApiBaseUrl'),'/incidents/$incidentId$/details')]",
+                      "headers": {
+                        "Accept": "application/json"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "ContosoIncidents",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ContosoIncidents/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Demonstrates the CCF nested API polling pattern in Microsoft Sentinel. Includes a mock Contoso Incident API (Azure Function App) and a fully configured RestApiPoller connector that chains a list call to a detail call, ingesting complete incident records into the ContosoIncidents_CL table.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ContosoIncidents",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "azuresentinelpartner@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-06-05",
+        "lastPublishDate": "2026-06-05",
+        "providers": [
+          "Contoso"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

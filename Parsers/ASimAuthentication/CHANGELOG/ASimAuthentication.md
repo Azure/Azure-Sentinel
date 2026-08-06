@@ -1,5 +1,13 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.19
+
+- (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication parser.
+
+## Version 0.2.18
+
+- (2026-07-16) Add parser Google Workspace Logins Authentication - [PR #14638](https://github.com/Azure/Azure-Sentinel/pull/14638)
+
 ## Version 0.2.17
 
 - (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #14581](https://github.com/Azure/Azure-Sentinel/pull/14581)
@@ -78,4 +86,3 @@
 ## Version 0.0
 
 - (2021-06-17) First commit - take 2 - [PR #2553](https://github.com/Azure/Azure-Sentinel/pull/2553)
-
