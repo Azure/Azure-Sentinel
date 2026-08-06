@@ -37,10 +37,11 @@ query: |
   | extend TargetObjectTypeNormalized = tostring(TargetObjectType)
   | extend TargetLocationNormalized = tostring(TargetLocation)
   | mv-apply Cat = ParsedCategories on (
-      summarize Values = make_list(tostring(Cat.value)) by Key = tostring(Cat.name)
+      summarize Values = make_list(tostring(Cat.value)) by Key = iff(tostring(Cat.name) startswith 'MITRE ATT', 'MITRE ATT&CK', tostring(Cat.name))
   | summarize CleanCategories = make_bag(pack(Key, strcat_array(Values, ', ')))
       )
-  | extend Tactics = replace_string(tostring(CleanCategories['Attack tactics']), ' ', '')
+  | extend Tactics = iff(isnotempty(CleanCategories['Attack tactics']), split(replace_string(tostring(CleanCategories['Attack tactics']), ' ', ''), ','), dynamic([]))
+  | extend Techniques = iff(isnotempty(CleanCategories['MITRE ATT&CK']), extract_all(@"(T\d{4})", tostring(CleanCategories['MITRE ATT&CK'])), dynamic([]))
   | extend ExtractedDomain = tostring(split(TargetLocationNormalized, '/')[0])
   | extend IsEntra = TargetObjectTypeNormalized startswith 'microsoft.graph'
   | extend IsAD = TargetObjectTypeNormalized startswith 'microsoft.ad' or TargetObjectTypeNormalized has 'ServiceAccount'
@@ -105,8 +106,6 @@ incidentConfiguration:
     reopenClosedIncident: false
     lookbackDuration: P1D
     matchingMethod: Selected
-    groupByEntities: []
-    groupByAlertDetails: []
     groupByCustomDetails:
     - ThreatId
 alertDetailsOverride:
@@ -117,6 +116,8 @@ alertDetailsOverride:
   alertDynamicProperties:
   - alertProperty: AlertLink
     value: ThreatDocUrl
+  - alertProperty: Techniques
+    value: Techniques
 customDetails:
   ThreatId: ThreatId
   Categories: Categories
