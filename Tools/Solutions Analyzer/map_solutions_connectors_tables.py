@@ -28,6 +28,11 @@ except ImportError:  # pragma: no cover - optional dependency
 GITHUB_REPO_URL = "https://github.com/Azure/Azure-Sentinel/blob/master"
 AZURE_MARKETPLACE_API_URL = "https://catalogapi.azure.com/offers"
 AZURE_MARKETPLACE_API_VERSION = "2018-08-01-beta"
+# Keyword stamped on every Azure Sentinel solution offer. Used by the catalog
+# filter-query fallback (mirrors .script/package-automation/catalogAPI.ps1) to
+# locate an offer by offerId when the direct legacy-id lookup 404s because the
+# solution was republished under a different publisherId.
+AZURE_MARKETPLACE_SENTINEL_KEYWORD = "f1de974b-f438-4719-b423-8bf704ba2aef"
 
 # Multi-valued collection_method and ingestion_api precedence orders
 # (most preferred → least preferred; used for sorting when a connector has multiple methods/APIs)
@@ -465,6 +470,211 @@ def _collapse_parenthesized_refinement(method: str) -> str:
             seen.add(p)
             kept.append(p)
     return '|'.join(kept) if kept else method
+
+
+# ===========================================================================
+# Table category_primary — a closed reporting taxonomy that mirrors the
+# collection_method family. See TABLE_CATEGORIZATION_GUIDANCE.md.
+#
+# Three columns are emitted alongside the raw `category` doc string:
+#   * category_primary     — single normalized value from the closed taxonomy
+#   * category_source      — provenance for the winning value (like
+#                            collection_method_source)
+#   * category_candidates  — every distinct taxonomy value any signal produced
+#                            (like collection_method_candidates)
+# ===========================================================================
+
+# Closed taxonomy (the only values category_primary may take).
+CATEGORY_PRIMARY_VALUES: Tuple[str, ...] = (
+    "Defender",
+    "ASIM",
+    "Endpoint",
+    "Syslog/CEF",
+    "3rd Party (SaaS)",
+    "Cloud",
+    "Internal",
+    "Unknown",
+)
+
+# Combo precedence (R2): when several signals map to different taxonomy values,
+# the earliest in this tuple wins. A specific platform / source-of-truth
+# (Internal/Defender/ASIM/Endpoint/Syslog) beats the generic Cloud bucket, and
+# any concrete signal beats Unknown. Cross-cutting doc tokens (Audit, Security,
+# Low value, …) contribute no signal and are therefore absent from the maps
+# below.
+CATEGORY_PRIMARY_PRECEDENCE: Tuple[str, ...] = (
+    "Internal",
+    "Defender",
+    "ASIM",
+    "Endpoint",
+    "Syslog/CEF",
+    "3rd Party (SaaS)",
+    "Cloud",
+    "Unknown",
+)
+
+# Map raw Azure Monitor / override doc category tokens (lowercased) to the
+# closed taxonomy. Tokens absent here are treated as cross-cutting and
+# contribute no category signal (e.g. 'audit', 'security', 'low value',
+# 'various', 'workloads' that don't denote a source type). 'network' is
+# intentionally omitted because it spans both Azure-native diagnostics (Cloud)
+# and network appliances (Syslog/CEF); those resolve via stronger signals.
+CATEGORY_TOKEN_TO_PRIMARY: Dict[str, str] = {
+    # Defender / XDR
+    'xdr': 'Defender',
+    'mde': 'Defender',
+    'defender': 'Defender',
+    # ASIM normalized
+    'normalized': 'ASIM',
+    # Endpoint
+    'endpoint': 'Endpoint',
+    'windows': 'Endpoint',
+    'crowdstrike': 'Endpoint',
+    'desktop analytics': 'Endpoint',
+    # Syslog/CEF
+    'syslog/cef': 'Syslog/CEF',
+    # Azure-native / other-cloud platform (all -> Cloud)
+    'azure resources': 'Cloud',
+    'azure monitor': 'Cloud',
+    'azure virtual desktop': 'Cloud',
+    'virtual machines': 'Cloud',
+    'vminsights': 'Cloud',
+    'containers': 'Cloud',
+    'entra': 'Cloud',
+    'intune': 'Cloud',
+    'microsoft graph': 'Cloud',
+    'office 365': 'Cloud',
+    'aws': 'Cloud',
+    'gcp': 'Cloud',
+    # Internal
+    'internal': 'Internal',
+}
+
+# Cross-derive from the already-resolved collection_method when the doc
+# `category` yields no signal (O6). Keys are lowercased collection_method
+# atoms. Used only as a fallback (weak signal).
+COLLECTION_METHOD_TO_CATEGORY: Dict[str, str] = {
+    'defender': 'Defender',
+    'syslog': 'Syslog/CEF',
+    'cef': 'Syslog/CEF',
+    'ama': 'Syslog/CEF',
+    'mma': 'Syslog/CEF',
+    'azure diagnostics': 'Cloud',
+    'native': 'Cloud',
+    'azure function': '3rd Party (SaaS)',
+    'logic app': '3rd Party (SaaS)',
+    'rest pull api': '3rd Party (SaaS)',
+    'codeless connector (ccf)': '3rd Party (SaaS)',
+    'codeless connector (ccf push)': '3rd Party (SaaS)',
+    'ccf': '3rd Party (SaaS)',
+    'ccf push': '3rd Party (SaaS)',
+    'ccf (legacy)': '3rd Party (SaaS)',
+    'http data collector api': '3rd Party (SaaS)',
+    'custom': '3rd Party (SaaS)',
+}
+
+# Solution support tiers that indicate a non-Microsoft (3rd-party) publisher.
+# Used for the _CL solution-signal fallback (R3): a custom-log table fed by a
+# partner/community solution is 3rd Party (SaaS); one fed only by a Microsoft
+# solution leans Cloud.
+NON_MICROSOFT_SOLUTION_TIERS: Set[str] = {'partner', 'community', 'developer'}
+
+
+def _pick_by_category_precedence(primaries: Iterable[str]) -> str:
+    """Return the highest-precedence taxonomy value from an iterable."""
+    best: Optional[str] = None
+    best_rank = len(CATEGORY_PRIMARY_PRECEDENCE) + 1
+    for p in primaries:
+        try:
+            rank = CATEGORY_PRIMARY_PRECEDENCE.index(p)
+        except ValueError:
+            rank = len(CATEGORY_PRIMARY_PRECEDENCE)
+        if rank < best_rank:
+            best_rank = rank
+            best = p
+    return best or 'Unknown'
+
+
+def resolve_category_primary(
+    table_name: str,
+    ref: Dict[str, str],
+    collection_method: str,
+    feeding_connector_ids: Iterable[str],
+    connector_vendor_product: Dict[str, Dict[str, Set[str]]],
+    connector_solution_lookup: Dict[str, str],
+    solution_tier_lookup: Dict[str, str],
+) -> Tuple[str, str, str]:
+    """Resolve a table's (category_primary, category_source, category_candidates).
+
+    Strong signals (doc category tokens, intrinsic Defender, ASIM) decide when
+    present, combining via CATEGORY_PRIMARY_PRECEDENCE (R2). When no strong
+    signal exists, weak fallbacks fire (R3/R4/O6): cross-derive from
+    collection_method, resource_types -> Cloud, and the _CL vendor/connector/
+    solution chain. `category_candidates` lists every distinct taxonomy value
+    any signal produced, for transparency (O4). Internal tables are handled by
+    the caller after internal-table detection.
+    """
+    strong: List[Tuple[str, str]] = []  # (primary, source)
+    weak: List[Tuple[str, str]] = []
+
+    # --- Strong signals ---------------------------------------------------
+    if table_name.startswith('ASim'):
+        strong.append(('ASIM', 'asim_table'))
+    if (ref.get('source_defender_xdr', '') or '').strip().lower() == 'yes':
+        strong.append(('Defender', 'source_defender_xdr'))
+    for tok in _table_categories(ref):
+        mapped = CATEGORY_TOKEN_TO_PRIMARY.get(tok.lower())
+        if mapped:
+            strong.append((mapped, f'category={tok}'))
+
+    # --- Weak fallbacks ---------------------------------------------------
+    # O6: cross-derive from the resolved collection_method.
+    for atom in (collection_method or '').split('|'):
+        mapped = COLLECTION_METHOD_TO_CATEGORY.get(atom.strip().lower())
+        if mapped:
+            weak.append((mapped, f'collection_method={atom.strip()}'))
+    # R4: any documented resource_types implies an Azure platform/diagnostic
+    # source. tables_reference.csv uses '-' as the empty placeholder.
+    rt = (ref.get('resource_types') or '').strip()
+    if rt and rt != '-':
+        weak.append(('Cloud', 'resource_types'))
+    # R3: custom-log tables — use table/connector vendor and the feeding
+    # connector's solution publisher tier to place the table.
+    if table_name.endswith('_CL'):
+        feeding_ids = list(feeding_connector_ids)
+        has_vendor = False
+        for cid in feeding_ids:
+            vp = connector_vendor_product.get(cid) or {}
+            if vp.get('vendor') or vp.get('product'):
+                has_vendor = True
+                break
+        if has_vendor:
+            weak.append(('3rd Party (SaaS)', 'cl_vendor'))
+        else:
+            # Inspect the publisher tier of feeding connectors' solutions.
+            tiers = {
+                (solution_tier_lookup.get(connector_solution_lookup.get(cid, ''), '') or '').strip().lower()
+                for cid in feeding_ids
+            }
+            tiers.discard('')
+            if tiers and tiers.issubset(NON_MICROSOFT_SOLUTION_TIERS):
+                weak.append(('3rd Party (SaaS)', 'cl_solution_partner'))
+            elif tiers & {'microsoft', 'first party'}:
+                weak.append(('Cloud', 'cl_solution_microsoft'))
+            else:
+                # No publisher signal — custom vendor tables are 3rd party by default.
+                weak.append(('3rd Party (SaaS)', 'cl_default'))
+
+    all_signals = strong + weak
+    pool = strong if strong else weak
+    if not pool:
+        return 'Unknown', 'default', ''
+
+    winner = _pick_by_category_precedence(p for p, _ in pool)
+    sources = sorted({src for p, src in pool if p == winner})
+    candidates = sorted({p for p, _ in all_signals}, key=lambda p: CATEGORY_PRIMARY_PRECEDENCE.index(p)
+                        if p in CATEGORY_PRIMARY_PRECEDENCE else len(CATEGORY_PRIMARY_PRECEDENCE))
+    return winner, ';'.join(sources), ','.join(candidates)
 
 
 # ASim tables use EventVendor/EventProduct
@@ -2299,7 +2509,15 @@ def is_valid_table_candidate(
 
 
 def is_true_table_name(value: Optional[str]) -> bool:
-    return isinstance(value, str) and value.strip().lower().endswith("_cl")
+    if not isinstance(value, str):
+        return False
+    stripped = value.strip()
+    lowered = stripped.lower()
+    # Reject ARM-template expressions captured as literal table names
+    # (e.g. "[parameters('PlaybookName')]_CL", "[variables('Sentinel_LogName')]_CL").
+    if stripped.startswith("[") or "parameters(" in lowered or "variables(" in lowered:
+        return False
+    return lowered.endswith("_cl")
 
 
 def prefers_asim_name(value: Optional[str]) -> bool:
@@ -3339,14 +3557,25 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
             if isinstance(data_flows, list):
                 for flow in data_flows:
                     if isinstance(flow, dict):
+                        # Try both "outputStream" (legacy) and "streams" (standard)
+                        output_streams = []
                         output_stream = flow.get("outputStream")
                         if isinstance(output_stream, str):
-                            # Strip "Microsoft-" or "Custom-" prefix
+                            output_streams.append(output_stream)
+                        
+                        streams = flow.get("streams")
+                        if isinstance(streams, list):
+                            output_streams.extend(s for s in streams if isinstance(s, str))
+                        
+                        for output_stream in output_streams:
+                            # Normalize stream names to table names
                             table_name = output_stream.strip()
                             if table_name.startswith("Microsoft-"):
                                 table_name = table_name[len("Microsoft-"):]
                             elif table_name.startswith("Custom-"):
                                 table_name = table_name[len("Custom-"):]
+                            if table_name.startswith("Sentinel"):
+                                table_name = table_name[len("Sentinel"):]
                             
                             # Skip if it looks like an expression or placeholder
                             if table_name and not table_name.startswith("[") and not table_name.startswith("{{"):
@@ -4559,11 +4788,36 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
     if not isinstance(author, dict):
         author = {}
     
-    # Extract categories as comma-separated string
+    # Extract categories as comma-separated string.
+    # SolutionMetadata.json stores `categories` as an object whose values are
+    # the actual category labels, e.g.
+    #   "categories": {"domains": ["Security - Threat Protection"], "verticals": []}
+    # Emit the flattened VALUES (the real domain/vertical labels), not the
+    # object keys ("domains"/"verticals"), so the column carries usable
+    # solution categorization that table category resolution can consume.
     categories = metadata.get("categories", {})
     if isinstance(categories, dict):
-        category_keys = [k for k in categories.keys() if categories.get(k)]
-        categories_str = ",".join(category_keys)
+        category_values: List[str] = []
+        seen_cat: Set[str] = set()
+        # Preserve a stable order: domains first, then verticals, then any others.
+        ordered_keys = (
+            [k for k in ("domains", "verticals") if k in categories]
+            + [k for k in categories.keys() if k not in ("domains", "verticals")]
+        )
+        for key in ordered_keys:
+            vals = categories.get(key)
+            if isinstance(vals, list):
+                for v in vals:
+                    label = str(v).strip()
+                    if label and label not in seen_cat:
+                        seen_cat.add(label)
+                        category_values.append(label)
+            elif isinstance(vals, str):
+                label = vals.strip()
+                if label and label not in seen_cat:
+                    seen_cat.add(label)
+                    category_values.append(label)
+        categories_str = ",".join(category_values)
     else:
         categories_str = ""
     
@@ -5103,6 +5357,83 @@ def save_marketplace_cache(cache_dir: Path, cache: Dict[str, Dict[str, str]]) ->
         print(f"Warning: Could not save marketplace cache: {e}")
 
 
+def _build_legacy_id(publisher_id: str, offer_id: str) -> str:
+    """
+    Build the Azure Marketplace legacy product id ("<publisher>.<offer>").
+
+    Some SolutionMetadata.json files already store the full legacy id in
+    offerId (e.g. publisher "azuresentinel" + offerId
+    "azuresentinel.trendmicrocas"). Re-prefixing those would produce a
+    double-prefixed id that 404s and is mis-reported as unpublished, so the
+    offerId is used as-is when it already starts with "<publisher>.".
+    """
+    prefix = f"{publisher_id}."
+    return offer_id if offer_id.startswith(prefix) else f"{publisher_id}.{offer_id}"
+
+
+def _query_marketplace_by_offer_id(publisher_id: str, offer_id: str) -> Optional[dict]:
+    """
+    Fallback marketplace lookup by offerId via the catalog filter query.
+
+    The direct legacy-id lookup (`/offers/<publisher>.<offer>`) 404s when a
+    solution is republished under a different publisherId than the one stored in
+    SolutionMetadata.json (e.g. "zscaler" -> "zscaler1579058425289"). This
+    mirrors the official packaging flow
+    (.script/package-automation/catalogAPI.ps1), which resolves offers by
+    offerId rather than by full legacy id, and so survives publisherId drift.
+
+    Note: this only finds offers whose offerId still matches the stored value.
+    Solutions whose offerId itself changed need a SolutionMetadata.json fix.
+
+    Args:
+        publisher_id: The publisher ID from SolutionMetadata.json
+        offer_id: The offer ID from SolutionMetadata.json (may be prefixed)
+
+    Returns:
+        The matching offer item dict from the catalog, or None if not found.
+    """
+    if not HAS_URLLIB:
+        return None
+
+    # Some SolutionMetadata.json files store the full legacy id in offerId
+    # ("<publisher>.<offer>"); the catalog offerId is just the "<offer>" part.
+    prefix = f"{publisher_id}."
+    offer_part = offer_id[len(prefix):] if offer_id.startswith(prefix) else offer_id
+    if not offer_part:
+        return None
+
+    odata_filter = (
+        "(categoryIds/any(cat: cat eq 'AzureSentinelSolution') "
+        f"or keywords/any(key: contains(key,'{AZURE_MARKETPLACE_SENTINEL_KEYWORD}'))) "
+        f"and (offerId eq '{offer_part}')"
+    )
+    api_url = (
+        f"{AZURE_MARKETPLACE_API_URL}?api-version={AZURE_MARKETPLACE_API_VERSION}"
+        f"&$filter={quote(odata_filter, safe='')}"
+    )
+
+    try:
+        request = urllib.request.Request(api_url)
+        request.add_header('Accept', 'application/json')
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if response.status != 200:
+                return None
+            data = json.loads(response.read().decode('utf-8'))
+    except Exception:
+        # Network errors, timeouts, HTTP errors - treat as "no fallback match"
+        return None
+
+    items = data.get('items', []) if isinstance(data, dict) else []
+    if not items:
+        return None
+
+    # Prefer an item whose offerId matches exactly (case-insensitive); the
+    # filter is already scoped to offerId, but guard against substring matches.
+    offer_part_l = offer_part.lower()
+    exact = [it for it in items if (it.get('offerId') or '').lower() == offer_part_l]
+    return (exact or items)[0]
+
+
 def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str, str]:
     """
     Check if a solution is available on Azure Marketplace and retrieve its metadata.
@@ -5121,8 +5452,15 @@ def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str
     if not publisher_id or not offer_id:
         return _empty_marketplace_record(False)  # Can't check without both IDs
 
-    # Build the API URL
-    legacy_id = f"{publisher_id}.{offer_id}"
+    # Build the API URL. The legacy id is "<publisher>.<offer>", but some
+    # SolutionMetadata.json files already store the full legacy id in offerId
+    # (e.g. publisher "azuresentinel" + offerId "azuresentinel.trendmicrocas",
+    # or publisher "squadratechnologies" + offerId
+    # "squadratechnologies.secrmmsentinel"). Re-prefixing those would produce a
+    # double-prefixed id (e.g. "azuresentinel.azuresentinel.trendmicrocas") that
+    # 404s and is mis-reported as unpublished, so use offerId as-is when it is
+    # already prefixed with "<publisher>." (see _build_legacy_id).
+    legacy_id = _build_legacy_id(publisher_id, offer_id)
     # URL-encode the legacy id path segment: some publisher/offer ids contain
     # spaces (e.g. "Red Canary"), which raise urllib InvalidURL before any
     # request is made and were silently swallowed as "assume published".
@@ -5138,7 +5476,20 @@ def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str
                 return _parse_marketplace_response(data, legacy_id)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            # Solution not found on marketplace
+            # Direct legacy-id lookup failed. Before declaring the solution
+            # unpublished, retry via the catalog filter query keyed by offerId
+            # (mirrors the official packaging flow). This recovers solutions
+            # that were republished under a different publisherId than the one
+            # recorded in SolutionMetadata.json (e.g. "zscaler" ->
+            # "zscaler1579058425289").
+            fallback = _query_marketplace_by_offer_id(publisher_id, offer_id)
+            if fallback:
+                live_legacy_id = fallback.get('legacyId') or (
+                    f"{fallback.get('publisherId', publisher_id)}."
+                    f"{fallback.get('offerId', offer_id)}"
+                )
+                return _parse_marketplace_response(fallback, live_legacy_id)
+            # Solution genuinely not found on marketplace
             return _empty_marketplace_record(False)
         # Other HTTP errors - assume published to avoid false negatives
         return _empty_marketplace_record(True)
@@ -5187,7 +5538,7 @@ def check_all_solutions_marketplace(
 
         # Check cache first
         if publisher_id and offer_id:
-            legacy_id = f"{publisher_id}.{offer_id}"
+            legacy_id = _build_legacy_id(publisher_id, offer_id)
             if legacy_id in cache:
                 results[solution_name] = cache[legacy_id]
                 cache_hits += 1
@@ -5200,7 +5551,7 @@ def check_all_solutions_marketplace(
 
         # Update cache
         if publisher_id and offer_id:
-            legacy_id = f"{publisher_id}.{offer_id}"
+            legacy_id = _build_legacy_id(publisher_id, offer_id)
             cache[legacy_id] = mp_data
 
         # Progress indicator every 25 API calls or every 100 solutions processed
@@ -9194,12 +9545,36 @@ def main() -> None:
                 has_valid_connector = True
                 
                 # === Table extraction with priority ordering ===
+                # Priority 0: dataTypes in standalone connector definitions (e.g. *_ConnectorDefinition.json)
                 # Priority 1: *_Table.json companion files
                 # Priority 2: *_DCR.json companion files  
                 # Priority 3: Query analysis from connector JSON
                 
                 table_map: Dict[str, Dict[str, Any]] = {}
                 tables_from_companion_files = False
+                
+                # Priority 0: Extract tables from dataTypes in the connector definition JSON
+                # For standalone connector definition files (like *_ConnectorDefinition.json or
+                # CCF v3 definition JSON), extract table names from connectorUiConfig.dataTypes
+                if isinstance(data, dict):
+                    properties = data.get("properties", {})
+                    if isinstance(properties, dict):
+                        ui_config = properties.get("connectorUiConfig", {})
+                        if isinstance(ui_config, dict):
+                            data_types = ui_config.get("dataTypes", [])
+                            if isinstance(data_types, list):
+                                for dt in data_types:
+                                    if isinstance(dt, dict):
+                                        tbl_name = dt.get("name", "")
+                                        if isinstance(tbl_name, str) and tbl_name.strip() and not tbl_name.startswith("{{"):
+                                            if tbl_name not in table_map:
+                                                table_map[tbl_name] = {
+                                                    "has_mismatch": False,
+                                                    "actual_table": None,
+                                                    "sources": {"dataTypes"},
+                                                    "from_companion_file": True,  # Mark as authoritative
+                                                }
+                                                tables_from_companion_files = True
                 
                 # Check for companion Table and DCR files
                 table_json_files, dcr_json_files = find_companion_table_files(json_path)
@@ -9506,33 +9881,6 @@ def main() -> None:
                         if not had_table_definitions:
                             reason = "no_table_definitions"
                             details = "Connector definition did not expose any table tokens."
-                            # Still include connector in output with empty table
-                            row_key = (
-                                solution_info["solution_name"],
-                                solution_info["solution_folder"],
-                                solution_info["solution_publisher_id"],
-                                solution_info["solution_offer_id"],
-                                solution_info["solution_first_publish_date"],
-                                solution_info["solution_last_publish_date"],
-                                solution_info["solution_version"],
-                                solution_info["solution_support_name"],
-                                solution_info["solution_support_tier"],
-                                solution_info["solution_support_link"],
-                                solution_info["solution_author_name"],
-                                solution_info["solution_categories"],
-                                connector_id,
-                                connector_publisher,
-                                connector_title,
-                                connector_description,
-                                connector_instruction_steps,
-                                connector_permissions,
-                                connector_id_generated,
-                                "",  # Empty table name
-                            )
-                            existing_flag = grouped_rows[row_key].get(relative_path)
-                            if existing_flag is None or (existing_flag and not is_azuredeploy):
-                                grouped_rows[row_key][relative_path] = is_azuredeploy
-                            produced_rows += 1
                         elif parser_filtered_tables and len(parser_filtered_tables) == total_table_entries:
                             reason = "parser_tables_only"
                             tables_list = ", ".join(sorted(parser_filtered_tables))
@@ -9546,6 +9894,41 @@ def main() -> None:
                             details = "Table tokens were detected but none could be emitted."
                         if used_loganalytics_fallback and reason == "no_table_definitions":
                             details = "No table tokens detected; emitted tables solely from logAnalyticsTableId values but still filtered."
+                        # Always include the connector in the output with an empty
+                        # table, regardless of WHY no table rows were produced. A
+                        # connector whose every table token was filtered out (parser
+                        # functions, failed validation, or a reported_table_exclusions
+                        # override — e.g. a Function App health connector that only
+                        # references AzureDiagnostics/AzureMetrics) is still a real
+                        # connector. Dropping its row would silently remove the whole
+                        # solution from the mapping CSV (and therefore the docs index)
+                        # when the connector is the solution's only one.
+                        row_key = (
+                            solution_info["solution_name"],
+                            solution_info["solution_folder"],
+                            solution_info["solution_publisher_id"],
+                            solution_info["solution_offer_id"],
+                            solution_info["solution_first_publish_date"],
+                            solution_info["solution_last_publish_date"],
+                            solution_info["solution_version"],
+                            solution_info["solution_support_name"],
+                            solution_info["solution_support_tier"],
+                            solution_info["solution_support_link"],
+                            solution_info["solution_author_name"],
+                            solution_info["solution_categories"],
+                            connector_id,
+                            connector_publisher,
+                            connector_title,
+                            connector_description,
+                            connector_instruction_steps,
+                            connector_permissions,
+                            connector_id_generated,
+                            "",  # Empty table name
+                        )
+                        existing_flag = grouped_rows[row_key].get(relative_path)
+                        if existing_flag is None or (existing_flag and not is_azuredeploy):
+                            grouped_rows[row_key][relative_path] = is_azuredeploy
+                        produced_rows += 1
                         # Log all issues including no_table_definitions to track items without detected tables
                         add_issue(
                             issues,
@@ -10677,6 +11060,29 @@ def main() -> None:
                 + ", ".join(sorted(prunable.keys()))
             )
 
+    # Redirect the marketplace lookup key BEFORE checking availability.
+    #
+    # The published signal is derived purely from the public Azure Marketplace
+    # catalog API, keyed by the solution's "<publisher_id>.<offer_id>" legacy
+    # id taken from SolutionMetadata.json. When a solution ships under a
+    # different marketplace offer than its repo metadata records — e.g. a
+    # renamed/re-published offer, a publisher hand-off, or a repo folder that
+    # carries no SolutionMetadata.json at all — the direct lookup 404s and the
+    # solution is mis-reported as unpublished even though it is live.
+    #
+    # Rather than masking that with a blanket `is_published` override (which
+    # hard-codes the conclusion and hides any future marketplace change), a
+    # Solution-scoped `solution_publisher_id` / `solution_offer_id` override
+    # redirects WHAT is looked up so the public marketplace check itself
+    # returns the correct, self-maintaining answer. These overrides are applied
+    # here, before the check, because the standard solution-override pass runs
+    # later (after marketplace status has already been resolved). The mapper
+    # never calls the authenticated Content Hub APIs; only the public
+    # marketplace catalog is consulted.
+    if overrides:
+        for _sol_info in all_solutions_info.values():
+            apply_overrides_to_row(_sol_info, overrides, 'solution', 'solution_name')
+
     # Check marketplace availability (always runs, uses cache by default)
     # Use --force-refresh=marketplace to refresh the cache
     marketplace_status: Dict[str, Dict[str, str]] = {}
@@ -11045,6 +11451,17 @@ def main() -> None:
         c['connector_id']: (c.get('is_published', '') or '').strip().lower() == 'true'
         for c in connectors_data
     }
+    # connector_id -> owning solution_name, and solution_name -> support tier.
+    # Used by category_primary resolution to place _CL custom-log tables via the
+    # publisher of their feeding connector's solution (R3 solution signal).
+    connector_solution_lookup = {
+        c['connector_id']: (c.get('solution_name', '') or '')
+        for c in connectors_data
+    }
+    solution_tier_lookup = {
+        s.get('solution_name', ''): (s.get('solution_support_tier', '') or '')
+        for s in solutions_data
+    }
     for conn_id, ctables in connector_tables_map.items():
         method = connector_method_lookup.get(conn_id, '')
         if _norm_method(method) in NON_INFORMATIVE_METHODS:
@@ -11312,10 +11729,29 @@ def main() -> None:
             _normalize_collection_method(collection_method)
         )
 
+        # === Table category_primary resolution ===
+        # Normalize the raw doc `category` into a single closed-taxonomy value
+        # plus provenance and candidates. Uses the resolved collection_method,
+        # resource_types, vendor/product, and the feeding connectors' solution
+        # publisher tiers. Internal tables are reclassified below, after the
+        # internal-table detection pass. See TABLE_CATEGORIZATION_GUIDANCE.md.
+        category_primary, category_source, category_candidates = resolve_category_primary(
+            table_name,
+            ref,
+            collection_method,
+            table_connector_ids.get(table_name, set()),
+            connector_vendor_product,
+            connector_solution_lookup,
+            solution_tier_lookup,
+        )
+
         tables_data.append({
             'table_name': table_name,
             'description': ref.get('description', ''),
             'category': ref.get('category', ''),
+            'category_primary': category_primary,
+            'category_source': category_source,
+            'category_candidates': category_candidates,
             'support_tier': support_tier,
             'collection_method': collection_method,
             'collection_method_source': method_source,
@@ -11431,6 +11867,15 @@ def main() -> None:
         for table_entry in tables_data:
             if table_entry['table_name'] in internal_tables:
                 table_entry['category'] = 'Internal'
+                # Internal wins over the source-type taxonomy: these are
+                # solution-private storage tables, not an ingestion source.
+                table_entry['category_primary'] = 'Internal'
+                table_entry['category_source'] = 'internal_table'
+                existing = [
+                    c for c in (table_entry.get('category_candidates', '') or '').split(',')
+                    if c and c != 'Internal'
+                ]
+                table_entry['category_candidates'] = ','.join(['Internal', *existing])
         log_print(f"Identified {len(internal_tables)} internal use tables (custom tables written by playbooks AND used by non-playbook content)")
 
     # =========================================================================
@@ -12064,6 +12509,9 @@ def main() -> None:
         'table_name',
         'description',
         'category',
+        'category_primary',
+        'category_source',
+        'category_candidates',
         'support_tier',
         'collection_method',
         'collection_method_source',

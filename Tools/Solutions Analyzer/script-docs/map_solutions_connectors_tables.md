@@ -208,6 +208,10 @@ The override file is a CSV with the following columns:
 - Use `.*` for wildcards (e.g., `.*AWS.*` matches any table containing "AWS")
 - Field names must exactly match existing columns in the output
 
+**Correcting the "discovered" flag:** a `connector` override on `not_in_solution_json` (value `false`) reclassifies a connector from "Discovered" to "In Solutions". Use this for published connectors that ship inside a solution but are not listed in (or are out-shadowed within) the solution's `Solution_*.json` data file, when the proper fix has to be made upstream in the solution.
+
+**Redirecting the marketplace lookup (`solution_publisher_id` / `solution_offer_id`):** a `solution` override on `solution_publisher_id` and/or `solution_offer_id` changes the `<publisherId>.<offerId>` legacy id the mapper queries against the public Azure Marketplace catalog. These two fields are applied **before** the marketplace availability check (unlike all other overrides, which are applied after), so the resulting `mp_is_published` / `is_published` flag is computed against the corrected offer. Use this — rather than a blanket `is_published=true` override — when a solution is live in the marketplace but under a different offer than its `SolutionMetadata.json` records: a renamed or re-published offer, a publisher hand-off, or a repo folder that has no `SolutionMetadata.json` at all (e.g. `Farsight DNSDB` → `domaintoolsllc….farsight-dnsdb`, `Synack` → `synackinc….synack-sentinel-integration`). Because the verdict still comes from the live public catalog, it self-corrects on future marketplace changes. The mapper consults only the public marketplace catalog and never the authenticated Content Hub APIs; an `is_published` override remains the last resort for content that is genuinely in the Content Hub but absent from the marketplace catalog.
+
 ### Example Override File
 
 ```csv
@@ -320,10 +324,11 @@ The script queries the Azure Marketplace Catalog API to collect comprehensive me
 
 ### How It Works
 
-1. For each solution, the script constructs a legacy product ID from the `publisher_id` and `offer_id` in `SolutionMetadata.json`
+1. For each solution, the script constructs a legacy product ID from the `publisher_id` and `offer_id` in `SolutionMetadata.json` (normally `<publisher_id>.<offer_id>`). If `offer_id` already begins with `<publisher_id>.` — some metadata files store the full legacy ID in `offerId` (e.g. publisher `azuresentinel` + offer `azuresentinel.trendmicrocas`) — the `offer_id` is used as-is to avoid producing a double-prefixed ID that would 404 and be mis-reported as unpublished.
 2. It queries the Azure Marketplace Catalog API at `https://catalogapi.azure.com/offers/{legacy_id}?api-version=2018-08-01-beta`
 3. If the API returns a valid response, the full response is parsed into 19 `mp_*` fields and cached
-4. If the API returns an error or no data, the solution is marked as unpublished with empty metadata fields
+4. If the direct lookup returns **404**, the script retries via a catalog `$filter` query keyed by `offerId` only (`_query_marketplace_by_offer_id()`), mirroring the official packaging flow in `.script/package-automation/catalogAPI.ps1`. The filter is scoped to Sentinel offers (`categoryIds/any(cat: cat eq 'AzureSentinelSolution')` or `keywords` containing the Sentinel keyword GUID `f1de974b-f438-4719-b423-8bf704ba2aef`) and matches `offerId` exactly. This recovers solutions that were **republished under a different `publisherId`** than the one recorded in `SolutionMetadata.json` (e.g. Zscaler Internet Access: `zscaler.zscaler_zia` → live `zscaler1579058425289.zscaler_zia`). The matched offer is parsed into the same `mp_*` fields using the live legacy ID. The fallback only *adds* recovery on a 404 — it never flips a published solution to unpublished. Solutions whose **`offerId` itself changed** in the marketplace (not just the publisher) are not recovered and remain reported as unpublished; those need a `SolutionMetadata.json` `offerId` correction.
+5. If both the direct lookup and the filter fallback return no data (or the API returns a non-404 error), the solution is marked as unpublished with empty metadata fields
 
 ### Collected Fields
 
@@ -525,6 +530,30 @@ Comparisons are case-insensitive throughout.
 |----------|---------|
 | `table_method_conflict` | Intrinsic value disagrees with the connector-inferred (or precedence-collapsed) method. Intrinsic always wins; the disagreement is logged for visibility. The `details` column lists the intrinsic value, its source, the connector-inferred method, and the feeding connector IDs. |
 | `table_method_ambiguity` | Feeding connectors still disagree after the published-trump filter and precedence collapse, **and** no intrinsic value was set. The `details` column lists the candidate methods and a `method:[connector_id,...]` breakdown. Tables that already have an intrinsic value (e.g. `Syslog`, `CommonSecurityLog` → `AMA`) are not reported here since the intrinsic wins. |
+
+#### Table-Level `category_primary` Resolution
+
+`tables.csv` keeps the raw Azure Monitor doc `category` string unchanged for traceability and adds a normalized **`category_primary`** drawn from a closed reporting taxonomy: `Cloud`, `Endpoint`, `Syslog/CEF`, `3rd Party (SaaS)`, `Defender`, `ASIM`, `Internal`, `Unknown`. Two diagnostic columns mirror the `collection_method` family: `category_source` (provenance) and `category_candidates` (every distinct taxonomy value any signal produced, ordered by precedence).
+
+Resolution distinguishes **strong** signals (which decide when present, combining via combo precedence) from **weak** fallbacks (which fire only when no strong signal exists):
+
+**Strong signals**
+1. **ASIM** — table name starts with `ASim` → `ASIM`.
+2. **Intrinsic Defender** — `source_defender_xdr=Yes` → `Defender`.
+3. **Doc category tokens** — each token of the raw `category` (already override-injected in `tables_reference.csv`, e.g. `AWS`, `GCP`, `Crowdstrike`, `Entra`, `MDE`, `Normalized`, `Syslog/CEF`) is mapped via `CATEGORY_TOKEN_TO_PRIMARY`. Cross-cutting tokens (`Audit`, `Security`, `Low value`, `Network`, `Workloads`, …) contribute no signal.
+
+When several strong signals map to different taxonomy values, the winner is chosen by `CATEGORY_PRIMARY_PRECEDENCE` (`Internal` > `Defender` > `ASIM` > `Endpoint` > `Syslog/CEF` > `3rd Party (SaaS)` > `Cloud` > `Unknown`). This deterministically resolves combos such as SigninLogs (`Audit, Azure Resources` → `Cloud`, not `Defender`).
+
+**Weak fallbacks (only when no strong signal)**
+4. **Cross-derive from `collection_method`** (`COLLECTION_METHOD_TO_CATEGORY`) — e.g. `Syslog`/`CEF`/`AMA` → `Syslog/CEF`, `Defender` → `Defender`, `Azure Diagnostics`/`Native` → `Cloud`, CCF/Function/Logic App/Custom → `3rd Party (SaaS)`.
+5. **`resource_types`** non-empty → `Cloud` (Azure platform/diagnostic source).
+6. **`_CL` custom-log chain** — feeding-connector vendor/product present → `3rd Party (SaaS)` (`cl_vendor`); otherwise the feeding connectors' **solution publisher tier** decides: partner/community/developer → `3rd Party (SaaS)` (`cl_solution_partner`), Microsoft/first-party → `Cloud` (`cl_solution_microsoft`), unknown → `3rd Party (SaaS)` (`cl_default`).
+
+**Post-resolution**
+- **Internal reclassification** — tables identified as solution-private storage (`_CL` written by a solution's playbook **and** read by its non-playbook content) are forced to `category_primary = Internal` (`category_source = internal_table`), winning over the source-type taxonomy.
+- **Override CSV** — `Entity=Table, Field=category_primary` rows in `solution_analyzer_overrides.csv` overwrite the resolved value (the existing `Field=category` rows instead change the raw token that feeds resolution).
+
+The constants live at the top of `map_solutions_connectors_tables.py` (`CATEGORY_PRIMARY_VALUES`, `CATEGORY_PRIMARY_PRECEDENCE`, `CATEGORY_TOKEN_TO_PRIMARY`, `COLLECTION_METHOD_TO_CATEGORY`). See [`TABLE_CATEGORIZATION_GUIDANCE.md`](../TABLE_CATEGORIZATION_GUIDANCE.md).
 
 ### CCF Configuration and Capabilities
 
@@ -814,7 +843,7 @@ When a connector references a parser function (e.g., `ASimDns`):
 For each connector, tables are gathered from several sources. The most authoritative source for what a connector *ingests* is its Data Collection Rule (DCR) and table-definition companion files, so the analyzer applies the following priority:
 
 1. **`dataTypes` declarations** in the connector definition.
-2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR's output stream (e.g., `Custom-OktaV2_CL`) and the table definition declare exactly what the connector writes to.
+2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR `dataFlows` stream declarations (`outputStream` and `streams`) and the table definition declare exactly what the connector writes to. Stream values are normalized by stripping `Microsoft-` / `Custom-` prefixes and a leading `Sentinel` token (for example, `Microsoft-SentinelAlibabaCloudWAFLogs` -> `AlibabaCloudWAFLogs`).
 3. **Query analysis** of the connector's UI/status queries (`graphQueries`, `sampleQueries`, `lastDataReceivedQuery`, connectivity criteria), including expansion of any parser functions they reference.
 
 **The DCR/Table companion files trump query analysis.** When companion `*_Table.json` / `*_DCR.json` files are present for a connector, the analyzer treats them as ground truth and **skips query analysis** (priority 3) entirely for that connector. This prevents non-ingested tables from leaking onto the connector.
