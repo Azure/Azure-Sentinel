@@ -1,4 +1,4 @@
-# Infoblox-SOC-Import-Indicators-TI
+# Infoblox-IQ-for-TD-Import-Indicators-TI
 
 * [Summary](#Summary)
 * [Prerequisites](#Prerequisites)
@@ -7,11 +7,13 @@
 
 ## Summary<a name="Summary"></a>
 
-This playbook imports each Indicator of an SOC Insight Incident into the ```ThreatIntelligenceIndicator``` table you can use as **threat intelligence**. 
+This playbook imports each Indicator of a Microsoft Sentinel Incident triggered by an **Infoblox IQ for TD Insight** into the ```ThreatIntelligenceIndicator``` table you can use as **threat intelligence**.
 
-*You must run the **Infoblox-SOC-Get-Insight-Details** playbook on the SOC Insight Incident before running this playbook.*
+*You must run the **Infoblox-IQ-for-TD-Get-Insight-Details** playbook on the IQ for TD Insight Incident before running this playbook.*
 
-This playbook can be configured to run automatically when a SOC Insight Incident occurs or run on demand.
+This playbook can be configured to run automatically when a IQ for TD Insight Incident occurs or run on demand.
+
+![Infoblox IQ for TD Import Indicators TI](./Images/InfobloxSOCImportIndicatorsTI.png)
 
 ### Prerequisites<a name="Prerequisites"></a>
 
@@ -30,7 +32,7 @@ This playbook can be configured to run automatically when a SOC Insight Incident
     * Client ID: Enter value for Application (Client) ID
     * Tenant ID: Enter value for Directory (Tenant) ID
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Import%20Indicators%20TI%2Fazuredeploy.json)[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Import%20Indicators%20TI%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Import%20Indicators%20TI%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Import%20Indicators%20TI%2Fazuredeploy.json)
 
 ### Post-Deployment instructions<a name="Post-Deployment-instructions"></a>
 
@@ -45,12 +47,17 @@ Once deployment is complete, authorize each connection.
 5. Click Save
 6. Repeat steps for other connections
 
-#### b. Assign Role to Update in incident
-
-Assign role to this playbook
+#### b. Assign role to this playbook
 
 1. Go to Log Analytics Workspace → *select your workspace* → Access Control → Add
 2. Add role assignment
 3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role
 4. Members: select managed identity for assigned access to and add your logic app as member
 5. Click on review+assign
+
+#### c. Configure playbook permissions (required for automation rules to run this playbook)
+
+1. Go to Microsoft Sentinel → *select your workspace* → Settings
+2. Select the Settings tab → Playbook permissions → Configure permissions
+3. Select the subscription containing this playbook
+4. Click Apply
