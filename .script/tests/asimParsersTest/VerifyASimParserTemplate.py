@@ -45,19 +45,19 @@ parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASim
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
-    {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
-    {"SchemaName": "AgentEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
+    {"SchemaName": "AlertEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
+    {"SchemaName": "AgentEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
     {"SchemaName": "AssetEntity", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Asset Entity Schema", "SchemaLink": "https://aka.ms/ASimAssetEntityDoc"},
-    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
-    {"SchemaName": "Authentication", "SchemaVersion": "0.1.4","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
-    {"SchemaName": "Dns", "SchemaVersion": "0.1.7", "SchemaTitle":"ASIM Dns Schema","SchemaLink": "https://aka.ms/ASimDnsDoc"},
-    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
-    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.2", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
-    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
-    {"SchemaName": "ProcessEvent", "SchemaVersion": "0.1.4", "SchemaTitle":"ASIM Process Schema","SchemaLink": "https://aka.ms/ASimProcessEventDoc"},
-    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.3", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
-    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
-    {"SchemaName": "WebSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
+    {"SchemaName": "AuditEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
+    {"SchemaName": "Authentication", "SchemaVersion": "1.0.0","SchemaTitle":"ASIM Authentication Schema","SchemaLink":"https://aka.ms/ASimAuthenticationDoc"},
+    {"SchemaName": "Dns", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dns Schema","SchemaLink":"https://aka.ms/ASimDnsDoc"},
+    {"SchemaName": "DhcpEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink":"https://aka.ms/ASimDhcpEventDoc"},
+    {"SchemaName": "FileEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM File Schema","SchemaLink":"https://aka.ms/ASimFileEventDoc"},
+    {"SchemaName": "NetworkSession", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Network Session Schema","SchemaLink":"https://aka.ms/ASimNetworkSessionDoc"},
+    {"SchemaName": "ProcessEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Process Schema","SchemaLink":"https://aka.ms/ASimProcessEventDoc"},
+    {"SchemaName": "RegistryEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Registry Schema","SchemaLink":"https://aka.ms/ASimRegistryEventDoc"},
+    {"SchemaName": "UserManagement", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM User Management Schema","SchemaLink":"https://aka.ms/ASimUserManagementDoc"},
+    {"SchemaName": "WebSession", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Web Session Schema","SchemaLink":"https://aka.ms/ASimWebSessionDoc"}
     # Add more schemas as needed
 ]
 
@@ -87,7 +87,8 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml', f'vim{schema_name}Empty.yaml')):
+        is_empty_parser = os.path.basename(parser).startswith('vim') and parser.endswith('Empty.yaml')
+        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml')) or is_empty_parser:
             print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
