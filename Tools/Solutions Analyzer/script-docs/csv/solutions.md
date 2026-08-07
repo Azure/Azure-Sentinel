@@ -28,8 +28,8 @@ Flattened solution metadata combining `SolutionMetadata.json` and `Data/Solution
 | `solution_name` | Official solution name (or folder name fallback) | Solution JSON `Name` |
 | `solution_folder` | Solution folder name | File system |
 | `solution_github_url` | Full GitHub URL to the solution's folder | Computed |
-| `solution_publisher_id` | Publisher ID | SolutionMetadata.json `publisherId` |
-| `solution_offer_id` | Offer ID | SolutionMetadata.json `offerId` |
+| `solution_publisher_id` | Publisher ID. Overridable via `Solution,<pattern>,solution_publisher_id,<value>` to redirect the marketplace lookup (applied before the marketplace check) | SolutionMetadata.json `publisherId` |
+| `solution_offer_id` | Offer ID. Overridable via `Solution,<pattern>,solution_offer_id,<value>` to redirect the marketplace lookup (applied before the marketplace check) | SolutionMetadata.json `offerId` |
 | `solution_first_publish_date` | First publication date | SolutionMetadata.json `firstPublishDate` |
 | `solution_last_publish_date` | Last update date | SolutionMetadata.json `lastPublishDate` |
 | `solution_version` | Solution version | Solution JSON `Version` or SolutionMetadata.json `version` |
@@ -37,7 +37,7 @@ Flattened solution metadata combining `SolutionMetadata.json` and `Data/Solution
 | `solution_support_tier` | Support tier (Microsoft, Partner, Community) | SolutionMetadata.json `support.tier` |
 | `solution_support_link` | Support link URL | SolutionMetadata.json `support.link` |
 | `solution_author_name` | Author name | Solution JSON `Author` |
-| `solution_categories` | Comma-separated categories | SolutionMetadata.json `categories` |
+| `solution_categories` | Comma-separated category labels (the flattened **values** of the `categories` object — domain labels first, then verticals — e.g. `Security - Threat Protection,Identity`), not the `domains`/`verticals` keys | SolutionMetadata.json `categories` |
 | `solution_readme_file` | Path to solution README (if exists) | File system |
 | `solution_logo_url` | URL to solution logo (extracted from HTML img in Logo field) | Solution JSON `Logo` |
 | `solution_description` | Full solution description | Solution JSON `Description` |

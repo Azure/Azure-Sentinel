@@ -69,6 +69,19 @@ INGESTION_API_OVERVIEW_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/az
 AZURE_MONITOR_TABLE_REF_BASE = 'https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/'
 AZURE_MONITOR_TABLE_REF_RAW_BASE = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/reference/tables/'
 
+# GitHub APIs for the full per-table reference directory. The tables-category
+# page only lists tables that belong to a category, so tables published without
+# a category (e.g. ApiManagementGatewayLlmLog) are missing from it. The
+# per-table reference directory is the authoritative complete set and is used
+# to flag those categoryless tables as Azure Monitor tables.
+#
+# The contents API caps directory listings at 1000 entries (the tables dir is
+# right at that limit), so we resolve the directory's tree SHA via the parent
+# contents listing and then read it through the Git Trees API, which returns up
+# to 100k entries.
+AZURE_MONITOR_REFERENCE_DIR_API = 'https://api.github.com/repos/MicrosoftDocs/azure-monitor-docs/contents/articles/azure-monitor/reference?ref=main'
+AZURE_MONITOR_TREES_API_BASE = 'https://api.github.com/repos/MicrosoftDocs/azure-monitor-docs/git/trees/'
+
 # Sentinel tables and connectors reference (includes lake-only support info)
 # The Microsoft Sentinel docs source moved from MicrosoftDocs/azure-docs
 # (articles/sentinel on main) to MicrosoftDocs/defender-docs (sentinel/ on the
@@ -312,7 +325,7 @@ def clear_cache() -> int:
     return count
 
 
-def fetch_content(url: str, verbose: bool = False) -> str:
+def fetch_content(url: str, verbose: bool = False, headers: Optional[Dict[str, str]] = None) -> str:
     """Fetch content from a URL with caching."""
     if not HAS_REQUESTS:
         raise ImportError("The 'requests' library is required. Install it with: pip install requests")
@@ -327,7 +340,7 @@ def fetch_content(url: str, verbose: bool = False) -> str:
     if verbose:
         print(f"  [fetching] {url.split('/')[-1]}")
     
-    response = requests.get(url, timeout=30)
+    response = requests.get(url, timeout=30, headers=headers)
     response.raise_for_status()
     content = response.text
     
@@ -466,7 +479,63 @@ def parse_azure_monitor_tables_category(content: str, verbose: bool = False) -> 
     return tables
 
 
-def parse_defender_xdr_schema(content: str, verbose: bool = False) -> Dict[str, TableInfo]:
+def fetch_azure_monitor_table_index(verbose: bool = False) -> Set[str]:
+    """Fetch the authoritative complete set of Azure Monitor table reference pages.
+
+    The tables-category page only lists tables that belong to a category, so
+    tables published without a category (e.g. ApiManagementGatewayLlmLog) are
+    missing from it and would otherwise be flagged source_azure_monitor=No.
+    The per-table reference ``.md`` files in the azure-monitor-docs repo are the
+    complete list. The directory has ~1000 files (at the contents-API cap), so
+    we resolve its tree SHA from the parent ``reference`` listing and read it via
+    the Git Trees API, returning the set of lowercase table names (filename
+    without ``.md``).
+
+    Returns an empty set on any failure so callers degrade gracefully to the
+    category-page behavior.
+    """
+    headers = {
+        'User-Agent': 'azure-sentinel-solutions-analyzer',
+        'Accept': 'application/vnd.github+json',
+    }
+    # Step 1: resolve the SHA of the tables/ subtree from the parent listing.
+    try:
+        parent = json.loads(fetch_content(AZURE_MONITOR_REFERENCE_DIR_API, verbose, headers=headers))
+    except Exception as e:
+        if verbose:
+            print(f"  Warning: could not fetch Azure Monitor reference directory: {e}")
+        return set()
+    tables_sha = ''
+    if isinstance(parent, list):
+        for entry in parent:
+            if isinstance(entry, dict) and entry.get('type') == 'dir' and entry.get('name') == 'tables':
+                tables_sha = entry.get('sha', '')
+                break
+    if not tables_sha:
+        if verbose:
+            print("  Warning: could not locate Azure Monitor 'tables' subtree")
+        return set()
+    # Step 2: read the full tree (up to 100k entries, well above ~1000 tables).
+    try:
+        tree = json.loads(fetch_content(f"{AZURE_MONITOR_TREES_API_BASE}{tables_sha}", verbose, headers=headers))
+    except Exception as e:
+        if verbose:
+            print(f"  Warning: could not fetch Azure Monitor tables tree: {e}")
+        return set()
+    names: Set[str] = set()
+    if isinstance(tree, dict):
+        if tree.get('truncated'):
+            if verbose:
+                print("  Warning: Azure Monitor tables tree was truncated by GitHub")
+        for entry in tree.get('tree', []):
+            if not isinstance(entry, dict):
+                continue
+            path = entry.get('path', '')
+            if entry.get('type') == 'blob' and path.lower().endswith('.md'):
+                names.add(path[:-3].lower())
+    if verbose:
+        print(f"  Found {len(names)} Azure Monitor table reference files")
+    return names
     """Parse the Defender XDR advanced hunting schema page (from raw markdown)."""
     tables = {}
     
@@ -1203,6 +1272,12 @@ Examples:
     except Exception as e:
         print(f"   Error: {e}")
         azure_monitor_tables = {}
+
+    # 1b. Fetch the authoritative complete list of Azure Monitor table reference
+    # files (catches categoryless tables missing from the category page).
+    if verbose:
+        print("\n1b. Fetching Azure Monitor table reference index...")
+    azure_monitor_table_index = fetch_azure_monitor_table_index(verbose)
     
     # 2. Fetch Defender XDR schema
     if verbose:
@@ -1248,6 +1323,19 @@ Examples:
     if verbose:
         print("\n6. Merging table information...")
     tables = merge_table_info(azure_monitor_tables, defender_tables, feature_info, ingestion_tables, sentinel_tables_info)
+    
+    # Flag categoryless Azure Monitor tables that the category page omits but
+    # that have a real per-table reference page (e.g. ApiManagementGatewayLlmLog).
+    if azure_monitor_table_index:
+        am_flagged = 0
+        for name, info in tables.items():
+            if not info.source_azure_monitor and name.lower() in azure_monitor_table_index:
+                info.source_azure_monitor = True
+                if not info.azure_monitor_doc_link:
+                    info.azure_monitor_doc_link = f"{AZURE_MONITOR_TABLE_REF_BASE}{name.lower()}"
+                am_flagged += 1
+        if verbose and am_flagged:
+            print(f"   Flagged {am_flagged} categoryless table(s) as Azure Monitor via reference index")
     
     if verbose:
         print(f"   Total unique tables: {len(tables)}")
@@ -1400,6 +1488,17 @@ Examples:
     
     csv_path = args.output / 'tables_reference.csv'
     write_tables_csv(tables, csv_path)
+    
+    # Write the Azure Monitor table reference index (lowercase table names) so
+    # the mapper can flag categoryless Azure Monitor tables it discovers from
+    # solution/connector references but that this script never emits a row for.
+    if azure_monitor_table_index:
+        index_path = args.output / 'azure_monitor_tables_index.txt'
+        with open(index_path, 'w', encoding='utf-8') as f:
+            for name in sorted(azure_monitor_table_index):
+                f.write(f"{name}\n")
+        if verbose:
+            print(f"Wrote {len(azure_monitor_table_index)} Azure Monitor table names to {index_path}")
     
     # Write column schemas CSV
     if all_table_columns:

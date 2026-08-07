@@ -199,6 +199,84 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.11 - Parser, table discovery, and mapping accuracy
+
+**Unifying ASIM parser deduplication and dual-variant parser pages:**
+- Unifying (union) parser deduplication now happens at **CSV generation** in `map_solutions_connectors_tables.py` (root cause), not just in the display layer: `asim_parsers.csv` no longer emits a separate row for the `im`/`vim` (filtering) variant of each unifying parser, keeping only the `ASim` (parameter-less) row. The dropped variant is preserved on the surviving `ASim` row via two new columns, `filtering_parser_name` and `filtering_equivalent_builtin`. Pairing is by `(schema, action)` so the irregular `RegistryEvent` and three-way `ProcessEvent` (base/Create/Terminate) cases pair correctly.
+- The ASIM parser listings (interactive `index.html` ASIM tab and the static `asim/asim-index.md`) therefore list only the `ASim` variant per schema; the prior display-layer dedup filters are now defensive no-ops.
+- Each ASIM parser detail page still reflects **both** variants in its Parser Information table — the parameter-less `ASim` parser and the filtering `im`/`vim` parser (workspace names and built-in function names) — now read directly from the new CSV columns instead of a substitution lookup.
+- Source parser listings are unchanged (already a single `ASim` parser each); only unifying parsers were duplicated.
+- Index summary and per-schema counts now report actual parser counts (e.g., "N source parsers and M unifying parsers") instead of the previous, now-inaccurate "parser pairs" wording.
+
+**Categoryless Azure Monitor table detection (`tables_reference.csv`, `tables.csv`, table pages):**
+- `collect_table_info.py` previously derived `source_azure_monitor` only from the Azure Monitor [tables-category](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-category) page, which groups tables by category and therefore **omits tables published without a category** (e.g. `ApiManagementGatewayLlmLog`). Those tables were wrongly flagged `source_azure_monitor=No` with an empty `azure_monitor_doc_link`, which suppressed their Azure Monitor reference link and made the table page's "Schema References" section fall back to the generic data-source reference (the reported "incorrect schema link").
+- The collector now also reads the authoritative complete list of per-table reference pages from the `azure-monitor-docs` repo via the GitHub **Git Trees API** (the contents API truncates at 1000 entries; the tables directory exceeds that), corrects the flag/link for tables it already knows, and writes the full list to a new `azure_monitor_tables_index.txt`. `map_solutions_connectors_tables.py` loads that index and applies the same correction to tables it discovers from solution/connector references. This re-flagged 48 categoryless Azure Monitor tables (API Management LLM logs, Data Factory Airflow/SSIS logs, Entra Domain Services DNS audit tables, etc.), which also lets their `source_azure_monitor` collection-method fallback (Azure Diagnostics) and correct schema-reference link fire. Degrades gracefully (category-page behavior) if the GitHub API is unreachable.
+- The table page "Schema References" section now surfaces the table-specific Azure Monitor / Defender XDR reference page ahead of (and in place of) the generic fallback when a specific reference exists.
+
+**Ingestion API pipe-escaping on connector pages (`connectors` pages):**
+- Multi-value `ingestion_api` values (pipe-joined, e.g. `Log Ingestion API|Undetermined`) are now split into one Markdown link per API and joined with an escaped ` \| ` so they render correctly in the connector page table instead of breaking the Markdown table layout (`get_ingestion_api_link()` now escapes `|`, matching `get_collection_method_link()`), and the pipe-joined reason text is rendered with `; ` separators.
+
+**Parser names no longer surface as phantom tables:**
+- Content mappings that contain a known parser function name instead of a physical table now resolve that parser recursively to its underlying tables before the mapping and table CSVs are written. The rewritten mapping records the originating function in `source_parser`.
+- The resolver preserves genuine tables that share a parser name, including `*_CL` custom logs, self-referential parsers, and tables documented by Azure Monitor or Defender XDR. Parser functions with no physical-table expansion are removed rather than emitted as empty phantom table pages.
+
+### v9.10 - Schema reference documentation links for table pages
+
+**Schema references section added to table documentation:**
+- Each generated table page now includes a "Schema References" section with official Microsoft Learn documentation links for field/column information.
+- **Specific schema documentation** is provided for well-documented tables (e.g., SecurityAlert for security alerts, DnsEvents/DnsInventory for DNS via AMA) with dedicated reference pages.
+- **General data source schema reference** is provided for all other tables as a fallback.
+- The mapping is configurable via the `TABLE_SCHEMA_REFERENCES` dictionary in `generate_connector_docs.py`, allowing easy addition of new table-specific references.
+- Current mappings include:
+  - `SecurityAlert` → [Security Alert Schema](https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema)
+  - `DnsEvents`, `DnsInventory`, `AMA_DNS` → [DNS AMA Fields Reference](https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields)
+  - All other tables → [Data Source Schema Reference](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference) (general reference)
+- Schema References section appears in the Table of Contents for easy navigation.
+
+### v9.9 - In-solution override flag for misclassified published connectors
+
+**Internal Sentinel table suppression for connector mappings:**
+- `map_solutions_connectors_tables.py` now suppresses connector→table mapping edges for tables classified as internal in `tables_reference.csv` (`category` includes `Internal` or `collection_method` is `Internal`).
+- This prevents false ingestion attribution caused by connector status/health queries that reference internal Sentinel tables (for example `SecurityAlert`, `SecurityIncident`) without actually ingesting into them.
+- TI tables remain intentionally allowlisted for connector attribution: `ThreatIntelIndicators`, `ThreatIntelObjects`, and legacy `ThreatIntelligenceIndicator`.
+- Suppressed edges are logged in `solutions_connectors_tables_issues_and_exceptions_report.csv` with reason `internal_table_excluded`.
+
+**Connectors with all tables filtered out no longer drop their solution from the index (`solutions_connectors_tables_mapping.csv`, `solutions-index.md`, `index.html`):**
+- The mapper now **always** emits a placeholder mapping row when a connector produces zero table rows, regardless of *why* (no table tokens, parser-only tokens, failed table-name validation, or a `reported_table_exclusions` override). Previously only the `no_table_definitions` case kept a row; the other three drop reasons (`table_detection_failed`, `parser_tables_only`, `partial_parser_tables`) discarded the connector entirely. When such a connector was a solution's **only** connector, the whole solution vanished from the mapping CSV and therefore from `solutions-index.md` — even though its detail page was still generated. This regressed SlashNext, whose sole Function App connector (`SlashNextFunctionApp`) only references `AzureDiagnostics`/`AzureMetrics` health tables that the v9.9 `reported_table_exclusions` override drops.
+- Both doc generators now **seed the index from the union of the mapping CSV and `solutions.csv`** as a safety net: any solution present in `solutions.csv` but absent from the mapping CSV is added with an empty-connector placeholder row so it can never be silently dropped from `solutions-index.md` (`generate_connector_docs.py`) or the interactive `index.html` (`generate_interactive_docs.py`). The placeholder carries an empty `connector_id`, so it adds no phantom connector to the connectors index.
+
+**Marketplace double-prefix publish-status fix (`solutions.csv`):**
+- `check_marketplace_availability()` now builds the marketplace legacy ID via `_build_legacy_id()`, which uses `offerId` as-is when it is already prefixed with `<publisherId>.` instead of blindly forming `<publisherId>.<offerId>`. Some `SolutionMetadata.json` files store the full legacy ID in `offerId` (e.g. `azuresentinel` + `azuresentinel.trendmicrocas`, `squadratechnologies` + `squadratechnologies.secrmmsentinel`). The previous logic produced a double-prefixed ID (e.g. `azuresentinel.azuresentinel.trendmicrocas`) that 404s, so those published solutions (Trend Micro Cloud App Security, Squadra Technologies SecRmm) were wrongly reported as `mp_is_published=false`. The marketplace cache key uses the same helper so cache hits match the API ID.
+
+**Marketplace filter-query fallback for republished offers (`solutions.csv`):**
+- When the direct legacy-ID lookup 404s, `check_marketplace_availability()` now retries via a catalog `$filter` query keyed by `offerId` (new helper `_query_marketplace_by_offer_id()`), mirroring the official packaging flow in `.script/package-automation/catalogAPI.ps1`. The filter is scoped to Sentinel offers (`categoryIds` eq `AzureSentinelSolution` or `keywords` contains the Sentinel keyword GUID) and matches `offerId` exactly. This recovers solutions that were **republished under a different `publisherId`** than the one stored in `SolutionMetadata.json` (e.g. Zscaler Internet Access: `zscaler.zscaler_zia` → live `zscaler1579058425289.zscaler_zia`), so they are no longer mis-reported as `mp_is_published=false` and no longer need a per-solution `is_published=true` override. The fallback only *adds* recovery on a 404 — it never flips a published solution to unpublished. Solutions whose **`offerId` itself changed** in the marketplace (not just the publisher) are still reported unpublished and require a `SolutionMetadata.json` `offerId` correction.
+
+**Marketplace lookup-key overrides for renamed offers / metadata-less folders (`solutions.csv`):**
+- `Solution`-scoped `solution_publisher_id` and `solution_offer_id` overrides are now applied to each solution **before** the marketplace availability check, redirecting *what* the public catalog API looks up rather than hard-coding the published verdict. This is the preferred fix when a solution ships under a different marketplace offer than its repo `SolutionMetadata.json` records — a renamed/re-published offer, a publisher hand-off, or a repo folder that carries no `SolutionMetadata.json` at all (e.g. Farsight DNSDB → `domaintoolsllc….farsight-dnsdb`, Synack → `synackinc….synack-sentinel-integration`). Because the published flag is then derived from the live public catalog, it self-corrects on future marketplace changes instead of being frozen by a blanket `is_published=true` override. The mapper still consults **only** the public marketplace catalog and never the authenticated Content Hub APIs. The standard solution-override pass continues to run later in the pipeline; this earlier pass narrowly targets the two lookup-key fields so marketplace status is resolved against the corrected offer id.
+
+**Removed all blanket `is_published=true` solution overrides (data only):**
+- Eliminated the ~430 `Solution,…,is_published,true` override rows from `solution_analyzer_overrides.csv`. The combination of `_build_legacy_id()` (double-prefix fix), the `offerId` filter-query fallback, and the pre-check lookup-key redirects now resolves published status directly from the live public catalog for the vast majority of these solutions, so the blanket overrides were redundant. The remaining mismatches were verified against the public marketplace catalog and replaced with 11 `solution_publisher_id` / `solution_offer_id` lookup-redirect override pairs (Barracuda WAF, BitSight, Farsight DNSDB, Intel471, Lumen Defender Threat Feed, SailPointIdentityNow, SecurityScorecard Cybersecurity Ratings, Semperis Directory Services Protector, Synack, Egress Iris, OneIdentity). Solutions confirmed genuinely unpublished/superseded in the catalog now report `is_published=false` from live data rather than being masked. Net effect: connector/solution publish status is fully marketplace-authoritative and self-correcting, with no frozen verdicts.
+
+
+- Added a computed `category_primary` column that maps each table to a closed reporting taxonomy — `Cloud`, `Endpoint`, `Syslog/CEF`, `3rd Party (SaaS)`, `Defender`, `ASIM`, `Internal`, `Unknown` — alongside the raw `category` string (kept unchanged for traceability). Two diagnostic columns mirror the `collection_method` family: `category_source` (provenance) and `category_candidates` (all distinct taxonomy values produced, ordered by precedence).
+- Resolution combines **strong** signals (ASIM name prefix, `source_defender_xdr`, mapped doc-category tokens such as `AWS`/`GCP`/`Crowdstrike`/`Entra`/`MDE`/`Normalized`/`Syslog/CEF`) using a deterministic combo precedence (`Internal` > `Defender` > `ASIM` > `Endpoint` > `Syslog/CEF` > `3rd Party (SaaS)` > `Cloud` > `Unknown`), so combos like SigninLogs resolve to `Cloud` rather than `Defender`. **Weak** fallbacks (cross-derive from `collection_method`, `resource_types` → `Cloud`, and `_CL` chains) fire only when no strong signal exists.
+- `_CL` custom-log tables are categorized via their feeding connectors' vendor/product (→ `3rd Party (SaaS)`) or, absent that, the feeding **solution's publisher tier** (partner/community/developer → `3rd Party (SaaS)`; Microsoft → `Cloud`). Solution-private storage tables are forced to `Internal`. `category_primary` is overridable via `Entity=Table, Field=category_primary` rows in `solution_analyzer_overrides.csv`.
+
+**`solution_categories` fix (`solutions.csv`):**
+- The `solution_categories` column now lists the actual domain/vertical **values** from `SolutionMetadata.json` (e.g. `Security - Threat Protection`) instead of the JSON key names (`domains`, `verticals`).
+
+**ARM-expression table-name filter (`tables.csv`):**
+- `is_true_table_name()` now rejects ARM-template expressions captured as literal table names (strings starting with `[` or containing `parameters(`/`variables(`), so placeholders like `[parameters('PlaybookName')]_CL` and `[variables('Sentinel_LogName')]_CL` no longer leak into `tables.csv` as bogus `_CL` rows. Previously these passed the `_CL`-suffix check and were emitted as real tables.
+
+**Connector table-source precedence and DCR normalization fixes (`connectors.csv`, `solutions_connectors_tables_mapping.csv`):**
+- Companion files are now authoritative for table mapping: `*_Table.json` / `*_DCR.json` are applied first, query analysis runs only when companion files are absent, and `dataTypes` is now a fallback source (instead of Priority 0). This avoids over-trusting UI declarations when explicit DCR/table companion files are present.
+- DCR extraction now treats `outputStream` as authoritative destination-table signal and uses `streams` only as fallback when `outputStream` is missing. This prevents input stream declarations from being misreported as extra ingested tables (for example Zscaler `nss_*` helper streams alongside `CommonSecurityLog`).
+- `dataTypes` fallback extraction now expands placeholders (for example `{{graphQueriesTableName}}`) before resolving table tokens, improving coverage for connectors that parameterize table names in the UI config.
+
+**Override-driven "discovered" corrections (data only):**
+- Added `not_in_solution_json=false` overrides for three published connectors that the mapper flags as "discovered" because of source-side gaps in their solutions: `MailGuard365` (solution has no `Solution_*.json` data file), `CiscoMerakiNativePoller` (absent from the `Data Connectors` list in `Solution_CiscoMeraki.json`), and `Pathlock_TDnR` (legacy root `Pathlock_TDnR.json` collides with the CCP definition in `Pathlock_TDnR_PUSH_CCP/` that the solution actually references). The overrides are an interim accuracy fix; the underlying solutions still need upstream correction (tracked in the reports folder).
+- Documented `not_in_solution_json` as an overridable connector field in the override-system reference.
+
 ### v9.8 - Artifact deep-links, connector/table accuracy, Learn deep-links, and faster HTML generation
 
 **New artifact deep-link CSV + Kusto upload:**

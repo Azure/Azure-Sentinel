@@ -98,6 +98,22 @@ LOGIC_APPS_BUILTIN_LEARN_URLS: Dict[str, str] = {
     "apimanagement": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-azureapim",
 }
 
+# ----- Schema Reference Mappings -----
+# Maps specific table names (or table prefixes) to their official Microsoft Learn schema documentation URLs.
+# These links provide comprehensive field/column information for tables.
+TABLE_SCHEMA_REFERENCES: Dict[str, str] = {
+    # General data source schema reference (master index of all Sentinel table schemas)
+    "": "https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference",
+    
+    # Security Alert table schema
+    "SecurityAlert": "https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema",
+    
+    # DNS data via Azure Monitor Agent (AMA) - comprehensive field mapping
+    "AMA_DNS": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+    "DnsEvents": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+    "DnsInventory": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+}
+
 # Cache file for resolved Microsoft Learn URLs of managed/custom Logic Apps connectors.
 # Persists between runs; entries are kept indefinitely (only re-probed when missing).
 _LEARN_URL_CACHE_PATH: Path = Path(__file__).parent / ".cache" / "connector_learn_urls.json"
@@ -173,6 +189,34 @@ def resolve_connector_learn_url(api_name: str, api_kind: str) -> Optional[str]:
     global _LEARN_URL_CACHE_DIRTY
     _LEARN_URL_CACHE_DIRTY = True
     return resolved
+
+
+def get_schema_references(table_name: str) -> List[Tuple[str, str]]:
+    """
+    Get schema reference documentation links for a given table.
+    
+    Returns a list of (display_name, url) tuples for schema documentation.
+    Checks for exact match first, then returns the general schema reference.
+    
+    Args:
+        table_name: Name of the table (e.g., 'SecurityAlert', 'DnsEvents')
+    
+    Returns:
+        List of (display_name, url) tuples. First item is most specific.
+    """
+    results = []
+    
+    # Check for exact table name match
+    if table_name in TABLE_SCHEMA_REFERENCES:
+        url = TABLE_SCHEMA_REFERENCES[table_name]
+        results.append((f"{table_name} Schema Reference", url))
+    
+    # Always add the general schema reference at the end
+    general_url = TABLE_SCHEMA_REFERENCES.get("", "")
+    if general_url:
+        results.append(("Data Source Schema Reference", general_url))
+    
+    return results
 
 
 # Collection method metadata: descriptions and documentation links
@@ -331,7 +375,10 @@ def get_ingestion_api_link(api_name: str, relative_path: str = "") -> str:
     if not api_name:
         return ''
     filename = get_ingestion_api_filename(api_name)
-    return f"[{api_name}]({relative_path}methods/{filename}.md)"
+    # Escape pipe characters in the display label so a combined value like "A|B"
+    # cannot break a markdown table cell when this link is placed in a table.
+    display = api_name.replace('|', '\\|')
+    return f"[{display}]({relative_path}methods/{filename}.md)"
 
 
 def get_collection_method_filename(method: str) -> str:
@@ -3779,7 +3826,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             if not connector_id or connector_id in connectors_map:
                 continue
             
-            connector_title = conn.get('connector_title', connector_id)
+            connector_title = conn.get('connector_title', connector_id).strip()
             connectors_map[connector_id] = {
                 'title': connector_title,
                 'publisher': conn.get('connector_publisher', 'N/A'),
@@ -4916,6 +4963,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             # Build and write Table of Contents
             toc_entries = []
             _has_schema = bool(table_schemas_by_table.get(table, []))
+            _has_schema_refs = bool(get_schema_references(table))
             _has_additional_info = bool(get_doc_override('table', table, 'additional_information'))
             _has_solutions = bool(info['solutions'])
             _has_connectors = bool(info['connectors'])
@@ -4928,6 +4976,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
 
             if _has_schema:
                 toc_entries.append(("Schema", "schema"))
+            if _has_schema_refs:
+                toc_entries.append(("Schema References", "schema-references"))
             if _has_additional_info:
                 toc_entries.append(("Additional Information", "additional-information"))
             if _has_solutions:
@@ -5042,6 +5092,34 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     for col in unique_columns:
                         f.write(f"| {col['name']} | {col['type']} |\n")
                 
+                f.write("\n")
+            
+            # Schema References section - links to official documentation
+            schema_refs = get_schema_references(table)
+            # Prefer the table-specific Azure Monitor / Defender XDR reference
+            # page (which documents the actual column schema) over the generic
+            # fallback. Recomputed locally so it stays correct for categoryless
+            # Azure Monitor tables flagged via the reference index.
+            sr_am_link = table_ref.get('azure_monitor_doc_link', '')
+            if not sr_am_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
+                sr_am_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"
+            sr_xdr_link = table_ref.get('defender_xdr_doc_link', '')
+            specific_refs: List[Tuple[str, str]] = []
+            if sr_am_link:
+                specific_refs.append((f"{table} Schema Reference (Azure Monitor)", sr_am_link))
+            if sr_xdr_link:
+                specific_refs.append((f"{table} Schema Reference (Defender XDR)", sr_xdr_link))
+            if specific_refs:
+                # A table-specific reference exists; drop the generic fallback,
+                # but keep any curated table-name-specific entry.
+                schema_refs = specific_refs + [
+                    r for r in schema_refs if r[0] != "Data Source Schema Reference"
+                ]
+            if schema_refs:
+                f.write("## Schema References\n\n")
+                f.write("Official Microsoft Learn documentation for field/column information:\n\n")
+                for ref_name, ref_url in schema_refs:
+                    f.write(f"- [{ref_name}]({ref_url})\n")
                 f.write("\n")
             
             # Additional Information section from overrides
@@ -5599,7 +5677,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         # Get additional connector info from connectors_reference (includes not_in_solution_json, is_deprecated)
         connector_ref = connectors_reference.get(connector_id, {})
         
-        connector_title = first_entry.get('connector_title', connector_id)
+        connector_title = first_entry.get('connector_title', connector_id).strip()
         
         # Check status flags - use is_deprecated from CSV if available, fallback to title check
         is_deprecated = connector_ref.get('is_deprecated', first_entry.get('is_deprecated', 'false')) == 'true'
@@ -5691,9 +5769,15 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             # Ingestion API
             ingestion_api = connector_ref.get('ingestion_api', '')
             if ingestion_api:
-                ingestion_api_link = get_ingestion_api_link(ingestion_api, "../")
+                # ingestion_api may be a pipe-joined combination of detected signals
+                # (e.g., "Log Ingestion API|Undetermined"). Render each as its own link
+                # and join with an escaped pipe so the markdown table cell stays intact.
+                api_parts = [a.strip() for a in ingestion_api.split('|') if a.strip()]
+                ingestion_api_link = " \\| ".join(get_ingestion_api_link(a, "../") for a in api_parts)
                 ingestion_api_reason = connector_ref.get('ingestion_api_reason', '')
-                reason_suffix = f" — *{ingestion_api_reason}*" if ingestion_api_reason else ""
+                # The reason is similarly pipe-joined; replace pipes with "; " so the
+                # combined explanation reads cleanly and does not break the table cell.
+                reason_suffix = f" — *{ingestion_api_reason.replace('|', '; ')}*" if ingestion_api_reason else ""
                 f.write(f"| **Ingestion API** | {ingestion_api_link}{reason_suffix} |\n")
             
             # Custom Log V1 tables
@@ -6713,11 +6797,26 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         f.write("## Parser Information\n\n")
         f.write("| Property | Value |\n")
         f.write("|:---------|:------|\n")
-        f.write(f"| **Parser Name** | `{parser_name}` |\n")
-        
+
         equivalent = parser.get('equivalent_builtin', '')
+        parser_type = parser.get('parser_type', '')
+
+        # For unifying (union) parsers, surface both the parameter-less ASim variant and the
+        # filtering im/vim variant. The mapper deduplicates the unifying pair to the ASim row
+        # and records the filtering variant's identity on it, so read it directly.
+        im_variant_name = parser.get('filtering_parser_name', '') if parser_type == 'union' else ''
+        im_variant_builtin = parser.get('filtering_equivalent_builtin', '') if parser_type == 'union' else ''
+
+        if im_variant_name:
+            f.write(f"| **Parser Name** | `{parser_name}` (parameter-less) · `{im_variant_name}` (filtering) |\n")
+        else:
+            f.write(f"| **Parser Name** | `{parser_name}` |\n")
+
         if equivalent:
-            f.write(f"| **Built-in Parser** | `{equivalent}` |\n")
+            if im_variant_builtin:
+                f.write(f"| **Built-in Parser** | `{equivalent}` (parameter-less) · `{im_variant_builtin}` (filtering) |\n")
+            else:
+                f.write(f"| **Built-in Parser** | `{equivalent}` |\n")
         
         schema = parser.get('schema', '')
         if schema:
@@ -7200,14 +7299,12 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
         schema = parser.get('schema', 'Other')
         by_schema[schema].append(parser)
     
-    # Count by type
-    union_count = sum(1 for p in parsers if p.get('parser_type') == 'union')
+    # Count by type. Unifying (union) parsers come as an ASim (parameter-less) and an
+    # im/vim (filtering) variant for the same schema; the listing is deduplicated to the
+    # ASim variant, so count only those. Source parsers are already a single ASim parser each.
+    union_count = sum(1 for p in parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim'))
     source_count = sum(1 for p in parsers if p.get('parser_type') == 'source')
     empty_count = sum(1 for p in parsers if p.get('parser_type') == 'empty')
-    
-    # Parser pairs (ASim + vim = 1 pair)
-    source_pair_count = source_count // 2
-    union_pair_count = union_count // 2
     
     with index_path.open("w", encoding="utf-8") as f:
         f.write(f"# {ASIM_BADGE_LARGE} ASIM Parsers Index\n\n")
@@ -7223,10 +7320,10 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
         f.write("---\n\n")
         
         # Summary count
-        f.write(f"**{len(by_schema)} schemas** with {source_pair_count} source parser pairs and {union_pair_count} union parser pairs. ")
+        f.write(f"**{len(by_schema)} schemas** with {source_count} source parsers and {union_count} unifying parsers. ")
         f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns.\n\n")
         
-        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        f.write("\\* *Each unifying parser is available as a parameter-less `ASim` parser and a filtering `im`/`vim` parser; both are listed on the parser's page.*\n\n")
         
         # Quick links by schema with detailed counts
         f.write("## Schemas\n\n")
@@ -7234,15 +7331,15 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
             anchor = schema.lower().replace(' ', '-')
             schema_parsers = by_schema[schema]
             schema_source = sum(1 for p in schema_parsers if p.get('parser_type') == 'source')
-            schema_union = sum(1 for p in schema_parsers if p.get('parser_type') == 'union')
+            schema_union = sum(1 for p in schema_parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim'))
             schema_empty = sum(1 for p in schema_parsers if p.get('parser_type') == 'empty')
             
             # Build counts string
             counts_parts = []
             if schema_source > 0:
-                counts_parts.append(f"{schema_source // 2} source pairs")
+                counts_parts.append(f"{schema_source} source")
             if schema_union > 0:
-                counts_parts.append(f"{schema_union // 2} union pair{'s' if schema_union > 2 else ''}")
+                counts_parts.append(f"{schema_union} unifying")
             if schema_empty > 0:
                 counts_parts.append(f"{schema_empty} empty")
             counts_str = ", ".join(counts_parts)
@@ -7256,8 +7353,9 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
             
             f.write(f"## {schema}\n\n")
             
-            # Separate union and source parsers
-            union_parsers = [p for p in schema_parsers if p.get('parser_type') == 'union']
+            # Separate union and source parsers. Unifying parsers are deduplicated to the
+            # ASim variant; the filtering im/vim variant is surfaced on the parser's page.
+            union_parsers = [p for p in schema_parsers if p.get('parser_type') == 'union' and p.get('parser_name', '').startswith('ASim')]
             source_parsers = [p for p in schema_parsers if p.get('parser_type') == 'source']
             empty_parsers = [p for p in schema_parsers if p.get('parser_type') == 'empty']
             
@@ -9509,11 +9607,13 @@ def main() -> None:
     # Load tables overrides CSV (mapper output) to get internal table categories
     if args.tables_overrides_csv.exists():
         print(f"Reading {args.tables_overrides_csv} for overrides...")
+        mapper_table_names: Set[str] = set()
         with args.tables_overrides_csv.open("r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 table_name = row.get('table_name', '')
                 if table_name:
+                    mapper_table_names.add(table_name)
                     # Track internal tables (category="Internal")
                     if row.get('category', '').lower() == 'internal':
                         INTERNAL_TABLES.add(table_name)
@@ -9527,6 +9627,19 @@ def main() -> None:
                         # Merge is_clv1 from mapper output
                         if row.get('is_clv1', ''):
                             tables_reference[table_name]['is_clv1'] = row['is_clv1']
+        # The mapper's tables.csv is the authoritative real-table list: it emits a
+        # row for every genuine table (including reference-only tables like
+        # AKSAudit) but excludes parser names mis-listed as tables in
+        # tables_reference.csv (e.g. `ImpervaWAFCloud`, `OktaSSO`). Drop any
+        # tables_reference entry the mapper did not keep, so those phantoms never
+        # get a table page.
+        if mapper_table_names:
+            _dropped = [t for t in tables_reference if t not in mapper_table_names]
+            for _t in _dropped:
+                del tables_reference[_t]
+            if _dropped:
+                print(f"  Excluded {len(_dropped)} non-table entries absent from mapper tables.csv "
+                      f"(e.g. parser names): {', '.join(sorted(_dropped)[:12])}")
         print(f"Loaded overrides ({len(INTERNAL_TABLES)} internal tables)")
     else:
         print(f"Warning: Tables overrides CSV not found: {args.tables_overrides_csv}")
@@ -9818,6 +9931,60 @@ def main() -> None:
     for row in rows:
         solution_name = row.get('solution_name', 'Unknown')
         by_solution[solution_name].append(row)
+    
+    # Safety net: seed any solution that exists in solutions.csv but produced no
+    # mapping rows so it is never silently dropped from the index. The mapping CSV
+    # can lack a solution when all of its connectors had their table tokens filtered
+    # out (parser-only, validation, or reported_table_exclusions overrides). Such a
+    # solution still has a generated detail page and must remain linked from
+    # solutions-index.md. We synthesize a single placeholder row carrying the
+    # solution metadata (mirroring the mapper's connector-less placeholder rows).
+    seeded_missing_solutions = 0
+    for solution_name, sol_info in solutions_reference.items():
+        if solution_name in by_solution:
+            continue
+        placeholder_row: Dict[str, str] = {
+            'Table': '',
+            'solution_name': solution_name,
+            'solution_folder': sol_info.get('solution_folder', ''),
+            'solution_github_url': sol_info.get('solution_github_url', ''),
+            'solution_publisher_id': sol_info.get('solution_publisher_id', ''),
+            'solution_offer_id': sol_info.get('solution_offer_id', ''),
+            'solution_first_publish_date': sol_info.get('solution_first_publish_date', ''),
+            'solution_last_publish_date': sol_info.get('solution_last_publish_date', ''),
+            'solution_version': sol_info.get('solution_version', ''),
+            'solution_support_name': sol_info.get('solution_support_name', ''),
+            'solution_support_tier': sol_info.get('solution_support_tier', ''),
+            'solution_support_link': sol_info.get('solution_support_link', ''),
+            'solution_author_name': sol_info.get('solution_author_name', ''),
+            'solution_categories': sol_info.get('solution_categories', ''),
+            'connector_id': '',
+            'connector_publisher': '',
+            'connector_title': '',
+            'connector_description': '',
+            'connector_instruction_steps': '',
+            'connector_permissions': '',
+            'connector_id_generated': '',
+            'connector_files': '',
+            'is_unique': '',
+            'is_published': sol_info.get('is_published', 'true'),
+            'not_in_solution_json': 'false',
+            'solution_logo_url': sol_info.get('solution_logo_url', ''),
+            'solution_description': sol_info.get('solution_description', ''),
+            'solution_is_deprecated': sol_info.get('is_deprecated', 'false'),
+            'solution_deprecation_date': sol_info.get('deprecation_date', ''),
+            'marketplace_url': sol_info.get('marketplace_url', ''),
+            'mp_display_name': sol_info.get('mp_display_name', ''),
+            'mp_summary': sol_info.get('mp_summary', ''),
+            'mp_popularity': sol_info.get('mp_popularity', ''),
+            'mp_rating_average': sol_info.get('mp_rating_average', ''),
+            'mp_rating_count': sol_info.get('mp_rating_count', ''),
+            'mp_last_modified_date': sol_info.get('mp_last_modified_date', ''),
+        }
+        by_solution[solution_name].append(placeholder_row)
+        seeded_missing_solutions += 1
+    if seeded_missing_solutions:
+        print(f"Seeded {seeded_missing_solutions} solution(s) present in solutions.csv but absent from the mapping CSV")
     
     # Filter solutions if specified
     if args.solutions:

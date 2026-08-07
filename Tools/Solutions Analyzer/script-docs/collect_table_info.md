@@ -61,6 +61,7 @@ See [`csv/`](csv/README.md) for full per-file documentation.
 |------|-------------|-----|
 | `tables_reference.csv` | Comprehensive table metadata fetched from Microsoft documentation | [`csv/tables_reference.md`](csv/tables_reference.md) |
 | `la_table_schemas.csv` | Column-level schemas from Azure Monitor and Defender XDR rendered HTML pages (only when `--skip-details` is **not** used) | [`csv/la_table_schemas.md`](csv/la_table_schemas.md) |
+| `azure_monitor_tables_index.txt` | Authoritative list of every Azure Monitor table reference page (one lowercase table name per line), read from the per-table reference directory via the GitHub Git Trees API. Consumed by `map_solutions_connectors_tables.py` to flag categoryless Azure Monitor tables (see below). Not a CSV and not uploaded to Kusto. | — |
 
 ## Transformation Support Enrichment
 
@@ -69,6 +70,14 @@ The `supports_transformations` field is populated from two sources:
 2. **Fallback**: [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) (used when primary source has no data)
 
 When both sources have data for a table, the script validates consistency and generates a `transformation_support_mismatch_report.md` file if any discrepancies are found.
+
+## Categoryless Azure Monitor Table Detection
+
+The `source_azure_monitor` flag was historically derived only from the [tables-category](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-category) page, which groups tables by category. Tables published **without** a category (for example `ApiManagementGatewayLlmLog`) never appear there and were incorrectly flagged `source_azure_monitor=No` with an empty `azure_monitor_doc_link`.
+
+To close this gap the script also reads the authoritative complete list of per-table reference pages from the `azure-monitor-docs` repository via the GitHub **Git Trees API** (the contents API caps directory listings at 1000 entries, which the tables directory exceeds). Any table the script already knows about but whose `source_azure_monitor` is `No`, while its name appears in this index, is corrected to `Yes` and given its `…/reference/tables/{name}` documentation link. The full index is also written to `azure_monitor_tables_index.txt` so `map_solutions_connectors_tables.py` can apply the same correction to tables it discovers from solution/connector references but that this script never emits a row for.
+
+If the GitHub API is unreachable, the index is empty and detection falls back to the category-page behavior with no error.
 
 ## Custom Log Table Rules
 
@@ -118,6 +127,7 @@ The script collects table information from the following Microsoft documentation
 | Source | URL | Information Collected |
 |--------|-----|----------------------|
 | Azure Monitor Tables (by category) | [tables-category](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-category) | Table names, categories, documentation links |
+| Azure Monitor Tables (complete index) | GitHub Git Trees API for the `azure-monitor-docs` `reference/tables` directory | Full set of table reference page filenames, including categoryless tables omitted from the category page (`azure_monitor_tables_index.txt`) |
 | Individual Table Reference Pages | [tables/{tablename}](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/) | Description, categories, solutions, resource types, basic log eligibility |
 | Rendered Table Reference Pages | [tables/{tablename}](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/) (HTML) | Column names, types, descriptions (for `la_table_schemas.csv`) |
 | Defender XDR Schema | [advanced-hunting-schema-tables](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables) | Table names, descriptions, Defender documentation links |
