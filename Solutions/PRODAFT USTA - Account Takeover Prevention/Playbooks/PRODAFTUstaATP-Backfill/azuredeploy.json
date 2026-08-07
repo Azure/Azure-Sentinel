@@ -3,10 +3,11 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "PRODAFTUstaATP-Backfill",
-    "description": "On-demand backfill playbook for PRODAFT USTA - Account Takeover Prevention. Pages through the USTA compromised-credentials API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (password redaction, field mapping) as live polling. The deployment is self-contained: it creates its own Data Collection Endpoint and Rule (writing into the existing PRODAFTUstaCompromisedCredentials_CL table) and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
+    "description": "On-demand backfill playbook for PRODAFT USTA - Account Takeover Prevention. Pages through the USTA compromised-credentials API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (password redaction, field mapping) as live polling. The deployment is self-contained: it creates the PRODAFTUstaCompromisedCredentials_CL table if it does not exist yet, its own Data Collection Endpoint and Rule, and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
     "prerequisites": [
-      "The PRODAFT USTA - Account Takeover Prevention solution installed (this creates the PRODAFTUstaCompromisedCredentials_CL table the backfill writes into); connecting the data connector starts forward polling.",
+      "The PRODAFT USTA - Account Takeover Prevention solution installed. The backfill can run before the data connector has ingested anything: it creates the PRODAFTUstaCompromisedCredentials_CL table itself if the connector has not yet done so. Connecting the data connector starts forward polling.",
       "A PRODAFT USTA long-lived API key.",
+      "Permission to write tables on the workspace (Microsoft.OperationalInsights/workspaces/tables/write, included in Log Analytics Contributor), since the template creates the PRODAFTUstaCompromisedCredentials_CL table when it is missing.",
       "Permission to create role assignments in the workspace resource group (Owner or User Access Administrator), since the template grants its identity 'Monitoring Metrics Publisher' automatically."
     ],
     "postDeployment": [
@@ -22,6 +23,11 @@
       "name": "PRODAFT"
     },
     "releaseNotes": [
+      {
+        "version": "1.2",
+        "title": "PRODAFTUstaATP-Backfill",
+        "notes": [ "Deployment now creates the PRODAFTUstaCompromisedCredentials_CL table if it does not already exist, so the backfill can be run before the data connector has ingested its first record. Adds a TableRetentionDays parameter." ]
+      },
       {
         "version": "1.1",
         "title": "PRODAFTUstaATP-Backfill",
@@ -66,10 +72,18 @@
       "type": "int",
       "defaultValue": 90,
       "metadata": { "description": "Number of days of history to backfill." }
+    },
+    "TableRetentionDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "metadata": { "description": "Retention in days applied to the PRODAFTUstaCompromisedCredentials_CL table. Only relevant when this deployment has to create the table; set it to the table's current retention if the table already exists and you have changed it from the 90-day default." }
     }
   },
   "variables": {
     "WorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "TableName": "PRODAFTUstaCompromisedCredentials_CL",
+    "TableDeploymentName": "[concat(parameters('PlaybookName'), '-table')]",
+    "TableDeploymentResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.Resources/deployments', concat(parameters('PlaybookName'), '-table'))]",
     "DceName": "[concat(parameters('PlaybookName'), '-DCE')]",
     "DcrName": "[concat(parameters('PlaybookName'), '-DCR')]",
     "DceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
@@ -77,6 +91,62 @@
     "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]"
   },
   "resources": [
+    {
+      "comments": "Ensures the destination table exists. The codeless connector only materialises PRODAFTUstaCompromisedCredentials_CL once it ingests its first record, so a backfill run before any live data would otherwise fail with the table not found. Deploying the table is a create-or-update: it creates the table when absent, and when it already exists it re-asserts this schema and sets retention from TableRetentionDays, so pass the table's current retention if you have changed it from the default. Runs in the workspace's resource group, which may differ from this deployment's. Expression scope is 'outer' (the ARM default, stated explicitly here) so the inline template resolves the parent's parameters and variables; do not reference secure parameters inside it.",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('TableDeploymentName')]",
+      "resourceGroup": "[parameters('WorkspaceResourceGroup')]",
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "outer"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[concat(parameters('WorkspaceName'), '/', variables('TableName'))]",
+              "properties": {
+                "totalRetentionInDays": "[parameters('TableRetentionDays')]",
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "schema": {
+                  "name": "[variables('TableName')]",
+                  "description": "PRODAFT USTA Account Takeover Prevention - compromised credentials (password redacted). TimeGenerated reflects ingestion time; Created and StatusTimestamp carry the true event time reported by USTA.",
+                  "columns": [
+                    { "name": "TimeGenerated", "type": "dateTime" },
+                    { "name": "TicketId", "type": "long" },
+                    { "name": "Status", "type": "string" },
+                    { "name": "StatusTimestamp", "type": "dateTime" },
+                    { "name": "Created", "type": "dateTime" },
+                    { "name": "ContentType", "type": "string" },
+                    { "name": "CompanyId", "type": "int" },
+                    { "name": "CompanyName", "type": "string" },
+                    { "name": "Username", "type": "string" },
+                    { "name": "Url", "type": "string" },
+                    { "name": "Source", "type": "string" },
+                    { "name": "IsCorporate", "type": "boolean" },
+                    { "name": "PasswordScore", "type": "string" },
+                    { "name": "PasswordLength", "type": "int" },
+                    { "name": "VictimUid", "type": "string" },
+                    { "name": "VictimUsername", "type": "string" },
+                    { "name": "VictimCountry", "type": "string" },
+                    { "name": "VictimIp", "type": "string" },
+                    { "name": "VictimComputerName", "type": "string" },
+                    { "name": "VictimOs", "type": "string" },
+                    { "name": "VictimMalware", "type": "string" },
+                    { "name": "InfectionDate", "type": "dateTime" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
     {
       "type": "Microsoft.Insights/dataCollectionEndpoints",
       "apiVersion": "2024-03-11",
@@ -95,7 +165,8 @@
       "name": "[variables('DcrName')]",
       "location": "[parameters('WorkspaceLocation')]",
       "dependsOn": [
-        "[variables('DceResourceId')]"
+        "[variables('DceResourceId')]",
+        "[variables('TableDeploymentResourceId')]"
       ],
       "properties": {
         "description": "DCR for the PRODAFT USTA ATP backfill playbook. Applies the same transform as the connector DCR and writes to the existing PRODAFTUstaCompromisedCredentials_CL table.",
@@ -143,7 +214,7 @@
       ],
       "tags": {
         "hidden-SentinelTemplateName": "PRODAFTUstaATP-Backfill",
-        "hidden-SentinelTemplateVersion": "1.1"
+        "hidden-SentinelTemplateVersion": "1.2"
       },
       "properties": {
         "state": "Enabled",
