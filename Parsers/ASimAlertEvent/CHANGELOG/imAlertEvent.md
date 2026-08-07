@@ -2,6 +2,7 @@
 
 ## Version 0.1.7
 
+- (2026-07-28) Alert Schema Parsers - [PR #14771](https://github.com/Azure/Azure-Sentinel/pull/14771)
 - (2026-07-01) Google Threat Intelligence - AlertEvent ASIM Parser - [PR #14420](https://github.com/Azure/Azure-Sentinel/pull/14420)
 
 ## Version 0.1.6

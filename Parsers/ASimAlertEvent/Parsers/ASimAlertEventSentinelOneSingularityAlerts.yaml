@@ -1,0 +1,282 @@
+Parser:
+  Title: Alert Event ASIM parser for SentinelOne Singularity Alerts via CCF
+  Version: '0.1.0'
+  LastUpdated: Jul 24, 2026
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the SentinelOne Singularity Alerts ingested in SentinelOneAlerts_CL table (via Codeless Connector Framework) to the ASIM Alert normalized schema.
+ParserName: ASimAlertEventSentinelOneSingularityAlerts
+EquivalentBuiltInParser: _ASim_AlertEvent_SentinelOneSingularityAlerts
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AnalystVerdictArray = dynamic([
+      "true positive",
+      "false positive",
+      "benign positive"
+  ]);
+  let EventSubTypeLookup = datatable(EventOriginalSubType: string, EventSubType: string)[
+      "malicious", "Threat",
+      "suspicious", "Suspicious Activity",
+      "undefined", "Anomaly"
+  ];
+  let AlertStatusLookup = datatable(AlertOriginalStatus: string, AlertStatus: string)[
+      "unresolved", "Active",
+      "in progress", "Active",
+      "resolved", "Closed"
+  ];
+  let SentinelOneAlertsParser = (
+      disabled: bool = false,
+      pack: bool = false
+  )
+  {
+      SentinelOneAlerts_CL
+      | where not(disabled)
+      //parse columns accessed repeatedly for efficiency and readability
+      | extend 
+          AlertInfoJson = parse_json(AlertInfo),
+          AgentDetectionInfoJson = parse_json(AgentDetectionInfo),
+          SourceProcessInfoJson = parse_json(SourceProcessInfo),
+          SourceParentProcessInfoJson = parse_json(SourceParentProcessInfo),
+          RuleInfoJson = parse_json(RuleInfo)
+      | extend
+          Username = 
+              tostring(coalesce(
+                  AlertInfoJson.loginsUserName,
+                  SourceProcessInfoJson.effectiveUser,
+                  SourceProcessInfoJson.loginUser,
+                  SourceProcessInfoJson.realUser,
+                  SourceProcessInfoJson.user,
+                  SourceParentProcessInfoJson.effectiveUser,
+                  SourceParentProcessInfoJson.loginUser,
+                  SourceParentProcessInfoJson.realUser,
+                  SourceParentProcessInfoJson.user
+              )),
+          AlertVerdict = iff(AlertInfoJson.analystVerdict in~ (AnalystVerdictArray), AlertInfoJson.analystVerdict, "Unknown"),
+          EventSeverity = iff(RuleInfoJson.severity=~"Critical","High",tostring(RuleInfoJson.severity)),
+          AttackTactics = strcat_array(extract_all(@">([\S ]+) \(TA0\d{3}\)<",tostring(AlertInfoJson.indicatorDescription)),", "),
+          AttackTechniques = extract_all(@">(T\d{4}.\d{3}?)<.*>(.*):<",dynamic([2,1]),tostring(AlertInfoJson.indicatorDescription))
+      | extend
+          //Inspection Fields
+          AlertName = tostring(RuleInfoJson.name),
+          AlertOriginalStatus = tolower(AlertInfoJson.incidentStatus),
+          EventOriginalSubType = tolower(RuleInfoJson.treatAsThreat),
+          EventOriginalType = tostring(AlertInfoJson.eventType),
+          RuleNumber = toint(RuleInfoJson.id),
+          RuleName = tostring(RuleInfoJson.name),
+          RuleDescription = tostring(RuleInfoJson.description),
+          ThreatOriginalCategory = tostring(AlertInfoJson.indicatorName),
+          //User Fields
+          OriginalUserType = AlertInfoJson.loginType,
+          UsernameType = case(
+              Username contains "@", "UPN",
+              Username contains "\\", "Windows",
+              Username contains "OU=", "DN",
+              Username matches regex @"^\d{11}$","AWSId",
+              "Simple"
+          ),
+          //Device fields
+          DvcHostname = tostring(split(AgentDetectionInfoJson.name,".")[0]),
+          DvcDescription = tostring(AgentDetectionInfoJson.machineType),
+          DvcIpAddr = tostring(coalesce(AlertInfoJson.srcIp,AlertInfoJson.srcMachineIp)),
+          DvcOs = tostring(AgentDetectionInfoJson.osFamily),
+          DvcOsVersion = tostring(AgentDetectionInfoJson.osName),
+          DvcId = tostring(AgentDetectionInfoJson.uuid),
+          DvcIdType = "Other",
+          //Common ASIM Fields
+          EventUid = tostring(AlertInfoJson.alertId),
+          EventType = "Alert",
+          EventCount = int(1),
+          EventStartTime = todatetime(AlertInfoJson.createdAt),
+          EventEndTime = todatetime(AlertInfoJson.createdAt),
+          EventProduct = "Singularity",
+          EventVendor = "SentinelOne",
+          EventResult = "Success",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion="0.1",
+          EventOriginalSeverity = tostring(RuleInfoJson.severity),
+          EventMessage = 
+              case(
+                  isnotempty(AlertInfoJson.indicatorDescription),
+                    extract(@"(.*)\n?",1,tostring(AlertInfoJson.indicatorDescription)),
+                  AlertInfoJson.eventType =~ "WINLOGONATTEMPT" and AlertInfoJson.loginIsSuccessful =~ "false",
+                    strcat(AlertInfoJson.loginType, " logon failed user - ", AlertInfoJson.loginsUserName),
+                  AlertInfoJson.eventType =~ "WINLOGONATTEMPT" and AlertInfoJson.loginIsSuccessful =~ "true",
+                    strcat(AlertInfoJson.loginType, " logon successful user - ", AlertInfoJson.loginsUserName),
+                  AlertInfoJson.eventType =~ "DNS",
+                    strcat("DNS request for ", AlertInfoJson.dnsRequest , " returned ", AlertInfoJson.dnsResponse),
+                  AlertInfoJson.eventType =~ "REGVALUEMODIFIED",
+                    strcat("A registry value has been modified\n","RegistryKey: ",AlertInfoJson.registryKeyPath, "\nRegistryOldValue: ",AlertInfoJson.registryOldValue, "\nRegistryNewValue: ",AlertInfoJson.registryValue),
+                  tostring(RuleInfoJson.description)
+              )
+      //Normalize Mitre Format
+      | mv-apply AttackTechniques on 
+      (
+          extend Technique = iff (isnotempty(AttackTechniques),strcat(AttackTechniques[0]," (",AttackTechniques[1],")"),"") 
+          | summarize AttackTechniques = strcat_array(make_set_if(Technique,isnotempty(Technique)),", ")
+      )
+      | lookup AlertStatusLookup on AlertOriginalStatus
+      | lookup EventSubTypeLookup on EventOriginalSubType
+      | extend
+      //Process Fields
+          ProcessId = tostring(SourceProcessInfoJson.pid),
+          ProcessCommandLine = tostring(SourceProcessInfoJson.commandline),
+          ProcessName = tostring(SourceProcessInfoJson.filePath),
+          ProcessFileCompany = tostring(SourceProcessInfoJson.fileSignerIdentity),
+      //File Fields
+          FileName = tostring(SourceProcessInfoJson.name),
+          FilePath = tostring(SourceProcessInfoJson.filePath),
+          FileSHA1 = tostring(SourceProcessInfoJson.fileHashSha1),
+          FileSHA256 = tostring(SourceProcessInfoJson.fileHashSha256),
+          FileMD5 = tostring(SourceProcessInfoJson.fileHashMd5),
+      //Registry Fields
+          RegistryKey = tostring(AlertInfoJson.registryPath),
+          RegistryValue = tostring(split(AlertInfoJson.registryPath,"\\")[-1]),
+          RegistryValueData = tostring(AlertInfoJson.registryValue)
+      //Alias
+      | extend 
+          IpAddr = DvcIpAddr,
+          Hostname = DvcHostname,
+          Dvc = DvcHostname,
+          AlertId = EventUid,
+          AlertDescription = EventMessage,
+          Rule = RuleName,
+          User = Username
+      //AdditionalFields
+      | extend
+          DstIpAddr = tostring(AlertInfoJson.dstIp),
+          DstPortNumber = tostring(AlertInfoJson.dstPort),
+          SrcIpAddr = tostring(AlertInfoJson.srcIp),
+          SrcMachineIp = tostring(AlertInfoJson.srcMachineIp),
+          SrcPortNumber = tostring(AlertInfoJson.srcPort),
+          LoginAccountDomain = tostring(AlertInfoJson.loginAccountDomain),
+          LoginAccountSid = tostring(AlertInfoJson.loginAccountSid),
+          LoginIsAdministratorEquivalent = tostring(AlertInfoJson.loginIsAdministratorEquivalent),
+          ModulePath = tostring(AlertInfoJson.modulePath),
+          ModuleSha1 = tostring(AlertInfoJson.moduleSha1),
+          NetEventDirection = tostring(AlertInfoJson.netEventDirection),
+          RegistryKeyPath = tostring(AlertInfoJson.registryKeyPath),
+          RegistryOldValue = tostring(AlertInfoJson.registryOldValue),
+          RegistryOldValueType = tostring(AlertInfoJson.registryOldValueType),
+          TiIndicatorComparisonMethod = tostring(AlertInfoJson.tiIndicatorComparisonMethod),
+          TiIndicatorSource = tostring(AlertInfoJson.tiIndicatorSource),
+          TiIndicatorType = tostring(AlertInfoJson.tiIndicatorType),
+          TiIndicatorValue = tostring(AlertInfoJson.tiIndicatorValue),
+          Source = tostring(AlertInfoJson.source),
+          ReportedAt = tostring(AlertInfoJson.reportedAt),
+          UpdatedAt = tostring(AlertInfoJson.updatedAt),
+          S1ql = tostring(RuleInfoJson.s1ql)
+      | extend AdditionalFields = 
+          iff(pack == true,
+              bag_pack(
+                  "SourceProcessInfo", SourceProcessInfo,
+                  "SourceParentProcessInfo", SourceParentProcessInfo,
+                  "TargetProcessInfo", TargetProcessInfo,
+                  "ContainerInfo", ContainerInfo,
+                  "KubernetesInfo", KubernetesInfo,
+                  "DstIpAddr", DstIpAddr,
+                  "DstPortNumber", DstPortNumber,
+                  "SrcIpAddr", SrcIpAddr,
+                  "SrcMachineIp", SrcMachineIp,
+                  "SrcPortNumber", SrcPortNumber,
+                  "LoginAccountDomain", LoginAccountDomain,
+                  "LoginAccountSid", LoginAccountSid,
+                  "LoginIsAdministratorEquivalent", LoginIsAdministratorEquivalent,
+                  "ModulePath", ModulePath,
+                  "ModuleSha1", ModuleSha1,
+                  "NetEventDirection", NetEventDirection,
+                  "RegistryKeyPath", RegistryKeyPath,
+                  "RegistryOldValue", RegistryOldValue,
+                  "RegistryOldValueType", RegistryOldValueType,
+                  "TiIndicatorComparisonMethod", TiIndicatorComparisonMethod,
+                  "TiIndicatorSource", TiIndicatorSource,
+                  "TiIndicatorType", TiIndicatorType,
+                  "TiIndicatorValue", TiIndicatorValue,
+                  "Source", Source,
+                  "ReportedAt", ReportedAt,
+                  "UpdatedAt", UpdatedAt,
+                  "S1ql", S1ql
+              ),
+              dynamic({}))
+      | project
+          TimeGenerated,
+          AlertId,
+          AlertName,
+          AlertDescription,
+          AlertVerdict,
+          AlertStatus,
+          AlertOriginalStatus,
+          Dvc,
+          DvcDescription,
+          DvcIpAddr,
+          DvcId,
+          DvcIdType,
+          DvcOs,
+          DvcOsVersion,
+          User,
+          ProcessName,
+          ProcessId,
+          ProcessCommandLine,
+          ProcessFileCompany,
+          FileName,
+          FilePath,
+          FileSHA1,
+          FileSHA256,
+          FileMD5,
+          //Url,
+          RegistryKey,
+          RegistryValue,
+          RegistryValueData,
+          //Email,
+          EventUid,
+          EventType,
+          EventCount,
+          EventSeverity,
+          EventOriginalSeverity,
+          EventMessage,
+          EventOriginalType,
+          EventSubType,
+          EventOriginalSubType,
+          EventStartTime,
+          EventEndTime,
+          EventProduct,
+          EventVendor,
+          EventResult,
+          EventSchema,
+          EventSchemaVersion,
+          IpAddr,
+          Username,
+          UsernameType,
+          Rule,
+          RuleNumber,
+          RuleName,
+          RuleDescription,
+          DvcHostname,
+          Hostname,
+          ThreatOriginalCategory,
+          AttackTactics,
+          AttackTechniques,
+          Type,
+          AdditionalFields
+  };
+  SentinelOneAlertsParser
+  (
+      disabled = disabled,
+      pack = pack
+  )
