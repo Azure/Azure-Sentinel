@@ -1,4 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                |
 |-------------|--------------------------------|-----------------------------------|
+| 3.1.0       | 07-08-2026                     | Added 16 additional incident analytic rules (LateralMovement, CredentialScanning, WhiteCane, SuspiciousDeniedMfa, AsRepRoasting, SmbEnumeration, BadChecksum, MaliciousIp, ImpossibleTravel, MfaRequestGeneration, PayloadInjection, Kerberoasting, RemoteServiceInstallation, PrivilegedGroupMemberAddition, SecurityLogCleared, NtdsDitDump); fixed broken Account entity mapping in Certifried, Log4Shell, NoPac_Breach, and UserBruteForce rules |
 | 3.0.1       | 02-06-2026                     | Minor Doc Update                  |
 | 3.0.0       | 13-09-2024                     | Initial Solution Release          |

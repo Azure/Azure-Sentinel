@@ -1,0 +1,61 @@
+id: e8e921df-1954-5d9e-bfc9-56df5628208c
+name: Silverfort - Kerberoasting Incident
+description: |
+  Detects Silverfort Suspected Kerberoasting incidents. Silverfort describes this incident type as: Detects weakly encrypted service ticket requests. May indicate SPN ticket harvesting for brute-force attacks.
+severity: High
+requiredDataConnectors:
+  - connectorId: SilverfortAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1558.003
+query: |-
+  CommonSecurityLog
+  | where DeviceVendor has 'Silverfort'
+  | where DeviceProduct has 'Admin Console'
+  | where DeviceEventClassID == "NewIncident"
+  | extend IncidentData = parse_json(replace('^""|""$', '', Message))
+  | extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))
+  | where Message has "Kerberoasting"
+      or IncidentKind =~ "Kerberoasting"
+  | extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))
+  | extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))
+  | extend UserName = coalesce(
+      tostring(IncidentData.data.users[0].displayName),
+      tostring(IncidentData.data.users[0].samAccountName),
+      tostring(IncidentData.data.users[0].upn),
+      tostring(IncidentData.users[0].displayName)
+  )
+  | extend SourceHost = coalesce(
+      tostring(IncidentData.data.sources[0].displayName),
+      tostring(IncidentData.sources[0].displayName)
+  )
+  | extend DestinationHost = coalesce(
+      tostring(IncidentData.data.destinations[0].displayName),
+      tostring(IncidentData.destinations[0].displayName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationHost
+customDetails:
+  IncidentId: IncidentId
+  IncidentKind: IncidentKind
+  IncidentSummary: IncidentSummary
+queryPeriod: 15m
+queryFrequency: 15m
+triggerOperator: gt
+triggerThreshold: 0
+version: 1.0.0
+kind: Scheduled
