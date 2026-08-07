@@ -1,0 +1,1037 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "string",
+            "defaultValue": "ANYRUN-Submit-File-to-Blob"
+        },
+        "azureTenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure Tenant ID for authentication."
+            }
+        },
+        "azureClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure Client ID for authentication."
+            }
+        },
+        "azureClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Azure Client Secret for authentication."
+            }
+        },
+        "logAnalyticsWorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics Workspace Name."
+            }
+        }
+    },
+    "variables": {
+        "wdatpConnectionName": "wdatp--anyrun-app",
+        "azuremonitorlogsConnectionName": "azuremonitorlogs--anyrun-app",
+        "wdatpApiId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]",
+        "azuremonitorlogsApiId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('wdatpConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('wdatpConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[variables('wdatpApiId')]"
+                },
+                "parameterValues": {
+                    "token:tenantId": "[parameters('azureTenantId')]",
+                    "token:clientId": "[parameters('azureClientId')]",
+                    "token:clientSecret": "[parameters('azureClientSecret')]",
+                    "token:grantType": "client_credentials"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('azuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[variables('azuremonitorlogsApiId')]"
+                },
+                "parameterValues": {
+                    "token:tenantId": "[parameters('azureTenantId')]",
+                    "token:clientId": "[parameters('azureClientId')]",
+                    "token:clientSecret": "[parameters('azureClientSecret')]",
+                    "token:grantType": "client_credentials"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Resource": "Microsoft Sentinel",
+                "PlaybookTrigger": "Incident",
+                "Custom": "ANYRUN",
+                "PlaybookType": "Enrichment"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Log Analytics Workspace": {
+                            "defaultValue": "[parameters('logAnalyticsWorkspaceName')]",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Main_Workflow_parameters": {
+                            "runAfter": {
+                                "Initialize_and_Set_Azure_Parameters": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Suspicious File - FilePath",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "Suspicious File - FileName",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "Machine ID",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "Script Name",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "Script Parameters",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "Machine OS",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each_-_Host": {
+                            "foreach": "@body('Parse_JSON_-_Workflow_input')?['hosts']",
+                            "actions": {
+                                "For_each_-_Find_file_path_on_the_target_host": {
+                                    "foreach": "@body('Parse_JSON_-_Workflow_input')?['files']",
+                                    "actions": {
+                                        "Parse_JSON_-_Parse_File_Path": {
+                                            "runAfter": {
+                                                "KQL_-_Get_FilePath": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('KQL_-_Get_FilePath')",
+                                                "schema": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "FolderPath": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "FileName": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "FolderPath",
+                                                                    "FileName"
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Condition_-_Check_if_KQL_Result_is_not_empty": {
+                                            "actions": {
+                                                "HTTP_-_Download_Response_Body": {
+                                                    "runAfter": {
+                                                        "Actions_-_Get_live_response_command_result_download_URI": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@body('Actions_-_Get_live_response_command_result_download_URI')?['value']",
+                                                        "method": "GET",
+                                                        "headers": {
+                                                            "Accept": "text/csv"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_JSON_-_Response_Body": {
+                                                    "runAfter": {
+                                                        "HTTP_-_Download_Response_Body": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@json(string(body('HTTP_-_Download_Response_Body')))",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "$content": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_JSON_-_Parse_Script_Output": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_Response_Body": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Parse_JSON_-_Response_Body')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "script_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "exit_code": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "script_output": {
+                                                                    "type": "string"
+                                                                },
+                                                                "script_errors": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_-_If_File_Does_not_upload_to_Blob_Storage": {
+                                                    "actions": {
+                                                        "Append_to_array_variable_-_File_Does_not_upload_to_Blob": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "Results Array",
+                                                                "value": {
+                                                                    "machineID": "@{variables('Machine ID')}",
+                                                                    "fileName": "@{variables('Suspicious File - FileName')}",
+                                                                    "filePath": "@{variables('Suspicious File - FilePath')}",
+                                                                    "status": "ERROR. The file was not uploaded to Azure Blob Storage. Check the status of your Storage Account @{variables('Storage Account Name')} and Container @{variables('Container Name')} in Azure Blob Storage."
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_Parse_Script_Output": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_to_array_variable_-_File_uploaded_to_Blob": {
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "Results Array",
+                                                                    "value": {
+                                                                        "machineID": "@{variables('Machine ID')}",
+                                                                        "fileName": "@{variables('Suspicious File - FileName')}",
+                                                                        "filePath": "@{variables('Suspicious File - FilePath')}",
+                                                                        "status": "SUCCESS. The file was successfully uploaded to your Storage Account @{variables('Storage Account Name')} and Container @{variables('Container Name')} in Azure Blob Storage."
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "or": [
+                                                            {
+                                                                "contains": [
+                                                                    "@body('Parse_JSON_-_Parse_Script_Output')?['script_errors']",
+                                                                    "FullyQualifiedErrorId"
+                                                                ]
+                                                            },
+                                                            {
+                                                                "not": {
+                                                                    "contains": [
+                                                                        "@body('Parse_JSON_-_Parse_Script_Output')?['script_output']",
+                                                                        "File uploaded to Blob Storage successfully"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Delay_-_Wait_for_next_live_response_session": {
+                                                    "type": "Wait",
+                                                    "inputs": {
+                                                        "interval": {
+                                                            "count": 1,
+                                                            "unit": "Minute"
+                                                        }
+                                                    }
+                                                },
+                                                "HTTP_-_Generate_SAS_Token": {
+                                                    "runAfter": {
+                                                        "Delay_-_Wait_for_next_live_response_session": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@concat('https://management.azure.com/subscriptions/', variables('Subscription ID'), '/resourceGroups/', variables('Resource Group Name'), '/providers/Microsoft.Storage/storageAccounts/', variables('Storage Account Name'), '/listServiceSas?api-version=2021-04-01')",
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "canonicalizedResource": "@concat('/blob/', variables('Storage Account Name'), '/', variables('Container Name'))",
+                                                            "signedResource": "c",
+                                                            "signedPermission": "racw",
+                                                            "signedProtocol": "https",
+                                                            "signedExpiry": "@addToTime(utcNow(), 2, 'Hour')"
+                                                        },
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_JSON_-_SAS_Token": {
+                                                    "runAfter": {
+                                                        "HTTP_-_Generate_SAS_Token": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_-_Generate_SAS_Token')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "serviceSasToken": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Compose_-_SAS_Token": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_SAS_Token": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Parse_JSON_-_SAS_Token')?['serviceSasToken']"
+                                                },
+                                                "Actions_-_Run_live_response": {
+                                                    "runAfter": {
+                                                        "Set_variable_-_Machine_OS": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": {
+                                                            "Comment": "Live Response to upload suspicious file to Blob Stotage",
+                                                            "Commands": [
+                                                                {
+                                                                    "type": "RunScript",
+                                                                    "params": [
+                                                                        {
+                                                                            "key": "ScriptName",
+                                                                            "value": "@{variables('Script Name')}"
+                                                                        },
+                                                                        {
+                                                                            "key": "Args",
+                                                                            "value": "@{variables('Script Parameters')}"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "path": "/api/machines/@{encodeURIComponent(variables('Machine ID'))}/runliveresponse"
+                                                    }
+                                                },
+                                                "Until_-_Wait_Live_Response_Actions_Completion": {
+                                                    "actions": {
+                                                        "Actions_-_Get_single_machine_action": {
+                                                            "runAfter": {
+                                                                "Delay_-_Wait_for_all_Actions": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "get",
+                                                                "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Run_live_response')?['id'])}"
+                                                            }
+                                                        },
+                                                        "Delay_-_Wait_for_all_Actions": {
+                                                            "type": "Wait",
+                                                            "inputs": {
+                                                                "interval": {
+                                                                    "count": 15,
+                                                                    "unit": "Second"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Actions_-_Run_live_response": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": "@equals(body('Actions_-_Get_single_machine_action')?['status'], 'Succeeded')",
+                                                    "limit": {
+                                                        "count": 60,
+                                                        "timeout": "PT1H"
+                                                    },
+                                                    "type": "Until"
+                                                },
+                                                "Append_to_array_variable_-_Pending_Live_Response": {
+                                                    "runAfter": {
+                                                        "Until_-_Wait_Live_Response_Actions_Completion": [
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Results Array",
+                                                        "value": {
+                                                            "machineID": "@{variables('Machine ID')}",
+                                                            "fileName": "@{variables('Suspicious File - FileName')}",
+                                                            "filePath": "@{variables('Suspicious File - FilePath')}",
+                                                            "status": "ERROR. Live response session has been pending for 1hr after multiple attempts to initiate the live response and await a response. Terminating the session due to a possibly offline device."
+                                                        }
+                                                    }
+                                                },
+                                                "Actions_-_Get_live_response_command_result_download_URI": {
+                                                    "runAfter": {
+                                                        "Until_-_Wait_Live_Response_Actions_Completion": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Run_live_response')?['id'])}/GetLiveResponseResultDownloadLink(index=@{encodeURIComponent('0')})"
+                                                    }
+                                                },
+                                                "Condition_-_Machine_OS": {
+                                                    "actions": {
+                                                        "Set_variable_-_Windows_Script_Name": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Script Name",
+                                                                "value": "ANYRUN-QUARANTINE-TO-BLOB.ps1"
+                                                            }
+                                                        },
+                                                        "Set_variable_-_Windows_Script_Parameters": {
+                                                            "runAfter": {
+                                                                "Set_variable_-_Windows_Script_Name": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Script Parameters",
+                                                                "value": "-filePath @{variables('Suspicious File - FilePath')} -SAStoken '@{replace(outputs('Compose_-_SAS_Token'), '&', '^&')}' -storageAccountName @{variables('Storage Account Name')} -containerName @{variables('Container Name')}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Machines_-_Get_single_machine": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable_-_UNIX_Script_Name": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Script Name",
+                                                                    "value": "ANYRUN-QUARANTINE-TO-BLOB.sh"
+                                                                }
+                                                            },
+                                                            "Set_variable_-_UNIX_Script_Parameters": {
+                                                                "runAfter": {
+                                                                    "Set_variable_-_UNIX_Script_Name": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Script Parameters",
+                                                                    "value": "\"@{replace(variables('Suspicious File - FilePath'),'\\','/')}\" \"@{outputs('Compose_-_SAS_Token')}\" \"@{variables('Storage Account Name')}\" \"@{variables('Container Name')}\""
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@body('Machines_-_Get_single_machine')?['osPlatform']",
+                                                                    "Windows"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Machines_-_Get_single_machine": {
+                                                    "runAfter": {
+                                                        "Compose_-_SAS_Token": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/api/machines/@{encodeURIComponent(variables('Machine ID'))}"
+                                                    }
+                                                },
+                                                "Set_variable_-_Machine_OS": {
+                                                    "runAfter": {
+                                                        "Condition_-_Machine_OS": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Machine OS",
+                                                        "value": "@body('Machines_-_Get_single_machine')?['osPlatform']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_-_Set_paths": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_to_array_-_KQL_is_empty": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "Results Array",
+                                                            "value": {
+                                                                "machineID": "@{variables('Machine ID')}",
+                                                                "fileName": "@{variables('Suspicious File - FileName')}",
+                                                                "filePath": "@{variables('Suspicious File - FilePath')}",
+                                                                "status": "ERROR. There aren't Antivirus Detection actions at the host with specified file path in Log Analytics workspace."
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('KQL_-_Get_FilePath')?['value'])",
+                                                            false
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "KQL_-_Get_FilePath": {
+                                            "runAfter": {
+                                                "Parse_JSON_-_Extract_File_Name": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": "DeviceFileEvents\n| where ActionType == \"FileCreated\"\n| where DeviceId == \"@{variables('Machine ID')}\"\n| where FileName == \"@{body('Parse_JSON_-_Extract_File_Name')?['properties']?['fileName']}\" and FileName !endswith \".lnk\"\n| project FolderPath, FileName\n| distinct FolderPath, FileName",
+                                                "path": "/queryData",
+                                                "queries": {
+                                                    "subscriptions": "@{variables('Subscription ID')}",
+                                                    "resourcegroups": "@{variables('Resource Group Name')}",
+                                                    "resourcetype": "Log Analytics Workspace",
+                                                    "resourcename": "@{variables('Log Analytics Workspace Name')}",
+                                                    "timerange": "7d"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_-_Extract_File_Name": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_-_Find_file_path_on_the_target_host')",
+                                                "schema": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "kind": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "directory": {
+                                                                    "type": "string"
+                                                                },
+                                                                "fileName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "additionalData": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "MdatpDeviceId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "DetectionStatus": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "friendlyName": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "For_each_-_Set_paths": {
+                                            "foreach": "@outputs('Parse_JSON_-_Parse_File_Path')?['body']?['value']",
+                                            "actions": {
+                                                "Set_variable_-_File_Name": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Suspicious File - FileName",
+                                                        "value": "@items('For_each_-_Set_paths')?['FileName']"
+                                                    }
+                                                },
+                                                "Set_variable_-_Folder_Path": {
+                                                    "runAfter": {
+                                                        "Set_variable_-_File_Name": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Suspicious File - FilePath",
+                                                        "value": "@items('For_each_-_Set_paths')?['FolderPath']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_-_Parse_File_Path": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_Machine_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_JSON_-_extract_Machine_id": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_-_Host')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "hostName": {
+                                                    "type": "string"
+                                                },
+                                                "osFamily": {
+                                                    "type": "string"
+                                                },
+                                                "osVersion": {
+                                                    "type": "string"
+                                                },
+                                                "additionalData": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "LastIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastExternalIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "FQDN": {
+                                                            "type": "string"
+                                                        },
+                                                        "AvStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "LoggedOnUsers": {
+                                                            "type": "string"
+                                                        },
+                                                        "MdatpDeviceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "RiskScore": {
+                                                            "type": "string"
+                                                        },
+                                                        "HealthStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "OsBuild": {
+                                                            "type": "string"
+                                                        },
+                                                        "FirstSeenDateTime": {
+                                                            "type": "string"
+                                                        },
+                                                        "OnboardingStatus": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "Type": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Set_variable_-_Machine_ID": {
+                                    "runAfter": {
+                                        "Parse_JSON_-_extract_Machine_id": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Machine ID",
+                                        "value": "@body('Parse_JSON_-_extract_Machine_id')?['additionalData']?['MdatpDeviceId']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Additional_Service_Workflow_Parameters": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_and_Set_Azure_Parameters": {
+                            "runAfter": {
+                                "Parse_JSON_-_Workflow_input": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Storage Account Name",
+                                        "type": "string",
+                                        "value": "@{body('Parse_JSON_-_Workflow_input')?['storageAccountName']}"
+                                    },
+                                    {
+                                        "name": "Container Name",
+                                        "type": "string",
+                                        "value": "@{body('Parse_JSON_-_Workflow_input')?['containerName']}"
+                                    },
+                                    {
+                                        "name": "Subscription ID",
+                                        "type": "string",
+                                        "value": "@{body('Parse_JSON_-_Workflow_input')?['subscriptionID']}"
+                                    },
+                                    {
+                                        "name": "Resource Group Name",
+                                        "type": "string",
+                                        "value": "@{body('Parse_JSON_-_Workflow_input')?['resourceGroupName']}"
+                                    },
+                                    {
+                                        "name": "Log Analytics Workspace Name",
+                                        "type": "string",
+                                        "value": "@{parameters('Log Analytics Workspace')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_Workflow_input": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hosts": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "hostName": {
+                                                        "type": "string"
+                                                    },
+                                                    "osFamily": {
+                                                        "type": "string"
+                                                    },
+                                                    "osVersion": {
+                                                        "type": "string"
+                                                    },
+                                                    "additionalData": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "LastIpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "LastExternalIpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "FQDN": {
+                                                                "type": "string"
+                                                            },
+                                                            "AvStatus": {
+                                                                "type": "string"
+                                                            },
+                                                            "LoggedOnUsers": {
+                                                                "type": "string"
+                                                            },
+                                                            "MdatpDeviceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "RiskScore": {
+                                                                "type": "string"
+                                                            },
+                                                            "HealthStatus": {
+                                                                "type": "string"
+                                                            },
+                                                            "OsBuild": {
+                                                                "type": "string"
+                                                            },
+                                                            "FirstSeenDateTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "OnboardingStatus": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "files": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    },
+                                                    "kind": {
+                                                        "type": "string"
+                                                    },
+                                                    "properties": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "directory": {
+                                                                "type": "string"
+                                                            },
+                                                            "fileName": {
+                                                                "type": "string"
+                                                            },
+                                                            "additionalData": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "MdatpDeviceId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "DetectionStatus": {
+                                                                        "type": "string"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "friendlyName": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "containerName": {
+                                            "type": "string"
+                                        },
+                                        "storageAccountName": {
+                                            "type": "string"
+                                        },
+                                        "subscriptionID": {
+                                            "type": "string"
+                                        },
+                                        "resourceGroupName": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Initialize_Additional_Service_Workflow_Parameters": {
+                            "runAfter": {
+                                "Initialize_Main_Workflow_parameters": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Array for Response",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "Results Array",
+                                        "type": "array",
+                                        "value": []
+                                    },
+                                    {
+                                        "name": "Connector Version",
+                                        "type": "string",
+                                        "value": "1.0.0"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "For_each_-_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 200,
+                                "body": "@variables('Results Array')"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "wdatp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('wdatpConnectionName'))]",
+                                "connectionName": "[variables('wdatpConnectionName')]",
+                                "id": "[variables('wdatpApiId')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                "id": "[variables('azuremonitorlogsApiId')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('wdatpConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]"
+            ]
+        }
+    ]
+}
