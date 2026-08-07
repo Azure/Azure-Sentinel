@@ -1,0 +1,61 @@
+id: 26f002c2-c020-5528-acf1-c98592e18aa7
+name: Silverfort - ImpossibleTravel Incident
+description: |
+  Detects Silverfort Impossible Travel incidents. Silverfort describes this incident type as: Detects logins from distant locations within a short time. May indicate credential compromise.
+severity: High
+requiredDataConnectors:
+  - connectorId: SilverfortAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |-
+  CommonSecurityLog
+  | where DeviceVendor has 'Silverfort'
+  | where DeviceProduct has 'Admin Console'
+  | where DeviceEventClassID == "NewIncident"
+  | extend IncidentData = parse_json(replace('^""|""$', '', Message))
+  | extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))
+  | where Message has "ImpossibleTravel"
+      or IncidentKind =~ "ImpossibleTravel"
+  | extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))
+  | extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))
+  | extend UserName = coalesce(
+      tostring(IncidentData.data.users[0].displayName),
+      tostring(IncidentData.data.users[0].samAccountName),
+      tostring(IncidentData.data.users[0].upn),
+      tostring(IncidentData.users[0].displayName)
+  )
+  | extend SourceHost = coalesce(
+      tostring(IncidentData.data.sources[0].displayName),
+      tostring(IncidentData.sources[0].displayName)
+  )
+  | extend DestinationHost = coalesce(
+      tostring(IncidentData.data.destinations[0].displayName),
+      tostring(IncidentData.destinations[0].displayName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationHost
+customDetails:
+  IncidentId: IncidentId
+  IncidentKind: IncidentKind
+  IncidentSummary: IncidentSummary
+queryPeriod: 15m
+queryFrequency: 15m
+triggerOperator: gt
+triggerThreshold: 0
+version: 1.0.0
+kind: Scheduled
