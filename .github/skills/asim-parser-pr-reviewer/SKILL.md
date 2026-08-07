@@ -46,6 +46,8 @@ Review the parameter-less parser for the following:
 
 - **`pack` parameter**: If the query uses `AdditionalFields`, verify that a `pack: bool = false` parameter is included. This allows users to choose whether to populate `AdditionalFields` or return an empty dynamic, improving performance for users who do not need the extra information.
 
+- **Placeholder entity fields**: Determine the complete set of applicable fields from the target schema and `Common` rows in `ASimTester.csv`. Verify that the parser includes every defined `*EntityKey` and `*AdditionalIds` field, plus `AdditionalEntities` when defined. Names and casing must exactly match `ASimTester.csv`; generic names such as `entityKey` or `AdditionalIds` are invalid. Every `*EntityKey` must be an empty string, and every `*AdditionalIds` field and `AdditionalEntities` must be an empty dynamic array until mappings are defined.
+
 - **Parsing operator efficiency**: Check that high-performance parsing operators are used (`split`, `parse-kv`, `parse`) and that regular expressions are avoided where simpler operators would work.
 
 - **General KQL performance**: Flag any other inefficient patterns such as unnecessary `let` statements, redundant filters, expensive joins, or operations that could be reordered for better performance.
@@ -81,6 +83,7 @@ Please review:
 2. **Filter efficiency**: Are the parameter-based filters using native columns and indexed fields where possible?
 3. **Redundant computation**: Are there any calculated fields or parsing operations that occur before the parameter filters, when they could be moved after?
 4. **Parameter completeness**: Are the filtering parameters comprehensive enough to allow efficient querying for common use cases?
+5. **Placeholder entity field consistency**: Compare the parameterized parser's placeholder fields and values with the parameter-less parser. Report fields missing from both parsers only in the parameter-less review above. In this section, report only differences introduced by the parameterized parser, such as a placeholder that is omitted, renamed, or populated when the parameter-less parser defines it correctly. Matching omissions are not acceptable; they are already reported in the parameter-less review.
 
 **Output format:**
 
