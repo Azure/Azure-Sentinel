@@ -8,5 +8,5 @@ This playbook will take each URL entity and query the VirusTotal v2 API for URL 
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-UrlReport%2Fazuredeploy.json" target="_blank">
-<img src="https://aka.ms/deploytoazuregovbutton"/>
+<img src="https://aka.ms/deploytoazuregovernbutton"/>
 </a>
