@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                 |
 |-------------|--------------------------------|------------------------------------------------------------------------------------|
+| 3.0.3       | 28-07-2026                     | Expanded ingestion from 1 to 6 Upwind API endpoints (inventory assets, vulnerability findings, threat detections, threat events, threat stories, configuration findings). Fixed inventory asset columns not populating (DCR stream schema mismatch). Added support for a Log Analytics workspace in a different resource group. Fixed Linux Function App deployment (missing `reserved: true` on the App Service Plan). Renamed reserved column names (`title`, `type`) that were rejected by the custom-table schema API. |
 | 3.0.2       | 28-04-2026                     | Fixed Function App deployment: restructured zip package to flat layout and removed separate App Service Plan for correct code deployment. |
 | 3.0.1       | 12-04-2026                     | Updated **SolutionMetadata** publisherId to align the solution package metadata with publisher validation requirements. |
 | 3.0.0       | 10-03-2026                     | Initial solution release.                                                          |
