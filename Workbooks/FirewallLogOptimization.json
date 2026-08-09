@@ -1,0 +1,523 @@
+{
+ "version": "Notebook/1.0",
+ "fromTemplateId": "sentinel-FirewallLogOptimization",
+ "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+ "items": [
+  {
+   "type": 9,
+   "content": {
+    "version": "KqlParameterItem/1.0",
+    "parameters": [
+     {
+      "id": "f1a2b3c4-d5e6-7890-abcd-ef1234567801",
+      "version": "KqlParameterItem/1.0",
+      "name": "parameterTab",
+      "type": 1,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": "overview",
+      "isHiddenWhenLocked": true
+     },
+     {
+      "id": "f2b3c4d5-e6f7-8901-bcde-f12345678902",
+      "version": "KqlParameterItem/1.0",
+      "name": "TimeRange",
+      "label": "Time Range",
+      "type": 4,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": { "durationMs": 2592000000 },
+      "typeSettings": {
+       "selectableValues": [
+        { "durationMs": 604800000, "label": "Last 7 days" },
+        { "durationMs": 2592000000, "label": "Last 30 days" },
+        { "durationMs": 7776000000, "label": "Last 90 days" }
+       ]
+      }
+     },
+     {
+      "id": "f3c4d5e6-f7a8-9012-cdef-012345678903",
+      "version": "KqlParameterItem/1.0",
+      "name": "TableSource",
+      "label": "Data Source",
+      "type": 2,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": "both",
+      "jsonData": "[\"CommonSecurityLog\",\"Syslog\",\"Both\"]",
+      "typeSettings": {
+       "additionalResourceOptions": [],
+       "showDefault": false
+      }
+     },
+     {
+      "id": "f4d5e6f7-a8b9-0123-defa-123456789014",
+      "version": "KqlParameterItem/1.0",
+      "name": "OptimizationMode",
+      "label": "Optimization Mode",
+      "type": 2,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": "balanced",
+      "jsonData": "[\"Conservative\",\"Balanced\",\"Aggressive\"]",
+      "typeSettings": {
+       "additionalResourceOptions": [],
+       "showDefault": false
+      }
+     },
+     {
+      "id": "f5e6f7a8-b9c0-1234-efab-234567890125",
+      "version": "KqlParameterItem/1.0",
+      "name": "PricePerGB",
+      "label": "Price per GB ($)",
+      "type": 1,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": "5.00"
+     }
+    ],
+    "style": "above",
+    "queryType": 0,
+    "resourceType": "microsoft.operationalinsights/workspaces"
+   },
+   "name": "parameters"
+  },
+  {
+   "type": 11,
+   "content": {
+    "version": "LinkItem/1.0",
+    "style": "tabs",
+    "links": [
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "Overview", "subTarget": "overview", "style": "link" },
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "By Source (CSL)", "subTarget": "csltab", "style": "link" },
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "By Source (Syslog)", "subTarget": "syslogtab", "style": "link" },
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "DCR Playbook", "subTarget": "dcrplaybook", "style": "link" },
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "Detection Coverage", "subTarget": "coverage", "style": "link" },
+     { "cellValue": "parameterTab", "linkTarget": "parameter", "linkLabel": "Anomalies", "subTarget": "anomalies", "style": "link" }
+    ]
+   },
+   "name": "linksTabs"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Firewall Log Optimization\n\nAnalyze and reduce firewall log ingestion costs. This workbook supports both **CommonSecurityLog** (CEF-normalized via AMA) and **Syslog** (raw syslog forwarders). Use the parameters above to select your data source, optimization aggressiveness, and time window.\n\n---\n\n### At a Glance",
+       "style": "markdown"
+      },
+      "name": "text - overview"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let CSL = union isfuzzy=true (CommonSecurityLog | where _IsBillable == true | project BillableBytes = _BilledSize, TimeGenerated, Source = \"CommonSecurityLog\"), (datatable(BillableBytes:real, TimeGenerated:datetime, Source:string)[]);\nlet SYS = union isfuzzy=true (Syslog | where _IsBillable == true | project BillableBytes = _BilledSize, TimeGenerated, Source = \"Syslog\"), (datatable(BillableBytes:real, TimeGenerated:datetime, Source:string)[]);\nlet Combined = union CSL, SYS\n| where isnotempty(BillableBytes)\n| where BillableBytes > 0;\nlet Both = union isfuzzy=true (Combined | where '{TableSource}' == 'Both' or ('{TableSource}' == 'CommonSecurityLog' and Source == 'CommonSecurityLog') or ('{TableSource}' == 'Syslog' and Source == 'Syslog')), (datatable(BillableBytes:real, TimeGenerated:datetime, Source:string)[]);\nBoth\n| summarize TotalGB = sum(BillableBytes) / (1024*1024*1024) by Source\n| extend DailyGB = round(TotalGB / iff({TimeRange:grain} contains \"d\", todouble(replace(@\"(\\d+)d\", @\"\\1\", {TimeRange:grain})), 30), 2)",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 10 },
+       "chartSettings": { "chartType": 8, "group": "Source", "metric": "DailyGB", "title": "Daily GB by Source" }
+      },
+      "name": "query - daily gb"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let CSL = union isfuzzy=true (CommonSecurityLog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"CommonSecurityLog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet SYS = union isfuzzy=true (Syslog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"Syslog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet Combined = union CSL, SYS\n| where isnotempty(BillableBytes) and BillableBytes > 0;\nlet Filtered = Combined\n| where '{TableSource}' == 'Both' or ('{TableSource}' == 'CommonSecurityLog' and Source == 'CommonSecurityLog') or ('{TableSource}' == 'Syslog' and Source == 'Syslog');\nFiltered\n| summarize TotalGB = sum(BillableBytes) / (1024*1024*1024)\n| extend MonthlyCost = round(TotalGB * 30 * todouble('{PricePerGB}'), 2), DailyGB = round(TotalGB / 30, 2)\n| project DailyGB, MonthlyCost",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 5 }
+      },
+      "name": "query - estimated cost"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let CSL = union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | extend ActionType = case(DeviceAction in~ (\"allow\",\"accept\",\"pass\",\"permit\"), \"Allow\", DeviceAction in~ (\"deny\",\"drop\",\"block\",\"reset\",\"prevent\"), \"Deny/Block\", \"Other\")\n        | summarize NoiseEvents = countif(ActionType == \"Allow\"), TotalEvents = count()),\n    (datatable(NoiseEvents:long, TotalEvents:long)[]);\nlet SYS = union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Noise = iff(SeverityLevel in~ (\"info\",\"debug\",\"notice\"), 1, 0)\n        | summarize NoiseEvents = countif(Noise == 1), TotalEvents = count()),\n    (datatable(NoiseEvents:long, TotalEvents:long)[]);\nunion CSL, SYS\n| summarize NoiseEvents = sum(NoiseEvents), TotalEvents = sum(TotalEvents)\n| extend NoisePct = round(toreal(NoiseEvents) / toreal(TotalEvents) * 100, 1)",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 5 }
+      },
+      "name": "query - noise ratio"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let CSLVendors = union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by DeviceVendor, DeviceProduct\n        | extend Source = \"CSL\"),\n    (datatable(DeviceVendor:string, DeviceProduct:string, BillableGB:real, Events:long, Source:string)[]);\nlet SyslogHosts = union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by Computer, Facility\n        | extend DeviceVendor = strcat(\"Syslog:\", Computer), DeviceProduct = tostring(Facility), Source = \"Syslog\"),\n    (datatable(Computer:string, Facility:string, BillableGB:real, Events:long, DeviceVendor:string, DeviceProduct:string, Source:string)[]);\nlet Combined = union CSLVendors, SyslogHosts\n| where isnotempty(BillableGB);\nCombined\n| where '{TableSource}' == 'Both' or ('{TableSource}' == 'CommonSecurityLog' and Source == 'CSL') or ('{TableSource}' == 'Syslog' and Source == 'Syslog')\n| project Source, DeviceVendor, DeviceProduct, BillableGB = round(BillableGB, 2), Events\n| order by BillableGB desc\n| take 20",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 20 }
+      },
+      "name": "query - top sources"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "overview" },
+   "name": "groupOverview"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## CommonSecurityLog (CEF) — By Vendor\n\nVendor-specific breakdown of CSL ingestion. The log-type taxonomy labels each DeviceEventClassID or Activity value as **Threat**, **Traffic**, **System**, **Audit**, or **Unknown** based on the vendor's known log schema.",
+       "style": "markdown"
+      },
+      "name": "text - csl"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count(),\n            AllowEvents = countif(DeviceAction in~ (\"allow\",\"accept\",\"pass\",\"permit\")),\n            DenyEvents = countif(DeviceAction in~ (\"deny\",\"drop\",\"block\",\"reset\",\"prevent\"))\n          by DeviceVendor, DeviceProduct),\n    (datatable(DeviceVendor:string, DeviceProduct:string, BillableGB:real, Events:long, AllowEvents:long, DenyEvents:long)[])\n| where isnotempty(DeviceVendor)\n| extend AllowPct = round(toreal(AllowEvents) / toreal(Events) * 100, 1),\n         DenyPct = round(toreal(DenyEvents) / toreal(Events) * 100, 1)\n| project DeviceVendor, DeviceProduct, BillableGB = round(BillableGB, 2), Events, AllowPct, DenyPct\n| order by BillableGB desc\n| take 30",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 30 }
+      },
+      "name": "query - csl vendor breakdown"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let VendorTaxonomy = datatable(DeviceVendor:string, Pattern:string, LogType:string)[\n    \"Palo Alto Networks\", \"THREAT\", \"Threat\",\n    \"Palo Alto Networks\", \"TRAFFIC\", \"Traffic\",\n    \"Palo Alto Networks\", \"SYSTEM\", \"System\",\n    \"Palo Alto Networks\", \"HIP-MATCH\", \"Audit\",\n    \"Palo Alto Networks\", \"USERID\", \"Audit\",\n    \"Palo Alto Networks\", \"CONFIG\", \"Audit\",\n    \"Fortinet\", \"forward\", \"Traffic\",\n    \"Fortinet\", \"event:system\", \"System\",\n    \"Fortinet\", \"event:security\", \"Threat\",\n    \"Cisco\", \"%ASA-6-3020\", \"Traffic\",\n    \"Cisco\", \"%ASA-4-1060\", \"Threat\",\n    \"Cisco\", \"%ASA-4-7331\", \"Threat\",\n    \"Cisco\", \"%FTD-4-4300\", \"Threat\",\n    \"Check Point\", \"Accept\", \"Traffic\",\n    \"Check Point\", \"Detect\", \"Threat\",\n    \"Check Point\", \"Prevent\", \"Threat\",\n    \"Check Point\", \"Drop\", \"Threat\"\n];\nunion isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by DeviceVendor, DeviceEventClassID, Activity\n        | extend Pattern = coalesce(DeviceEventClassID, Activity, \"Unknown\")),\n    (datatable(DeviceVendor:string, DeviceEventClassID:string, Activity:string, BillableGB:real, Events:long, Pattern:string)[])\n| where isnotempty(DeviceVendor)\n| join kind=leftouter VendorTaxonomy on DeviceVendor, Pattern\n| extend LogType = iif(isempty(LogType), \"Unknown\", LogType)\n| summarize BillableGB = sum(BillableGB), Events = sum(Events) by DeviceVendor, LogType\n| order by DeviceVendor asc, BillableGB desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 40 }
+      },
+      "name": "query - csl log type taxonomy"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by DeviceVendor, DeviceExternalID, DeviceProduct),\n    (datatable(DeviceVendor:string, DeviceExternalID:string, DeviceProduct:string, BillableGB:real, Events:long)[])\n| where isnotempty(DeviceVendor) and isnotempty(DeviceExternalID)\n| project DeviceVendor, DeviceExternalID, DeviceProduct, BillableGB = round(BillableGB, 2), Events\n| order by BillableGB desc\n| take 25",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 25 }
+      },
+      "name": "query - csl per device"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "csltab" },
+   "name": "groupBySourceCSL"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Syslog — By Source\n\nRaw syslog analysis with vendor fingerprinting. Firewall vendors are identified by `SyslogMessage` content patterns. Messages that cannot be classified are grouped as **Unclassified / Other**. Use this tab to find the highest-volume message patterns and identify non-firewall processes consuming ingest budget.",
+       "style": "markdown"
+      },
+      "name": "text - syslog"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let VendorPatterns = datatable(Vendor:string, MatchToken:string)[];\nlet Classified = union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = case(\n            SyslogMessage matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n            SyslogMessage contains \"%ASA-\", \"Cisco\",\n            SyslogMessage contains \"%FTD-\", \"Cisco\",\n            SyslogMessage contains \"subtype=\", \"Fortinet\",\n            SyslogMessage contains \"logdesc=\", \"Fortinet\",\n            SyslogMessage contains \"action=\" and SyslogMessage contains \"product=\", \"Check Point\",\n            \"Unclassified\")\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count(), Computers = dcount(Computer) by Vendor),\n    (datatable(Vendor:string, BillableGB:real, Events:long, Computers:long)[]);\nClassified\n| where isnotempty(Vendor)\n| project Vendor, BillableGB = round(BillableGB, 2), Events, Computers\n| order by BillableGB desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 20 }
+      },
+      "name": "query - syslog vendor classification"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by Computer, Facility),\n    (datatable(Computer:string, Facility:string, BillableGB:real, Events:long)[])\n| where isnotempty(Computer) and isnotempty(Facility)\n| extend IsNetworkDevice = iff(Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\"), \"Network\", \"System/Other\")\n| project Computer, Facility, DeviceType = IsNetworkDevice, BillableGB = round(BillableGB, 2), Events\n| order by BillableGB desc\n| take 30",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 30 }
+      },
+      "name": "query - syslog per computer"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count() by ProcessName),\n    (datatable(ProcessName:string, BillableGB:real, Events:long)[])\n| where isnotempty(ProcessName)\n| extend IsSecurityRelevant = iff(ProcessName has_any (\"sshd\",\"sudo\",\"su\",\"login\",\"auth\"), \"Security\", \"Non-Security\")\n| project ProcessName, Category = IsSecurityRelevant, BillableGB = round(BillableGB, 2), Events\n| order by BillableGB desc\n| take 25",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 25 }
+      },
+      "name": "query - syslog per process"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize Events = count(), BillableGB = sum(_BilledSize) / (1024*1024*1024) by SyslogMessage\n        | take 100),\n    (datatable(SyslogMessage:string, Events:long, BillableGB:real)[])\n| where isnotempty(SyslogMessage)\n| project SyslogMessage = strcat(substring(SyslogMessage, 0, 200), iff(strlen(SyslogMessage) > 200, \"...\", \"\")), Events, BillableGB = round(BillableGB, 4)\n| order by Events desc\n| take 20",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 20 }
+      },
+      "name": "query - syslog top message patterns"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let VendorPatterns = datatable(Vendor:string, MatchToken:string)[];\nunion isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = case(\n            SyslogMessage matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n            SyslogMessage contains \"%ASA-\", \"Cisco\",\n            SyslogMessage contains \"%FTD-\", \"Cisco\",\n            SyslogMessage contains \"subtype=\", \"Fortinet\",\n            SyslogMessage contains \"logdesc=\", \"Fortinet\",\n            SyslogMessage contains \"action=\" and SyslogMessage contains \"product=\", \"Check Point\",\n            \"Unclassified\")\n        | summarize Events = count() by Vendor, SeverityLevel),\n    (datatable(Vendor:string, SeverityLevel:string, Events:long)[])\n| where isnotempty(Vendor) and isnotempty(SeverityLevel)\n| order by Vendor asc, Events desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 30 }
+      },
+      "name": "query - syslog severity distribution"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "syslogtab" },
+   "name": "groupBySourceSyslog"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## DCR Optimization Playbook\n\nReady-to-paste `transformKql` snippets for Data Collection Rules. Each snippet filters out noise while preserving security-relevant events. **Copy the snippet for your vendor and mode, paste it into your DCR's transformKql field.**\n\n---\n\n### CommonSecurityLog (CEF) Transformations",
+       "style": "markdown"
+      },
+      "name": "text - dcr playbook"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Palo Alto Networks — Conservative Mode\nKeeps threats, denies, and high-severity events. Drops ALLOW traffic and informational events.\n\n```kusto\nsource\n| where DeviceVendor != \"Palo Alto Networks\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"reset-both\",\"reset-server\",\"reset-client\"))\n   or (Activity == \"THREAT\")\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Emergency\",\"Medium\"))\n   or (DeviceEventClassID in~ (\"globalprotect\",\"userid\"))\n```\n\n**Estimated savings: 25-35%**",
+       "style": "markdown"
+      },
+      "conditionalVisibility": { "parameterName": "OptimizationMode", "comparison": "isEqualTo", "value": "Conservative" },
+      "name": "dcr - palo alto conservative"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Palo Alto Networks — Balanced Mode\nAll of Conservative plus drops most ALLOW traffic, keeping only high-risk traffic patterns.\n\n```kusto\nsource\n| where DeviceVendor != \"Palo Alto Networks\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"reset-both\",\"reset-server\",\"reset-client\"))\n   or (Activity == \"THREAT\")\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Emergency\"))\n   or (DeviceEventClassID == \"globalprotect\")\n```\n\n**Estimated savings: 50-65%**",
+       "style": "markdown"
+      },
+      "conditionalVisibility": { "parameterName": "OptimizationMode", "comparison": "isEqualTo", "value": "Balanced" },
+      "name": "dcr - palo alto balanced"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Palo Alto Networks — Aggressive Mode\nKeeps only threats and deny actions. Drops all traffic, system, and audit logs.\n\n```kusto\nsource\n| where DeviceVendor != \"Palo Alto Networks\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"reset-both\"))\n   or (Activity == \"THREAT\")\n```\n\n**Estimated savings: 75-85%**\n\n**Warning:** This will drop traffic logs needed by PortScanning and NetworkBeaconing detections. See the Detection Coverage tab.",
+       "style": "markdown"
+      },
+      "conditionalVisibility": { "parameterName": "OptimizationMode", "comparison": "isEqualTo", "value": "Aggressive" },
+      "name": "dcr - palo alto aggressive"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Fortinet / FortiGate — All Modes\n\n**Conservative:**\n```kusto\nsource\n| where DeviceVendor != \"Fortinet\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\",\"client-rst\",\"server-rst\"))\n   or (Activity contains \"event:security\")\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Emergency\",\"Medium\"))\n```\n\n**Balanced:**\n```kusto\nsource\n| where DeviceVendor != \"Fortinet\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\"))\n   or (Activity contains \"security\")\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Emergency\"))\n```\n\n**Aggressive:**\n```kusto\nsource\n| where DeviceVendor != \"Fortinet\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\"))\n   or (Activity contains \"security\")\n```\n\n**Estimated savings:** Conservative 20-30% / Balanced 45-60% / Aggressive 70-80%",
+       "style": "markdown"
+      },
+      "name": "dcr - fortinet all modes"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Cisco ASA / FTD — All Modes\n\n**Conservative (keep denies + threats, drop session build/teardown):**\n```kusto\nsource\n| where DeviceVendor != \"Cisco\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\",\"denied\"))\n   or (DeviceEventClassID in~ (\"106100\",\"106023\",\"733100\"))\n   or (Activity == \"File Malware Event\")\n   or (DeviceEventClassID startswith \"%FTD-4\" and DeviceEventClassID !startswith \"%FTD-4-4300\")\n```\n\n**Balanced (keep only deny/threat actions):**\n```kusto\nsource\n| where DeviceVendor != \"Cisco\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\",\"denied\"))\n   or (Activity == \"File Malware Event\")\n   or (DeviceEventClassID has_any (\"106023\",\"733100\"))\n```\n\n**Aggressive (threats + denies only):**\n```kusto\nsource\n| where DeviceVendor != \"Cisco\"\n   or (DeviceAction in~ (\"deny\",\"drop\",\"block\"))\n   or (Activity == \"File Malware Event\")\n```\n\n**Estimated savings:** Conservative 30-40% / Balanced 55-70% / Aggressive 75-85%",
+       "style": "markdown"
+      },
+      "name": "dcr - cisco all modes"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Check Point — All Modes\n\n**Conservative:**\n```kusto\nsource\n| where DeviceVendor != \"Check Point\"\n   or (DeviceAction in~ (\"Detect\",\"Prevent\",\"Drop\",\"Block\"))\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Very-High\",\"Medium\"))\n```\n\n**Balanced:**\n```kusto\nsource\n| where DeviceVendor != \"Check Point\"\n   or (DeviceAction in~ (\"Detect\",\"Prevent\",\"Drop\",\"Block\"))\n   or (LogSeverity in~ (\"High\",\"Critical\",\"Very-High\"))\n```\n\n**Aggressive:**\n```kusto\nsource\n| where DeviceVendor != \"Check Point\"\n   or (DeviceAction in~ (\"Prevent\",\"Drop\",\"Block\"))\n```\n\n**Estimated savings:** Conservative 25-30% / Balanced 50-60% / Aggressive 75-85%",
+       "style": "markdown"
+      },
+      "name": "dcr - checkpoint all modes"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "#### Generic CEF (catch-all for other vendors)\n\n**Conservative:**\n```kusto\nsource\n| where DeviceAction !in~ (\"allow\",\"accept\",\"pass\",\"permit\")\n   or LogSeverity in~ (\"High\",\"Critical\",\"Emergency\")\n```\n\n**Balanced:**\n```kusto\nsource\n| where DeviceAction !in~ (\"allow\",\"accept\",\"pass\",\"permit\",\"close\")\n   or LogSeverity in~ (\"High\",\"Critical\",\"Emergency\")\n```\n\n**Aggressive:**\n```kusto\nsource\n| where DeviceAction in~ (\"deny\",\"drop\",\"block\",\"reset\",\"prevent\")\n```\n\n**Estimated savings:** Conservative 20-30% / Balanced 40-55% / Aggressive 65-80%",
+       "style": "markdown"
+      },
+      "name": "dcr - generic cef"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "---\n\n### Raw Syslog Transformations\n\n**Conservative (keep emerg/alert/crit/err, exclude cron/mail/lpr):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\")\n   or Facility !in~ (\"cron\",\"mail\",\"lpr\",\"news\",\"uucp\")\n```\n\n**Balanced (keep emerg through warning, network facilities only):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\",\"warning\",\"warn\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"kern\",\"auth\",\"authpriv\")\n```\n\n**Aggressive (emerg/alert/crit only, security-relevant facilities):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"auth\",\"authpriv\")\n```\n\n**Estimated savings:** Conservative 20-30% / Balanced 40-55% / Aggressive 60-75%",
+       "style": "markdown"
+      },
+      "name": "dcr - syslog all modes"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let CSL = union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | summarize TotalGB = sum(_BilledSize) / (1024*1024*1024) by DeviceVendor\n        | extend FilteredGB = case(\n            '{OptimizationMode}' == 'Conservative', TotalGB * 0.75,\n            '{OptimizationMode}' == 'Balanced', TotalGB * 0.50,\n            '{OptimizationMode}' == 'Aggressive', TotalGB * 0.25,\n            TotalGB)),\n    (datatable(DeviceVendor:string, TotalGB:real, FilteredGB:real)[]);\nCSL\n| where isnotempty(DeviceVendor)\n| summarize TotalGB = sum(TotalGB), FilteredGB = sum(FilteredGB)\n| extend SavingsGB = round(TotalGB - FilteredGB, 2), SavingsPct = round((TotalGB - FilteredGB) / TotalGB * 100, 1)\n| project TotalGB = round(TotalGB,2), FilteredGB = round(FilteredGB,2), SavingsGB, SavingsPct",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 5 }
+      },
+      "name": "query - projected savings"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "dcrplaybook" },
+   "name": "groupDCRPlaybook"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Detection Coverage\n\nMaps firewall log data to the analytics rules and hunting queries that consume it. Vendors with **0 rules** have no detection value — their logs are pure cost. **Aggressive mode warnings** flag rules that would lose data under the selected optimization mode.\n\nThis mapping is a snapshot of rules in the Azure-Sentinel repository. New rules added after this workbook was published are not reflected.",
+       "style": "markdown"
+      },
+      "name": "text - coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let RuleCoverage = datatable(Vendor:string, RuleCount:long, RuleNames:string)[\n    \"Palo Alto Networks\", 7, \"PaloAlto-NetworkBeaconing, PaloAlto-PortScanning, PaloAlto-UnusualThreatSignatures, PaloAlto-Top100_NmapScan, FileHashEntity_CommonSecurityLog, RiskyUserIn3Pnetworkactivity, TimeSeriesAnomaly-MultiVendor_NetworkTraffic\",\n    \"Fortinet\", 2, \"Fortinet-NetworkBeaconPattern, RiskyUserIn3Pnetworkactivity\",\n    \"Cisco\", 4, \"CiscoASA-AvgAttackDetectRateIncrease, CiscoASA-ThreatDetectionMessage, SigninFirewallCorrelation, RiskyUserIn3Pnetworkactivity\",\n    \"Check Point\", 1, \"RiskyUserIn3Pnetworkactivity\",\n    \"Zscaler\", 2, \"RiskyUserIn3Pnetworkactivity, MultiVendor-PossibleDGAContacts\",\n    \"All Vendors (Multi)\", 7, \"MultiVendor-PossibleDGAContacts, TimeSeriesAnomaly-MultiVendor_NetworkTraffic, TimeSeriesAnomaly-MultiVendor_DataExfiltration, CreepyDriveURLs, CreepyDriveRequestSequence, CreepySnailURLParameters, DomainEntity_CommonSecurityLog\"\n];\nRuleCoverage\n| order by RuleCount desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 15 }
+      },
+      "name": "query - rule coverage by vendor"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let ImpactMatrix = datatable(RuleName:string, VendorTarget:string, LogTypeNeeded:string, ConservativeImpact:string, BalancedImpact:string, AggressiveImpact:string)[\n    \"PaloAlto-NetworkBeaconing\", \"Palo Alto\", \"Traffic (forwarded/deny patterns)\", \"No impact\", \"May lose some data\", \"WILL LOSE DATA\",\n    \"PaloAlto-PortScanning\", \"Palo Alto\", \"Traffic (deny/reset actions)\", \"No impact\", \"No impact\", \"WILL LOSE DATA\",\n    \"PaloAlto-UnusualThreatSignatures\", \"Palo Alto\", \"Threat logs\", \"No impact\", \"No impact\", \"No impact\",\n    \"PaloAlto-Top100_NmapScan\", \"Palo Alto\", \"Traffic (deny events)\", \"No impact\", \"No impact\", \"Partial impact\",\n    \"Fortinet-NetworkBeaconPattern\", \"Fortinet\", \"Traffic (forwarded/close/reset/deny)\", \"No impact\", \"May lose some data\", \"WILL LOSE DATA\",\n    \"CiscoASA-AvgAttackDetectRateIncrease\", \"Cisco\", \"Traffic (threat detection events)\", \"No impact\", \"No impact\", \"No impact\",\n    \"CiscoASA-ThreatDetectionMessage\", \"Cisco\", \"Threat events\", \"No impact\", \"No impact\", \"No impact\",\n    \"TimeSeriesAnomaly-MultiVendor_NetworkTraffic\", \"All\", \"Traffic volume data\", \"No impact\", \"May lose some data\", \"WILL LOSE DATA\",\n    \"MultiVendor-PossibleDGAContacts\", \"All\", \"Web/proxy events\", \"No impact\", \"No impact\", \"May lose some data\",\n    \"TimeSeriesAnomaly-MultiVendor_DataExfiltration\", \"All\", \"Traffic byte counts\", \"No impact\", \"May lose some data\", \"WILL LOSE DATA\",\n    \"RiskyUserIn3Pnetworkactivity\", \"Multi\", \"All traffic\", \"No impact\", \"May lose some data\", \"WILL LOSE DATA\"\n];\nImpactMatrix\n| extend Impact = case(\n    '{OptimizationMode}' == 'Conservative', ConservativeImpact,\n    '{OptimizationMode}' == 'Balanced', BalancedImpact,\n    AggressiveImpact)\n| project RuleName, VendorTarget, LogTypeNeeded, Impact\n| order by Impact asc, RuleName asc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 20 }
+      },
+      "name": "query - mode impact matrix"
+     },
+     {
+      "type": 1,
+      "content": {
+       "json": "### Aggressive Mode Warnings\n\nThe following rules WILL LOSE DATA under Aggressive mode:\n- **PaloAlto-NetworkBeaconing** — requires traffic log action patterns\n- **PaloAlto-PortScanning** — requires deny/reset traffic events\n- **Fortinet-NetworkBeaconPattern** — requires forwarded/close/reset traffic data\n- **TimeSeriesAnomaly-MultiVendor_NetworkTraffic** — requires traffic volume data\n- **TimeSeriesAnomaly-MultiVendor_DataExfiltration** — requires traffic byte counts\n\nConsider using **Balanced mode** if these detections are critical to your SOC.",
+       "style": "markdown"
+      },
+      "conditionalVisibility": { "parameterName": "OptimizationMode", "comparison": "isEqualTo", "value": "Aggressive" },
+      "name": "text - aggressive warnings"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "coverage" },
+   "name": "groupDetectionCoverage"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Anomalies\n\nDetect unusual changes in firewall log ingestion that may indicate configuration issues, attacks, or operational changes. Anomalies are detected using time-series decomposition against a 14-day baseline.",
+       "style": "markdown"
+      },
+      "name": "text - anomalies"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let TimeSeriesData = union isfuzzy=true\n    (CommonSecurityLog\n        | where _IsBillable == true\n        | make-series DailyGB = sum(_BilledSize) / (1024*1024*1024) on TimeGenerated step 1d by DeviceVendor),\n    (datatable(DeviceVendor:string, DailyGB:dynamic, TimeGenerated:datetime)[]);\nTimeSeriesData\n| where isnotempty(DeviceVendor) and array_length(DailyGB) > 7\n| extend (anomalies, score, baseline) = series_decompose_anomalies(DailyGB, 2.5, -1, 'linefit')\n| mv-expand TimeGenerated to typeof(datetime), DailyGB to typeof(real), anomalies to typeof(real), baseline to typeof(real)\n| where anomalies != 0\n| project TimeGenerated, DeviceVendor, DailyGB = round(DailyGB, 2), Baseline = round(baseline, 2), AnomalyScore = round(anomalies, 2)\n| order by TimeGenerated desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 25 }
+      },
+      "name": "query - volume anomalies csl"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Lookback = ago(14d);\nlet CurrentWindow = ago(1d);\nlet KnownDevices = union isfuzzy=true\n    (CommonSecurityLog\n        | where TimeGenerated between (Lookback .. CurrentWindow)\n        | distinct DeviceExternalID),\n    (datatable(DeviceExternalID:string)[]);\nlet CurrentDevices = union isfuzzy=true\n    (CommonSecurityLog\n        | where TimeGenerated > CurrentWindow\n        | distinct DeviceExternalID),\n    (datatable(DeviceExternalID:string)[]);\nCurrentDevices\n| where isnotempty(DeviceExternalID)\n| join kind=leftanti KnownDevices on DeviceExternalID\n| take 20",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 20 }
+      },
+      "name": "query - new devices csl"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let BaselinePeriod = ago(14d);\nlet CurrentPeriod = ago(1d);\nlet BaselineNoise = union isfuzzy=true\n    (CommonSecurityLog\n        | where TimeGenerated between (BaselinePeriod .. CurrentPeriod)\n        | where DeviceAction in~ (\"allow\",\"accept\",\"pass\",\"permit\")\n        | summarize AllowEvents = count(), TotalEvents = count() by DeviceVendor\n        | extend BaselineNoisePct = round(toreal(AllowEvents) / toreal(TotalEvents) * 100, 1)),\n    (datatable(DeviceVendor:string, AllowEvents:long, TotalEvents:long, BaselineNoisePct:real)[]);\nlet CurrentNoise = union isfuzzy=true\n    (CommonSecurityLog\n        | where TimeGenerated > CurrentPeriod\n        | where DeviceAction in~ (\"allow\",\"accept\",\"pass\",\"permit\")\n        | summarize AllowEvents = count(), TotalEvents = count() by DeviceVendor\n        | extend CurrentNoisePct = round(toreal(AllowEvents) / toreal(TotalEvents) * 100, 1)),\n    (datatable(DeviceVendor:string, AllowEvents:long, TotalEvents:long, CurrentNoisePct:real)[]);\nBaselineNoise\n| join kind=inner CurrentNoise on DeviceVendor\n| extend NoiseDelta = round(CurrentNoisePct - BaselineNoisePct, 1)\n| where abs(NoiseDelta) > 20\n| project DeviceVendor, BaselineNoisePct, CurrentNoisePct, NoiseDelta\n| order by abs(NoiseDelta) desc",
+       "size": 0,
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": { "rowLimit": 15 }
+      },
+      "name": "query - noise ratio drift"
+     }
+    ]
+   },
+   "conditionalVisibility": { "parameterName": "parameterTab", "comparison": "isEqualTo", "value": "anomalies" },
+   "name": "groupAnomalies"
+  }
+ ]
+}
