@@ -1,0 +1,167 @@
+{
+  "name": "FireCompassRisksPush",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "[parameters('workspace-location')]",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "FireCompassRisksPush",
+      "title": "FireCompass Risks (Push)",
+      "publisher": "FireCompass",
+      "descriptionMarkdown": "The FireCompass Risks (Push) connector enables the FireCompass platform to push risk findings directly into Microsoft Sentinel in real time using the Codeless Connector Framework (CCF) Push pattern. Risk records are ingested into the FCRisks_CL custom table for analysis, alerting, and closed-loop remediation workflows.",
+      "graphQueries": [
+        {
+          "metricName": "Risk records received",
+          "legend": "FCRisks_CL",
+          "baseQuery": "FCRisks_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Latest state of every risk",
+          "query": "FCRisks_CL\n| summarize arg_max(UpdatedAt, *) by RiskId\n| sort by UpdatedAt desc"
+        },
+        {
+          "description": "Open critical and high severity risks",
+          "query": "FCRisks_CL\n| summarize arg_max(UpdatedAt, *) by RiskId\n| where State == 'OPEN' and Severity in ('CRITICAL', 'HIGH')\n| sort by UpdatedAt desc"
+        },
+        {
+          "description": "Risks by assessment",
+          "query": "FCRisks_CL\n| summarize Risks = dcount(RiskId) by AssessmentName, Severity"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "FCRisks_CL",
+          "lastDataReceivedQuery": "FCRisks_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "FCRisks_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to assign Monitoring Metrics Publisher role on the data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "This connector enables the FireCompass platform to push risk findings directly to Microsoft Sentinel via the Azure Monitor Logs Ingestion API.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application\nClicking on \"Deploy\" will trigger the creation of the FCRisks_CL Log Analytics table and a Data Collection Rule (DCR).\nIt will then create an Entra application, link the DCR to it, and set the generated secret in the application. This setup enables the FireCompass platform to send data securely to the DCR using an Entra token."
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy FireCompass Risks Push connector resources",
+                "applicationDisplayName": "FireCompass Risks Push Connector Application"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure the FireCompass Platform",
+          "description": "Use the following parameters to configure the FireCompass platform integration to push risk findings to this workspace.",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [
+                  "TenantId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Application ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Application ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Secret"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint Uri",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Rule Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Stream Name",
+                "value": "Custom-FCRisks_API"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Configure FireCompass Integration\nEnter the above credentials in the FireCompass platform's Microsoft Sentinel integration settings to enable real-time risk push.\n\nThe platform sends risk records in their native API JSON format; field mapping to the FCRisks_CL table is handled by the Data Collection Rule."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
