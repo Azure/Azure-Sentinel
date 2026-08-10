@@ -27,6 +27,23 @@ These standard tables integrate natively with the Microsoft Sentinel Solution fo
 - **Automatic connection naming**: Connections are named `{ConnectionPrefix}-{DestinationName}`
 - **Shared infrastructure**: Single DCE/DCR shared across all connections
 
+> [!IMPORTANT]
+> **Custom DCE/DCR names are not supported** for connections created by this tool (the SAP
+> agentless connector and any other integration that uses the `SAPCC` connector definition).
+> Use the tool-generated resources: `Microsoft-Sentinel-SAPCC-{workspace-short-id}` (DCE) and
+> `Microsoft-Sentinel-SAPCC-DCR-{workspace-short-id}` (DCR), where `{workspace-short-id}` is the
+> **first 12 characters** of the workspace ID (a GUID) — **not the full 36-character GUID**.
+> Because a GUID is formatted `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, its first 12 characters are
+> `xxxxxxxx-xxx` (8 hex digits, a hyphen, then 3 hex digits). For example, workspace ID
+> `20e82d11-6f17-4ad2-b623-6449525967fc` gives DCE `Microsoft-Sentinel-SAPCC-20e82d11-6f1` and DCR
+> `Microsoft-Sentinel-SAPCC-DCR-20e82d11-6f1`. Using the full GUID makes the name exceed Azure's
+> 44-character resource-name limit (`Resource name ... must be between 3 and 44 characters`) or be
+> silently truncated. A custom-named or truncated DCE/DCR also causes the SAP Data Collector to
+> fail with `Failed to extract workspace ID` (observed in the SAP Integration Suite message
+> processing log and the `SentinelHealth` table). This may manifest as intermittent failures and
+> missing data. Redeploy with this tool and repoint the connection to the standard resources. This
+> convention is enforced by the tool, which refuses to create or reuse a non-standard DCE/DCR.
+
 ## Files
 
 | File | Description |
