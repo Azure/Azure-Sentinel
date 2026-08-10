@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.1       | 05-08-2026                     | Updated CCP Connector Air Marshal polling to use checkpointed `t0` windowing instead of a fixed timespan to prevent duplicate ingestion. |
 | 3.1.1       | 30-07-2026                     | Updated CCP Connector poller config: reduced polling timespan to 3600 seconds for Organization API Requests and Configuration Changes data types. |
 | 3.1.0       | 06-07-2026                     | Added four new data types to the **CCP Connector**: Organizations, Organization Networks, Network Clients, and Wireless Air Marshal Events. |
 | 3.0.2       | 10-01-2025                     | Transitioned the **CCP Connector** to General Availability (GA).    |
