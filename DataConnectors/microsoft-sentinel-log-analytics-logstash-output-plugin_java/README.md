@@ -252,7 +252,8 @@ Proxy URLs use the format `[http://][user:password@]host:port`. The scheme is op
       }
     }
 
-Security note: if your proxy requires credentials, store them in the Logstash KeyStore rather than placing them in plaintext in the configuration file.
+Security note: if your proxy requires credentials, store them in the Logstash KeyStore rather than placing them in plaintext in the configuration file.  
+Note: Only HTTP forward proxies are supported. HTTPS destination traffic is tunneled through the proxy using HTTP CONNECT.  
 
 ## Known issues
  
