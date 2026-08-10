@@ -63,7 +63,7 @@ Determine the API domain based on your TrendAI Vision One tenant region:
 | US | `api.xdr.trendmicro.com` |
 | EU | `api.eu.xdr.trendmicro.com` |
 | SG | `api.sg.xdr.trendmicro.com` |
-| JP | `api.xdr.trendmicro.co.jp` / `api.jp.xdr.trendmicro.co.jp` |
+| JP | `api.xdr.trendmicro.co.jp` |
 | AU | `api.au.xdr.trendmicro.com` |
 | IN | `api.in.xdr.trendmicro.com` |
 | MEA | `api.mea.xdr.trendmicro.com` |
