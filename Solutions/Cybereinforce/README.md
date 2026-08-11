@@ -6,9 +6,9 @@ This solution brings Cybereinforce's enforcement and audit activity into Microso
 
 ## Contents
 
-- **Data Connectors**: 1 — scheduled Logic App that polls the Cybereinforce API and ingests events into the `CybereinforceCTE_CL` custom table via the Azure Monitor Logs Ingestion API.
-- **Workbooks**: 1 — ingestion health, URL blocks, audit activity, and IOC synchronization.
-- **Analytic Rules**: 18 — covering URL enforcement, threat-intelligence matches, device risk patterns (repeated/spiking blocks, suspected compromise, company-wide campaigns), administrative/audit activity, and license/rule capacity health.
+- **Data Connectors**: 1 - scheduled Logic App that polls the Cybereinforce API and ingests events into the `CybereinforceCTE_CL` custom table via the Azure Monitor Logs Ingestion API.
+- **Workbooks**: 1 - ingestion health, URL blocks, audit activity, and IOC synchronization.
+- **Analytic Rules**: 18 - covering URL enforcement, threat-intelligence matches, device risk patterns (repeated/spiking blocks, suspected compromise, company-wide campaigns), administrative/audit activity, and license/rule capacity health.
 
 ## Prerequisites
 
