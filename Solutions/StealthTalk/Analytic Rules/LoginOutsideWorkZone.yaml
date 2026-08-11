@@ -1,0 +1,89 @@
+id: a7c3e9b1-4f5d-4e2a-9b8c-1d2e3f4a5b6c
+name: StealthTalk - Login outside work zone
+description: |
+  Identifies a single StealthTalk authentication originating from a country or city that does
+  not match the user's assigned (expected) geographic zone. Each individual mismatch is
+  treated as an incident - there is no aggregation threshold, since a single login from an
+  unexpected country is high-confidence evidence of a credential issue.
+
+  An incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs
+  from AssignedCity. Source IPv4, raw event ID, and both the observed and expected
+  geo-locations are surfaced as entities and custom details for the SOC analyst.
+severity: High
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let LookbackPeriod = 1h;
+  StealthTalkAnomalousAuth_CL
+  | where TimeGenerated >= ago(LookbackPeriod)
+  | where EventType == "GeoAnomalyLogin"
+  | where LoginCountry != AssignedCountry
+       or LoginCity    != AssignedCity
+  | extend
+      CountryMismatch = LoginCountry != AssignedCountry,
+      CityMismatch    = LoginCity    != AssignedCity,
+      AlertName       = "LoginOutsideWorkZone",
+      AlertDetails    = strcat(
+          "User ", UserId,
+          " logged in from ", LoginCity, " (", LoginCountry, ")",
+          " - assigned zone: ", AssignedCity, " (", AssignedCountry, ").",
+          " Source IP: ", IpAddress, ".",
+          " Country mismatch: ", tostring(LoginCountry != AssignedCountry), ".",
+          " City mismatch: ", tostring(LoginCity != AssignedCity), "."
+      )
+  | project
+      TimeGenerated, UserId, DeviceId,
+      LoginCountry, LoginCity, AssignedCountry, AssignedCity,
+      CountryMismatch, CityMismatch, IpAddress,
+      AppVersion, RawEventId, AlertName, AlertDetails
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserId
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+customDetails:
+  LoginCountry: LoginCountry
+  LoginCity: LoginCity
+  AssignedCountry: AssignedCountry
+  AssignedCity: AssignedCity
+  CountryMismatch: CountryMismatch
+  CityMismatch: CityMismatch
+  AppVersion: AppVersion
+  EventReference: RawEventId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'StealthTalk: Login Outside Work Zone - {{UserId}} from {{LoginCity}} ({{LoginCountry}})'
+  alertDescriptionFormat: '{{AlertDetails}}'
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+suppressionEnabled: false
+suppressionDuration: 1h
+version: 1.0.0
+kind: Scheduled

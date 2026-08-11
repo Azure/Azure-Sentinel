@@ -83,7 +83,7 @@ The Lab environment ingests data into the following tables. Understanding which 
 4. The Tables screen lists all tables in your workspace with their current tier and retention settings
 
 <p align="center">
-<img src="../Images/OnboardingImage16.png?raw=true">
+<img src="../Images/OnboardingImage16.png?raw=true" alt="Table management screen in the Defender portal" width="800">
 </p>
 
 
@@ -102,7 +102,7 @@ The Lab environment ingests data into the following tables. Understanding which 
    - **Total retention** — total data lifespan including data lake
 
 <p align="center">
-<img src="../Images/OnboardingImage17.png?raw=true">
+<img src="../Images/OnboardingImage17.png?raw=true" alt="Table details showing tier and retention settings" width="800">
 </p>
 
 Questions to consider:
@@ -118,8 +118,8 @@ In this step, you will extend the analytics retention for a custom table.
 
 1. On the **Tables** screen, find `OktaV2_CL`
 2. Select the table to open the details panel
-3. Select **Manage table**
-4. On the **Manage table** screen, you will see the current retention configuration
+3. Select **Data retention settings**
+4. On the **Data retention settings** screen, you will see the current retention configuration
 5. Change the **Analytics retention** to **180 days**
 6. Note that the **Total retention** automatically adjusts — by default it matches the analytics retention
 7. Optionally, set the **Total retention** to **1 year** to keep data in the data lake for an additional 185 days beyond the analytics retention
@@ -127,7 +127,7 @@ In this step, you will extend the analytics retention for a custom table.
 9. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage18.png?raw=true">
+<img src="../Images/OnboardingImage18.png?raw=true" alt="Changing table tier from Analytics to Data Lake" width="800">
 </p>
 
 
@@ -147,14 +147,14 @@ Moving a table to the data lake tier is useful for tables with high ingestion vo
 > Only move tables that you are certain don't need real-time analytics.
 
 1. On the **Tables** screen, find `OfficeActivity_CL`
-2. Select the table, then select **Manage table**
+2. Select the table, then select **Data retention settings**
 3. Under **Tier**, change from **Analytics** to **Data lake**
 4. Set the **Retention** (30 days to 12 years)
 5. Review the warning message about features that will stop working
 6. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage19.png?raw=true">
+<img src="../Images/OnboardingImage19.png?raw=true" alt="Retention configuration for a table" width="800">
 </p>
 
 
@@ -165,13 +165,13 @@ Moving a table to the data lake tier is useful for tables with high ingestion vo
 Now reverse the change to restore real-time capabilities:
 
 1. On the **Tables** screen, find `OfficeActivity_CL` (it should now show as Data lake tier)
-2. Select the table, then select **Manage table**
+2. Select the table, then select **Data retention settings**
 3. Under **Tier**, change from **Data lake** back to **Analytics**
 4. Set the **Analytics retention** and **Total retention** as desired
 5. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage20.png?raw=true">
+<img src="../Images/OnboardingImage20.png?raw=true" alt="Table management confirmation after changes" width="800">
 </p>
 
 
@@ -193,8 +193,8 @@ The tier a table lives in directly affects which detection rules can query it. R
 
 **Practical example from this Lab:**
 
-- The `CommonSecurityLog` table **must** stay in the analytics tier because detection rules like `Lab Stage 3.5 Internal Port Scan` and `Lab Stage 6 Large Data Exfiltration` query it in real time
-- The `PaloAlto_ThreatSummary_KQL_CL` table **must** stay in the analytics tier because the `[S8]` detection rule queries it
+- The `CommonSecurityLog` table **must** stay in the analytics tier because detection rules like `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage 6 - Large Data Exfiltration (Palo Alto)` query it in real time
+- The `PaloAlto_ThreatSummary_KQL_CL` table **must** stay in the analytics tier because the `Lab Stage S8 - Data Lake Promoted Threat (Palo Alto)` detection rule queries it
 - However, `OfficeActivity_CL` could potentially be moved to the data lake tier if no active detection rules reference it, and you could use a KQL job (Exercise 11) to promote relevant data when needed
 
 ---
@@ -213,3 +213,9 @@ The tier a table lives in directly affects which detection rules can query it. R
 - [Manage data tiers and retention in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/manage-data-overview)
 - [Microsoft Sentinel data lake overview](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-lake-overview)
 - [Understand the full billing model for Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/billing)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 11 — Data Lake KQL Jobs](./E11_datalake_kql_jobs.md)**

@@ -1,0 +1,124 @@
+id: ef34b272-930c-41c8-a682-8c2093cd2024
+name: "[Entra ID] Application Granted Administrative Permission to Assign Microsoft Entra ID Roles"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects when an application receives permission to assign Microsoft Entra ID roles. This can enable directory privilege escalation and should be reviewed immediately.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Impact
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.003
+query: |
+  AuditLogs
+  | where Category =~ "ApplicationManagement"
+      and LoggedByService =~ "Core Directory"
+      and OperationName in~ ("Add delegated permission grant", "Add app role assignment to service principal")
+  | mv-apply TargetResource = TargetResources on
+      (
+      where TargetResource.type =~ "ServicePrincipal"
+          and array_length(TargetResource.modifiedProperties) > 0
+          and isnotnull(TargetResource.displayName)
+      | extend props = TargetResource.modifiedProperties
+      )
+  | mv-apply Property = props on
+      (
+      where Property.displayName in~ ("AppRole.Value", "DelegatedPermissionGrant.Scope")
+      | extend
+          DisplayName = tostring(Property.displayName),
+          PermissionGrant = trim('"', tostring(Property.newValue))
+      )
+  | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+  | mv-apply Property = props on
+      (
+      where Property.displayName =~ "ServicePrincipal.DisplayName"
+      | extend TargetAppDisplayName = trim('"', tostring(Property.newValue))
+      )
+  | mv-apply Property = props on
+      (
+      where Property.displayName =~ "ServicePrincipal.ObjectID"
+      | extend TargetAppServicePrincipalId = trim('"', tostring(Property.newValue))
+      )
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend TargetAppDisplayName = tostring(iff(isnotempty(TargetAppDisplayName), TargetAppDisplayName, TargetAppServicePrincipalId))
+  | extend
+      InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]),
+      InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | extend Initiator = InitiatingAccountName, Target = TargetAppDisplayName
+  | extend
+      Source_Network_IPLocation = ""
+  | project
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Identity Privilege Modification",
+      Alert_Name_en = "Application Granted Administrative Permission to Assign Microsoft Entra ID Roles",
+      Alert_Description_en = strcat("At Taiwan time", format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"), ". ", "EntraID:", "", ". ", "detected source user/service principal ", iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName), " granted application: ", TargetAppDisplayName, ".", " administrative permission to assign Microsoft Entra ID roles: ", ActivityDisplayName, ". Source IP: ", InitiatingIpAddress, ", source location: ", Source_Network_IPLocation),
+      Alert_TriageStep_en = strcat(
+                            "1. Confirm whether the operating user/service principal: ",
+                            iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName),
+                            ", source IP: ",
+                            InitiatingIpAddress,
+                            " is abnormal. ",
+                            "2. Review the authorized target application ",
+                            TargetAppDisplayName,
+                            "  authorization content: ",
+                            ActivityDisplayName,
+                            " to determine whether it is an expected operation or maintenance task."
+                        ),
+      Alert_Containment_en = strcat(
+                             "1. If determined to be unauthorized or suspicious privilege escalation, immediately remove the permissions from target application: ",
+                             TargetAppDisplayName,
+                             " and disable it.",
+                             "2. Perform risk handling for the initiator  ",
+                             iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName),
+                             "  (revoke sessions/force re-authentication, and suspend directory management permissions if necessary)."
+                         ),
+      Alert_Remediation_en =
+      "1. Strengthen application and permission governance: apply least privilege and administrator approval processes for high-risk Graph/Directory permissions, and include Service Principal credential/permission changes in regular audits.  "
+      "2. Strengthen detection and automation: establish automated response (SOAR) for notification/source blocking/user verification.",
+              Alert_Time_TW = datetime_utc_to_local(TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = TimeGenerated,
+      Event_Action = ActivityDisplayName,
+      Event_Status = Result,
+      Event_Description = PermissionGrant,
+      Source_Identity_FullName = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName),
+      Source_Identity_ID = iff(isnotempty(InitiatingAadUserId), InitiatingAadUserId, InitiatingAppServicePrincipalId),
+      Source_Identity_Type = iff(isnotempty(InitiatingUserPrincipalName), "User", "Service"),
+      Source_Network_IPAddress = InitiatingIpAddress,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Target_Identity_FullName = TargetAppDisplayName,
+      Target_Identity_ID = TargetAppServicePrincipalId,
+      Target_Identity_Type = "Service",
+      Target_Resource_ID = "",
+      Target_Resource_Name = "Microsoft Entra ID",
+      Target_Resource_Type = "Microsoft Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: Target_Identity_FullName
+alertDetailsOverride:
+  alertDynamicProperties: []
+

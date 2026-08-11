@@ -1,23 +1,22 @@
 # Exercise 8 — Watchlist Integration
 
-**Rule:** `[E4] [AWS] Console Login Without MFA` _(the `[E4]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1078.004 (Valid Accounts: Cloud Accounts)
-**Difficulty:** Intermediate
+**Rule:** `Lab Stage E4 - Console Login Without MFA (AWS)`  
+**Difficulty:** Intermediate  
+**Prerequisites:** None
 
 ---
 
 ## Objective
 
-Create a Microsoft Sentinel **watchlist** and integrate it into a Custom Detection rule using the `_GetWatchlist()` KQL function. This exercise demonstrates how to enrich detection logic with contextual business data.
+Create a Microsoft Sentinel **watchlist** and integrate it into a custom detection rule using the `_GetWatchlist()` KQL function. This exercise demonstrates how to enrich detection logic with contextual business data.
 
 ## Background
 
-The rule `[E4] [AWS] Console Login Without MFA` detects AWS console logins where MFA was not used. On its own, the rule generates alerts for **all** non-MFA logins. By adding a watchlist, you can prioritise alerts for logins that affect **business-critical AWS services** — making the detection far more actionable.
+The rule `Lab Stage E4 - Console Login Without MFA (AWS)` detects AWS console logins where MFA was not used. On its own, the rule generates alerts for **all** non-MFA logins. By adding a watchlist, you can prioritise alerts for logins that affect **business-critical AWS services** — making the detection far more actionable.
 
 ### What is a Watchlist?
 
-A watchlist is a named lookup table uploaded to Microsoft Sentinel as a CSV file. Once uploaded, it becomes queryable via the `_GetWatchlist('alias')` function in any KQL query, including Custom Detection rules.
+A watchlist is a named lookup table uploaded to Microsoft Sentinel as a CSV file. Once uploaded, it becomes queryable via the `_GetWatchlist('alias')` function in any KQL query, including custom detection rules.
 
 > **Reference:** [Watchlists in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/watchlists)
 
@@ -81,7 +80,7 @@ You should see all rows from your CSV.
 
 ### Step 4 — Modify the Detection Query
 
-Open `[E4] [AWS] Console Login Without MFA` and modify the query to join with the watchlist. Replace the existing query with:
+Open `Lab Stage E4 - Console Login Without MFA (AWS)` and modify the query to join with the watchlist. Replace the existing query with:
 
 ```kusto
 let critical_services = _GetWatchlist('BusinessCriticalAWS')
@@ -175,3 +174,9 @@ The complete modified query is in Step 4 above. Key elements:
 - [Build queries with watchlists](https://learn.microsoft.com/en-us/azure/sentinel/watchlists-queries)
 - [_GetWatchlist function](https://learn.microsoft.com/en-us/azure/sentinel/watchlists-queries#build-queries-with-watchlists)
 - [MITRE T1078.004 — Valid Accounts: Cloud Accounts](https://attack.mitre.org/techniques/T1078/004/)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 9 — Cost Management & Ingestion Analysis](./E09_cost_management.md)**

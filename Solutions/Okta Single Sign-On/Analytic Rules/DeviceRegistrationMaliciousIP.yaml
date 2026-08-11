@@ -1,7 +1,7 @@
 id: e36c6bd6-f86a-4282-93a5-b4a1b48dd849
 name: Device Registration from Malicious IP
 description: |
-  'This query identifies Device Registration from IP addresses identified as malicious by Okta ThreatInsight.'
+  This rule identifies successful Okta device registration events that originate from IP addresses also observed by Okta ThreatInsight as malicious or suspicious.
 severity: High
 status: Available
 requiredDataConnectors:
@@ -18,13 +18,16 @@ triggerThreshold: 0
 tactics:
   - Persistence
 relevantTechniques:
-  - T1098
+  - T1098.005
 query: |
   let Events = dynamic(["device.enrollment.create"]);
   let ThreatInsightOperations = dynamic(["security.threat.detected", "security.attack.start", "security.attack.end" ]);
+  // Adjust list of allowed IPs to reduce false positives
+  let AllowedIPs = dynamic([]);
   let DeviceRegistrations =  OktaSSO
   | where eventType_s in (Events)
   | where outcome_result_s == "SUCCESS"
+  | where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPs)
   | extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)
   | extend Location = strcat(client_geographicalContext_city_s,  " | ", client_geographicalContext_state_s," | ", client_geographicalContext_country_s)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,
@@ -35,16 +38,27 @@ query: |
   | project TimeGenerated, column_ifexists('debugContext_debugData_threatDetections_s', ""), client_userAgent_rawUserAgent_s, severity_s, outcome_result_s, eventType_s, displayMessage_s, SuspiciousIP, transaction_id_s;
   DeviceRegistrations 
   | join kind=inner (ThreatInsightEvents) on $left.client_ipAddress_s == $right.SuspiciousIP
+  | project TimeGenerated, actor_alternateId_s, actor_displayName_s, client_ipAddress_s, client_userAgent_os_s, client_userAgent_rawUserAgent_s, client_userAgent_browser_s, displayMessage_s, outcome_result_s, outcome_reason_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location, SuspiciousIP, transaction_id_s
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: actor_alternateId_s
-      - identifier: DisplayName
-        columnName: actor_displayName_s
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: client_ipAddress_s
-version: 1.1.1
+customDetails:
+  ActorDisplayName: actor_displayName_s
+  ActorDeviceOS: NewDevice_osPlatform
+  ActorDeviceOSVersion: NewDevice_osVersion
+  UserAgent: client_userAgent_rawUserAgent_s
+  Location: Location
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Device registration from Malicious IP {{client_ipAddress_s}}'
+  alertDescriptionFormat: 'User {{actor_displayName_s}} ({{actor_alternateId_s}}) registered a device from {{client_ipAddress_s}} and the IP is associated with malicious activity in Okta ThreatInsight.'
+version: 1.1.2
 kind: Scheduled

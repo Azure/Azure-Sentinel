@@ -1,0 +1,33 @@
+{
+  "name": "NordStellarPushDCR",
+  "apiVersion": "2021-09-01-preview",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "location": "[parameters('workspace-location')]",
+  "properties": {
+    "dataCollectionEndpointId": "[resourceId(parameters('subscription'), parameters('resourceGroupName'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('workspace'))]",
+    "streamDeclarations": {
+      "Custom-NordStellar": {
+        "columns": [
+          { "name": "time", "type": "string" },
+          { "name": "event", "type": "dynamic" }
+        ]
+      }
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "workspaceResourceId": "[variables('workspaceResourceId')]",
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": ["Custom-NordStellar"],
+        "destinations": ["clv2ws1"],
+        "transformKql": "source | extend EventId = tostring(event.id), EventType = tostring(event['type']), Module = tostring(event.module), RiskLevel = tostring(event.risk_level), AssetType = case(tostring(event['type']) == 'DOMAIN_PERMUTATION', 'DOMAIN', isnotempty(tostring(event.asset['type'])), tostring(event.asset['type']), isnotempty(tostring(event.source_type)), tostring(event.source_type), ''), AssetValue = case(tostring(event['type']) == 'DOMAIN_PERMUTATION', tostring(event.original_domain), isnotempty(tostring(event.asset['value'])), tostring(event.asset['value']), isnotempty(tostring(event.asset_value)), tostring(event.asset_value), ''), Tags = event['tags'], TimeGenerated = iif(isnotempty(tostring(event.date_added)), todatetime(event.date_added), iif(isnotempty(tostring(event.detected_at)), todatetime(event.detected_at), iif(isnotempty(['time']), todatetime(['time']), now()))), Details = event | project TimeGenerated, EventId, EventType, Module, RiskLevel, AssetType, AssetValue, Tags, Details",
+        "outputStream": "Custom-NordStellar_CL"
+      }
+    ]
+  }
+}

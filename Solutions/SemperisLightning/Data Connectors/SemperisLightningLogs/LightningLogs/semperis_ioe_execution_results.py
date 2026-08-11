@@ -63,7 +63,6 @@ class SemperisIOEExecutionResults:
             response = requests.get(
                 endpoint,
                 headers=headers,
-                verify=False,
                 params=params,
                 timeout=30,
             )

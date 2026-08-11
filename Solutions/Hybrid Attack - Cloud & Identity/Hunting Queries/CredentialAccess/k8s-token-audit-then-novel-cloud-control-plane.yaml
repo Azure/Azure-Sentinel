@@ -1,0 +1,112 @@
+id: 90379ce8-b674-4f81-ac66-7d3c66439fd6
+name: K8s token audit then novel cloud control plane operations
+description: |
+  Detects Kubernetes token and exec audit activity followed by first-seen cloud control-plane operations from the same IP and user-agent context.
+description-detailed: |
+  This query baselines cloud control-plane operation tuples and surfaces novel operations that occur shortly after Kubernetes token-related audit behavior.
+  It is designed for high-fidelity detection of Kubernetes-to-cloud pivot activity.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAuditEvents
+tactics:
+  - CredentialAccess
+  - Discovery
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1552
+  - T1528
+  - T1078.004
+  - T1526
+tags:
+  - Kubernetes audit
+  - Novel cloud operation
+  - Federated pivot
+  - Control plane
+query: |
+  // Time and tuning parameters.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineWindow = 14d;
+  let PivotWindow = 60m;
+  // Stage A: k8s audit indicators associated with token and workload execution paths.
+  let K8sTokenAudit =
+    CloudAuditEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AzureResourceId = coalesce(column_ifexists('AzureResourceId', ''), column_ifexists('CloudResourceId', ''))
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Kubernetes'
+    | extend AF = todynamic(AdditionalFields)
+    | extend OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent),
+             NamespaceNorm = tolower(coalesce(tostring(AF.KubernetesNamespace), tostring(extractjson('$.objectRef.namespace', tostring(RawEventData))))),
+             PodNorm = tolower(coalesce(tostring(AF.KubernetesPodName), tostring(extractjson('$.objectRef.name', tostring(RawEventData)))))
+    | where isnotempty(IpNorm)
+    | where OpNorm has_any (
+        'serviceaccounts/token',
+        'tokenreviews',
+        'pods/exec',
+        'pods/attach',
+        'secrets/get'
+      )
+    | summarize FirstK8s=min(Timestamp), LastK8s=max(Timestamp), K8sEventCount=count(), K8sOps=make_set(OperationName, 10)
+      by IpNorm, UaNorm, NamespaceNorm, PodNorm;
+  // Build historical baseline of cloud operation tuples to identify first-seen pivots.
+  let CloudOpBaseline =
+    CloudAuditEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AzureResourceId = coalesce(column_ifexists('AzureResourceId', ''), column_ifexists('CloudResourceId', ''))
+    | where Timestamp between ((StartTime - BaselineWindow) .. StartTime)
+    | where DataSource has 'Azure'
+    | extend OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent)
+    | where isnotempty(IpNorm) and isnotempty(OpNorm)
+    | summarize by IpNorm, UaNorm, OpNorm;
+  // Current sensitive cloud control-plane operations.
+  let CloudSensitiveCurrent =
+    CloudAuditEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AzureResourceId = coalesce(column_ifexists('AzureResourceId', ''), column_ifexists('CloudResourceId', ''))
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Azure'
+    | extend OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent)
+    | where isnotempty(IpNorm) and isnotempty(UaNorm)
+    | where OpNorm contains 'microsoft.authorization/roleassignments/'
+       or OpNorm contains 'microsoft.authorization/roledefinitions/'
+       or OpNorm contains 'microsoft.keyvault/vaults/'
+       or OpNorm contains 'microsoft.storage/storageaccounts/listkeys/action'
+       or OpNorm contains 'microsoft.resources/subscriptions/read'
+    | project CloudTime=Timestamp, IpNorm, UaNorm, OpNorm, OperationName, AzureResourceId, ActionType, CountryCode, IsAnonymousProxy;
+  // Keep only novel cloud operation tuples for high-fidelity behavior change.
+  let CloudSensitiveNovel =
+    CloudSensitiveCurrent
+    | join kind=leftanti CloudOpBaseline on IpNorm, UaNorm, OpNorm;
+  // Correlate k8s precursor to novel cloud control-plane behavior.
+  K8sTokenAudit
+  | where isnotempty(UaNorm)
+  | join kind=inner CloudSensitiveNovel on IpNorm, UaNorm
+  | where CloudTime between (FirstK8s .. (LastK8s + PivotWindow))
+  | summarize FirstK8s=min(FirstK8s),
+              LastK8s=max(LastK8s),
+              FirstCloud=min(CloudTime),
+              LastCloud=max(CloudTime),
+              K8sEventCount=max(K8sEventCount),
+              CloudEventCount=count(),
+              K8sOps=any(K8sOps),
+              CloudOps=make_set(OperationName, 15),
+              CloudResources=make_set(AzureResourceId, 20),
+              Countries=make_set(CountryCode, 5),
+              AnyAnonymousProxy=max(toint(IsAnonymousProxy))
+    by IpNorm, UaNorm, NamespaceNorm, PodNorm
+  | extend TimeGenerated = FirstK8s
+  | order by CloudEventCount desc, FirstCloud desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpNorm
+version: 1.0.0

@@ -27,7 +27,7 @@ Workbooks and Hunting queries deployed by Solutions may miss correct metadata in
 A central option to uninstall all content associated with an Microsoft Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type in alignment with the feature gallery UX support (some feature galleries may not provide a content delete option by design). 
 
 ## Known Issue #6 - CSP Program Enablement
-All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support.
+All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support for assistance with Microsoft-supported solutions, and refer to the relevant support information for ISV or Partner-supported solutions provided within each specific solution.
 
 
 ## Known Issue #7 - Private solutions in Content hub

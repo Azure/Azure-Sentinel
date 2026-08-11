@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Cisco ISE Administrator events
-  Version: '0.1.0'
-  LastUpdated: Apr 09, 2026
+  Version: '0.1.1'
+  LastUpdated: Apr 14, 2026
 Product:
   Name: Cisco ISE Administrator
 Normalization:
@@ -17,7 +17,7 @@ References:
 Description: |
   This ASIM parser supports normalizing Cisco ISE administrator login events ingested into Microsoft Sentinel by the AMA agent to the ASIM Authentication schema.
 ParserName: vimAuthenticationCiscoISEAdministrator
-EquivalentBuiltInParser: _vim_Authentication_CiscoISEAdministrator
+EquivalentBuiltInParser: _Im_Authentication_CiscoISEAdministrator
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -69,7 +69,6 @@ ParserQuery: |
   | where (isnull(starttime) or TimeGenerated >= starttime)
       and (isnull(endtime) or TimeGenerated <= endtime)
       and (array_length(targetappname_has_any) == 0) // No Target app name
-      and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(HostIP, srcipaddr_has_any_prefix))
       and (array_length(srchostname_has_any) == 0 or HostName has_any (srchostname_has_any))
       and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
   | where SyslogMessage has "Administrator-Login"
@@ -81,11 +80,10 @@ ParserQuery: |
       EventCount = int(1),
       EventStartTime = EventTime,
       EventEndTime = EventTime,
-      EventSeverity = "Informational",
       EventType = "Logon",
       Type = "Syslog"
   | project-rename
-      SrcIpAddr = HostIP,
+      TargetIpAddr = HostIP,
       SrcDvcId = HostName
   | extend
       SrcDvcIdType = "Other"
@@ -100,6 +98,7 @@ ParserQuery: |
       ), ""),
       TargetUsername = coalesce(AdminName, ""),
       TargetUsernameType = iff(isnotempty(AdminName), "Simple", "")
+  | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(AdminIPAddress, srcipaddr_has_any_prefix))
   | where (array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any)
   | where (eventresult == '*' or eventresult =~ EventResult) and (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
   | extend temp_isMatchTargetUsername = TargetUsername has_any(username_has_any)
@@ -109,9 +108,11 @@ ParserQuery: |
       "No match"
   )
   | project-rename
-      TargetIpAddr = AdminIPAddress,
+      SrcIpAddr = AdminIPAddress,
       EventOriginalResultDetails = OperationMessageText,
-      TargetPortNumber = Port
+      TargetPortNumber = Port,
+      EventOriginalSeverity = SeverityLevel
+  | extend EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity)
   | extend AdditionalFields = iff(pack, bag_pack(
       "AdminInterface", AdminInterface,
       "ConfigVersionId", ConfigVersionId,
@@ -120,7 +121,8 @@ ParserQuery: |
   ), dynamic([]))
   | extend
       IpAddr = SrcIpAddr,
-      Dvc = SrcDvcId
+      Dvc = SrcDvcId,
+      User = TargetUsername
   | project
       TimeGenerated,
       Type,
@@ -132,6 +134,7 @@ ParserQuery: |
       EventStartTime,
       EventEndTime,
       EventSeverity,
+      EventOriginalSeverity,
       EventType,
       SrcIpAddr,
       SrcDvcId,
@@ -146,7 +149,8 @@ ParserQuery: |
       TargetPortNumber,
       AdditionalFields,
       IpAddr,
-      Dvc
+      Dvc,
+      User
   };
   parser(
       starttime=starttime,

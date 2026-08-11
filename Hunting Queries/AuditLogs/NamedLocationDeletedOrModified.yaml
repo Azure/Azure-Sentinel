@@ -1,0 +1,69 @@
+id: ef54a29b-136c-42a3-9d37-49fd67e2598b
+name: Entra ID named location deleted or modified
+description: Identifies deletions or modifications to named locations in Entra ID, which may indicate an attacker weakening Conditional Access enforcement by removing trusted network definitions.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+query: |
+  let timeframe = 14d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "Policy"
+  | where OperationName in~ (
+        "Add named location",
+        "Update named location",
+        "Delete named location"
+    )
+  | where Result =~ "success"
+  | extend LocationName = tostring(TargetResources[0].displayName)
+  | extend LocationId   = tostring(TargetResources[0].id)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend AccountName      = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      OperationName,
+      LocationName,
+      LocationId,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

@@ -1,0 +1,52 @@
+id: 2d38986b-3068-4f43-9841-b4f82268c14f
+name: Kubernetes daemonset or cronjob by non-automation identity
+description: |
+  Hunts for daemonset or cronjob creation performed by identities outside the approved automation allowlist.
+description-detailed: |
+  This hunt identifies potential persistence activity in Kubernetes by focusing on daemonset and cronjob creation events from non-automation principals. Tune the allowlist to include only approved CI and maintenance identities.
+requiredDataConnectors:
+  - connectorId: AzureMonitor
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1053
+  - T1078
+tags:
+  - Kubernetes
+  - DaemonSet
+  - CronJob
+  - Persistence
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let AllowedAutomationPrincipals = dynamic(["ci-pipeline-sp", "aks-maintenance-mi", "github-actions-mi", "ado-release-sp"]);
+  AzureDiagnostics
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where Category has "kube-audit"
+  | where OperationName has_any ("daemonsets/create", "cronjobs/create")
+  | where isnotempty(Caller_s)
+  | extend CallerNorm = tolower(Caller_s)
+  | where CallerNorm !in (AllowedAutomationPrincipals)
+  | summarize
+      EventCount = count(),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      Operations = make_set(OperationName, 10),
+      Resources = make_set(Resource, 20)
+      by Caller = CallerNorm, ResourceId
+  | extend TimeGenerated = FirstSeen
+  | project TimeGenerated, Caller, ResourceId, EventCount, FirstSeen, LastSeen, Operations, Resources
+  | order by LastSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Caller
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.0

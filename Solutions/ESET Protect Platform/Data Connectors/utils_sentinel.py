@@ -1,13 +1,15 @@
+import asyncio
 import logging
 import typing as t
 from datetime import datetime, timedelta, timezone
 
+from aiohttp import ClientSession
 from azure.core.exceptions import HttpResponseError, ServiceRequestError
 from azure.data.tables import TableServiceClient
 from azure.identity.aio import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
 from cryptography.fernet import Fernet, InvalidToken
-from integration.models import TokenStorage
+from integration.models import DataSource, TokenStorage
 from integration.utils import LastDataTimeHandler, RequestSender, TokenProvider, TransformerData
 
 from models_sentinel import EnvVariablesSentinel
@@ -111,7 +113,11 @@ class TransformerDataSentinel(TransformerData):
         super().__init__(env_vars)
 
     async def _send_data_to_destination(
-        self, validated_data: t.List[dict[str, t.Any]], last_data: str | None, endp: str = ""
+        self,
+        validated_data: t.List[dict[str, t.Any]],
+        last_data: str | None,
+        endp: str = "",
+        *args: t.Any
     ) -> tuple[str | None, bool]:
         assert isinstance(self.env_vars, EnvVariablesSentinel)
         credential = DefaultAzureCredential()  # Env vars: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
@@ -125,10 +131,10 @@ class TransformerDataSentinel(TransformerData):
                 await client.upload(
                     rule_id=self.env_vars.dcr_immutableid,
                     stream_name=steam_name,
-                    logs=validated_data,
+                    logs=validated_data,  # type: ignore[arg-type]
                 )
-                time_key = "createTime" if "incidents" in endp else "occurTime"
-                last_data = max(validated_data, key=lambda data: data.get(time_key) or "").get(time_key)
+                if "incidents" in endp:
+                    last_data = max(validated_data, key=lambda data: data.get("createTime") or "").get("createTime")
                 successful_data_upload = True
             except ServiceRequestError as e:
                 logging.error(f"Authentication to Azure service failed: {e}")
@@ -140,24 +146,35 @@ class TransformerDataSentinel(TransformerData):
 
 
 class LastDataTimeHandlerSentinel(LastDataTimeHandler):
-    def __init__(self, data_source: str, interval: int, storage_table_conn_str: str) -> None:
-        self.storage_table_name = f"LastDetectionTime{data_source}"
+    def __init__(self, data_source: DataSource, interval: int, storage_table_conn_str: str) -> None:
+        self.storage_table_name = f"LastData{data_source.name.replace('_', '')}"
         self.storage_table_handler = StorageTableHandler(storage_table_conn_str, self.storage_table_name)
         self.storage_table_handler.set_entity()
         super().__init__(data_source, interval)
 
-    def get_last_data_time(self, data_source: t.Optional[str] = None, interval: int = 5) -> t.Any:
-        if self.storage_table_handler.entities:
-            return self.storage_table_handler.entities.get(self.storage_table_name)
-        return (datetime.now(timezone.utc) - timedelta(seconds=10 * interval * 60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    def get_last_data_time(self, data_source: t.Optional[DataSource] = None, interval: int = 5) -> t.Any:
 
-    async def update_last_data_time(self, cur_ld_time: str | None, data_source: str = "") -> None:
-        if cur_ld_time and cur_ld_time != self.last_data_time:
-            self.storage_table_handler.input_entity(
-                new_entity=self.get_entity_schema(cur_ld_time)  # type: ignore[call-arg]
+        if data_source == DataSource.INCIDENTS and not self.storage_table_handler.entities:
+            return (datetime.now(timezone.utc) - timedelta(minutes=10 * interval)).strftime("%Y-%m-%dT%H:%M:%SZ"), ""
+        elif self.storage_table_handler.entities:
+            return (
+                self.storage_table_handler.entities.get(self.storage_table_name),
+                self.storage_table_handler.entities.get(f"{self.storage_table_name}NPT", ""),
             )
+        return "", ""
 
-    def get_entity_schema(self, cur_last_data_time: str) -> dict[str, t.Any]:
-        return {
-            self.storage_table_name: self.prepare_date_plus_timedelta(cur_last_data_time),
-        }
+    async def update_last_data_time(
+        self, cur_ld_time: t.Optional[str], next_page_token: t.Optional[str], data_source: DataSource
+    ) -> None:
+        if data_source == DataSource.INCIDENTS:
+            if cur_ld_time and cur_ld_time != self.last_data_time:
+                self.storage_table_handler.input_entity(
+                    {self.storage_table_name: self.prepare_date_plus_timedelta(cur_ld_time)}  # type: ignore[call-arg]
+                )
+        else:
+            if next_page_token and next_page_token != self.next_page_token:
+                self.storage_table_handler.input_entity({f"{self.storage_table_name}NPT": next_page_token})  # type: ignore[call-arg]
+            elif cur_ld_time and cur_ld_time != self.last_data_time:
+                self.storage_table_handler.input_entity(
+                    {self.storage_table_name: cur_ld_time, f"{self.storage_table_name}NPT": next_page_token}  # type: ignore[call-arg]
+                )

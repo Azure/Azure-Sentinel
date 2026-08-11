@@ -19,11 +19,12 @@ relevantTechniques:
 query: |
   SlackAudit
   | where DvcAction =~ 'file_downloaded'
-  | extend fe = split(EntityFileName, '.')
-  | where array_length(fe) > 2
-  | where fe[1] matches regex @"\D+"
-  | where strlen(fe[1]) < 5
-  | project EntityFileName, SrcUserName
+  | extend FileName = tostring(EntityFileName)
+  | extend fe = split(FileName, '.')
+  | extend FileExtension = iff(array_length(fe) > 1, tostring(fe[-1]), '')
+  | where FileName contains '.'
+  | where FileExtension matches regex @"^[A-Za-z]{1,4}$"
+  | project EntityFileName = FileName, SrcUserName
   | extend AccountCustomEntity = SrcUserName
   | extend FileCustomEntity = EntityFileName
 entityMappings:
@@ -35,5 +36,12 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: FileCustomEntity
-version: 1.0.0
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Suspicious Slack file downloaded by {{SrcUserName}}: {{EntityFileName}}'
+  alertDescriptionFormat: A Slack audit file_downloaded event matched the suspicious extension heuristic for {{EntityFileName}}
+    by {{SrcUserName}}.
+customDetails:
+  FileName: EntityFileName
+  UserName: SrcUserName
+version: 1.0.1
 kind: Scheduled

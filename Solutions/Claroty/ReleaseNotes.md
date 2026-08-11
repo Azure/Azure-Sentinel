@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
 | ----------- | ------------------------------ | ---------------------------------------------- |
+| 3.0.5       | 05-05-2026                     | Updated **analytical rule** and **Hunting Queries**.|
 | 3.0.4       | 03-04-2026                     | Fixed typo error in analytical rule            |
 | 3.0.3       | 18-11-2024                     | Removed Deprecated **Data Connectors**         |
 | 3.0.2       | 10-07-2024                     | Deprecated **Data Connector**                  |

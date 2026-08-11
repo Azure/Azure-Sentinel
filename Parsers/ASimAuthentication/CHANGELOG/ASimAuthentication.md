@@ -1,5 +1,29 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.19
+
+- (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication parser.
+
+## Version 0.2.18
+
+- (2026-07-16) Add parser Google Workspace Logins Authentication - [PR #14638](https://github.com/Azure/Azure-Sentinel/pull/14638)
+
+## Version 0.2.17
+
+- (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #14581](https://github.com/Azure/Azure-Sentinel/pull/14581)
+
+## Version 0.2.16
+
+- (2026-06-03) Add pack parameter to updated Salesforce Service Cloud parser - [PR #14215](https://github.com/Azure/Azure-Sentinel/pull/14215)
+
+## Version 0.2.15
+
+- (2026-04-13) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
+
+## Version 0.2.14
+
+- (2026-04-29) Add parser Cisco DNAC events from Syslog - [PR #14135](https://github.com/Azure/Azure-Sentinel/pull/14135)
+
 ## Version 0.2.13
 
 - (2026-04-09) Add parser Cisco ISE administrator events from Syslog by AMA - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
@@ -62,4 +86,3 @@
 ## Version 0.0
 
 - (2021-06-17) First commit - take 2 - [PR #2553](https://github.com/Azure/Azure-Sentinel/pull/2553)
-

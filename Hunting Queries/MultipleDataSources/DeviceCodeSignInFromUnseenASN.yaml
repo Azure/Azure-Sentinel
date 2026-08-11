@@ -1,0 +1,70 @@
+id: 562647c0-5edb-4a47-afa2-fa662efa89bf
+name: Device code authentication from unseen autonomous system
+description: |
+  Identifies successful device code flow sign-ins from autonomous system numbers not
+  seen for the user in the previous 30 days. Consistent with device code phishing:
+  attacker initiates the flow, tricks the target into completing it.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+  - T1078.004
+query: |
+  let timeframe = 1d;
+  let lookback = 30d;
+  let KnownASNPerUser =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(AutonomousSystemNumber)
+      | summarize KnownASNs = make_set(AutonomousSystemNumber, 100) by UserPrincipalName;
+  SigninLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where ResultType == 0
+  | where isnotempty(AutonomousSystemNumber)
+  | where AuthenticationDetails has "deviceCode"
+  | join kind=leftouter KnownASNPerUser on UserPrincipalName
+  | where isnull(KnownASNs) or not(set_has_element(KnownASNs, AutonomousSystemNumber))
+  | extend AccountName      = tostring(split(UserPrincipalName, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | project
+      TimeGenerated,
+      UserPrincipalName,
+      AccountName,
+      AccountUPNSuffix,
+      IPAddress,
+      AutonomousSystemNumber,
+      Location,
+      AppDisplayName,
+      AuthenticationDetails,
+      DeviceDetail,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

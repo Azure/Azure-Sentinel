@@ -1,0 +1,75 @@
+id: ac1efe0f-654e-264e-07be-c1b60e698343
+name: "UniFi Site Manager: Controller Connection State Change"
+description: |
+  Identifies when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change, which may indicate a network outage, power loss, or device failure.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Hosts_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1489
+  - T1071
+subTechniques:
+  - T1071.001
+query: |
+  // UniFi Controller Connection State Change Detection
+  // Only fire when LastConnectionStateChange has changed since the prior 15-min cycle
+  // to avoid 4-5 alerts per actual state change (rule runs every 15m, change visible for 1h).
+  let prev = Unifi_SiteManager_Hosts_CL
+      | where TimeGenerated between (ago(30m) .. ago(15m))
+      | summarize arg_max(TimeGenerated, *) by Id
+      | project id_s = Id, prevChange = todatetime(LastConnectionStateChange);
+  Unifi_SiteManager_Hosts_CL
+  | where TimeGenerated > ago(15m)
+  | where isnotempty(LastConnectionStateChange)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | extend
+      ConnectionChange = todatetime(LastConnectionStateChange),
+      id_s = Id
+  | join kind=leftouter prev on id_s
+  | where ConnectionChange != prevChange or isnull(prevChange)
+  | where ConnectionChange > ago(30m)
+  | extend
+      HostTypeDisplay = case(
+          HostType == "ucore", "UniFi OS Console",
+          HostType == "uck", "Cloud Key",
+          HostType == "uckp", "Cloud Key+",
+          HostType == "udm", "Dream Machine",
+          HostType == "udmpro", "Dream Machine Pro",
+          HostType == "udmse", "Dream Machine SE",
+          HostType == "self-hosted", "Self-Hosted",
+          HostType
+      )
+  | project
+      TimeGenerated,
+      ConnectionChangeTime = ConnectionChange,
+      PreviousChangeTime = prevChange,
+      HostId = Id,
+      HostType = HostType,
+      HostTypeDisplay,
+      IPAddress = IpAddress,
+      IsBlocked = IsBlocked,
+      IsOwner = Owner
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.1

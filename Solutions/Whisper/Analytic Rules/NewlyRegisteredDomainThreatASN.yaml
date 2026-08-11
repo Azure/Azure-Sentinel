@@ -1,0 +1,67 @@
+id: 4f80ee8e-901f-538a-8603-cc4b49e80164
+name: Whisper Security - Newly Registered Domain on Threat ASN
+description: |
+  Identifies newly registered domains (under 7 days old) hosted on autonomous systems with elevated threat scores. This combination often indicates adversary infrastructure staging for phishing, malware delivery, or C2 operations.
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperASNReputation_CL
+  - WhisperInfraContext_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583
+query: |
+  // MITRE ATT&CK: T1583.001 - Acquire Infrastructure: Domains
+  // Tactic: Resource Development
+  // Correlates newly registered domains with high-threat ASN reputation data
+  let maxDomainAgeDays = 7;
+  let asnThreatThreshold = 50;
+  // Defensive: WhisperInfraChainPipeline currently emits domainAge=-1 as a
+  // sentinel when the create date is unknown (tracked bug - proper fix needs
+  // CALL whisper.history() integration). Filter the sentinel out so the rule
+  // does not fire on every domain with an ASN.
+  let newDomains = WhisperInfraContext_CL
+      | where TimeGenerated > ago(1d)
+      | where domainAge >= 0 and domainAge < maxDomainAgeDays
+      | where isnotempty(asns)
+      | extend parsedAsn = tostring(split(asns, ",")[0])
+      | extend parsedIp = tostring(split(ipAddresses, ",")[0])
+      | project TimeGenerated, indicator, domainAge, parsedAsn, parsedIp, registrar, countries;
+  let threatAsns = WhisperASNReputation_CL
+      | where TimeGenerated > ago(1d)
+      | where maxThreatScore > asnThreatThreshold
+      | project asn, asnName, reputationScore, reputationLevel, maxThreatScore;
+  newDomains
+      | join kind=inner (threatAsns) on $left.parsedAsn == $right.asn
+      | extend DnsDomain = indicator, IPAddress = parsedIp
+      | project TimeGenerated, DnsDomain, IPAddress, domainAge, registrar, countries, asn, asnName, reputationScore, reputationLevel, maxThreatScore
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: DnsDomain
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+customDetails:
+  DomainAgeDays: domainAge
+  ASNName: asnName
+  ReputationScore: reputationScore
+  MaxThreatScore: maxThreatScore
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

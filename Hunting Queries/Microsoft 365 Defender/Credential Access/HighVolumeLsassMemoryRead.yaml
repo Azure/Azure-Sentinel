@@ -1,0 +1,149 @@
+id: 2a7ce5d7-e478-404a-a0e3-fde6e96c92f1
+name: High volume LSASS memory read
+description: |
+  This query identifies processes extracting an abnormally large volume of memory (>40MB) from LSASS. By focusing on physical bytes copied rather than process names, it detects credential dumping even if the malicious process runs with SYSTEM privileges.
+description-detailed: |
+  To extract plaintext credentials or NTLM hashes, tools must parse the LSASS heap, which requires reading megabytes of continuous memory. Legitimate security tools (like DLP or AV) typically perform small, targeted reads.
+  This rule is highly resilient because it tracks the physical bytes copied at the kernel callback level, making it agnostic to the executing context. It will clearly detect anomalies EVEN IF the malicious process successfully elevates to SYSTEM privilege, or if it uses Handle Hijacking (DuplicateHandle) to bypass OpenProcess monitoring.
+  False Positives Avoided: It utilizes cryptographic whitelisting to filter out legitimate heavy-readers (e.g., Task Manager, Windows Backup, EDR agents).
+  References:
+  https://thedfirreport.com/2026/02/23/apache-activemq-exploit-leads-to-lockbit-ransomware
+  https://medium.com/@bharathbandari/detect-credential-dumping-signals-lsass-access-suspicious-tools-1f3ae9d4fa0d
+  https://troopers.de/downloads/troopers22/TR22_LiftingTheVeilALookAtMDE.pdf
+
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+      - DeviceFileCertificateInfo
+
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003.001
+query: |
+  // DETECTION STRATEGY:
+  // Identify credential dumping by measuring the physical volume of memory extracted from the LSASS process.
+  //
+  // THE MECHANIC:
+  // To extract plaintext credentials, NTLM hashes, or Kerberos tickets, an attacker's tool (like Mimikatz, 
+  // Procdump, or a custom BYOVD (Bring Your Own Vulnerable Driver)) must parse the LSASS heap. This requires reading megabytes of continuous 
+  // memory from the process using the ReadProcessMemory API. 
+  //
+  // THE RESILIENCE:
+  // This detection is highly resilient because it ignores "Who" is doing the dumping and focuses on "What" 
+  // is happening. It completely bypasses common evasions like privilege escalation (running as SYSTEM) or 
+  // Handle Hijacking (duplicating an EDR's existing handle via DuplicateHandle), because the physical 
+  // memory extraction itself is still tracked by the kernel callbacks fueling MDE.
+  
+  // Define the extraction threshold.
+  // Why: A malicious dump needs the full credential tables. Legitimate API inspections (like DLP or AV) 
+  // rarely copy continuous megabytes of data. 40MB (41943040 bytes) safely captures full process dumps.
+  let bytesThreshold = 41943040; 
+  
+  // Define the explicitly trusted tools for cryptographically-backed whitelisting.
+  // Why: Relying on ProcessName alone is unsafe, as attackers rename malware to "taskmgr.exe". 
+  // We bind the expected name to the verified digital signer.
+  // Note: Internal tools like procdump.exe are often used by attackers. Whitelist with caution.
+  let allowedProcesses = datatable(ProcessNameLower:string, SignerNameLower:string)[
+      // Tier 1: Built-in Windows Administration Tools
+      "taskmgr.exe", "microsoft windows",
+      "procdump.exe", "microsoft corporation",
+      // Tier 2: Enterprise Backup and Security Agents
+      "mssense.exe", "microsoft windows publisher",
+      "wbengine.exe", "microsoft windows" 
+  ];
+  
+  // Define the deduplicated Certificate dataset.
+  // Note: We use a 14-day lookback here specifically for the join to ensure we find the certificate 
+  // even if the file was dropped/loaded days before the memory dump occurred.
+  let certInfo = DeviceFileCertificateInfo
+      | where Timestamp >= ago(14d)
+      | where isnotempty(SHA1) and isnotempty(Signer)
+      | summarize Signer = take_any(Signer) by SHA1;
+  
+  // Base Query: Look for explicit memory reads against LSASS in MDE telemetry.
+  DeviceEvents
+  // STEP 1: Filter aggressively using string indexes before any heavy transformations.
+  | where ActionType =~ "ReadProcessMemoryApiCall"
+  | where isnotempty(AdditionalFields)
+  | where FileName =~ "lsass.exe" or AdditionalFields has "lsass.exe"
+  
+  // STEP 2: Execute expensive JSON parsing ONLY on the heavily reduced dataset.
+  | extend TotalBytesCopied = tolong(parse_json(tostring(AdditionalFields)).TotalBytesCopied)
+  | where TotalBytesCopied >= bytesThreshold
+  
+  // STEP 3: Cryptographic Whitelisting (The Join).
+  // Left side (DeviceEvents) is extremely small here, making the join highly efficient.
+  | join kind=leftouter (certInfo) on $left.InitiatingProcessSHA1 == $right.SHA1
+  | extend ProcessNameLower = tolower(InitiatingProcessFileName)
+  | extend SignerNameLower = tolower(Signer)
+  | join kind=leftanti (allowedProcesses) on ProcessNameLower, SignerNameLower
+  
+  // EXCLUSION:
+  // Filter out poorly behaved legitimate software by ensuring the binary's internal version metadata 
+  // or cryptographic signer does not belong to a trusted internal tool.
+  // Never whitelist purely by filename. Use FolderPath or Verified Signer.
+  // | where SignerLower !has "your internal company ca"
+  // | where InitiatingProcessFolderPath !has @"\Program Files\Your Approved Security Tool\"
+  
+  // STEP 4: Output Engineering & Schema Alignment.
+  // Explicitly cast mapped entities to strings to guarantee type-safety for the Sentinel schema.
+  | extend HostName = tostring(DeviceName)
+  | extend AccountName = tostring(InitiatingProcessAccountName)
+  | extend InitiatingProcessAccountDomain = tostring(InitiatingProcessAccountDomain)
+  | extend ProcessIdString = tostring(InitiatingProcessId)
+  | extend VerifiedSigner = tostring(Signer)
+  
+  // STEP 5: Format the output for triage.
+  // ANALYST ACTION: Review 'DumpingProcessPath' and 'VerifiedSigner'. If the execution path is a user profile 
+  // directory (\AppData\, \Downloads\, \Temp\) and the VerifiedSigner is empty or anomalous, assume immediate 
+  // compromise. The 'TotalBytesCopied' confirms credentials have been staged in memory.
+  | project Timestamp, 
+            HostName, 
+            AccountName, 
+            InitiatingProcessAccountDomain,
+            DumpingProcess = InitiatingProcessFileName, 
+            VerifiedSigner, 
+            DumpingProcessPath = InitiatingProcessFolderPath, 
+            InitiatingProcessCommandLine, 
+            ProcessIdString, 
+            TotalBytesCopied, 
+            ActionType, 
+            TargetProcess = FileName
+  | project-reorder Timestamp, HostName, AccountName, DumpingProcess, VerifiedSigner, InitiatingProcessCommandLine, TotalBytesCopied, ActionType, TargetProcess, DumpingProcessPath, InitiatingProcessAccountDomain, ProcessIdString
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdString
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+
+customDetails:
+  Dumping_Process: DumpingProcess
+  Execution_Path: DumpingProcessPath
+  Total_Bytes_Read: TotalBytesCopied
+  Verified_Signer: VerifiedSigner
+
+version: 1.0.0
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]

@@ -1,3 +1,5 @@
+require "logstash/json"
+
   # This code is from a PR for the official repo of ruby-stud
   # with a small change to calculating the event size in the var_size function
   # https://github.com/jordansissel/ruby-stud/pull/19
@@ -279,9 +281,9 @@
 
     private
     def var_size(var)
-        # Calculate event size as a json. 
-        # assuming event is a hash
-       return var.to_json.bytesize + 2
+      # Calculate event size as JSON.
+      # assuming event is a hash
+       return LogStash::Json.dump(var).bytesize + 2
     end
 
     protected

@@ -1,0 +1,61 @@
+id: 8d3b9c7e-5a2f-4e1d-b6c8-3f9a7e2d1b4c
+name: Check Point Exposure Management - Alert Ingestion Anomaly
+description: |
+  Detects when no Check Point Exposure Management alerts have been ingested into the argsentdc_CL table
+  for an extended period. This may indicate a failure in the CCP data connector or the
+  Importer playbook, a misconfigured API token, or network connectivity issues.
+severity: Medium
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+requiredDataConnectors:
+  - connectorId: CheckPointCyberintAlerts
+    dataTypes:
+      - argsentdc_CL
+query: |
+  let lookback = 24h;
+  let expected_interval = 1h;
+  let last_record = toscalar(
+      argsentdc_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize max(TimeGenerated)
+  );
+  let gap_minutes = datetime_diff('minute', now(), last_record);
+  // Alert if no records in the last expected_interval, but there WERE records in the lookback period
+  // (avoids alerting on brand-new deployments with no data yet)
+  argsentdc_CL
+  | where TimeGenerated > ago(lookback)
+  | summarize
+      LastIngestionTime = max(TimeGenerated),
+      TotalRecords = count(),
+      DistinctAlerts = dcount(ref_id)
+  | where LastIngestionTime < ago(expected_interval)
+  | extend GapMinutes = datetime_diff('minute', now(), LastIngestionTime)
+  | project
+      LastIngestionTime,
+      GapMinutes,
+      TotalRecords,
+      DistinctAlerts,
+      Message = strcat("No Check Point Exposure Management alerts ingested for ", GapMinutes, " minutes. Last record at ", LastIngestionTime)
+suppressionEnabled: false
+suppressionDuration: 5h
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 24h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDescriptionFormat: '{{Message}}'
+  alertDisplayNameFormat: 'Check Point Exposure Management - Ingestion gap detected ({{GapMinutes}} minutes)'
+version: 1.0.0
+kind: Scheduled

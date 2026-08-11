@@ -1,0 +1,208 @@
+{
+  "name": "MulesoftCloudhubPushConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "MulesoftCloudhubPushConnector",
+      "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
+      "graphQueriesTableName": "MuleSoftCloudhubLogs",
+      "graphQueries": [
+        {
+          "metricName": "Total logs received",
+          "legend": "MuleSoft CloudHub Logs",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "Error logs",
+          "legend": "Errors",
+          "baseQuery": "{{graphQueriesTableName}} | where Level == 'ERROR' or Level == 'FATAL'"
+        },
+        {
+          "metricName": "Warning logs",
+          "legend": "Warnings",
+          "baseQuery": "{{graphQueriesTableName}} | where Level == 'WARN' or Level == 'WARNING'"
+        },
+        {
+          "metricName": "Exception logs",
+          "legend": "Exceptions",
+          "baseQuery": "{{graphQueriesTableName}} | where isnotempty(Exception)"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Summarize by log level",
+          "query": "{{graphQueriesTableName}}\n| summarize count() by Level"
+        },
+        {
+          "description": "Summarize by application",
+          "query": "{{graphQueriesTableName}}\n| summarize count() by ApplicationDomainName"
+        },
+        {
+          "description": "Summarize by logger",
+          "query": "{{graphQueriesTableName}}\n| summarize count() by Logger"
+        },
+        {
+          "description": "Summarize by worker",
+          "query": "{{graphQueriesTableName}}\n| summarize count() by WorkerId"
+        },
+        {
+          "description": "Get sample of 20 recent logs",
+          "query": "{{graphQueriesTableName}}\n| take 20"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "MuleSoftCloudhubLogs",
+          "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": false,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft.Insights/dataCollectionEndpoints",
+            "description": "Data Collection Endpoint is required for the modern push connector to receive data from the external security system."
+          },
+          {
+            "name": "Microsoft.Insights/dataCollectionRules",
+            "description": "Data Collection Rule is required to define the schema and transformations for incoming data."
+          },
+          {
+            "name": "Microsoft.Authorization/roleAssignments",
+            "description": "Role assignment is required to grant the Entra application permissions to send data to the Data Collection Rule."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "TenantId"
+                ],
+                "label": "Tenant ID (Directory ID)",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "label": "Entra App Registration Application ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "label": "Entra App Registration Secret",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "label": "Data Collection Endpoint Url",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "label": "Data Collection Rule Immutable ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [],
+                "label": "Stream Name (MuleSoftCloudhubLogs)",
+                "value": "Custom-MuleSoftCloudhubLogs_CL"
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Keep these values secure. You will need them to configure your external security system.",
+                "visible": true,
+                "inline": true
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure your external system to push logs",
+          "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"          
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,146 @@
+id: 944d0ab5-b654-47f9-a398-2e77a0b7906e
+name: "[Entra ID] Domain Federation Trust Settings Modified"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects changes to domain federation trust settings or domain authentication mode. These changes can be used to redirect sign-in trust and should be reviewed immediately.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1555
+  - T1098
+query: |
+  (union isfuzzy=true
+      (
+      AuditLogs
+      | where OperationName =~ "Set federation settings on domain"
+      //| where Result =~ "success"   // commenting out, as it may be interesting to capture failed attempts
+      | mv-expand TargetResources
+      | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
+      | mv-expand modifiedProperties
+      | extend targetDisplayName = tostring(parse_json(modifiedProperties).displayName)
+      ),
+      (
+      AuditLogs
+      | where OperationName =~ "Set domain authentication"
+      //| where Result =~ "success"   // commenting out, as it may be interesting to capture failed attempts
+      | mv-expand TargetResources
+      | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
+      | mv-expand modifiedProperties
+      | mv-apply Property = modifiedProperties on
+          (
+          where Property.displayName =~ "LiveType"
+          | extend
+              targetDisplayName = tostring(Property.displayName),
+              NewDomainValue = tostring(Property.newValue)
+          )
+      | where NewDomainValue has "Federated"
+      )
+  )
+  | mv-apply AdditionalDetail = AdditionalDetails on
+      (
+      where AdditionalDetail.key =~ "User-Agent"
+      | extend UserAgent = tostring(AdditionalDetail.value)
+      )
+  | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.displayName)
+  | extend
+      InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]),
+      InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | extend Source_Network_IPLocation = ""
+  | project
+      Alert_Time_TW = datetime_utc_to_local(TimeGenerated, 'Asia/Taipei'),
+      Alert_Time_UTC0 = TimeGenerated,
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Config Modification",
+      Alert_Name_en = "Domain Federation Trust Settings Modified",
+      Alert_Description_en=strcat(
+                           "At Taiwan time: ",
+                           format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                           " in Entra ID:  ",
+                           "",
+                           ", detected that Entra ID domain authentication was set to Federated",
+                           " operation action: ",
+                           iff(isnotempty(OperationName), OperationName, "<NoOperationName>"),
+                           ", changed property: ",
+                           iff(isnotempty(targetDisplayName), targetDisplayName, "<NoProperty>"),
+                           ", operator/application: ",
+                           iff(isnotempty(InitiatingUserOrApp), InitiatingUserOrApp, "<NoInitiator>"),
+                           ", source IP: ",
+                           iff(isnotempty(InitiatingIpAddress), InitiatingIpAddress, "<NoIP>"),
+                           ", location: ",
+                           iff(isnotempty(Source_Network_IPLocation), Source_Network_IPLocation, "<NoLocation>"),
+                           ", User-Agent:",
+                           iff(isnotempty(UserAgent), UserAgent, "<NoUserAgent>"),
+                           "This is a high-risk domain-level change that may allow the entire tenant identity to be taken over by external federation."
+                       ),
+      Alert_TriageStep_en=strcat(
+                          "1. Confirm whether the change was authorized. Operation action: ",
+                          iff(isnotempty(OperationName), OperationName, "<NoOperationName>"),
+                          ", operator: ",
+                          iff(isnotempty(InitiatingUserOrApp), InitiatingUserOrApp, "<NoInitiator>"),
+                          "  has formal approval.",
+                          "2. Check source risk. Source IP: ",
+                          iff(isnotempty(InitiatingIpAddress), InitiatingIpAddress, "<NoIP>"),
+                          ", location: ",
+                          iff(isnotempty(Source_Network_IPLocation), Source_Network_IPLocation, "<NoLocation>"),
+                          "  is a company named location or an abnormal country.",
+                          "3. Check the operation tool User-Agent: ",
+                          iff(isnotempty(UserAgent), UserAgent, "<NoUserAgent>"),
+                          "  to determine whether it is an expected management entry point (Portal/PowerShell/Graph) or a suspicious script.",
+                          "4. Immediately inventory the impact scope: confirm which domains were set to Federated and whether all user sign-in flows are affected."
+                      ),
+      Alert_Containment_en=strcat(
+                           "1. If determined to be an unauthorized change, immediately change the affected domain authentication method back to Managed and remove any unauthorized Federation settings. ",
+                           "2. Immediately revoke the operator's sign-in tokens and administrative permissions, and reset the password and re-register MFA if necessary. ",
+                           "3. Block the source IP immediately or restrict management-plane access to prevent continued change attempts. ",
+                           "4. Initiate tenant emergency response: check whether any accounts have successfully signed in through the Federated domain and performed administrative operations."
+                       ),
+      Alert_Remediation_en=strcat(
+                           "1. Strengthen domain-level governance: limit the role scope that can execute Set federation / Set domain authentication, and enforce two-person review. ",
+                           "2. Strengthen Conditional Access: allow management-plane operations only from named locations, compliant devices, and MFA, and directly block abnormal countries or new User-Agents. ",
+                           "3. Automated detection and response: establish SOAR for related events (notification, account suspension, source IP blocking). ",
+                           "4. Regularly audit domain and federation settings: inventory all domain authentication modes and remove unnecessary or unused Federation and trust relationships."
+                       ),
+              //Event_Code = AliveTime,
+      Event_Action = OperationName,
+      //Event_Description = Role ,
+      Event_TimeRange_Start_TW = datetime_utc_to_local(TimeGenerated, 'Asia/Taipei'),
+      Event_TimeRange_End_TW = datetime_utc_to_local(TimeGenerated, 'Asia/Taipei'),
+      Source_Identity_FullName = InitiatingUserOrApp,
+      Source_Identity_Type = iff(isnotempty(InitiatingUserPrincipalName), "User", "Service"),
+      Source_Network_IPAddress = InitiatingIpAddress,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Source_Identity_DomainType = iff(InitiatingUserPrincipalName contains "EXT", 'External', 'Internal'),
+      Source_Resource_Name = UserAgent,
+      Target_Identity_ID = targetDisplayName,
+      //Target_Identity_Type = "Service",
+      Target_Resource_ID = "",
+      Target_Resource_Name = "Microsoft Entra ID",
+      Target_Resource_Type = "Microsoft Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+

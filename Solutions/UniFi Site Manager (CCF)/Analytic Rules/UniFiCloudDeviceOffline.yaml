@@ -1,0 +1,66 @@
+id: f3fa4f3f-c8db-ae35-ee06-04de2dfac511
+name: "UniFi Site Manager: Device Offline"
+description: |
+  Identifies when a UniFi device transitions to offline status, which may indicate a network outage, power loss, or hardware failure requiring attention.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Devices_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+subTechniques: []
+query: |
+  // UniFi Device Offline Detection
+  Unifi_SiteManager_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where Status == "offline"
+  | extend OfflineMinutes = datetime_diff('minute', now(), TimeGenerated)
+  | where OfflineMinutes >= 10
+  | extend
+      DeviceName = coalesce(Name, "Unnamed"),
+      DeviceId = Id,
+      Model = Model,
+      IPAddress = Ip,
+      MACAddress = Mac,
+      ProductLine = ProductLine,
+      FirmwareVersion = Version
+  | extend HostName = DeviceName
+  | project
+      TimeGenerated,
+      DeviceName,
+      DeviceId,
+      Model,
+      IPAddress,
+      MACAddress,
+      ProductLine,
+      Status = Status,
+      OfflineMinutes,
+      FirmwareVersion,
+      HostName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

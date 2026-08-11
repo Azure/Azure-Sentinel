@@ -21,6 +21,11 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
                 },
                 new ParserConfiguration()
                 {
+                    Schema= "ASimAgentEvent",
+                    SampleFunctionName= "_Im_AgentEvent",
+                },
+                new ParserConfiguration()
+                {
                     Schema= "ASimAssetEntity",
                     SampleFunctionName= "_Im_AssetEntity",
                 },

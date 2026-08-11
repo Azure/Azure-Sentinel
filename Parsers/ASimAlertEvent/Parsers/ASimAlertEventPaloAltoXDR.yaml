@@ -1,0 +1,214 @@
+Parser:
+  Title: Alert Event ASIM parser for Palo Alto XDR
+  Version: '0.1.0'
+  LastUpdated: Jun 04, 2026
+Product:
+  Name: Palo Alto XDR
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the Palo Alto XDR logs (via Codeless Connector Framework) to the ASIM Alert normalized schema.
+ParserName: ASimAlertEventPaloAltoXDR
+EquivalentBuiltInParser: _ASim_AlertEvent_PaloAltoXDR
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+    let PaloXDRParser = (
+        disabled: bool=false,
+        pack: bool=false
+    )
+    {
+        PaloAltoCortexXDR_Alerts_CL
+        | where not(disabled)
+        | where Source startswith 'XDR Analytics' //filter out custom IOCs
+        | where AgentOSType != 'NO_HOST' //filter out firewall detections
+        | project-rename
+            EventUid = _ItemId,
+            EventOriginalUid = ExternalId,
+            EventProductVersion = AgentVersion,
+            AlertName = Name,
+            AlertDescription = Description,
+            ThreatId = MatchingServiceRuleId,
+            ThreatFirstReportedTime = DetectionTimestamp,
+            ThreatLastReportedTime = LocalInsert,
+            Username = UserName,
+            DvcIpAddr = HostIp,
+            DvcHostname = HostName,
+            EventOriginalSeverity = Severity,
+            DvcId = EndpointId,
+            DvcOs = AgentOSType,
+            DvcAction = ActionPretty,
+            DvcOriginalAction = Action
+        | mv-apply i = split(DvcIpAddr, ',') to typeof(string) on (
+            extend InternalIP = (ipv4_is_private(i))
+            | extend
+                DvcIpAddr = iff(InternalIP == true, i, ''),
+                ExternalIpAddr = iff(InternalIP == false, i, '')
+            | summarize DvcIpAddr = take_anyif(DvcIpAddr, isnotempty(DvcIpAddr)), ExternalIpAddr = take_anyif(ExternalIpAddr, isnotempty(ExternalIpAddr)), AllImpactedIpAddr = make_set_if(DvcIpAddr, isnotempty(DvcIpAddr)) by EventOriginalUid
+        )
+        | extend
+            AlertId = EventOriginalUid,
+            DetectionMethod = 'EDR',
+            ThreatCategory = case(
+                EventType == 'Process Execution' and AlertName has 'user', 'Security Policy Violation',
+                EventType == 'Network Connections' and AlertName has 'Domain', 'MaliciousUrl',
+                'Unknown'
+            ),
+            ThreatIsActive = (DvcAction !startswith 'Prevented'),
+            AttackTactics = replace_regex(tostring(MitreTacticIdAndName), @'(TA\d{4})\s+-\s+([\w\s]+)', @'\2 (\1)'),
+            AttackTechniques = replace_regex(tostring(MitreTechniqueIdAndName), @'(T[\d\.]+)\s+-\s+([\w\s-:]+)', @'\2 (\1)'),
+            User = tostring(split(Username, @'\')[1]),
+            UserType = case(
+                Username has 'SYSTEM', 'System',
+                Username has_any ('LOCAL SERVICE', 'NETWORK SERVICE'), 'Service',
+                isempty(Username), '',
+                'Regular'
+            ),
+            UsernameType = case(
+                Username has @'\', 'Windows',
+                Username has '@', 'UPN',
+                'Simple'
+            ),
+            Url = coalesce(tostring(MaliciousUrls), DstActionExternalHostname),
+            DvcIdType = iff(isnotempty(DvcId), 'Other', '')
+        | project-away
+            MitreTacticIdAndName,
+            MitreTechniqueIdAndName
+        | project-rename
+            ThreatOriginalCategory = EventType
+        | extend
+            ProcessId = tostring(coalesce(OsActorProcessOsPid, ActorProcessOsPid)),
+            ProcessCommandLine = coalesce(ActionProcessImageCommandLine, ActorProcessCommandLine, CausalityActorProcessCommandLine),
+            ProcessName = coalesce(ActionProcessImageName, ActorProcessImageName, CausalityActorProcessImageName),
+            ProcessFileCompany = coalesce(ActionProcessSignatureVendor, ActorProcessSignatureVendor),
+            FileName = coalesce(OsActorProcessImageName, ActionProcessImageName, ActorProcessImageName, CausalityActorProcessImageName),
+            FilePath = coalesce(OsActorProcessImagePath, ActorProcessImagePath, CausalityActorProcessImagePath),
+            FileSHA256 = coalesce(OsActorProcessImageSha256, ActorProcessImageSha256, CausalityActorProcessImageSha256),
+            FileMD5 = coalesce(ActorProcessImageMd5, CausalityActorProcessImageMd5)
+        | extend //Common Fields
+            EventCount = toint(1),
+            EventStartTime = ThreatFirstReportedTime,
+            EventEndTime = ThreatLastReportedTime,
+            EventType = 'Alert',
+            EventSubType = 'Threat',
+            EventMessage = AlertDescription,
+            IpAddr = DvcIpAddr,
+            Hostname = DvcHostname,
+            Dvc = DvcHostname,
+            EventSchema = 'AlertEvent',
+            EventSchemaVersion = '0.1',
+            EventSeverity = case(
+                EventOriginalSeverity == 'high', 'High',
+                EventOriginalSeverity == 'medium', 'Medium',
+                EventOriginalSeverity == 'low', 'Low',
+                'Informational'
+                ),
+            EventProduct = 'Cortex XDR',
+            EventVendor = 'Palo Alto'
+        | extend AdditionalFields = iff (
+            pack,
+            bag_pack(
+                'MatchingStatus', MatchingStatus,
+                'AttemptCounter', AttemptCounter,
+                'Whitelisted', Whitelisted,
+                'Starred', Starred,
+                'Category', Category,
+                'CausalityActorCausalityId', CausalityActorCausalityId,
+                'ActorProcessSignatureStatus', ActorProcessSignatureStatus,
+                'CausalityActorProcessCommandLine', CausalityActorProcessCommandLine,
+                'CausalityActorProcessImageName', CausalityActorProcessImageName,
+                'CausalityActorProcessImagePath', CausalityActorProcessImagePath,
+                'CausalityActorProcessSignatureStatus', CausalityActorProcessSignatureStatus,
+                'ActionCountry', ActionCountry,
+                'ActorProcessImageName', ActorProcessImageName,
+                'ActorProcessCommandLine', ActorProcessCommandLine,
+                'ActionLocalIp', ActionLocalIp,
+                'ActionRemoteIp', ActionRemoteIp,
+                'ActionLocalPort', ActionLocalPort,
+                'ActionRemotePort', ActionRemotePort,
+                'OsActorProcessCommandLine', OsActorProcessCommandLine,
+                'OsActorProcessImageName', OsActorProcessImageName,
+                'OsActorProcessImagePath', OsActorProcessImagePath,
+                'ProcessInstanceId', tostring(coalesce(ActorProcessInstanceId, ActorProcessCausalityId, ActorCausalityId, OsActorProcessCausalityId)),
+                'IdentityType', tostring(coalesce(IdentityType, "")),
+                'FwEmailRecipient', tostring(coalesce(FwEmailRecipient, "")),
+                'FwEmailSender', tostring(coalesce(FwEmailSender, "")),
+                'FwEmailSubject', tostring(coalesce(FwEmailSubject, "")),
+                'DnsQueryName', tostring(coalesce(DnsQueryName, "")),
+                'ExternalIpAddr', tostring(coalesce(columnifexists("ExternalIpAddr", ""), "")),
+                'AllImpactedIpAddr', tostring(coalesce(columnifexists("AllImpactedIpAddr", ""), ""))
+            ),
+            dynamic([])
+        )
+        | project
+            TimeGenerated,
+            Type,
+            EventUid,
+            EventOriginalUid,
+            EventProductVersion,
+            AlertName,
+            AlertDescription,
+            ThreatId,
+            ThreatFirstReportedTime,
+            ThreatLastReportedTime,
+            Username,
+            UsernameType,
+            DvcIpAddr,
+            DvcHostname,
+            EventOriginalSeverity,
+            DvcId,
+            DvcIdType,
+            DvcOs,
+            DvcAction,
+            DvcOriginalAction,
+            Url,
+            AlertId,
+            DetectionMethod,
+            ThreatCategory,
+            ThreatIsActive,
+            AttackTactics,
+            AttackTechniques,
+            User,
+            ThreatOriginalCategory,
+            UserType,
+            ProcessId,
+            ProcessCommandLine,
+            ProcessName,
+            ProcessFileCompany,
+            FileName,
+            FilePath,
+            FileSHA256,
+            FileMD5,
+            EventCount,
+            EventStartTime,
+            EventEndTime,
+            EventType,
+            EventSubType,
+            EventMessage,
+            IpAddr,
+            Hostname,
+            Dvc,
+            EventSchema,
+            EventSchemaVersion,
+            EventSeverity,
+            EventProduct,
+            EventVendor,
+            AdditionalFields
+    };
+    PaloXDRParser(
+        disabled = disabled,
+        pack = pack
+    )

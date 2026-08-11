@@ -77,13 +77,16 @@ query: |
     | extend PreviousLocation = tostring(ExtendedProperties_json.["Previous Location"])
     | extend CurrentIPAddress = tostring(ExtendedProperties_json.["Current IP Address"])
     | extend PreviousIPAddress = tostring(ExtendedProperties_json.["Previous IP Address"])
-    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName, CompromisedEntity
+    | extend Comments = tostring(ExtendedProperties_json.Comments)
+    | extend RiskDetail = extract(@"(?i)risk detail:\s*(.+)$", 1, Comments)
+    | where isempty(RiskDetail) or RiskDetail !contains "admin"
+    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, Comments, PreviousLocation, UserAccount, UserName, CompromisedEntity
     ;
     Alert_UnfamiliarSignInProps
     | join kind=inner Alert_AtypicalTravels on UserAccount
     | where abs(datetime_diff('minute', Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Time)) <= TimeDeltaInMinutes
     | extend TimeDelta = Alert_UnfamiliarSignInProps_Time - Alert_AtypicalTravels_Time
-    | project UserAccount, AadUserId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName
+    | project UserAccount, AadUserId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, Comments, UserName
     | extend UserEmailName = split(UserAccount,'@')[0], UPNSuffix = split(UserAccount,'@')[1]
 entityMappings:
   - entityType: Account
@@ -118,5 +121,5 @@ customDetails:
     PreviousLocation: PreviousLocation
     CurrentIPAddress: CurrentIPAddress
     PreviousIPAddress: PreviousIPAddress
-version: 1.0.8
+version: 1.0.9
 kind: Scheduled
