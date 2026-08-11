@@ -2,6 +2,22 @@
 # Recorded Future Intelligence for Microsoft Sentinel
 
 > [!IMPORTANT]
+> ## Log Ingestion API migration (deadline: 2026-09-14)
+>
+> Six playbooks in this solution used the deprecated Azure Log Analytics Data Collector connector (`azureloganalyticsdatacollector`), which Microsoft is retiring on September 14, 2026.
+>
+> Notable solution changes:
+> - `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, and `RecordedFuture-Sandbox_Outlook_Attachment` have been updated to use the Log Ingestion API instead, which authenticates via managed identity and routes data through a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) rather than a shared workspace key.
+> - Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't allow us to target an existing "v1" table with DCR/DCE without running migration scripts, so new tables were needed): `RecordedFuturePlaybookAlerts_CL` → `RecordedFuturePlaybookAlerts_V2_CL`, `RecordedFuturePortalAlerts_CL` → `RecordedFutureClassicAlerts_V2_CL`, `RecordedFutureThreatMap_CL` → `RecordedFutureThreatMap_V2_CL`, `RecordedFutureThreatMapMalware_CL` → `RecordedFutureThreatMapMalware_V2_CL`, `RecordedFutureSandboxResults_CL` → `RecordedFutureSandboxResults_V2_CL`.
+>
+> **Migration path:**
+> 1. Deploy the Data Connectors infrastructure (DCE, DCRs, Log Analytics tables, and the connector tile) into the same resource group as your Log Analytics Workspace.
+> 2. Deploy the Recorded Future Custom Connector, if not already deployed — it's shared by the playbooks.
+> 3. Redeploy the affected playbook(s) depending on your use case.
+> 4. Redeploy the corresponding Analytic Rules so they query the new `_V2_CL` tables.
+> 5. _Optional_: If you have other logic apps or processes dependent on the old `_CL` tables, update these references to the new `_V2_CL` tables.
+
+> [!IMPORTANT]
 > ## Microsoft Defender Unified Portal Migration - Breaking Changes
 >
 > With Microsoft's transition from the standalone Azure Sentinel Portal to the **unified Microsoft Defender portal**, the following **breaking changes** affect these playbooks:
@@ -11,10 +27,10 @@
 >
 > | Playbook | Previous Behavior | New Behavior (v3.2.20) |
 > |----------|-------------------|---------------------|
-> | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFutureClassicAlerts_CL` log only |
-> | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
-> | **RecordedFuture-Sandbox_StorageAccount** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
-> | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
+> | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFutureClassicAlerts_V2_CL` log only |
+> | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_V2_CL` log only |
+> | **RecordedFuture-Sandbox_StorageAccount** | Created incidents directly | Writes to `RecordedFutureSandboxResults_V2_CL` log only |
+> | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_V2_CL` log only |
 >
 > ## Incident Creation via Analytic Rules
 > Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents. See [Incident Creation](readme.md#incident-creation) for more information.
@@ -259,10 +275,10 @@ There is a general limitation of ***3*** fields in the alert description. More i
 
 |Use Case|Analytic Rule|Custom Log Name|
 |-|-|-|
-|Alerts|RecordedFutureAlerts|RecordedFutureClassicAlerts_CL|
-|Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_CL|
-|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_CL|
-|Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_CL|
+|Alerts|RecordedFutureAlerts|RecordedFutureClassicAlerts_V2_CL|
+|Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_V2_CL|
+|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_V2_CL|
+|Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_V2_CL|
 
 These analytic are available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
 
