@@ -1608,14 +1608,9 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'destinationTable' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
     }
 
-    # 'roleArn' and 'sqsUrls' are only required for role-based (STS AssumeRole) authentication.
-    # When the connector uses key-based authentication (i.e. 'awsAccessKey' is present), they are optional.
-    $hasAwsAccessKey = [bool]($armResource.properties.PSobject.Properties.name -match 'awsAccessKey')
-    $isRoleArnAndSqsRequired = -not $hasAwsAccessKey
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $isRoleArnAndSqsRequired -fileType $fileType -minLength 3 -isCreateArray $false
-
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $isRoleArnAndSqsRequired -fileType $fileType -minLength 3 -isCreateArray $true
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
 
     $hasDataFormat = [bool]($armResource.properties.PSobject.Properties.name -match "dataFormat")
     if ($hasDataFormat) {
