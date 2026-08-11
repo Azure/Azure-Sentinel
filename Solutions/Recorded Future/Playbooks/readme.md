@@ -4,18 +4,7 @@
 > [!IMPORTANT]
 > ## Log Ingestion API migration (deadline: 2026-09-14)
 >
-> Six playbooks in this solution used the deprecated Azure Log Analytics Data Collector connector (`azureloganalyticsdatacollector`), which Microsoft is retiring on September 14, 2026.
->
-> Notable solution changes:
-> - `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, and `RecordedFuture-Sandbox_Outlook_Attachment` have been updated to use the Log Ingestion API instead, which authenticates via managed identity and routes data through a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) rather than a shared workspace key.
-> - Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't allow us to target an existing "v1" table with DCR/DCE without running migration scripts, so new tables were needed): `RecordedFuturePlaybookAlerts_CL` → `RecordedFuturePlaybookAlerts_V2_CL`, `RecordedFuturePortalAlerts_CL` → `RecordedFutureClassicAlerts_V2_CL`, `RecordedFutureThreatMap_CL` → `RecordedFutureThreatMap_V2_CL`, `RecordedFutureThreatMapMalware_CL` → `RecordedFutureThreatMapMalware_V2_CL`, `RecordedFutureSandboxResults_CL` → `RecordedFutureSandboxResults_V2_CL`.
->
-> **Migration path:**
-> 1. Deploy the Data Connectors infrastructure (DCE, DCRs, Log Analytics tables, and the connector tile) into the same resource group as your Log Analytics Workspace.
-> 2. Deploy the Recorded Future Custom Connector, if not already deployed — it's shared by the playbooks.
-> 3. Redeploy the affected playbook(s) depending on your use case.
-> 4. Redeploy the corresponding Analytic Rules so they query the new `_V2_CL` tables.
-> 5. _Optional_: If you have other logic apps or processes dependent on the old `_CL` tables, update these references to the new `_V2_CL` tables.
+> Six playbooks in this solution used the deprecated Azure Log Analytics Data Collector connector (`azureloganalyticsdatacollector`), which Microsoft is retiring on September 14, 2026. See [Upgrade from previous versions](#upgrade-from-previous-versions) below for full details on the affected playbooks, table renames, and migration path.
 
 > [!IMPORTANT]
 > ## Microsoft Defender Unified Portal Migration - Breaking Changes
@@ -47,11 +36,13 @@ The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel <a href="https://learn.microsoft.com/en-us/azure/sentinel/roles" target="_blank">Roles and permissions in Microsoft Sentinel</a>
 
-- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level,
-
-- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner (highest level)** or **Role Based Access Control Administrator** on resource group level.
-
-- The users that are to interact with **Microsoft Sentinel** require _**Microsoft Sentinel Contributor**_ permissions
+| Resource | Permission |
+|-|-|
+| Data Connectors infrastructure | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#monitoring-contributor" target="_blank">_**Monitoring Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#log-analytics-contributor" target="_blank">_**Log Analytics Contributor**_</a> on the **Resource Group** level. |
+| Recorded Future Custom Connector | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> on the **Resource Group** level. |
+| Playbook(s), with `create_role_assignment=true` (default) | Either <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#owner" target="_blank">_**Owner**_</a>, **or** <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> + <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_</a> + <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#role-based-access-control-administrator" target="_blank">_**Role Based Access Control Administrator**_</a> — all on the **Resource Group** level. |
+| Playbook(s), with `create_role_assignment=false` | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_</a> on the **Resource Group** level. **Note:** an Azure administrator must then manually assign the <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor#monitoring-metrics-publisher" target="_blank">_**Monitoring Metrics Publisher**_</a> role on the relevant Data Collection Rule to the playbook's managed identity after deployment. |
+| Analytic Rules | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_</a> permissions. |
 
 <a id="api-key"></a>
 ### Recorded Future API Key
@@ -70,6 +61,12 @@ or\
 <img src="Images/2023-09-08-12-13-54.png" width="600"  />
 
 </details>
+
+### Data Connectors infrastructure
+Deploys the shared Data Collection Endpoint (DCE), Data Collection Rules (DCRs), Log Analytics tables, and connector definition tile used by the Log Ingestion API playbooks (see the [migration callout](#log-ingestion-api-migration-deadline-2026-09-14) above). Deploy this into the same resource group as your Log Analytics Workspace **before** deploying `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, or `RecordedFuture-Sandbox_Outlook_Attachment`.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 ### Connectors
 The Recorded Future solution uses the following connectors:
@@ -134,6 +131,7 @@ Consider your organizational use cases and install the corresponding playbooks t
 
 |Use case| Playbook |
 |-|-|
+| Prerequisite (Log Ingestion API playbooks) | [Data Connectors infrastructure](#data-connectors-infrastructure) |
 |Response| [Enrichment Playbooks](Enrichment/readme.md) |
 | Detect | [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md) |
 | SOC Efficiency | [Alert Playbooks](Alerts/readme.md) |
@@ -285,6 +283,20 @@ These analytic are available under `Microsoft Sentinel -> Configuration -> Analy
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.
+
+### Log Ingestion API migration (deadline: 2026-09-14)
+Six playbooks in this solution used the deprecated Azure Log Analytics Data Collector connector (`azureloganalyticsdatacollector`), which Microsoft is retiring on September 14, 2026.
+
+Notable solution changes:
+- `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, and `RecordedFuture-Sandbox_Outlook_Attachment` have been updated to use the Log Ingestion API instead, which authenticates via managed identity and routes data through a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) rather than a shared workspace key.
+- Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't allow us to target an existing "v1" table with DCR/DCE without running migration scripts, so new tables were needed): `RecordedFuturePlaybookAlerts_CL` → `RecordedFuturePlaybookAlerts_V2_CL`, `RecordedFuturePortalAlerts_CL` → `RecordedFutureClassicAlerts_V2_CL`, `RecordedFutureThreatMap_CL` → `RecordedFutureThreatMap_V2_CL`, `RecordedFutureThreatMapMalware_CL` → `RecordedFutureThreatMapMalware_V2_CL`, `RecordedFutureSandboxResults_CL` → `RecordedFutureSandboxResults_V2_CL`.
+
+**Migration path:**
+1. Deploy the [Data Connectors infrastructure](#data-connectors-infrastructure) (DCE, DCRs, Log Analytics tables, and the connector tile) into the same resource group as your Log Analytics Workspace.
+2. Deploy the Recorded Future Custom Connector, if not already deployed — it's shared by the playbooks.
+3. Redeploy the affected playbook(s) depending on your use case.
+4. Redeploy the corresponding Analytic Rules so they query the new `_V2_CL` tables.
+5. _Optional_: If you have other logic apps or processes dependent on the old `_CL` tables, update these references to the new `_V2_CL` tables.
 
 ### From version 3.2
 Microsoft is unifying their security portals, moving Microsoft Sentinel into the Microsoft Defender portal, this changes how incidents are created. Incidents created by Logic Apps are not visible in the Microsoft Defender portal. With the release of version 3.2.20 we are re-hauling how incidents are created. Now we'll rely on saving logs to _custom logs_ and use _analytic rules_ to create incidents. We provide updated Logic Apps and analytic rules for incident creation.
