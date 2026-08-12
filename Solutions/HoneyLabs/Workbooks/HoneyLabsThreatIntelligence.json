@@ -40,7 +40,7 @@
               "durationMs": 604800000
             },
             "value": {
-              "durationMs": 604800000
+              "durationMs": 2592000000
             }
           }
         ],
@@ -74,13 +74,13 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = dcount(Id) by bin(TimeGenerated, 1h)",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| extend ActivityTime = todatetime(todynamic(Data).valid_from)\n| summarize Indicators = dcount(Id) by bin(ActivityTime, 1d)\n| order by ActivityTime asc",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "timechart",
-        "title": "Indicators received over time"
+        "title": "Indicator activity over time"
       },
       "name": "Ingest over time"
     },
@@ -164,12 +164,31 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Label = Data.labels to typeof(string)\n| where Label startswith 'cve-'\n| extend CVE = toupper(tostring(Label))\n| summarize ProbingSources = dcount(Id), Evidence = max(Confidence) by CVE\n| top 20 by ProbingSources desc",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Label = Data.labels to typeof(string)\n| where Label startswith 'cve-'\n| extend CVE = toupper(tostring(Label))\n| summarize ProbingSources = dcount(Id), Evidence = max(Confidence) by CVE\n| top 20 by ProbingSources desc\n| extend Report = strcat('https://honeylabs.net/cves/', CVE)",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "title": "Most-probed CVEs by number of distinct source IPs"
+        "title": "Most-probed CVEs by number of distinct source IPs",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Report",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Who is probing it"
+              }
+            },
+            {
+              "columnMatch": "ProbingSources",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
       },
       "name": "CVEs probed"
     },
@@ -177,7 +196,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| where Data.labels has 'cve-probing'\n| summarize ProbingSources = dcount(Id) by bin(TimeGenerated, 1h)",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| where Data.labels has 'cve-probing'\n| extend ActivityTime = todatetime(todynamic(Data).valid_from)\n| summarize ProbingSources = dcount(Id) by bin(ActivityTime, 1d)\n| order by ActivityTime asc",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -204,9 +223,44 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "timechart",
-        "title": "Matches against CommonSecurityLog"
+        "title": "Matches against CommonSecurityLog",
+        "noDataMessage": "No CommonSecurityLog data in this workspace. This panel matches HoneyLabs indicators against firewall and proxy logs in CEF format; the ASIM panel below covers workspaces that normalise network data instead.",
+        "noDataMessageStyle": 4
       },
       "name": "Matches over time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated {TimeRange}\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| where ObservableKey == 'ipv4-addr:value'\n| extend TI_ip = tostring(ObservableValue),\n         Report = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue))\n| join kind=innerunique (\n    _Im_NetworkSession(starttime=ago(7d))\n    | where isnotempty(SrcIpAddr)\n    | summarize Sessions = count(), LastSeen = max(TimeGenerated) by SrcIpAddr\n  ) on $left.TI_ip == $right.SrcIpAddr\n| project TI_ip, Confidence, Sessions, LastSeen, Report\n| order by Confidence desc, Sessions desc\n| take 50",
+        "size": 0,
+        "title": "Matches against normalised network data (ASIM)",
+        "noDataMessage": "No ASIM network sessions in this workspace yet. This panel needs a source that populates _Im_NetworkSession, such as Azure Firewall, AWS VPC flow logs or a normalised syslog feed. Nothing is wrong with the HoneyLabs feed itself: the Feed health panel above shows whether indicators are arriving.",
+        "noDataMessageStyle": 4,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Report",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "View evidence"
+              }
+            },
+            {
+              "columnMatch": "Confidence",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ]
+        }
+      },
+      "name": "asim-matches"
     },
     {
       "type": 3,
@@ -217,7 +271,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "title": "Matched indicators (highest evidence first)"
+        "title": "Matched indicators (highest evidence first)",
+        "noDataMessage": "No CommonSecurityLog data in this workspace. This panel matches HoneyLabs indicators against firewall and proxy logs in CEF format; the ASIM panel below covers workspaces that normalise network data instead.",
+        "noDataMessageStyle": 4
       },
       "name": "Matched detail"
     },
