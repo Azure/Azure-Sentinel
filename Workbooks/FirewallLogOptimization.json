@@ -43,7 +43,7 @@
       "type": 2,
       "isRequired": true,
       "isGlobal": true,
-      "value": "both",
+      "value": "Both",
       "jsonData": "[\"CommonSecurityLog\",\"Syslog\",\"Both\"]",
       "typeSettings": {
        "additionalResourceOptions": [],
@@ -58,7 +58,7 @@
       "type": 2,
       "isRequired": true,
       "isGlobal": true,
-      "value": "balanced",
+      "value": "Balanced",
       "jsonData": "[\"Conservative\",\"Balanced\",\"Aggressive\"]",
       "typeSettings": {
        "additionalResourceOptions": [],
@@ -130,7 +130,7 @@
       "type": 3,
       "content": {
        "version": "KqlItem/1.0",
-       "query": "let CSL = union isfuzzy=true (CommonSecurityLog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"CommonSecurityLog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet SYS = union isfuzzy=true (Syslog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"Syslog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet Combined = union CSL, SYS\n| where isnotempty(BillableBytes) and BillableBytes > 0;\nlet Filtered = Combined\n| where '{TableSource}' == 'Both' or ('{TableSource}' == 'CommonSecurityLog' and Source == 'CommonSecurityLog') or ('{TableSource}' == 'Syslog' and Source == 'Syslog');\nFiltered\n| summarize TotalGB = sum(BillableBytes) / (1024*1024*1024)\n| extend MonthlyCost = round(TotalGB * 30 * todouble('{PricePerGB}'), 2), DailyGB = round(TotalGB / 30, 2)\n| project DailyGB, MonthlyCost",
+        "query": "let Days = iff({TimeRange:grain} contains \"d\", todouble(replace(@\"(\\d+)d\", @\"\\1\", {TimeRange:grain})), 30.0);\nlet CSL = union isfuzzy=true (CommonSecurityLog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"CommonSecurityLog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet SYS = union isfuzzy=true (Syslog | where _IsBillable == true | project BillableBytes = _BilledSize, Source = \"Syslog\"), (datatable(BillableBytes:real, Source:string)[]);\nlet Combined = union CSL, SYS\n| where isnotempty(BillableBytes) and BillableBytes > 0;\nlet Filtered = Combined\n| where '{TableSource}' == 'Both' or ('{TableSource}' == 'CommonSecurityLog' and Source == 'CommonSecurityLog') or ('{TableSource}' == 'Syslog' and Source == 'Syslog');\nFiltered\n| summarize TotalGB = sum(BillableBytes) / (1024*1024*1024)\n| extend DailyGB = TotalGB / Days\n| extend MonthlyCost = round(DailyGB * 30 * todouble('{PricePerGB}'), 2), DailyGB = round(DailyGB, 2)\n| project DailyGB, MonthlyCost",
        "size": 0,
        "timeContextFromParameter": "TimeRange",
        "queryType": 0,
@@ -246,7 +246,7 @@
       "type": 3,
       "content": {
        "version": "KqlItem/1.0",
-       "query": "let VendorPatterns = datatable(Vendor:string, MatchToken:string)[];\nlet Classified = union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = case(\n            SyslogMessage matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n            SyslogMessage contains \"%ASA-\", \"Cisco\",\n            SyslogMessage contains \"%FTD-\", \"Cisco\",\n            SyslogMessage contains \"subtype=\", \"Fortinet\",\n            SyslogMessage contains \"logdesc=\", \"Fortinet\",\n            SyslogMessage contains \"action=\" and SyslogMessage contains \"product=\", \"Check Point\",\n            \"Unclassified\")\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count(), Computers = dcount(Computer) by Vendor),\n    (datatable(Vendor:string, BillableGB:real, Events:long, Computers:long)[]);\nClassified\n| where isnotempty(Vendor)\n| project Vendor, BillableGB = round(BillableGB, 2), Events, Computers\n| order by BillableGB desc",
+        "query": "let ClassifyVendor = (message:string) {\n    case(\n        message matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n        message contains \"%ASA-\", \"Cisco\",\n        message contains \"%FTD-\", \"Cisco\",\n        message contains \"subtype=\", \"Fortinet\",\n        message contains \"logdesc=\", \"Fortinet\",\n        message contains \"action=\" and message contains \"product=\", \"Check Point\",\n        \"Unclassified\")\n};\nlet Classified = union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = ClassifyVendor(SyslogMessage)\n        | summarize BillableGB = sum(_BilledSize) / (1024*1024*1024), Events = count(), Computers = dcount(Computer) by Vendor),\n    (datatable(Vendor:string, BillableGB:real, Events:long, Computers:long)[]);\nClassified\n| where isnotempty(Vendor)\n| project Vendor, BillableGB = round(BillableGB, 2), Events, Computers\n| order by BillableGB desc",
        "size": 0,
        "timeContextFromParameter": "TimeRange",
        "queryType": 0,
@@ -285,7 +285,7 @@
       "type": 3,
       "content": {
        "version": "KqlItem/1.0",
-       "query": "union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize Events = count(), BillableGB = sum(_BilledSize) / (1024*1024*1024) by SyslogMessage\n        | take 100),\n    (datatable(SyslogMessage:string, Events:long, BillableGB:real)[])\n| where isnotempty(SyslogMessage)\n| project SyslogMessage = strcat(substring(SyslogMessage, 0, 200), iff(strlen(SyslogMessage) > 200, \"...\", \"\")), Events, BillableGB = round(BillableGB, 4)\n| order by Events desc\n| take 20",
+        "query": "union isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | summarize Events = count(), BillableGB = sum(_BilledSize) / (1024*1024*1024) by SyslogMessage),\n    (datatable(SyslogMessage:string, Events:long, BillableGB:real)[])\n| where isnotempty(SyslogMessage)\n| project SyslogMessage = strcat(substring(SyslogMessage, 0, 200), iff(strlen(SyslogMessage) > 200, \"...\", \"\")), Events, BillableGB = round(BillableGB, 4)\n| order by Events desc\n| take 20",
        "size": 0,
        "timeContextFromParameter": "TimeRange",
        "queryType": 0,
@@ -298,7 +298,7 @@
       "type": 3,
       "content": {
        "version": "KqlItem/1.0",
-       "query": "let VendorPatterns = datatable(Vendor:string, MatchToken:string)[];\nunion isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = case(\n            SyslogMessage matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n            SyslogMessage contains \"%ASA-\", \"Cisco\",\n            SyslogMessage contains \"%FTD-\", \"Cisco\",\n            SyslogMessage contains \"subtype=\", \"Fortinet\",\n            SyslogMessage contains \"logdesc=\", \"Fortinet\",\n            SyslogMessage contains \"action=\" and SyslogMessage contains \"product=\", \"Check Point\",\n            \"Unclassified\")\n        | summarize Events = count() by Vendor, SeverityLevel),\n    (datatable(Vendor:string, SeverityLevel:string, Events:long)[])\n| where isnotempty(Vendor) and isnotempty(SeverityLevel)\n| order by Vendor asc, Events desc",
+        "query": "let ClassifyVendor = (message:string) {\n    case(\n        message matches regex \"(THREAT|TRAFFIC|SYSTEM|HIP-MATCH)\", \"Palo Alto Networks\",\n        message contains \"%ASA-\", \"Cisco\",\n        message contains \"%FTD-\", \"Cisco\",\n        message contains \"subtype=\", \"Fortinet\",\n        message contains \"logdesc=\", \"Fortinet\",\n        message contains \"action=\" and message contains \"product=\", \"Check Point\",\n        \"Unclassified\")\n};\nunion isfuzzy=true\n    (Syslog\n        | where _IsBillable == true\n        | extend Vendor = ClassifyVendor(SyslogMessage)\n        | summarize Events = count() by Vendor, SeverityLevel),\n    (datatable(Vendor:string, SeverityLevel:string, Events:long)[])\n| where isnotempty(Vendor) and isnotempty(SeverityLevel)\n| order by Vendor asc, Events desc",
        "size": 0,
        "timeContextFromParameter": "TimeRange",
        "queryType": 0,
@@ -388,7 +388,7 @@
      {
       "type": 1,
       "content": {
-       "json": "---\n\n### Raw Syslog Transformations\n\n**Conservative (keep emerg/alert/crit/err, exclude cron/mail/lpr):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\")\n   or Facility !in~ (\"cron\",\"mail\",\"lpr\",\"news\",\"uucp\")\n```\n\n**Balanced (keep emerg through warning, network facilities only):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\",\"warning\",\"warn\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"kern\",\"auth\",\"authpriv\")\n```\n\n**Aggressive (emerg/alert/crit only, security-relevant facilities):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"auth\",\"authpriv\")\n```\n\n**Estimated savings:** Conservative 20-30% / Balanced 40-55% / Aggressive 60-75%",
+        "json": "---\n\n### Raw Syslog Transformations\n\n**Conservative (keep emerg/alert/crit/err, exclude cron/mail/lpr):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\")\n   and Facility !in~ (\"cron\",\"mail\",\"lpr\",\"news\",\"uucp\")\n```\n\n**Balanced (keep emerg through warning, network facilities only):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\",\"err\",\"error\",\"warning\",\"warn\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"kern\",\"auth\",\"authpriv\")\n```\n\n**Aggressive (emerg/alert/crit only, security-relevant facilities):**\n```kusto\nsource\n| where SeverityLevel in~ (\"emerg\",\"alert\",\"crit\")\n   and Facility in~ (\"local0\",\"local1\",\"local2\",\"local3\",\"local4\",\"local5\",\"local6\",\"local7\",\"auth\",\"authpriv\")\n```\n\n**Estimated savings:** Conservative 20-30% / Balanced 40-55% / Aggressive 60-75%",
        "style": "markdown"
       },
       "name": "dcr - syslog all modes"
