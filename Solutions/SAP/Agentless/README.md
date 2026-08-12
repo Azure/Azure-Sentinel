@@ -5,7 +5,7 @@ Microsoft Sentinel Solution for SAP ERP and S/4HANA package officially available
 This repo serves the editable version of the solution package intended for hot fixes. The official release served through SAP API Business Accelerator Hub is in configure-only mode.
 
 > [!NOTE]
-> For solution release notes and version history, see [Agentless SAP README](../ReleaseNotes.md).
+> For solution release notes and version history, see [Release Notes](../ReleaseNotes.md).
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
