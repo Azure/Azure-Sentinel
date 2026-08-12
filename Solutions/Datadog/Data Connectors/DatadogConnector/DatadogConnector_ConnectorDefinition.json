@@ -1,16 +1,15 @@
 {
-  "name": "DatadogAuditLogsConnector",
+  "name": "DatadogConnector",
   "apiVersion": "2025-07-01-preview",
   "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
   "location": "{{location}}",
   "kind": "Customizable",
   "properties": {
     "connectorUiConfig": {
-      "id": "DatadogAuditLogsConnector",
-      "title": "Datadog Audit Logs (via Codeless Connector Framework)",
+      "id": "DatadogConnector",
+      "title": "Datadog Logs (via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "The Datadog Audit Logs data connector ingests [Datadog](https://www.datadoghq.com/) audit events into Microsoft Sentinel through the [Datadog Audit API](https://docs.datadoghq.com/api/latest/audit/). Audit events capture activity performed within the Datadog platform, providing visibility into configuration changes, access, and administrative actions for security monitoring and investigation.",
-      "graphQueriesTableName": "DatadogAuditV2_CL",
+      "descriptionMarkdown": "The Datadog Logs data connector ingests [Datadog](https://www.datadoghq.com/) audit events, indexed logs, and security signals into Microsoft Sentinel through the [Datadog API](https://docs.datadoghq.com/api/latest/). The supported data types provide administrative activity, application and infrastructure telemetry, and Datadog Security Monitoring detections for investigation.",
       "graphQueries": [
         {
           "metricName": "Total audit events received",
@@ -18,9 +17,14 @@
           "baseQuery": "DatadogAuditV2_CL"
         },
         {
-          "metricName": "Recent audit events",
-          "legend": "Recent Datadog Audit Events",
-          "baseQuery": "DatadogAuditV2_CL | where TimeGenerated > ago(24h)"
+          "metricName": "Total logs received",
+          "legend": "Datadog Logs",
+          "baseQuery": "DatadogLogs_CL"
+        },
+        {
+          "metricName": "Total security signals received",
+          "legend": "Datadog Security Logs",
+          "baseQuery": "DatadogSecurityLogs_CL"
         }
       ],
       "sampleQueries": [
@@ -29,14 +33,38 @@
           "query": "DatadogAuditV2_CL\n| take 20"
         },
         {
-          "description": "Audit events by Datadog service",
-          "query": "DatadogAuditV2_CL\n| summarize count() by EventService"
+          "description": "Get sample of 20 recent Datadog logs",
+          "query": "DatadogLogs_CL\n| take 20"
+        },
+        {
+          "description": "Get sample of 20 recent Datadog security signals",
+          "query": "DatadogSecurityLogs_CL\n| take 20"
+        },
+        {
+          "description": "Audit events by action and status",
+          "query": "DatadogAuditV2_CL\n| summarize count() by Action, Status"
+        },
+        {
+          "description": "Logs by Datadog service and status",
+          "query": "DatadogLogs_CL\n| summarize count() by Service, Status"
+        },
+        {
+          "description": "Security signals by status and title",
+          "query": "DatadogSecurityLogs_CL\n| summarize count() by Status, SignalTitle"
         }
       ],
       "dataTypes": [
         {
           "name": "DatadogAuditV2_CL",
           "lastDataReceivedQuery": "DatadogAuditV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "DatadogLogs_CL",
+          "lastDataReceivedQuery": "DatadogLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "DatadogSecurityLogs_CL",
+          "lastDataReceivedQuery": "DatadogSecurityLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -46,7 +74,7 @@
         {
           "type": "IsConnectedQuery",
           "value": [
-            "DatadogAuditV2_CL | where TimeGenerated > ago(1h) | take 1"
+            "union DatadogAuditV2_CL, DatadogLogs_CL, DatadogSecurityLogs_CL | where TimeGenerated > ago(1h) | take 1"
           ]
         }
       ],
@@ -72,14 +100,14 @@
         "customs": [
           {
             "name": "Datadog API access",
-            "description": "**Datadog API and Application keys** are required. See the [Datadog API and Application Keys documentation](https://docs.datadoghq.com/account_management/api-app-keys/)."
+            "description": "**Datadog API and Application keys** are required. The Application key must have permission to read the selected data type. Security Logs require the `security_monitoring_signals_read` scope. See the [Datadog API and Application Keys documentation](https://docs.datadoghq.com/account_management/api-app-keys/)."
           }
         ]
       },
       "instructionSteps": [
         {
           "title": "1. Connections",
-          "description": "Configure and manage Datadog Audit Logs connections.",
+          "description": "Configure and manage Datadog connections.",
           "instructions": [
             {
               "type": "Markdown",
@@ -98,6 +126,10 @@
                   {
                     "columnName": "Datadog API Endpoint",
                     "columnValue": "properties.request.apiEndpoint"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.addOnAttributes.dataType"
                   }
                 ],
                 "menuItems": [
@@ -110,7 +142,7 @@
               "parameters": {
                 "label": "Add Connection",
                 "title": "Add Datadog Connection",
-                "subtitle": "Connect to Datadog Audit Logs",
+                "subtitle": "Connect Datadog data to Microsoft Sentinel",
                 "contextPaneType": "DataConnectorsContextPane",
                 "instructionSteps": [
                   {
@@ -161,6 +193,29 @@
                           "validations": {
                             "required": true
                           }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data Type",
+                          "name": "selectedDataType",
+                          "options": [
+                            {
+                              "key": "DatadogAuditV2",
+                              "text": "Audit Events"
+                            },
+                            {
+                              "key": "DatadogLogs",
+                              "text": "Logs"
+                            },
+                            {
+                              "key": "DatadogSecurityLogs",
+                              "text": "Security Logs"
+                            }
+                          ],
+                          "placeholder": "Select a data type",
+                          "required": true
                         }
                       }
                     ]
