@@ -400,7 +400,8 @@ for file in parser_yaml_files:
     else:
         SchemaName = None
     # Check if changed file is a union or empty parser. If Yes, skip the file
-    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+    is_empty_parser = os.path.basename(file).startswith('vim') and file.endswith('Empty.yaml')
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")

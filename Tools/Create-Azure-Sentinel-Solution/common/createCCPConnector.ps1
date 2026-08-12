@@ -646,6 +646,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
+                    if ($fileContent.PSObject.Properties.Name -contains "eventGridAdvancedFilters") {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "eventGridAdvancedFilters" -Value $fileContent.eventGridAdvancedFilters -Force
+                    }
 
                     if ($null -ne $fileContent.condition) {
                         $armResource | Add-Member -MemberType NoteProperty -Name "condition" -Value $fileContent.condition                       
