@@ -26,6 +26,11 @@ These standard tables integrate natively with the Microsoft Sentinel Solution fo
 - **CSV-based destination management**: Process multiple SAP destinations from a CSV file
 - **Automatic connection naming**: Connections are named `{ConnectionPrefix}-{DestinationName}`
 - **Shared infrastructure**: Single DCE/DCR shared across all connections
+- **Enforced DCE/DCR naming**: Names are derived from the Log Analytics workspace ID and validated, so they always match Azure portal deployed resources:
+  - DCR: `Microsoft-Sentinel-SAPCC-DCR-<first 12 chars of workspace GUID>`
+  - DCE: `ASI-<full workspace GUID>`
+
+  The scripts abort with a clear error if a name (or a supplied DCE reference) violates this convention, because downstream processes depend on it.
 
 ## Files
 

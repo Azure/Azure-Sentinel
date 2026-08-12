@@ -270,7 +270,7 @@ if ($null -eq $workspaceDetails) {
 $dcrInfo = Get-OrCreateSapccDataCollectionRule `
     -SubscriptionId $SubscriptionId `
     -ResourceGroupName $ResourceGroupName `
-    -WorkspaceShortId $workspaceDetails.ShortId `
+    -WorkspaceId $workspaceDetails.WorkspaceId `
     -WorkspaceResourceId $workspaceDetails.ResourceId `
     -Location $workspaceDetails.Location
 
@@ -289,7 +289,7 @@ if ($null -eq $dceInfo) {
     $dceInfo = Get-OrCreateSapccDataCollectionEndpoint `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
-        -WorkspaceShortId $workspaceDetails.ShortId `
+        -WorkspaceId $workspaceDetails.WorkspaceId `
         -Location $workspaceDetails.Location
     
     if ($null -eq $dceInfo) {
@@ -301,7 +301,7 @@ if ($null -eq $dceInfo) {
     $dcrInfo = Get-OrCreateSapccDataCollectionRule `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
-        -WorkspaceShortId $workspaceDetails.ShortId `
+        -WorkspaceId $workspaceDetails.WorkspaceId `
         -WorkspaceResourceId $workspaceDetails.ResourceId `
         -DataCollectionEndpointId $dceInfo.ResourceId `
         -Location $workspaceDetails.Location
