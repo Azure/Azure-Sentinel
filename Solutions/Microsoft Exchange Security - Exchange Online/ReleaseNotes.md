@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.8       | 12-08-2026                     | Updated the API version to address ARM-TTK validation issues |
 | 3.1.7       | 26-03-2025                     | Update documentation link to new repository     |
 | 3.1.6       | 30-08-2024                     | Correct bug on LasdtReceivedData of DataConnector. and change parser     |
 | 3.1.5       | 15-05-2024                     | Enhancement in existing **Parser**       |
