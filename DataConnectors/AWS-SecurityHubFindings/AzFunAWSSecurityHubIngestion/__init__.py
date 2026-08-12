@@ -1,3 +1,4 @@
+import ast
 import base64
 import datetime
 import hashlib
@@ -98,10 +99,10 @@ def main(mytimer: func.TimerRequest) -> None:
         aws_role_arn, aws_role_session_name, aws_region_name, token
     )
     securityhub_filters_dict = {}
-    logging.info("SecurityHubFilters : {0}".format(aws_securityhub_filters))
     if aws_securityhub_filters:
-        securityhub_filters = aws_securityhub_filters.replace("'", '"')
-        securityhub_filters_dict = eval(securityhub_filters)
+        securityhub_filters_dict = ast.literal_eval(aws_securityhub_filters)
+        if not isinstance(securityhub_filters_dict, dict):
+            raise ValueError("SecurityHubFilters must evaluate to a dictionary.")
 
     results = securityHubSession.getFindings(securityhub_filters_dict)
     fresh_events_after_this_time = securityHubSession.freshEventTimestampGenerator(
