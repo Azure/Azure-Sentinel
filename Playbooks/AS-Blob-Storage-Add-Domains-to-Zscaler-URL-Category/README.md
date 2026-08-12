@@ -5,7 +5,7 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)    
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)    
 
 This playbook will use an Azure blob storage file to maintain a Zscaler custom URL category of your choice. The logic app is set to run every 5 minutes polling this blob storage file for changes. If any changes are made to the blob storage file, the Zscaler URL category values will be updated to match the file exactly. This will enable you to manage your Zscaler custom URL categories entirely from Microsoft Sentinel.
 Blob storage was opted for because unlike Microsoft Sentinel watchlists, the lastModified time attribute reflects changes to the contents of the file.
@@ -191,7 +191,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
