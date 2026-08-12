@@ -1,0 +1,155 @@
+id: 8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41
+name: Datazag - impersonation domain resolved in DNS
+description: |
+  'Matches active, high-confidence domain indicators delivered by Datazag against DNS query
+  activity normalized by the ASIM Dns schema. Because the rule reads from _Im_Dns rather than
+  a vendor-specific table, it works across any DNS source the workspace has normalized -
+  Windows DNS, Infoblox, Cisco Umbrella, Azure Firewall, Zscaler and others - without
+  modification.
+
+  A match means a host inside the estate resolved a domain that Datazag scored as
+  brand-impersonation, platform-impersonation or attacker infrastructure at or above the
+  block-confidence floor. Resolution is not proof of compromise, but it establishes that the
+  domain reached a resolver from inside the estate, which is the earliest observable point in
+  most credential-phishing chains.
+
+  Indicator revisions are collapsed with arg_max by Id, so a re-derived indicator does not
+  produce a duplicate match. Withdrawn (IsDeleted), revoked and expired indicators are
+  excluded.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: DatazagThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1566
+  - T1071
+query: |
+  let ioc_lookback = 14d;
+  let dns_lookback = 1h;
+  let confidence_floor = 85;
+  let DatazagDomains =
+      ThreatIntelIndicators
+      | where TimeGenerated >= ago(ioc_lookback)
+      | where SourceSystem == "Datazag"
+      | where ObservableKey == "domain-name:value"
+      | where isnotempty(ObservableValue)
+      // collapse indicator revisions to the most recent state of each
+      | summarize arg_max(TimeGenerated, *) by Id
+      | where IsDeleted == false
+      | where tostring(Data.revoked) != "true"
+      | where isempty(ValidUntil) or ValidUntil > now()
+      | where Confidence >= confidence_floor
+      | extend IndicatorDomain = tolower(trim_end(@"\.", ObservableValue))
+      | project
+          IndicatorDomain,
+          IndicatorStixId   = tostring(Data.id),
+          IndicatorRecordId = Id,
+          Confidence,
+          ThreatType,
+          IndicatorEvidence = tostring(Data.labels),
+          IndicatorSummary  = tostring(Data.description),
+          IndicatorValidUntil = ValidUntil;
+  let DnsActivity =
+      _Im_Dns(starttime=ago(dns_lookback), endtime=now())
+      | where isnotempty(DnsQuery)
+      | extend IndicatorDomain = tolower(trim_end(@"\.", DnsQuery))
+      | project
+          DnsTime       = TimeGenerated,
+          IndicatorDomain,
+          DnsQuery,
+          SrcIpAddr     = column_ifexists("SrcIpAddr", ""),
+          SrcHostname   = column_ifexists("SrcHostname", ""),
+          SrcUsername   = column_ifexists("SrcUsername", ""),
+          DnsResponseName = column_ifexists("DnsResponseName", ""),
+          EventVendor   = column_ifexists("EventVendor", ""),
+          EventProduct  = column_ifexists("EventProduct", "");
+  DatazagDomains
+  | join kind=innerunique DnsActivity on IndicatorDomain
+  | summarize
+      FirstSeen   = min(DnsTime),
+      LastSeen    = max(DnsTime),
+      QueryCount  = count(),
+      SourceIps   = make_set(SrcIpAddr, 50),
+      SourceHosts = make_set(SrcHostname, 50),
+      Users       = make_set(SrcUsername, 50),
+      ResolvedTo  = make_set(DnsResponseName, 20),
+      SeenBy      = make_set(strcat(EventVendor, " ", EventProduct), 10)
+      by
+      IndicatorDomain, IndicatorStixId, IndicatorRecordId, Confidence,
+      ThreatType, IndicatorEvidence, IndicatorSummary, IndicatorValidUntil
+  | extend
+      SourceIp   = tostring(SourceIps[0]),
+      SourceHost = tostring(SourceHosts[0]),
+      UserRaw    = tostring(Users[0])
+  | extend
+      AccountNTDomain = iff(UserRaw has @"\", tostring(split(UserRaw, @"\")[0]), ""),
+      AccountName     = iff(UserRaw has @"\", tostring(split(UserRaw, @"\")[1]), UserRaw)
+  | project-away UserRaw
+  | order by LastSeen desc
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Datazag: {{IndicatorDomain}} resolved from inside the estate'
+  alertDescriptionFormat: |
+    '{{QueryCount}} DNS resolution(s) of {{IndicatorDomain}}, an indicator Datazag scored at
+    confidence {{Confidence}}. First and last seen times, supporting evidence and the
+    indicator expiry are available in the alert custom details.'
+customDetails:
+  DatazagIndicatorId: IndicatorStixId
+  DatazagConfidence: Confidence
+  DatazagEvidence: IndicatorEvidence
+  DatazagThreatType: ThreatType
+  IndicatorExpiry: IndicatorValidUntil
+  ResolutionCount: QueryCount
+  ObservedBy: SeenBy
+  FirstResolved: FirstSeen
+  LastResolved: LastSeen
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: IndicatorDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+suppressionEnabled: false
+suppressionDuration: 1h
+version: 1.0.0
+kind: Scheduled
