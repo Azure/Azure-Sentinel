@@ -1,0 +1,132 @@
+{
+  "name": "ClarotyXDomeCCFConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ClarotyXDomeCCFConnector",
+      "title": "Claroty xDome (via Codeless Connector Framework)",
+      "publisher": "Claroty",
+      "descriptionMarkdown": "The Claroty xDome connector polls the Claroty xDome public API directly from Microsoft Sentinel using the Codeless Connector Framework (CCF) - no agent, collector VM, or syslog forwarder required. Connect once with your xDome API root URL and a Bearer API token, and the following data types stream into dedicated tables: **Alerts**, **Device-Alert relations**, **OT Activity Events**, **Vulnerabilities**, **Device-Vulnerability relations**, **Device inventory**, and **Audit Log**. Each data type supports an optional filter so you can cut down ingested volume.",
+      "graphQueries": [
+        { "metricName": "Alerts", "legend": "ClarotyXDomeAlert_CL", "baseQuery": "ClarotyXDomeAlert_CL" },
+        { "metricName": "Device-Alert relations", "legend": "ClarotyXDomeDeviceAlert_CL", "baseQuery": "ClarotyXDomeDeviceAlert_CL" },
+        { "metricName": "OT Activity Events", "legend": "ClarotyXDomeOTEvent_CL", "baseQuery": "ClarotyXDomeOTEvent_CL" },
+        { "metricName": "Vulnerabilities", "legend": "ClarotyXDomeVulnerability_CL", "baseQuery": "ClarotyXDomeVulnerability_CL" },
+        { "metricName": "Device-Vulnerability relations", "legend": "ClarotyXDomeDeviceVulnerability_CL", "baseQuery": "ClarotyXDomeDeviceVulnerability_CL" },
+        { "metricName": "Devices", "legend": "ClarotyXDomeDevice_CL", "baseQuery": "ClarotyXDomeDevice_CL" },
+        { "metricName": "Audit Log", "legend": "ClarotyXDomeAuditLog_CL", "baseQuery": "ClarotyXDomeAuditLog_CL" }
+      ],
+      "sampleQueries": [
+        { "description": "All alerts (latest first)", "query": "ClarotyXDomeAlert_CL\n| sort by TimeGenerated desc" },
+        { "description": "Affected devices per alert", "query": "ClarotyXDomeDeviceAlert_CL\n| summarize AffectedDevices = dcount(DeviceUid) by AlertId, AlertName\n| sort by AffectedDevices desc" },
+        { "description": "Known-exploited vulnerabilities", "query": "ClarotyXDomeVulnerability_CL\n| where IsKnownExploited == true\n| sort by CvssV3Score desc" },
+        { "description": "Current device inventory (deduplicated)", "query": "ClarotyXDomeDevice_CL\n| summarize arg_max(TimeGenerated, *) by DeviceUid" },
+        { "description": "xDome console logins", "query": "ClarotyXDomeAuditLog_CL\n| where Action == 'User Logged In'\n| sort by TimeGenerated desc" }
+      ],
+      "dataTypes": [
+        { "name": "ClarotyXDomeAlert_CL", "lastDataReceivedQuery": "ClarotyXDomeAlert_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeDeviceAlert_CL", "lastDataReceivedQuery": "ClarotyXDomeDeviceAlert_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeOTEvent_CL", "lastDataReceivedQuery": "ClarotyXDomeOTEvent_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeVulnerability_CL", "lastDataReceivedQuery": "ClarotyXDomeVulnerability_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeDeviceVulnerability_CL", "lastDataReceivedQuery": "ClarotyXDomeDeviceVulnerability_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeDevice_CL", "lastDataReceivedQuery": "ClarotyXDomeDevice_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "ClarotyXDomeAuditLog_CL", "lastDataReceivedQuery": "ClarotyXDomeAuditLog_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" }
+      ],
+      "connectivityCriteria": [
+        { "type": "HasDataConnectors" },
+        { "type": "IsConnectedQuery", "value": [ "union isfuzzy=true ClarotyXDomeAlert_CL, ClarotyXDomeDeviceAlert_CL, ClarotyXDomeOTEvent_CL, ClarotyXDomeVulnerability_CL, ClarotyXDomeDeviceVulnerability_CL, ClarotyXDomeDevice_CL, ClarotyXDomeAuditLog_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(3d)" ] }
+      ],
+      "availability": { "isPreview": true, "status": 1 },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": { "write": true, "read": true, "delete": true, "action": false }
+          }
+        ],
+        "customs": [
+          { "name": "Claroty xDome API token", "description": "A Claroty xDome public API token (Bearer) with read access is required. Generate it in the xDome console under Admin Settings > User Management." }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Prerequisites",
+          "description": "Ensure you have the required access and configuration before connecting.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Prerequisites\n\n- A Claroty xDome tenant with the public API enabled.\n- An xDome API token (Bearer) with read access. Generate it in the xDome console under **Admin Settings > User Management**.\n- Your xDome API root URL, for example `https://<region>.api.claroty.com`. The connector appends the `/api/v1/...` paths automatically - do not include a trailing slash or the `/api/v1` segment.\n- Outbound network connectivity from the Microsoft Sentinel CCF service to your xDome API endpoint. If your xDome API restricts source IPs, allowlist the Microsoft Sentinel **Scuba** service tag."
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Connect to Claroty xDome",
+          "description": "Add a connection with your xDome API root URL and Bearer token, then choose which data types to ingest (all are selected by default). Optionally provide a per-data-type filter and polling window.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Optional per-data-type filters\n\nLeave a filter blank to ingest everything for that data type. To cut volume, paste a single xDome **filter_by** JSON object; it is combined (AND) with the incremental time window. Examples:\n\n- **Alerts** - only some categories: `{\"field\":\"category\",\"operation\":\"in\",\"value\":[\"Threat\",\"Segmentation\"]}`\n- **OT Events** - exclude scans: `{\"field\":\"event_type\",\"operation\":\"not_in\",\"value\":[\"Scan\"]}`\n- **Vulnerabilities** - high severity only: `{\"field\":\"cvss_v3_score\",\"operation\":\"greater_or_equal\",\"value\":7}`\n- **Devices** - OT/Medical only: `{\"field\":\"device_category\",\"operation\":\"in\",\"value\":[\"OT\",\"Medical\"]}`\n- **Audit Log** - authentication only: `{\"field\":\"category\",\"operation\":\"in\",\"value\":[\"Authentication\"]}`"
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  { "columnName": "Connection", "columnValue": "properties.addOnAttributes.friendlyName" },
+                  { "columnName": "Data Type", "columnValue": "properties.addOnAttributes.dataType" },
+                  { "columnName": "API Endpoint", "columnValue": "properties.request.apiEndpoint" }
+                ],
+                "menuItems": [ "DeleteConnector" ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connection",
+                "title": "Add Claroty xDome Connection",
+                "subtitle": "Connect to Claroty xDome",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "title": "Connection Details",
+                    "instructions": [
+                      { "type": "Textbox", "parameters": { "label": "Connection Name", "placeholder": "e.g. Production, EU tenant", "type": "text", "name": "friendlyName", "validations": { "required": true } } },
+                      { "type": "Textbox", "parameters": { "label": "API Root URL", "placeholder": "https://<region>.api.claroty.com", "type": "text", "name": "apiRootUrl", "validations": { "required": true } } },
+                      { "type": "Textbox", "parameters": { "label": "API Token", "placeholder": "Enter your Claroty xDome Bearer API token", "type": "password", "name": "apiKey", "validations": { "required": true } } },
+                      { "type": "Dropdown", "parameters": { "label": "Data types to ingest", "name": "selectedDataTypes", "placeholder": "Select data types to ingest...", "isMultiSelect": true, "defaultAllSelected": true, "required": true, "options": [ { "key": "ClarotyXDomeAlert_CL", "text": "Alerts" }, { "key": "ClarotyXDomeDeviceAlert_CL", "text": "Device-Alert relations" }, { "key": "ClarotyXDomeOTEvent_CL", "text": "OT Activity Events" }, { "key": "ClarotyXDomeVulnerability_CL", "text": "Vulnerabilities" }, { "key": "ClarotyXDomeDeviceVulnerability_CL", "text": "Device-Vulnerability relations" }, { "key": "ClarotyXDomeDevice_CL", "text": "Devices" }, { "key": "ClarotyXDomeAuditLog_CL", "text": "Audit Log" } ] } },
+                      { "type": "InfoMessage", "parameters": { "text": "All data types are selected by default. Unticked data types are not created. To stop or pause one selected data type later, delete that poller from the connector grid. To resume it, create it again.", "visible": true, "inline": true } },
+                      { "type": "Textbox", "parameters": { "label": "Alerts polling window in minutes", "placeholder": "5", "type": "number", "name": "alertsQueryWindowInMin", "defaultValue": 5 } },
+                      { "type": "Textbox", "parameters": { "label": "Device-Alert relations polling window in minutes", "placeholder": "5", "type": "number", "name": "deviceAlertsQueryWindowInMin", "defaultValue": 5 } },
+                      { "type": "Textbox", "parameters": { "label": "OT Activity Events polling window in minutes", "placeholder": "5", "type": "number", "name": "otEventsQueryWindowInMin", "defaultValue": 5 } },
+                      { "type": "Textbox", "parameters": { "label": "Vulnerabilities polling window in minutes", "placeholder": "1440", "type": "number", "name": "vulnerabilitiesQueryWindowInMin", "defaultValue": 1440 } },
+                      { "type": "Textbox", "parameters": { "label": "Device-Vulnerability relations polling window in minutes", "placeholder": "1440", "type": "number", "name": "deviceVulnerabilitiesQueryWindowInMin", "defaultValue": 1440 } },
+                      { "type": "Textbox", "parameters": { "label": "Devices polling window in minutes", "placeholder": "1440", "type": "number", "name": "devicesQueryWindowInMin", "defaultValue": 1440 } },
+                      { "type": "Textbox", "parameters": { "label": "Audit Log polling window in minutes", "placeholder": "5", "type": "number", "name": "auditLogQueryWindowInMin", "defaultValue": 5 } },
+                      { "type": "Textbox", "parameters": { "label": "Alerts filter (optional JSON)", "placeholder": "{\"field\":\"category\",\"operation\":\"in\",\"value\":[\"Threat\"]}", "type": "text", "name": "alertsFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "Device-Alert relations filter (optional JSON)", "placeholder": "{\"field\":\"alert_category\",\"operation\":\"in\",\"value\":[\"Threat\"]}", "type": "text", "name": "deviceAlertsFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "OT Activity Events filter (optional JSON)", "placeholder": "{\"field\":\"event_type\",\"operation\":\"not_in\",\"value\":[\"Scan\"]}", "type": "text", "name": "otEventsFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "Vulnerabilities filter (optional JSON)", "placeholder": "{\"field\":\"cvss_v3_score\",\"operation\":\"greater_or_equal\",\"value\":7}", "type": "text", "name": "vulnerabilitiesFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "Device-Vulnerability relations filter (optional JSON)", "placeholder": "{\"field\":\"vulnerability_relevance\",\"operation\":\"in\",\"value\":[\"Confirmed\"]}", "type": "text", "name": "deviceVulnerabilitiesFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "Devices filter (optional JSON)", "placeholder": "{\"field\":\"device_category\",\"operation\":\"in\",\"value\":[\"OT\",\"Medical\"]}", "type": "text", "name": "devicesFilter" } },
+                      { "type": "Textbox", "parameters": { "label": "Audit Log filter (optional JSON)", "placeholder": "{\"field\":\"category\",\"operation\":\"in\",\"value\":[\"Authentication\"]}", "type": "text", "name": "auditLogFilter" } },
+                      { "type": "InfoMessage", "parameters": { "text": "The API token is stored securely and sent to xDome as an 'Authorization: Bearer <token>' header. Filters must be a single valid xDome filter_by JSON object. Polling windows must be positive integer minutes.", "visible": true, "inline": true } }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

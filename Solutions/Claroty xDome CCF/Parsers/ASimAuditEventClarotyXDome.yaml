@@ -1,0 +1,66 @@
+id: b2000000-0000-4a2b-8c3d-000000000005
+Category: Microsoft Sentinel Parser
+Function:
+  Title: Audit Event ASIM parser for Claroty xDome audit log
+  Version: '1.0.0'
+  LastUpdated: '2026-08-01'
+Product:
+  Name: Claroty xDome
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Claroty xDome audit log events,
+  ingested into the ClarotyXDomeAuditLog_CL table, to the ASIM Audit Event normalized schema.
+FunctionName: ASimAuditEventClarotyXDome
+FunctionAlias: ASimAuditEventClarotyXDome
+EquivalentBuiltInParser: _ASim_AuditEvent_ClarotyXDome
+FunctionParams:
+- Name: disabled
+  Type: bool
+  Default: false
+FunctionQuery: |
+  let parser = (disabled: bool = false) {
+      ClarotyXDomeAuditLog_CL
+      | where not(disabled)
+      | extend actlower = tolower(Action)
+      | extend
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventProduct = 'xDome',
+          EventVendor = 'Claroty',
+          EventSchema = 'AuditEvent',
+          EventSchemaVersion = '0.1',
+          EventResult = 'Success',
+          EventOriginalUid = AuditId,
+          EventMessage = Details,
+          Operation = Action,
+          Object = Category,
+          ObjectType = 'Other',
+          NewValue = '',
+          ActorUsername = Username,
+          ActorUsernameType = 'Simple',
+          ActorDisplayName = UserDisplayName,
+          SrcIpAddr = '',
+          Dvc = 'xDome'
+      | extend
+          EventType = case(
+              actlower has 'create' or actlower has 'add', 'Create',
+              actlower has 'delete' or actlower has 'remove', 'Delete',
+              actlower has 'update' or actlower has 'edit' or actlower has 'modify' or actlower has 'change', 'Set',
+              actlower has 'view' or actlower has 'read' or actlower has 'get' or actlower has 'export' or actlower has 'download', 'Read',
+              actlower has 'enable', 'Enable',
+              actlower has 'disable', 'Disable',
+              actlower has 'execute' or actlower has 'run', 'Execute',
+              'Other')
+      | extend
+          User = ActorUsername,
+          IpAddr = SrcIpAddr
+  };
+  parser(disabled = disabled)
