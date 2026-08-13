@@ -16,10 +16,13 @@ using an Entra ID app registration; nothing polls Fivetran.
 | Analytics rule - ingestion gap (Defense Evasion / T1562) | `Analytic Rules/FivetranIngestionGap.yaml` |
 | Analytics rule - auth failures (Credential Access / T1110) | `Analytic Rules/FivetranAuthFailures.yaml` |
 | Hunting query - SEVERE spike | `Hunting Queries/FivetranSevereSpike.yaml` |
-| Overview workbook | `Workbooks/Fivetran.json` |
+| Overview workbook (includes volume and cost panels) | `Workbooks/Fivetran.json` |
 | Solution manifest | `Data/Solution_Fivetran.json` |
 | Publisher metadata | `SolutionMetadata.json` |
 | Change history | `ReleaseNotes.md` |
+| Volume and cost guidance (optional) | `VOLUME-AND-COST.md` |
+| Split-plan DCR variant (optional) | `Data Connectors/Fivetran_CCF/Fivetran_DCR_SplitPlan.json` |
+| Auxiliary plan verbose table (optional) | `Data Connectors/Fivetran_CCF/FivetranVerbose_Table.json` |
 
 ## Deployment order
 
@@ -58,8 +61,24 @@ shared `Parsers/ASimAuditEvent/Parsers/` and
 `Parsers/ASimAuthentication/Parsers/` folders so the `Im*` and
 `imAuditEvent` union parsers pick them up.
 
-## Prerequisites (customer)
+## Managing log volume and cost (optional)
 
+The External Logs feed is dominated by routine `INFO` connector sync messages,
+which carry little detection value. If that volume is a problem, `VOLUME-AND-COST.md`
+covers four options: DCR-level filtering, a split across the Analytics and
+Auxiliary table plans using the optional `Fivetran_DCR_SplitPlan.json` and
+`FivetranVerbose_Table.json`, shorter retention, and using the Platform Connector
+path instead.
+
+The workbook's "Ingestion volume and cost" section shows where your volume
+actually sits before you change anything. The `FivetranIngestionGap` analytics
+rule is deliberately tier-agnostic (`union isfuzzy=true` across `Fivetran_CL` and
+the optional `FivetranVerboseSummary_CL`), so it works correctly in both the
+default and split deployments.
+
+The default deployment is unchanged and remains a single Analytics plan table.
+
+## Prerequisites (customer)
 - Log Analytics workspace with Microsoft Sentinel enabled.
 - Entra ID app registration (Client ID, Client Secret, Tenant ID).
 - `Monitoring Metrics Publisher` role for that app on the DCR.

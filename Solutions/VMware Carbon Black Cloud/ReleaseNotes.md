@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                        |
 |-------------|--------------------------------|-----------------------------------------------------------|
+| 3.0.10      | 03-08-2026                     | Fixed broken **Deploy to Azure Gov** button link in **Data Connector** and **Playbooks** |
 | 3.0.9       | 12-07-2026                     | Fixed type mismatch in **Data Connector** |
 | 3.0.8       | 24-03-2026                     | Deprecate to VMware Carbon Black Cloud (using Azure Function) |
 | 3.0.7       | 24-03-2026                     | Rename to VMware Carbon Black Cloud via AWS S3(via Codeless Connector Framework)	   |
