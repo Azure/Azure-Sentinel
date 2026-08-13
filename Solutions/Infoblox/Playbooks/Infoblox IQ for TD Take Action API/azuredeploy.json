@@ -1,0 +1,677 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Infoblox-IQ-for-TD-Take-Action-API",
+        "description": "Leverages the Infoblox IQ for Threat Defense Insights API to take action on an Insight by applying the provided recommendation, then ingests the updated Insight details into the custom InfobloxInsight table. This playbook is triggered on demand with an insight_id and recommendation_id.",
+        "prerequisites": [
+            "1. User must have a valid Infoblox IQ for Threat Defense API Key",
+            "2. An existing Log Analytics Workspace where the InfobloxInsight table will be created"
+        ],
+        "postDeployment": [
+            "**a. No manual authorization needed**",
+            "This playbook uses Managed Identity for authentication with the Log Ingestion API.",
+            "The deployment automatically:",
+            "1. Creates Data Collection Endpoint (DCE) and Data Collection Rule (DCR)",
+            "2. Creates or updates the custom table in Log Analytics Workspace",
+            "3. Assigns the Logic App's Managed Identity the 'Monitoring Metrics Publisher' role on the DCR"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2026-07-08T16:15:48.355Z",
+        "entities": [],
+        "tags": [
+            "Action"
+        ],
+        "support": {
+            "tier": "Community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Infoblox"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Infoblox-IQ-for-TD-Take-Action-API",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App (Playbook) resource"
+            }
+        },
+        "Infoblox API Key": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter value for Infoblox IQ for Threat Defense API Key"
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Log Analytics workspace to ingest Infoblox IQ for Threat Defense Insights data."
+            }
+        }
+    },
+    "variables": {
+        "suffix": "[concat('IB', uniqueString(resourceGroup().id, parameters('WorkspaceName')))]",
+        "TableName": "InfobloxInsight",
+        "DCEName": "[concat('infobloxta-dce-', variables('suffix'))]",
+        "DCRName": "[concat('infobloxta-dcr-', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "StreamName": "Custom-InfobloxInsight",
+        "_MonitoringMetricsPublisherRole": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "RoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName')), resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '3913510d-42f4-4e42-8a64-420c390055eb')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCEName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for Infoblox IQ for Threat Defense Insights ingestion",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('TableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(variables('TableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "total_events",
+                            "type": "int"
+                        },
+                        {
+                            "name": "total_assets",
+                            "type": "int"
+                        },
+                        {
+                            "name": "insight_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "date_created",
+                            "type": "string"
+                        },
+                        {
+                            "name": "evaluation_start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "evaluation_end_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_indicators",
+                            "type": "int"
+                        },
+                        {
+                            "name": "total_users",
+                            "type": "int"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "expiring_in_days",
+                            "type": "int"
+                        },
+                        {
+                            "name": "threat_properties",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "time_saved_seconds",
+                            "type": "int"
+                        },
+                        {
+                            "name": "total_verified_assets",
+                            "type": "int"
+                        },
+                        {
+                            "name": "total_unverified_assets",
+                            "type": "int"
+                        },
+                        {
+                            "name": "top_indicators",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "top_assets",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "threat_actors",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "overview",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "key_recommendations",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "InsightDetail",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "DataObservedVia",
+                            "type": "string"
+                        },
+                        {
+                            "name": "InfobloxInsightLogType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCRName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "[concat(variables('logWsResId'), '/tables/', variables('TableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "streamDeclarations": {
+                    "[variables('StreamName')]": {
+                        "columns": [
+                            {
+                                "name": "total_events",
+                                "type": "int"
+                            },
+                            {
+                                "name": "total_assets",
+                                "type": "int"
+                            },
+                            {
+                                "name": "insight_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "date_created",
+                                "type": "string"
+                            },
+                            {
+                                "name": "evaluation_start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "evaluation_end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total_indicators",
+                                "type": "int"
+                            },
+                            {
+                                "name": "total_users",
+                                "type": "int"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "expiring_in_days",
+                                "type": "int"
+                            },
+                            {
+                                "name": "threat_properties",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "time_saved_seconds",
+                                "type": "int"
+                            },
+                            {
+                                "name": "total_verified_assets",
+                                "type": "int"
+                            },
+                            {
+                                "name": "total_unverified_assets",
+                                "type": "int"
+                            },
+                            {
+                                "name": "top_indicators",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "top_assets",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "threat_actors",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "overview",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "key_recommendations",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "InsightDetail",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "DataObservedVia",
+                                "type": "string"
+                            },
+                            {
+                                "name": "InfobloxInsightLogType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('logWsResId')]",
+                            "name": "[concat('InfobloxDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamName')]"
+                        ],
+                        "destinations": [
+                            "[concat('InfobloxDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', variables('TableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('RoleAssignmentName')]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_MonitoringMetricsPublisherRole'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Infoblox API Key": {
+                            "type": "String",
+                            "defaultValue": "[trim(parameters('Infoblox API Key'))]"
+                        },
+                        "DCEIngestionEndpoint": {
+                            "defaultValue": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/', variables('StreamName'), '?api-version=2023-01-01')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "insight_id": {
+                                            "type": "string"
+                                        },
+                                        "recommendation_id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "insight_id",
+                                        "recommendation_id"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Infoblox_Customer_Id": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://csp.infoblox.com/api/atcfw/v1/account",
+                                "method": "GET",
+                                "headers": {
+                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                }
+                            }
+                        },
+                        "Initialize_Infoblox_Customer_Id": {
+                            "runAfter": {
+                                "Get_Infoblox_Customer_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InfobloxCustomerId",
+                                        "type": "string",
+                                        "value": "@{coalesce(body('Get_Infoblox_Customer_Id')?['results']?['customer_id'], '')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Take_Action_on_Insight": {
+                            "runAfter": {
+                                "Initialize_Infoblox_Customer_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://csp.infoblox.com/api/v2/insights/@{triggerBody()?['insight_id']}/actions",
+                                "method": "POST",
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "Token @{parameters('Infoblox API Key')}",
+                                    "x-Infoblox-client": "AzureSentinel-TakeActionOnInsightAPI",
+                                    "x-Infoblox-customer": "@{variables('InfobloxCustomerId')}"
+                                },
+                                "body": {
+                                    "items": [
+                                        {
+                                            "recommendation_id": "@{triggerBody()?['recommendation_id']}"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "Validate_Action_Status": {
+                            "actions": {
+                                "Get_Insight_Data": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://csp.infoblox.com/api/v2/insights/@{triggerBody()?['insight_id']}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Token @{parameters('Infoblox API Key')}",
+                                            "x-Infoblox-client": "AzureSentinel-GetInsightDetails",
+                                            "x-Infoblox-customer": "@{variables('InfobloxCustomerId')}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Parse_Insight_JSON": {
+                                    "runAfter": {
+                                        "Get_Insight_Data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_Insight_Data')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total_events": {
+                                                    "type": "integer"
+                                                },
+                                                "total_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "insight_id": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "severity": {
+                                                    "type": "string"
+                                                },
+                                                "date_created": {
+                                                    "type": "string"
+                                                },
+                                                "evaluation_start_date": {
+                                                    "type": "string"
+                                                },
+                                                "evaluation_end_date": {
+                                                    "type": "string"
+                                                },
+                                                "total_indicators": {
+                                                    "type": "integer"
+                                                },
+                                                "total_users": {
+                                                    "type": "integer"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "expiring_in_days": {
+                                                    "type": "integer"
+                                                },
+                                                "threat_properties": {
+                                                    "type": "array"
+                                                },
+                                                "total_verified_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "total_unverified_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "top_indicators": {
+                                                    "type": "array"
+                                                },
+                                                "top_assets": {
+                                                    "type": "array"
+                                                },
+                                                "threat_actors": {
+                                                    "type": "array"
+                                                },
+                                                "overview": {
+                                                    "type": "array"
+                                                },
+                                                "key_recommendations": {
+                                                    "type": "array"
+                                                },
+                                                "time_saved_seconds": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Condition_To_Ingest_Insight_Data_If_It_Is_Not_Null": {
+                                    "actions": {
+                                        "Send_Insight_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "POST",
+                                                "uri": "@parameters('DCEIngestionEndpoint')",
+                                                "headers": {
+                                                    "Content-Type": "application/json",
+                                                    "User-Agent": "azure-sentinel-infoblox-iq-td-playbook/1.0.0"
+                                                },
+                                                "body": "@array(addProperty(addProperty(body('Parse_Insight_JSON'), 'InfobloxInsightLogType', 'Insight'),'InsightDetail',true))",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "retryPolicy": {
+                                                    "type": "exponential",
+                                                    "count": 3,
+                                                    "interval": "PT10S",
+                                                    "minimumInterval": "PT10S",
+                                                    "maximumInterval": "PT1H"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Insight_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_Insight_JSON')",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Mark_Playbook_Succeeded": {
+                                    "runAfter": {
+                                        "Condition_To_Ingest_Insight_Data_If_It_Is_Not_Null": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Take_Action_on_Insight": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Mark_Playbook_Failed": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "InfobloxActionNotApplied",
+                                                "message": "@{coalesce(body('Take_Action_on_Insight')?['results']?[0]?['message'], body('Take_Action_on_Insight')?['results']?[0]?['reason'], 'Take_Action_on_Insight did not succeed. Check the playbook run history for details.')}"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@actions('Take_Action_on_Insight')['status']",
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@coalesce(body('Take_Action_on_Insight')?['results']?[0]?['status'], '')",
+                                            "succeeded"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    }
+                },
+                "parameters": {}
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "Infoblox-IQ-for-TD-Take-Action-API",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2019-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "[concat(variables('logWsResId'), '/tables/', variables('TableName'), '_CL')]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]"
+            ]
+        }
+    ]
+}
