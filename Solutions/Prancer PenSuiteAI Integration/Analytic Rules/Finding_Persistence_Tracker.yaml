@@ -1,0 +1,77 @@
+id: acca9a0b-60e8-4b89-81a7-f767a1b0711a
+name: Critical/High findings persisting across scan cycles unremediated
+description: |
+  'Reframes the finding store from a discovery tool into an accountability tool: flags Critical/High
+  (SeverityRank <= 2) findings that recur across 3 or more distinct ScanIds for the same ConfigId/Title/
+  CweId over a 30-day window, i.e. survived multiple scan cycles unremediated. Uses first/last-seen
+  aggregation to surface how long each finding has been outstanding.'
+severity: Medium
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1d
+queryPeriod: 30d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1592
+query: |
+  // This is a process/accountability signal rather than a specific attacker technique, so it runs on a
+  // daily cadence over a 30-day window rather than near-real-time. SeverityRank <= 2 filters to
+  // Critical/High before the group-by aggregation that computes scan-cycle persistence.
+  let LookbackWindow = 30d;
+  let MinScanCyclesToFlag = 3;
+  PrancerFindings
+  | where TimeGenerated > ago(LookbackWindow)
+  | where SeverityRank <= 2
+  | where isnotempty(ConfigId) and isnotempty(Title)
+  | summarize
+      ScanCycleCount = dcount(ScanId),
+      DistinctScanIds = make_set(ScanId, 50),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      arg_max(TimeGenerated, FindingId, Severity, SeverityRank, CompanyName, CustomerId, DeviceProduct, ScanType, ResourceID, ResourceUrl, Solution, RemediationDescription)
+    by ConfigId, Title, CweId
+  | where ScanCycleCount >= MinScanCyclesToFlag
+  | extend PersistenceDurationDays = datetime_diff('day', LastSeen, FirstSeen)
+  | extend PersistenceSummary = strcat(
+      'Unremediated across ', ScanCycleCount, ' scan cycles over ', PersistenceDurationDays, ' days (', SeverityRank, ')')
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
+customDetails:
+  UniqueFindingId: FindingId
+  ScanCycleCount: ScanCycleCount
+  PersistenceDurationDays: PersistenceDurationDays
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 30d
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Persisting finding ({{ScanCycleCount}} scan cycles): {{Title}}"
+  alertDescriptionFormat: "{{PersistenceSummary}}"
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: RemediationSteps
+      value: Solution
+version: 1.0.0
+kind: Scheduled

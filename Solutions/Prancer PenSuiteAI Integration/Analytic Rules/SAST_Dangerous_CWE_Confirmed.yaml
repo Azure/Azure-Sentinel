@@ -1,0 +1,79 @@
+id: cc4800b3-e9b5-4784-99ad-0cb2b15a0725
+name: SAST finding in dangerous-CWE allowlist with evidence
+description: |
+  'Flags DeviceProduct == sast findings scoped to a curated dangerous-CWE allowlist (SQL Injection=89,
+  XSS=79, Hardcoded Credentials=798, Broken/Risky Crypto=327, Path Traversal=22, SSRF=918, Insecure
+  Deserialization=502) that also carry non-empty AlertEvidence, instead of alerting on every SAST finding
+  regardless of class or evidence quality.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1190
+  - T1552
+  - T1600
+query: |
+  // DeviceProduct (not ScanType) is the correct SAST filter - ScanType would be the raw tool name
+  // (e.g. semgrep). Cheap filters (DeviceProduct, isnotempty(CweId/AlertEvidence)) run before the
+  // regex-based CweId normalization, since CweId storage format (bare digits vs 'CWE-89') isn't
+  // guaranteed uniform across scanner versions.
+  let DangerousCwes = dynamic(['89', '79', '798', '327', '22', '918', '502']);
+  PrancerFindings
+  | where DeviceProduct == 'sast'
+  | where isnotempty(CweId)
+  | where isnotempty(AlertEvidence)
+  | extend CweIdNormalized = extract(@'(\d+)', 1, tostring(CweId))
+  | where CweIdNormalized in (DangerousCwes)
+  | extend CweCategory = case(
+      CweIdNormalized == '89', 'SQL Injection',
+      CweIdNormalized == '79', 'Cross-Site Scripting',
+      CweIdNormalized == '798', 'Hardcoded Credentials',
+      CweIdNormalized == '327', 'Broken/Risky Cryptography',
+      CweIdNormalized == '22', 'Path Traversal',
+      CweIdNormalized == '918', 'Server-Side Request Forgery',
+      CweIdNormalized == '502', 'Insecure Deserialization',
+      'Other')
+  | project
+      FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, CweId, CweIdNormalized, CweCategory,
+      MitreIds, AlertEvidence, AlertSolution, ResourceID, ApplicationName, ResourceUrl, ScannerVersion, TimeGenerated
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
+customDetails:
+  UniqueFindingId: FindingId
+  CweCategory: CweCategory
+  CweNumber: CweId
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "SAST {{CweCategory}}: {{Title}}"
+  alertDescriptionFormat: "{{Title}} - {{AlertEvidence}}"
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: RemediationSteps
+      value: AlertSolution
+version: 1.0.0
+kind: Scheduled

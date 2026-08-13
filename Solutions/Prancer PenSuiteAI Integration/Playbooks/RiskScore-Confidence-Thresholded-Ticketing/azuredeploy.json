@@ -1,0 +1,320 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Prancer-RiskConfidence-Thresholded-Ticketing",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook resource."
+      }
+    },
+    "Location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the Logic App and its API connections. Required (no default) since this playbook is nested inside the packaged solution's mainTemplate.json, where a resource-group-derived default would fall outside the range ARM-TTK's Location check recognizes as exempt."
+      }
+    },
+    "RiskScoreThreshold": {
+      "type": "string",
+      "defaultValue": "8",
+      "metadata": {
+        "description": "Minimum RiskScore (0-10) required to auto-file a ticket."
+      }
+    },
+    "ConfidenceThreshold": {
+      "type": "string",
+      "defaultValue": "0.7",
+      "metadata": {
+        "description": "Minimum Confidence (0-1) required to auto-file a ticket."
+      }
+    },
+    "TicketingApiUrl": {
+      "type": "string",
+      "defaultValue": "https://REPLACE-ME.service-now.com/api/now/table/incident",
+      "metadata": {
+        "description": "PLACEHOLDER endpoint. Modeled as a ServiceNow Table API / Jira REST 'create issue' style endpoint. Replace with the real ticketing system URL at deployment time; no real credentials are embedded in this template."
+      }
+    },
+    "TicketingApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PLACEHOLDER API key/token for the ticketing system, supplied at deployment time. Never hardcode this value in source control."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('Location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PrancerRiskConfidenceThresholdedTicketing",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkflowTrustClass": "fully-autonomous-read-only"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "RiskScoreThreshold": {
+              "type": "String",
+              "defaultValue": "[parameters('RiskScoreThreshold')]"
+            },
+            "ConfidenceThreshold": {
+              "type": "String",
+              "defaultValue": "[parameters('ConfidenceThreshold')]"
+            },
+            "TicketingApiUrl": {
+              "type": "String",
+              "defaultValue": "[parameters('TicketingApiUrl')]"
+            },
+            "TicketingApiKey": {
+              "type": "SecureString",
+              "defaultValue": "[parameters('TicketingApiKey')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident_trigger": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_RiskScore": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "RiskScore",
+                    "type": "float",
+                    "value": "@{float(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Risk_Score'], '0'))}"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_Confidence": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Confidence",
+                    "type": "float",
+                    "value": "@{float(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Confidence'], '0'))}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_RiskScore": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_IncidentArmId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IncidentArmId",
+                    "type": "string",
+                    "value": "@{triggerBody()?['object']?['id']}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_Confidence": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "RiskScore_and_Confidence_clear_threshold": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greaterOrEquals": [
+                      "@variables('RiskScore')",
+                      "@float(parameters('RiskScoreThreshold'))"
+                    ]
+                  },
+                  {
+                    "greaterOrEquals": [
+                      "@variables('Confidence')",
+                      "@float(parameters('ConfidenceThreshold'))"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "File_ticket_via_HTTP_(generic_ServiceNow/Jira-style_endpoint)": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('TicketingApiUrl')}",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "Bearer @{parameters('TicketingApiKey')}"
+                    },
+                    "body": {
+                      "short_description": "@{triggerBody()?['object']?['properties']?['title']}",
+                      "severity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                      "description": "Auto-filed by Prancer RiskScore/Confidence-thresholded ticketing playbook. RiskScore=@{variables('RiskScore')} Confidence=@{variables('Confidence')}",
+                      "cwe_id": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Cwe_Id'], '')}",
+                      "solution": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Solution'], '')}",
+                      "resource_url": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Resource_Url'], '')}",
+                      "kill_chain": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Kill_Chain'], '')}",
+                      "risk_score": "@{variables('RiskScore')}",
+                      "confidence": "@{variables('Confidence')}"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Parse_ticketing_response": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('File_ticket_via_HTTP_(generic_ServiceNow/Jira-style_endpoint)')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "sys_id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "File_ticket_via_HTTP_(generic_ServiceNow/Jira-style_endpoint)": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Add_comment_to_incident_with_ticket_ID_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@variables('IncidentArmId')",
+                      "message": "Auto-filed ticket for this finding (RiskScore=@{variables('RiskScore')}, Confidence=@{variables('Confidence')}). Ticket reference: @{coalesce(body('Parse_ticketing_response')?['result']?['number'], body('Parse_ticketing_response')?['key'], body('Parse_ticketing_response')?['id'], 'unknown - check ticketing system response shape')}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Parse_ticketing_response": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Add_comment_below_threshold_routed_to_enrichment_only": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@variables('IncidentArmId')",
+                        "message": "RiskScore=@{variables('RiskScore')} / Confidence=@{variables('Confidence')} did not clear the auto-ticketing threshold (RiskScore>=@{parameters('RiskScoreThreshold')} and Confidence>=@{parameters('ConfidenceThreshold')}). No ticket filed; routed to enrichment-only per the Kill-Chain Context Enrichment playbook instead."
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    },
+                    "runAfter": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_IncidentArmId": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}

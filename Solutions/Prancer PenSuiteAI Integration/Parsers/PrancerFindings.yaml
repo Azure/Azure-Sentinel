@@ -1,0 +1,44 @@
+id: 49099bdc-2257-4eca-9725-36159affabd4
+Function:
+  Title: Parser for Prancer Findings
+  Version: '1.0.0'
+  LastUpdated: '2026-08-10'
+Category: Microsoft Sentinel Parser
+FunctionName: PrancerFindings
+FunctionAlias: PrancerFindings
+FunctionQuery: |
+  let SeverityRank = (sev: string) {
+      case(
+          sev == 'Critical', 1,
+          sev == 'High', 2,
+          sev == 'Medium', 3,
+          sev == 'Low', 4,
+          sev == 'Info' or sev == 'Informational', 5,
+          99
+      )
+  };
+  PrancerFindings_CL
+  | extend
+      ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),
+      ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),
+      RequestHeader = tostring(Payload.message.requestHeader),
+      RequestBody = tostring(Payload.message.requestBody),
+      ResponseHeader = tostring(Payload.message.responseHeader),
+      ResponseBody = tostring(Payload.message.responseBody),
+      AlertEvidence = tostring(Payload.alert.evidence),
+      AlertSolution = tostring(coalesce(Payload.alert.solution, Solution)),
+      CVSSScore = todouble(Payload.alert.cvss.cvss_score),
+      CVSSVector = tostring(Payload.alert.cvss.vector_string),
+      Snapshots = Payload.data.snapshots,
+      RemediationDescription = tostring(Payload.data.remediation_description)
+  | extend SeverityRank = SeverityRank(Severity)
+  | extend DataQualityNotes = strcat(
+        iff(isempty(FindingId), 'missing FindingId; ', ''),
+        iff(isempty(Severity), 'missing Severity; ', ''),
+        iff(isempty(CustomerId), 'missing CustomerId; ', ''),
+        iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),
+        iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')
+    )
+  | extend IsDataQualityIssue = isnotempty(DataQualityNotes)
+  | summarize arg_max(TimeGenerated, *) by FindingId
+  | order by TimeGenerated desc

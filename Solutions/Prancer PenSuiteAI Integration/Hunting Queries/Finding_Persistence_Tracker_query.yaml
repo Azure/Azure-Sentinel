@@ -1,0 +1,50 @@
+id: 0c90dc02-6181-4965-bd1d-67b923614b41
+name: Finding persistence tracker (all severities)
+description: |
+  Broader, exploration-oriented companion to the Finding_Persistence_Tracker analytic rule: surfaces
+  findings recurring across 2 or more distinct ScanIds for the same ConfigId/Title/CweId over a 30-day
+  window at any severity (not just Critical/High), with SeverityRank included so analysts can sort/filter
+  interactively rather than relying on the rule's fixed Critical/High threshold.
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1592
+query: |
+  // isnotempty(ConfigId)/isnotempty(Title) run before the group-by aggregation that computes
+  // scan-cycle persistence, same filter-early shape as the companion analytic rule.
+  let LookbackWindow = 30d;
+  let MinScanCyclesToSurface = 2;
+  PrancerFindings
+  | where TimeGenerated > ago(LookbackWindow)
+  | where isnotempty(ConfigId) and isnotempty(Title)
+  | summarize
+      ScanCycleCount = dcount(ScanId),
+      DistinctScanIds = make_set(ScanId, 50),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      arg_max(TimeGenerated, FindingId, Severity, SeverityRank, CompanyName, CustomerId, DeviceProduct, ScanType, ResourceID, ResourceUrl, Solution, RemediationDescription)
+    by ConfigId, Title, CweId
+  | where ScanCycleCount >= MinScanCyclesToSurface
+  | extend PersistenceDurationDays = datetime_diff('day', LastSeen, FirstSeen)
+  | project
+      ConfigId, Title, CweId, Severity, SeverityRank, ScanCycleCount, PersistenceDurationDays,
+      FirstSeen, LastSeen, DeviceProduct, ScanType, FindingId, ResourceID, ResourceUrl, Solution, RemediationDescription
+  | order by SeverityRank asc, ScanCycleCount desc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
+customDetails:
+  ConfigId: ConfigId
+  ScanCycleCount: ScanCycleCount
+  SeverityRank: SeverityRank
+version: 1.0.0
