@@ -127,29 +127,31 @@ After deployment, verify that data is flowing into Microsoft Sentinel:
 
 ```kql
 // Check CrowdStrike Alerts
-CrowdStrikeAlerts
+CrowdStrikeAlertsV2_CL
 | take 10
 
 // Check Crowdstrike Cases
-CrowdStrikeCases
+CrowdStrikeCasesV2_CL
 | take 10
 
 // Check CrowdStrike Detections  
-CrowdStrikeDetections
+CrowdStrikeDetectionsV2_CL
 | take 10
 
 // Check CrowdStrike Incidents
-CrowdStrikeIncidents
+CrowdStrikeIncidentsV2_CL
 | take 10
 
 // Check CrowdStrike Hosts
-CrowdStrikeHosts
+CrowdStrikeHostsV2_CL
 | take 10
 
 // Check CrowdStrike Vulnerabilities
-CrowdStrikeVulnerabilities
+CrowdStrikeVulnerabilitiesV2_CL
 | take 10
 ```
+
+**It is highly recommended to use parser (CrowdStrikeApi) instead of individual tables for queries**
 
 ### **2. Monitor Connector Health**
 - Check the connector status regularly in the **Data Connectors** page.
