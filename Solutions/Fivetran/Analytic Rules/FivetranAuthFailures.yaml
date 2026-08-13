@@ -1,0 +1,45 @@
+id: bbfbff4e-134d-4e21-a56b-93bc1de7cc2c
+name: Fivetran - Repeated authentication failures
+description: 'Detects an unusually high number of Fivetran log events referencing authentication, authorization or credential failures within a short window. Repeated failures can indicate brute-force or credential-stuffing attempts against the accounts Fivetran uses, credential theft/misuse, or (more benignly) expired or revoked credentials. The threshold is tuned so routine one-off credential expiry does not alert.'
+kind: Scheduled
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Fivetran
+    dataTypes:
+      - Fivetran_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+    let threshold = 10;
+    Fivetran_CL
+    | where Level in ("SEVERE", "WARNING")
+    | where Message has_any (
+        "authentication failed", "authentication error", "unauthorized",
+        "invalid credentials", "invalid token", "access denied",
+        "permission denied", "forbidden", "401", "403",
+        "token expired", "credential", "auth failure", "login failed")
+    | summarize FailureCount = count(), SampleMessages = make_set(Message, 5),
+        FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+        by bin(TimeGenerated, 1h)
+    | where FailureCount > threshold
+    | sort by FailureCount desc
+    | extend Application = "Fivetran"
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+customDetails:
+    FailureCount: FailureCount
+    FirstSeen: FirstSeen
+    LastSeen: LastSeen
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: Application
+version: 1.0.0

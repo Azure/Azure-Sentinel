@@ -1,0 +1,45 @@
+id: 5f539c60-f2ed-4a22-b779-75a50ea1b919
+name: Fivetran - Log ingestion gap (telemetry loss)
+description: 'Alerts when no Fivetran logs have been received for more than 2 hours. Checks the Analytics table Fivetran_CL and, where the optional split-plan ingestion pattern is in use, the FivetranVerboseSummary_CL summary table, so a deployment that routes routine INFO events to the Auxiliary tier does not raise a false positive. A genuine gap can indicate a broken Fivetran-to-Sentinel pipeline, disabled logging, expired app credentials, or deliberately impaired security telemetry.'
+kind: Scheduled
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Fivetran
+    dataTypes:
+      - Fivetran_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+    let lookback = 14d;
+    let gapThreshold = 2h;
+    union isfuzzy=true
+        (Fivetran_CL
+         | where TimeGenerated > ago(lookback)
+         | summarize LastLogReceived = max(TimeGenerated)),
+        (FivetranVerboseSummary_CL
+         | where TimeGenerated > ago(lookback)
+         | summarize LastLogReceived = max(TimeGenerated))
+    | summarize LastLogReceived = max(LastLogReceived)
+    | where isnotnull(LastLogReceived)
+    | extend GapDuration = now() - LastLogReceived
+    | where GapDuration > gapThreshold
+    | extend Reason = strcat("No Fivetran logs received for ", format_timespan(GapDuration, 'dd.hh:mm:ss'))
+    | extend Application = "Fivetran"
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+customDetails:
+    LastLogReceived: LastLogReceived
+    Reason: Reason
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: Application
+version: 1.0.0

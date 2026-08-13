@@ -1,0 +1,155 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Fivetran Platform AUDIT_TRAIL
+  Version: '0.1.0'
+  LastUpdated: 2026-07-29
+Product:
+  Name: Fivetran Platform
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.2'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://learn.microsoft.com/azure/sentinel/normalization-schema-audit
+- Title: ASIM
+  Link: https://learn.microsoft.com/azure/sentinel/normalization
+- Title: Fivetran Platform AUDIT_TRAIL table reference
+  Link: https://fivetran.com/docs/logs/fivetran-platform/table-reference
+Description: |
+  ASIM Audit Event filtering parser for the Fivetran Platform Connector AUDIT_TRAIL
+  table, ingested from the Managed Data Lake into Fivetran_AuditTrail_CL by the
+  Path B ingest connector. Unlike the External Log (Fivetran_CL) best-effort parser,
+  this reads the fully structured audit columns (action, user_id, primary/secondary
+  resource, old_values/new_values) so Actor, Object, Operation and values are exact.
+
+  Delta/Iceberg compaction in the lake can re-emit rows already ingested, so the
+  parser dedupes by the immutable audit `id` (arg_max on TimeGenerated) before
+  normalising. AUDIT_TRAIL records completed administrative actions, so EventResult
+  is Success; there is no source IP in AUDIT_TRAIL.
+ParserName: vimAuditEventFivetranAuditTrail
+EquivalentBuiltInParser: _Im_AuditEvent_FivetranAuditTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: eventtype_in
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: operation_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: object_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let parser = (
+        starttime: datetime = datetime(null),
+        endtime: datetime = datetime(null),
+        srcipaddr_has_any_prefix: dynamic = dynamic([]),
+        eventtype_in: dynamic = dynamic([]),
+        eventresult: string = '*',
+        actorusername_has_any: dynamic = dynamic([]),
+        operation_has_any: dynamic = dynamic([]),
+        object_has_any: dynamic = dynamic([]),
+        newvalue_has_any: dynamic = dynamic([]),
+        disabled: bool = false)
+    {
+        Fivetran_AuditTrail_CL | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        // Dedupe compaction re-emits: keep the latest landed copy of each audit id.
+        | summarize arg_max(TimeGenerated, *) by id
+        | extend
+            _action = tostring(action),
+            _primType = tostring(primary_resource_type),
+            _primId = tostring(primary_resource_id),
+            _secType = tostring(secondary_resource_type),
+            _secId = tostring(secondary_resource_id)
+        | extend Operation = _action
+        | extend EventType = case(
+                _action has_any ('create', 'add', 'insert'), 'Create',
+                _action has_any ('delete', 'remove', 'drop'), 'Delete',
+                _action has_any ('pause', 'disable'), 'Disable',
+                _action has_any ('resume', 'enable'), 'Enable',
+                _action has_any ('edit', 'update', 'alter', 'change', 'modify', 'set'), 'Set',
+                _action has_any ('read', 'view', 'access', 'get'), 'Read',
+                'Other')
+        // AUDIT_TRAIL records completed actions; there is no failure indicator.
+        | extend EventResult = 'Success'
+        | where (eventresult == '*' or EventResult =~ eventresult)
+        | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+        | where (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+        | extend
+            Object = tostring(coalesce(_primId, _primType, 'Unknown')),
+            ObjectType = case(
+                _primType has_any ('connector', 'connection', 'destination'), 'Cloud Resource',
+                _primType has_any ('user', 'team', 'role', 'account', 'membership'), 'Directory Service Object',
+                'Other')
+        | where (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+        | extend
+            OldValue = tostring(old_values),
+            NewValue = tostring(new_values)
+        | where (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+        | extend
+            ActorUserId = tostring(user_id),
+            ActorUsername = tostring(user_id)
+        | extend
+            ActorUsername = iff(isempty(ActorUsername), 'Unknown', ActorUsername),
+            ActorUsernameType = 'Other',
+            ActorUserIdType = 'Other'
+        | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
+        | extend
+            EventCount = int(1),
+            EventStartTime = todatetime(coalesce(column_ifexists('captured_at', TimeGenerated), TimeGenerated)),
+            EventEndTime = todatetime(coalesce(column_ifexists('captured_at', TimeGenerated), TimeGenerated)),
+            EventVendor = 'Fivetran',
+            EventProduct = 'Fivetran Platform',
+            EventSchema = 'AuditEvent',
+            EventSchemaVersion = '0.1.2',
+            EventOriginalType = _action,
+            EventOriginalUid = tostring(id),
+            EventMessage = strcat(_action, ' ', _primType, ' ', _primId),
+            Dvc = 'Fivetran',
+            DvcHostname = 'Fivetran',
+            TargetAppName = iff(isnotempty(_primType), _primType, 'Fivetran'),
+            TargetAppType = 'Service'
+        | extend
+            User = ActorUsername,
+            Application = TargetAppName,
+            Value = NewValue,
+            AdditionalFields = bag_pack(
+                'interaction_method', tostring(interaction_method),
+                'secondary_resource_type', _secType,
+                'secondary_resource_id', _secId)
+        // AUDIT_TRAIL carries no source IP, so any caller filtering on it excludes this source.
+        | where (array_length(srcipaddr_has_any_prefix) == 0)
+        | project-away _action, _primType, _primId, _secType, _secId
+    };
+    parser(
+        starttime = starttime,
+        endtime = endtime,
+        srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+        eventtype_in = eventtype_in,
+        eventresult = eventresult,
+        actorusername_has_any = actorusername_has_any,
+        operation_has_any = operation_has_any,
+        object_has_any = object_has_any,
+        newvalue_has_any = newvalue_has_any,
+        disabled = disabled)
