@@ -85,10 +85,7 @@ namespace Sentinel.Client
 
         protected static VoneConfiguration CreateVoneConfig(string baseUrl)
         {
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            };
+            var handler = CreateHttpClientHandler();
 
             var httpClient = new HttpClient(handler)
             {
@@ -101,6 +98,11 @@ namespace Sentinel.Client
             };
 
             return voneConfig;
+        }
+
+        protected static HttpClientHandler CreateHttpClientHandler()
+        {
+            return new HttpClientHandler();
         }
 
         public override void Dispose()
