@@ -27,13 +27,13 @@
 
  Deploy the base playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
 
 
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)  
+ [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)  
 
  2. Fill in the required parameters for deploying the playbook.
 
