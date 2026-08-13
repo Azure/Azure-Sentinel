@@ -1,0 +1,93 @@
+id: 06184800-6d66-46ce-aabd-7e17e9cf3fb0
+name: Privileged identities authenticating via legacy protocols
+description: |
+  Identifies successful sign-ins by privileged accounts using legacy clients
+  such as Exchange ActiveSync, IMAP4, POP3, SMTP Auth, MAPI over HTTP, or other
+  legacy clients. These protocols may bypass modern Conditional Access and
+  MFA controls.
+description-detailed: |
+  Joins privileged accounts from IdentityInfo (AssignedRoles /
+  PrivilegedEntraPimRoles) against SigninLogs where ClientAppUsed matches
+  a legacy protocol and the sign-in succeeded. Review each hit against
+  Conditional Access 'legacy authentication' blocking policies and
+  block-legacy-auth settings in Exchange Online; disable the legacy
+  protocol for any account that does not require it. Protocol names here
+  follow the SigninLogs ClientAppUsed values used by existing repo
+  legacy-auth detection patterns.
+  References:
+  - https://learn.microsoft.com/entra/identity/conditional-access/block-legacy-authentication
+  - https://attack.mitre.org/techniques/T1078/004/
+  - https://attack.mitre.org/techniques/T1110/003/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - IdentityInfo
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078.004
+  - T1110.003
+query: |
+  let timeframe = 30d;
+  let LegacyProtocols = dynamic([
+      "Exchange ActiveSync",
+      "IMAP4",
+      "MAPI over HTTP",
+      "POP3",
+      "SMTP Auth",
+      "Authenticated SMTP",
+      "Other clients"
+  ]);
+  let PrivilegedUsers = IdentityInfo
+  | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
+  | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId;
+  SigninLogs
+  | where TimeGenerated > ago(timeframe)
+  | where ResultType == "0"
+  | where ClientAppUsed in~ (LegacyProtocols)
+  | join kind=inner PrivilegedUsers on $left.UserId == $right.AccountObjectId
+  | extend
+      AccountName = tostring(split(UserPrincipalName, "@")[0]),
+      AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | summarize
+      SignInAttempts = count(),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      ClientApps = make_set(ClientAppUsed),
+      AuthRequirements = make_set(AuthenticationRequirement),
+      LastIP = tostring(arg_max(TimeGenerated, IPAddress))
+      by UserPrincipalName, AccountName, AccountUPNSuffix, UserId, AccountUpn, AppDisplayName
+  | project
+      UserPrincipalName, AccountName, AccountUPNSuffix, AccountUpn,
+      SignInAttempts, FirstSeen, LastSeen, ClientApps, AuthRequirements,
+      LastIP, AppDisplayName
+  | sort by SignInAttempts desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LastIP
+version: 1.0.3
+metadata:
+  source:
+    kind: Community
+  author:
+    name: d4rk-pri0r
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection", "Identity" ]
