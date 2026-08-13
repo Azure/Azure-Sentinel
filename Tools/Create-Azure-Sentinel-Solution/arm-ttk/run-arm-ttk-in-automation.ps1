@@ -3,11 +3,15 @@
 # This is a simplified version of run-arm-ttk.ps1 which outputs the results as is,
 #  without accounting for ADO Unit Test Formatting.
 
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$SolutionName
+)
+
 # Paths
 $repoRoot = $(git rev-parse --show-toplevel)
 $root="$repoRoot/Solutions"
 $tmp="$PSScriptRoot/tmp"
-$solutionName=$args[0]
 
 if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
     Import-Module "$tmp/arm-ttk/arm-ttk.psd1"
@@ -15,8 +19,8 @@ if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
 
 # Run 'Test-AzTemplate' from the arm-ttk for given solution package
 $solutions = Get-ChildItem $root -Directory
-if($solutionName){
-    $solutions = Get-Item "$root/$solutionName/Package"
+if($SolutionName){
+    $solutions = Get-Item "$root/$SolutionName/Package"
 }
 $fails = @()
 $skip = "poc","template", "automation"
