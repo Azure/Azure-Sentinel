@@ -1,20 +1,20 @@
 id: 2d7b90c5-41ae-4f83-a6d2-9b1c5e3407fa
 name: Datazag - retro-hunt historical DNS against impersonation indicators
 description: |
-  'Sweeps the workspace''s full DNS history against the current Datazag indicator set to answer
-  "what did we already miss?".
+  Sweeps the workspace DNS history against the current Datazag indicator set to answer the
+  question "what did we already miss?".
 
   This is the query to run immediately after connecting the Datazag TAXII feed. Indicators are
-  retained in the workspace, so they can be matched against logs that predate the connection -
-  a domain detected by Datazag at certificate issuance may have been resolved inside the estate
+  retained in the workspace, so they can be matched against logs that predate the connection.
+  A domain detected by Datazag at certificate issuance may have been resolved inside the estate
   weeks before the feed was configured.
 
-  The lookback is deliberately wider than any scheduled analytics rule can use, which is why
+  The lookback is deliberately wider than any scheduled analytic rule can use, which is why
   this is a hunting query rather than a rule. Adjust dns_lookback to match your DNS retention.
 
-  Note: if DNS logs are held in an auxiliary or data lake tier rather than the analytics tier,
-  they are not reachable from advanced hunting and must be queried through the data lake
-  exploration experience instead.'
+  If DNS logs are held in an auxiliary or data lake tier rather than the analytics tier, they
+  are not reachable from advanced hunting and must be queried through the data lake
+  exploration experience instead.
 requiredDataConnectors:
   - connectorId: DatazagThreatIntelligence
     dataTypes:
@@ -38,12 +38,10 @@ query: |
       | where IsDeleted == false
       | where tostring(Data.revoked) != "true"
       | where Confidence >= confidence_floor
-      // ValidUntil is deliberately NOT filtered here. An expired indicator is still
-      // meaningful evidence about the past, which is the whole point of a retro-hunt.
       | extend IndicatorDomain = tolower(trim_end(@"\.", ObservableValue))
       | project
           IndicatorDomain,
-          DatazagAlertId = tostring(Data.external_references[0].external_id),
+          DatazagAlertRef = tostring(Data.external_references[0].external_id),
           Confidence,
           IndicatorEvidence = tostring(Data.labels),
           IndicatorFirstPublished = todatetime(Data.created);
@@ -68,13 +66,12 @@ query: |
       SourceIps     = make_set(SrcIpAddr, 100),
       SourceHosts   = make_set(SrcHostname, 100),
       Upns          = make_set_if(SrcUsername, SrcUsernameType == "UPN", 100)
-      by IndicatorDomain, DatazagAlertId, Confidence, IndicatorEvidence, IndicatorFirstPublished
+      by IndicatorDomain, DatazagAlertRef, Confidence, IndicatorEvidence, IndicatorFirstPublished
   | extend
-      SourceIp   = tostring(SourceIps[0]),
-      SourceHost = tostring(SourceHosts[0]),
-      AccountUpn = tostring(Upns[0]),
+      SourceIp      = tostring(SourceIps[0]),
+      SourceHost    = tostring(SourceHosts[0]),
+      AccountUpn    = tostring(Upns[0]),
       HostsAffected = array_length(SourceHosts),
-      // negative means the estate resolved the domain before Datazag published the indicator
       DaysBeforeIndicator = datetime_diff('day', IndicatorFirstPublished, FirstResolved)
   | order by FirstResolved asc
 entityMappings:

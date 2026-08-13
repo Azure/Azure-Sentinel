@@ -1,54 +1,51 @@
 id: 8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41
 name: Datazag - impersonation domain resolved in DNS
 description: |
-  'Matches active, high-confidence domain indicators delivered by Datazag against DNS query
-  activity normalized by the ASIM Dns schema. Because the rule reads from _Im_Dns rather than
-  a vendor-specific table, it works across any DNS source the workspace has normalized -
-  Windows DNS, Infoblox, Cisco Umbrella, Azure Firewall, Zscaler and others - without
-  modification.
+  Matches active Datazag domain indicators against DNS query activity normalized by the ASIM
+  Dns schema. Reading from the ASIM parser rather than a vendor-specific table means the rule
+  works across any normalized DNS source in the workspace (Windows DNS, Infoblox, Cisco
+  Umbrella, Azure Firewall, Zscaler and others) without modification. The ASIM DNS parsers
+  must be deployed in the workspace for this rule to return results.
 
-  A match means a host inside the estate resolved a domain that Datazag scored as
-  brand-impersonation, platform-impersonation or attacker infrastructure at or above the
-  block-confidence floor. Resolution is not proof of compromise, but it establishes that the
-  domain reached a resolver from inside the estate, which is the earliest observable point in
-  most credential-phishing chains.
+  A match means a host inside the estate resolved a domain that Datazag scored as brand
+  impersonation, platform impersonation or attacker infrastructure at or above the configured
+  confidence floor. Resolution is not proof of compromise, but it establishes that the domain
+  reached a resolver from inside the estate, which is the earliest observable point in most
+  credential-phishing chains.
+
+  Indicators are identified by their STIX created_by_ref rather than by SourceSystem, because
+  SourceSystem reflects the friendly name chosen when the TAXII connector was configured and
+  therefore differs between deployments.
 
   Indicator revisions are collapsed with arg_max by Id, so a re-derived indicator does not
-  produce a duplicate match. Withdrawn (IsDeleted), revoked and expired indicators are
-  excluded.'
+  produce duplicate matches. Withdrawn, revoked and expired indicators are excluded.
 severity: High
 status: Available
 requiredDataConnectors:
   - connectorId: DatazagThreatIntelligence
     dataTypes:
       - ThreatIntelIndicators
-  - connectorId: AzureFirewall
-    dataTypes:
-      - AzureDiagnostics
-  - connectorId: DNS
-    dataTypes:
-      - DnsEvents
-queryFrequency: 1h
-queryPeriod: 1h
-triggerOperator: gt
-triggerThreshold: 0
 tactics:
   - InitialAccess
   - CommandAndControl
 relevantTechniques:
   - T1566
   - T1071
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
 query: |
+  let datazag_identity = "identity--55a5a448-c6f1-5128-bc71-4d85b719131e";
   let ioc_lookback = 14d;
   let dns_lookback = 1h;
   let confidence_floor = 85;
   let DatazagDomains =
       ThreatIntelIndicators
       | where TimeGenerated >= ago(ioc_lookback)
-      | where SourceSystem == "Datazag"
+      | where tostring(Data.created_by_ref) == datazag_identity
       | where ObservableKey == "domain-name:value"
       | where isnotempty(ObservableValue)
-      // collapse indicator revisions to the most recent state of each
       | summarize arg_max(TimeGenerated, *) by Id
       | where IsDeleted == false
       | where tostring(Data.revoked) != "true"
@@ -57,27 +54,27 @@ query: |
       | extend IndicatorDomain = tolower(trim_end(@"\.", ObservableValue))
       | project
           IndicatorDomain,
-          IndicatorStixId   = tostring(Data.id),
-          IndicatorRecordId = Id,
+          IndicatorStixId     = tostring(Data.id),
+          IndicatorRecordId   = Id,
+          DatazagAlertRef     = tostring(Data.external_references[0].external_id),
           Confidence,
-          ThreatType,
-          IndicatorEvidence = tostring(Data.labels),
-          IndicatorSummary  = tostring(Data.description),
+          IndicatorEvidence   = tostring(Data.labels),
           IndicatorValidUntil = ValidUntil;
   let DnsActivity =
-      _Im_Dns(starttime=ago(dns_lookback), endtime=now())
+      _Im_Dns
+      | where TimeGenerated >= ago(dns_lookback)
       | where isnotempty(DnsQuery)
       | extend IndicatorDomain = tolower(trim_end(@"\.", DnsQuery))
       | project
-          DnsTime       = TimeGenerated,
+          DnsTime         = TimeGenerated,
           IndicatorDomain,
           DnsQuery,
-          SrcIpAddr     = column_ifexists("SrcIpAddr", ""),
-          SrcHostname   = column_ifexists("SrcHostname", ""),
-          SrcUsername   = column_ifexists("SrcUsername", ""),
-          DnsResponseName = column_ifexists("DnsResponseName", ""),
-          EventVendor   = column_ifexists("EventVendor", ""),
-          EventProduct  = column_ifexists("EventProduct", "");
+          SrcIpAddr       = column_ifexists("SrcIpAddr", ""),
+          SrcHostname     = column_ifexists("SrcHostname", ""),
+          SrcUsername     = column_ifexists("SrcUsername", ""),
+          SrcUsernameType = column_ifexists("SrcUsernameType", ""),
+          EventVendor     = column_ifexists("EventVendor", ""),
+          EventProduct    = column_ifexists("EventProduct", "");
   DatazagDomains
   | join kind=innerunique DnsActivity on IndicatorDomain
   | summarize
@@ -86,39 +83,32 @@ query: |
       QueryCount  = count(),
       SourceIps   = make_set(SrcIpAddr, 50),
       SourceHosts = make_set(SrcHostname, 50),
-      Users       = make_set(SrcUsername, 50),
-      ResolvedTo  = make_set(DnsResponseName, 20),
+      Upns        = make_set_if(SrcUsername, SrcUsernameType == "UPN", 50),
       SeenBy      = make_set(strcat(EventVendor, " ", EventProduct), 10)
       by
-      IndicatorDomain, IndicatorStixId, IndicatorRecordId, Confidence,
-      ThreatType, IndicatorEvidence, IndicatorSummary, IndicatorValidUntil
+      IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,
+      Confidence, IndicatorEvidence, IndicatorValidUntil
   | extend
       SourceIp   = tostring(SourceIps[0]),
       SourceHost = tostring(SourceHosts[0]),
-      UserRaw    = tostring(Users[0])
-  | extend
-      AccountNTDomain = iff(UserRaw has @"\", tostring(split(UserRaw, @"\")[0]), ""),
-      AccountName     = iff(UserRaw has @"\", tostring(split(UserRaw, @"\")[1]), UserRaw)
-  | project-away UserRaw
+      AccountUpn = tostring(Upns[0])
   | order by LastSeen desc
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 alertDetailsOverride:
   alertDisplayNameFormat: 'Datazag: {{IndicatorDomain}} resolved from inside the estate'
   alertDescriptionFormat: |
-    '{{QueryCount}} DNS resolution(s) of {{IndicatorDomain}}, an indicator Datazag scored at
-    confidence {{Confidence}}. First and last seen times, supporting evidence and the
-    indicator expiry are available in the alert custom details.'
+    {{QueryCount}} DNS resolution(s) of {{IndicatorDomain}}, an indicator Datazag scored at
+    confidence {{Confidence}}. First seen {{FirstSeen}}, last seen {{LastSeen}}.
+    Supporting evidence: {{IndicatorEvidence}}
 customDetails:
-  DatazagIndicatorId: IndicatorStixId
+  DatazagAlertRef: DatazagAlertRef
+  DatazagIndicatorRef: IndicatorStixId
   DatazagConfidence: Confidence
   DatazagEvidence: IndicatorEvidence
-  DatazagThreatType: ThreatType
   IndicatorExpiry: IndicatorValidUntil
   ResolutionCount: QueryCount
   ObservedBy: SeenBy
-  FirstResolved: FirstSeen
-  LastResolved: LastSeen
 entityMappings:
   - entityType: DNS
     fieldMappings:
@@ -134,10 +124,8 @@ entityMappings:
         columnName: SourceHost
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
-      - identifier: NTDomain
-        columnName: AccountNTDomain
+      - identifier: FullName
+        columnName: AccountUpn
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -147,8 +135,6 @@ incidentConfiguration:
     matchingMethod: Selected
     groupByEntities:
       - DNS
-    groupByAlertDetails: []
-    groupByCustomDetails: []
 suppressionEnabled: false
 suppressionDuration: 1h
 version: 1.0.0

@@ -1,3 +1,3 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**            |
-|-------------|--------------------------------|-------------------------------|
-| 3.0.0       | 08-08-2026                     | Initial solution release. Adds the **Datazag Threat Intelligence** data connector (TAXII 2.1), one **Analytic Rule** matching Datazag domain indicators against ASIM-normalized DNS activity, and one **Hunting Query** for retro-hunting historical DNS against the current indicator set. |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
+|-------------|--------------------------------|--------------------|
+| 3.0.4 | 08-08-2026 | Initial solution release. Adds the **Datazag Threat Intelligence** data connector (TAXII 2.1), one **Analytic Rule** matching Datazag domain indicators against ASIM-normalized DNS activity, and one **Hunting Query** for retro-hunting historical DNS against the current indicator set. |

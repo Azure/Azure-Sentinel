@@ -33,7 +33,7 @@
     "email": "support@datazag.com",
     "_email": "[variables('email')]",
     "_solutionName": "Datazag",
-    "_solutionVersion": "3.0.6",
+    "_solutionVersion": "3.0.4",
     "solutionId": "datazag.azure-sentinel-solution-datazag",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "DatazagThreatIntelligence",
@@ -69,7 +69,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Datazag data connector with template version 3.0.6",
+        "description": "Datazag data connector with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -229,7 +229,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "DatazagDomainIndicatorMatch_DNS_AnalyticalRules Analytics Rule with template version 3.0.6",
+        "description": "DatazagDomainIndicatorMatch_DNS_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -243,12 +243,12 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Matches active, high-confidence domain indicators delivered by Datazag against DNS query\nactivity normalized by the ASIM Dns schema. Because the rule reads from _Im_Dns rather than\na vendor-specific table, it works across any DNS source the workspace has normalized -\nWindows DNS, Infoblox, Cisco Umbrella, Azure Firewall, Zscaler and others - without\nmodification.\n\nA match means a host inside the estate resolved a domain that Datazag scored as\nbrand-impersonation, platform-impersonation or attacker infrastructure at or above the\nblock-confidence floor. Resolution is not proof of compromise, but it establishes that the\ndomain reached a resolver from inside the estate, which is the earliest observable point in\nmost credential-phishing chains.\n\nIndicator revisions are collapsed with arg_max by Id, so a re-derived indicator does not\nproduce a duplicate match. Withdrawn (IsDeleted), revoked and expired indicators are\nexcluded.",
+                "description": "Matches active Datazag domain indicators against DNS query activity normalized by the ASIM\nDns schema. Reading from the ASIM parser rather than a vendor-specific table means the rule\nworks across any normalized DNS source in the workspace (Windows DNS, Infoblox, Cisco\nUmbrella, Azure Firewall, Zscaler and others) without modification. The ASIM DNS parsers\nmust be deployed in the workspace for this rule to return results.\n\nA match means a host inside the estate resolved a domain that Datazag scored as brand\nimpersonation, platform impersonation or attacker infrastructure at or above the configured\nconfidence floor. Resolution is not proof of compromise, but it establishes that the domain\nreached a resolver from inside the estate, which is the earliest observable point in most\ncredential-phishing chains.\n\nIndicators are identified by their STIX created_by_ref rather than by SourceSystem, because\nSourceSystem reflects the friendly name chosen when the TAXII connector was configured and\ntherefore differs between deployments.\n\nIndicator revisions are collapsed with arg_max by Id, so a re-derived indicator does not\nproduce duplicate matches. Withdrawn, revoked and expired indicators are excluded.",
                 "displayName": "Datazag - impersonation domain resolved in DNS",
                 "enabled": false,
-                "query": "let ioc_lookback = 14d;\nlet dns_lookback = 1h;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookback)\n    | where SourceSystem == \"Datazag\"\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    // collapse indicator revisions to the most recent state of each\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where isempty(ValidUntil) or ValidUntil > now()\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        IndicatorStixId   = tostring(Data.id),\n        IndicatorRecordId = Id,\n        Confidence,\n        ThreatType,\n        IndicatorEvidence = tostring(Data.labels),\n        IndicatorSummary  = tostring(Data.description),\n        IndicatorValidUntil = ValidUntil;\nlet DnsActivity =\n    _Im_Dns(starttime=ago(dns_lookback), endtime=now())\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime       = TimeGenerated,\n        IndicatorDomain,\n        DnsQuery,\n        SrcIpAddr     = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname   = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername   = column_ifexists(\"SrcUsername\", \"\"),\n        DnsResponseName = column_ifexists(\"DnsResponseName\", \"\"),\n        EventVendor   = column_ifexists(\"EventVendor\", \"\"),\n        EventProduct  = column_ifexists(\"EventProduct\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstSeen   = min(DnsTime),\n    LastSeen    = max(DnsTime),\n    QueryCount  = count(),\n    SourceIps   = make_set(SrcIpAddr, 50),\n    SourceHosts = make_set(SrcHostname, 50),\n    Users       = make_set(SrcUsername, 50),\n    ResolvedTo  = make_set(DnsResponseName, 20),\n    SeenBy      = make_set(strcat(EventVendor, \" \", EventProduct), 10)\n    by\n    IndicatorDomain, IndicatorStixId, IndicatorRecordId, Confidence,\n    ThreatType, IndicatorEvidence, IndicatorSummary, IndicatorValidUntil\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    UserRaw    = tostring(Users[0])\n| extend\n    AccountNTDomain = iff(UserRaw has @\"\\\", tostring(split(UserRaw, @\"\\\")[0]), \"\"),\n    AccountName     = iff(UserRaw has @\"\\\", tostring(split(UserRaw, @\"\\\")[1]), UserRaw)\n| project-away UserRaw\n| order by LastSeen desc\n",
+                "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet ioc_lookback = 14d;\nlet dns_lookback = 1h;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookback)\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where isempty(ValidUntil) or ValidUntil > now()\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        IndicatorStixId     = tostring(Data.id),\n        IndicatorRecordId   = Id,\n        DatazagAlertRef     = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence   = tostring(Data.labels),\n        IndicatorValidUntil = ValidUntil;\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        DnsQuery,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\"),\n        EventVendor     = column_ifexists(\"EventVendor\", \"\"),\n        EventProduct    = column_ifexists(\"EventProduct\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstSeen   = min(DnsTime),\n    LastSeen    = max(DnsTime),\n    QueryCount  = count(),\n    SourceIps   = make_set(SrcIpAddr, 50),\n    SourceHosts = make_set(SrcHostname, 50),\n    Upns        = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 50),\n    SeenBy      = make_set(strcat(EventVendor, \" \", EventProduct), 10)\n    by\n    IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,\n    Confidence, IndicatorEvidence, IndicatorValidUntil\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    AccountUpn = tostring(Upns[0])\n| order by LastSeen desc\n",
                 "queryFrequency": "PT1H",
-                "queryPeriod": "PT1H",
+                "queryPeriod": "P14D",
                 "severity": "High",
                 "suppressionDuration": "PT1H",
                 "suppressionEnabled": false,
@@ -261,18 +261,6 @@
                       "ThreatIntelIndicators"
                     ],
                     "connectorId": "DatazagThreatIntelligence"
-                  },
-                  {
-                    "dataTypes": [
-                      "AzureDiagnostics"
-                    ],
-                    "connectorId": "AzureFirewall"
-                  },
-                  {
-                    "dataTypes": [
-                      "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
                   }
                 ],
                 "tactics": [
@@ -285,75 +273,67 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "DNS",
                     "fieldMappings": [
                       {
-                        "identifier": "DomainName",
-                        "columnName": "IndicatorDomain"
+                        "columnName": "IndicatorDomain",
+                        "identifier": "DomainName"
                       }
-                    ],
-                    "entityType": "DNS"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIp"
+                        "columnName": "SourceIp",
+                        "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "HostName",
-                        "columnName": "SourceHost"
+                        "columnName": "SourceHost",
+                        "identifier": "HostName"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
-                      },
-                      {
-                        "identifier": "NTDomain",
-                        "columnName": "AccountNTDomain"
+                        "columnName": "AccountUpn",
+                        "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "ResolutionCount": "QueryCount",
-                  "LastResolved": "LastSeen",
-                  "DatazagConfidence": "Confidence",
-                  "ObservedBy": "SeenBy",
-                  "IndicatorExpiry": "IndicatorValidUntil",
-                  "DatazagThreatType": "ThreatType",
-                  "DatazagIndicatorId": "IndicatorStixId",
                   "DatazagEvidence": "IndicatorEvidence",
-                  "FirstResolved": "FirstSeen"
+                  "IndicatorExpiry": "IndicatorValidUntil",
+                  "ResolutionCount": "QueryCount",
+                  "ObservedBy": "SeenBy",
+                  "DatazagIndicatorRef": "IndicatorStixId",
+                  "DatazagConfidence": "Confidence",
+                  "DatazagAlertRef": "DatazagAlertRef"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "'{{QueryCount}} DNS resolution(s) of {{IndicatorDomain}}, an indicator Datazag scored at\nconfidence {{Confidence}}. First and last seen times, supporting evidence and the\nindicator expiry are available in the alert custom details.'\n",
+                  "alertDescriptionFormat": "{{QueryCount}} DNS resolution(s) of {{IndicatorDomain}}, an indicator Datazag scored at\nconfidence {{Confidence}}. First seen {{FirstSeen}}, last seen {{LastSeen}}.\nSupporting evidence: {{IndicatorEvidence}}\n",
                   "alertDisplayNameFormat": "Datazag: {{IndicatorDomain}} resolved from inside the estate"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
-                    "matchingMethod": "Selected",
+                    "enabled": true,
                     "groupByEntities": [
                       "DNS"
                     ],
-                    "groupByCustomDetails": [],
-                    "enabled": true,
+                    "lookbackDuration": "1d",
                     "reopenClosedIncident": false,
-                    "groupByAlertDetails": [],
-                    "lookbackDuration": "1d"
+                    "matchingMethod": "Selected"
                   },
                   "createIncident": true
                 }
@@ -410,7 +390,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "DatazagRetroHunt_DNS_HuntingQueries Hunting Query with template version 3.0.6",
+        "description": "DatazagRetroHunt_DNS_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -426,12 +406,12 @@
                 "eTag": "*",
                 "displayName": "Datazag - retro-hunt historical DNS against impersonation indicators",
                 "category": "Hunting Queries",
-                "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet dns_lookback = 90d;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where Confidence >= confidence_floor\n    // ValidUntil is deliberately NOT filtered here. An expired indicator is still\n    // meaningful evidence about the past, which is the whole point of a retro-hunt.\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        DatazagAlertId = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence = tostring(Data.labels),\n        IndicatorFirstPublished = todatetime(Data.created);\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstResolved = min(DnsTime),\n    LastResolved  = max(DnsTime),\n    QueryCount    = count(),\n    SourceIps     = make_set(SrcIpAddr, 100),\n    SourceHosts   = make_set(SrcHostname, 100),\n    Upns          = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 100)\n    by IndicatorDomain, DatazagAlertId, Confidence, IndicatorEvidence, IndicatorFirstPublished\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    AccountUpn = tostring(Upns[0]),\n    HostsAffected = array_length(SourceHosts),\n    // negative means the estate resolved the domain before Datazag published the indicator\n    DaysBeforeIndicator = datetime_diff('day', IndicatorFirstPublished, FirstResolved)\n| order by FirstResolved asc\n",
+                "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet dns_lookback = 90d;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        DatazagAlertRef = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence = tostring(Data.labels),\n        IndicatorFirstPublished = todatetime(Data.created);\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstResolved = min(DnsTime),\n    LastResolved  = max(DnsTime),\n    QueryCount    = count(),\n    SourceIps     = make_set(SrcIpAddr, 100),\n    SourceHosts   = make_set(SrcHostname, 100),\n    Upns          = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 100)\n    by IndicatorDomain, DatazagAlertRef, Confidence, IndicatorEvidence, IndicatorFirstPublished\n| extend\n    SourceIp      = tostring(SourceIps[0]),\n    SourceHost    = tostring(SourceHosts[0]),\n    AccountUpn    = tostring(Upns[0]),\n    HostsAffected = array_length(SourceHosts),\n    DaysBeforeIndicator = datetime_diff('day', IndicatorFirstPublished, FirstResolved)\n| order by FirstResolved asc\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "Sweeps the workspace''s full DNS history against the current Datazag indicator set to answer\n\"what did we already miss?\".\n\nThis is the query to run immediately after connecting the Datazag TAXII feed. Indicators are\nretained in the workspace, so they can be matched against logs that predate the connection -\na domain detected by Datazag at certificate issuance may have been resolved inside the estate\nweeks before the feed was configured.\n\nThe lookback is deliberately wider than any scheduled analytics rule can use, which is why\nthis is a hunting query rather than a rule. Adjust dns_lookback to match your DNS retention.\n\nNote: if DNS logs are held in an auxiliary or data lake tier rather than the analytics tier,\nthey are not reachable from advanced hunting and must be queried through the data lake\nexploration experience instead."
+                    "value": "Sweeps the workspace DNS history against the current Datazag indicator set to answer the\nquestion \"what did we already miss?\".\n\nThis is the query to run immediately after connecting the Datazag TAXII feed. Indicators are\nretained in the workspace, so they can be matched against logs that predate the connection.\nA domain detected by Datazag at certificate issuance may have been resolved inside the estate\nweeks before the feed was configured.\n\nThe lookback is deliberately wider than any scheduled analytic rule can use, which is why\nthis is a hunting query rather than a rule. Adjust dns_lookback to match your DNS retention.\n\nIf DNS logs are held in an auxiliary or data lake tier rather than the analytics tier, they\nare not reachable from advanced hunting and must be queried through the data lake\nexploration experience instead."
                   },
                   {
                     "name": "tactics",
@@ -491,16 +471,16 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.6",
+        "version": "3.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Datazag",
         "publisherDisplayName": "Datazag",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Datazag/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://datazag.com/\">Datazag</a> solution for Microsoft Sentinel delivers impersonation and attacker-infrastructure indicators derived from Certificate Transparency at issuance time, published as STIX 2.1 objects over a TAXII 2.1 server.</p>\n<p>Indicators are ingested using Microsoft Sentinel's built-in <strong>Threat Intelligence - TAXII</strong> data connector and land in the native <strong>ThreatIntelIndicators</strong> table. No custom table, data collection rule or workspace function is required, and indicators are available to analytics rules and hunting queries immediately. Because indicators are retained in the workspace, existing logs can also be retro-hunted against them.</p>\n<p><strong>Prerequisites:</strong></p>\n<ol type=\"a\">\n<li><p>An active Datazag subscription. Contact Datazag to obtain the API root, collection ID and credentials.</p>\n</li>\n<li><p>Analytic rules and hunting queries in this solution query DNS and web session activity through the <a href=\"https://learn.microsoft.com/azure/sentinel/normalization\">Advanced Security Information Model (ASIM)</a>. The relevant ASIM parsers must be deployed in the workspace for this content to return results.</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1, <strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Datazag/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://datazag.com/\">Datazag</a> solution for Microsoft Sentinel delivers impersonation and attacker-infrastructure indicators derived from Certificate Transparency at issuance time, published as STIX 2.1 objects over a TAXII 2.1 server.</p>\n<p>Indicators are ingested using Microsoft Sentinel's built-in <strong>Threat Intelligence - TAXII</strong> data connector and land in the native <strong>ThreatIntelIndicators</strong> table. No custom table, data collection rule or workspace function is required, and indicators are available to analytics rules and hunting queries immediately. Because indicators are retained in the workspace, existing logs can also be retro-hunted against them.</p>\n<p><strong>Prerequisites:</strong></p>\n<ol type=\"a\">\n<li><p>An active Datazag subscription. Contact Datazag to obtain the API root, collection ID and credentials.</p>\n</li>\n<li><p>Analytic rules and hunting queries in this solution query DNS activity through the <a href=\"https://learn.microsoft.com/azure/sentinel/normalization\">Advanced Security Information Model (ASIM)</a>. The relevant ASIM parsers must be deployed in the workspace for this content to return results.</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1, <strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
-        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Datazag.svg\" width=\"75px\" height=\"75px\">",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Datazag.png\" width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
