@@ -7,7 +7,7 @@ Category: Microsoft Sentinel Parser
 FunctionName: PrancerFindings
 FunctionAlias: PrancerFindings
 FunctionQuery: |
-  let SeverityRank = (sev: string) {
+  let SeverityRankFn = (sev: string) {
       case(
           sev == 'Critical', 1,
           sev == 'High', 2,
@@ -17,7 +17,7 @@ FunctionQuery: |
           99
       )
   };
-  PrancerFindings_CL
+  let Enriched = PrancerFindings_CL
   | extend
       ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),
       ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),
@@ -31,7 +31,7 @@ FunctionQuery: |
       CVSSVector = tostring(Payload.alert.cvss.vector_string),
       Snapshots = Payload.data.snapshots,
       RemediationDescription = tostring(Payload.data.remediation_description)
-  | extend SeverityRank = SeverityRank(Severity)
+  | extend SeverityRank = SeverityRankFn(Severity)
   | extend DataQualityNotes = strcat(
         iff(isempty(FindingId), 'missing FindingId; ', ''),
         iff(isempty(Severity), 'missing Severity; ', ''),
@@ -39,6 +39,13 @@ FunctionQuery: |
         iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),
         iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')
     )
-  | extend IsDataQualityIssue = isnotempty(DataQualityNotes)
-  | summarize arg_max(TimeGenerated, *) by FindingId
+  | extend IsDataQualityIssue = isnotempty(DataQualityNotes);
+  // Only de-duplicate rows that have a stable FindingId to key on ("latest wins" across
+  // re-ingested/updated records). Rows missing FindingId have no safe dedup key - collapsing
+  // them via arg_max(..., '') by an empty FindingId would merge every missing-FindingId finding
+  // into a single row, hiding exactly the data-quality problem DataQualityNotes/
+  // IsDataQualityIssue exist to surface. So those rows pass through unmodified instead.
+  union
+      (Enriched | where isnotempty(FindingId) | summarize arg_max(TimeGenerated, *) by FindingId),
+      (Enriched | where isempty(FindingId))
   | order by TimeGenerated desc

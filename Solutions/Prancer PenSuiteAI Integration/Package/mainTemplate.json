@@ -28,9 +28,17 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Prancer Microsoft Sentinel Analytics Workbook",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
     "watchlist1-id": {
       "type": "string",
-      "defaultValue": "CrownJewelAssets",
+      "defaultValue": "PrancerCrownJewelAssets",
       "minLength": 1,
       "metadata": {
         "description": "Unique id for the watchlist"
@@ -58,6 +66,13 @@
       "parserVersion1": "1.0.0",
       "parserContentId1": "PrancerFindings-Parser"
     },
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "PrancerSentinelAnalyticsWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
     "analyticRuleObject1": {
       "analyticRuleVersion1": "1.0.0",
       "_analyticRulecontentId1": "228e7a7b-a3d2-449c-9979-0730a746df2a",
@@ -186,7 +201,6 @@
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "RiskScore-Confidence-Thresholded-Ticketing": "RiskScore-Confidence-Thresholded-Ticketing",
     "_RiskScore-Confidence-Thresholded-Ticketing": "[variables('RiskScore-Confidence-Thresholded-Ticketing')]",
@@ -293,8 +307,7 @@
                         "scope": "Workspace",
                         "requiredPermissions": {
                           "write": true,
-                          "read": true,
-                          "delete": true
+                          "read": true
                         }
                       },
                       {
@@ -304,8 +317,7 @@
                         "scope": "Resource Group",
                         "requiredPermissions": {
                           "write": true,
-                          "read": true,
-                          "delete": true
+                          "read": true
                         }
                       },
                       {
@@ -315,8 +327,7 @@
                         "scope": "Resource Group",
                         "requiredPermissions": {
                           "write": true,
-                          "read": true,
-                          "delete": true
+                          "read": true
                         }
                       }
                     ],
@@ -486,8 +497,7 @@
                 "scope": "Workspace",
                 "requiredPermissions": {
                   "write": true,
-                  "read": true,
-                  "delete": true
+                  "read": true
                 }
               },
               {
@@ -497,8 +507,7 @@
                 "scope": "Resource Group",
                 "requiredPermissions": {
                   "write": true,
-                  "read": true,
-                  "delete": true
+                  "read": true
                 }
               },
               {
@@ -508,8 +517,7 @@
                 "scope": "Resource Group",
                 "requiredPermissions": {
                   "write": true,
-                  "read": true,
-                  "delete": true
+                  "read": true
                 }
               }
             ],
@@ -570,7 +578,7 @@
                 "displayName": "Parser for Prancer Findings",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "PrancerFindings",
-                "query": "let SeverityRank = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nPrancerFindings_CL\n| extend\n    ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),\n    ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),\n    RequestHeader = tostring(Payload.message.requestHeader),\n    RequestBody = tostring(Payload.message.requestBody),\n    ResponseHeader = tostring(Payload.message.responseHeader),\n    ResponseBody = tostring(Payload.message.responseBody),\n    AlertEvidence = tostring(Payload.alert.evidence),\n    AlertSolution = tostring(coalesce(Payload.alert.solution, Solution)),\n    CVSSScore = todouble(Payload.alert.cvss.cvss_score),\n    CVSSVector = tostring(Payload.alert.cvss.vector_string),\n    Snapshots = Payload.data.snapshots,\n    RemediationDescription = tostring(Payload.data.remediation_description)\n| extend SeverityRank = SeverityRank(Severity)\n| extend DataQualityNotes = strcat(\n      iff(isempty(FindingId), 'missing FindingId; ', ''),\n      iff(isempty(Severity), 'missing Severity; ', ''),\n      iff(isempty(CustomerId), 'missing CustomerId; ', ''),\n      iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),\n      iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')\n  )\n| extend IsDataQualityIssue = isnotempty(DataQualityNotes)\n| summarize arg_max(TimeGenerated, *) by FindingId\n| order by TimeGenerated desc\n",
+                "query": "let SeverityRankFn = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nlet Enriched = PrancerFindings_CL\n| extend\n    ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),\n    ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),\n    RequestHeader = tostring(Payload.message.requestHeader),\n    RequestBody = tostring(Payload.message.requestBody),\n    ResponseHeader = tostring(Payload.message.responseHeader),\n    ResponseBody = tostring(Payload.message.responseBody),\n    AlertEvidence = tostring(Payload.alert.evidence),\n    AlertSolution = tostring(coalesce(Payload.alert.solution, Solution)),\n    CVSSScore = todouble(Payload.alert.cvss.cvss_score),\n    CVSSVector = tostring(Payload.alert.cvss.vector_string),\n    Snapshots = Payload.data.snapshots,\n    RemediationDescription = tostring(Payload.data.remediation_description)\n| extend SeverityRank = SeverityRankFn(Severity)\n| extend DataQualityNotes = strcat(\n      iff(isempty(FindingId), 'missing FindingId; ', ''),\n      iff(isempty(Severity), 'missing Severity; ', ''),\n      iff(isempty(CustomerId), 'missing CustomerId; ', ''),\n      iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),\n      iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')\n  )\n| extend IsDataQualityIssue = isnotempty(DataQualityNotes);\n// Only de-duplicate rows that have a stable FindingId to key on (\"latest wins\" across\n// re-ingested/updated records). Rows missing FindingId have no safe dedup key - collapsing\n// them via arg_max(..., '') by an empty FindingId would merge every missing-FindingId finding\n// into a single row, hiding exactly the data-quality problem DataQualityNotes/\n// IsDataQualityIssue exist to surface. So those rows pass through unmodified instead.\nunion\n    (Enriched | where isnotempty(FindingId) | summarize arg_max(TimeGenerated, *) by FindingId),\n    (Enriched | where isempty(FindingId))\n| order by TimeGenerated desc\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -634,7 +642,7 @@
         "displayName": "Parser for Prancer Findings",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "PrancerFindings",
-        "query": "let SeverityRank = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nPrancerFindings_CL\n| extend\n    ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),\n    ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),\n    RequestHeader = tostring(Payload.message.requestHeader),\n    RequestBody = tostring(Payload.message.requestBody),\n    ResponseHeader = tostring(Payload.message.responseHeader),\n    ResponseBody = tostring(Payload.message.responseBody),\n    AlertEvidence = tostring(Payload.alert.evidence),\n    AlertSolution = tostring(coalesce(Payload.alert.solution, Solution)),\n    CVSSScore = todouble(Payload.alert.cvss.cvss_score),\n    CVSSVector = tostring(Payload.alert.cvss.vector_string),\n    Snapshots = Payload.data.snapshots,\n    RemediationDescription = tostring(Payload.data.remediation_description)\n| extend SeverityRank = SeverityRank(Severity)\n| extend DataQualityNotes = strcat(\n      iff(isempty(FindingId), 'missing FindingId; ', ''),\n      iff(isempty(Severity), 'missing Severity; ', ''),\n      iff(isempty(CustomerId), 'missing CustomerId; ', ''),\n      iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),\n      iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')\n  )\n| extend IsDataQualityIssue = isnotempty(DataQualityNotes)\n| summarize arg_max(TimeGenerated, *) by FindingId\n| order by TimeGenerated desc\n",
+        "query": "let SeverityRankFn = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nlet Enriched = PrancerFindings_CL\n| extend\n    ResourceID = tostring(coalesce(Payload.message.resourceID, Payload.data.resourceID)),\n    ApplicationName = tostring(coalesce(Payload.message.applicationName, Payload.data.applicationName)),\n    RequestHeader = tostring(Payload.message.requestHeader),\n    RequestBody = tostring(Payload.message.requestBody),\n    ResponseHeader = tostring(Payload.message.responseHeader),\n    ResponseBody = tostring(Payload.message.responseBody),\n    AlertEvidence = tostring(Payload.alert.evidence),\n    AlertSolution = tostring(coalesce(Payload.alert.solution, Solution)),\n    CVSSScore = todouble(Payload.alert.cvss.cvss_score),\n    CVSSVector = tostring(Payload.alert.cvss.vector_string),\n    Snapshots = Payload.data.snapshots,\n    RemediationDescription = tostring(Payload.data.remediation_description)\n| extend SeverityRank = SeverityRankFn(Severity)\n| extend DataQualityNotes = strcat(\n      iff(isempty(FindingId), 'missing FindingId; ', ''),\n      iff(isempty(Severity), 'missing Severity; ', ''),\n      iff(isempty(CustomerId), 'missing CustomerId; ', ''),\n      iff(isempty(DeviceProduct), 'missing DeviceProduct; ', ''),\n      iff(isempty(ResourceID) and isempty(ApplicationName), 'missing ResourceID and ApplicationName; ', '')\n  )\n| extend IsDataQualityIssue = isnotempty(DataQualityNotes);\n// Only de-duplicate rows that have a stable FindingId to key on (\"latest wins\" across\n// re-ingested/updated records). Rows missing FindingId have no safe dedup key - collapsing\n// them via arg_max(..., '') by an empty FindingId would merge every missing-FindingId finding\n// into a single row, hiding exactly the data-quality problem DataQualityNotes/\n// IsDataQualityIssue exist to surface. So those rows pass through unmodified instead.\nunion\n    (Enriched | where isnotempty(FindingId) | summarize arg_max(TimeGenerated, *) by FindingId),\n    (Enriched | where isempty(FindingId))\n| order by TimeGenerated desc\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -677,6 +685,93 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "PrancerSentinelAnalytics Workbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Monitor and analyze Prancer PAC and CSPM scan results."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Prancer Analytics\\n---\\n\\n\"},\"name\":\"text-workbook-header\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"85ada798-ad50-4bd2-9f51-a5dfc3cd0081\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Time_Range\",\"type\":4,\"isRequired\":true,\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"timeContext\":{\"durationMs\":86400000},\"value\":{\"durationMs\":7776000000}},{\"id\":\"084b679c-4ff7-479b-8cce-ff7eb6667dd1\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Dashboard_Mode\",\"type\":2,\"isRequired\":true,\"isGlobal\":true,\"typeSettings\":{\"showDefault\":false},\"jsonData\":\"[{\\n    \\\"value\\\":\\\"pAlert\\\",\\n    \\\"label\\\":\\\"Alert\\\"\\n},\\n{\\n    \\\"value\\\":\\\"pResource\\\",\\n    \\\"label\\\":\\\"Resource\\\"\\n}]\",\"value\":\"pResource\"},{\"id\":\"3b41aaed-330f-404a-b039-6265fddd3ae2\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Subscription\",\"type\":2,\"query\":\"PrancerFindings\\n| where isnotempty(ResourceID) and ResourceID contains '-'\\n| extend startPos = indexof(ResourceID, \\\"/subscriptions/\\\") + strlen(\\\"/subscriptions/\\\")\\n| extend endPos = indexof(ResourceID, \\\"/\\\", startPos)\\n| extend subscriptionId = substring(ResourceID, startPos, endPos - startPos)\\n| project subscriptionId\\n| summarize by subscriptionId\",\"typeSettings\":{\"showDefault\":false},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-global\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let TotalAlerts = PrancerFindings\\n    | where isempty(Snapshots) and isnotempty(Severity) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize count()\\n    | extend AlertType = \\\"Application Alerts\\\";\\nlet HighRiskAlerts = PrancerFindings\\n    | where isempty(Snapshots) and Severity == \\\"High\\\" and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize count()\\n    | extend AlertType = \\\"High Risk Alerts\\\";\\nunion TotalAlerts, HighRiskAlerts\\n| project AlertType, Count = count_\\n| order by AlertType desc\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"AlertType\",\"formatter\":1,\"numberFormat\":{\"unit\":0,\"options\":{\"style\":\"decimal\"},\"emptyValCustomText\":\"Total Alerts\"}},\"leftContent\":{\"columnMatch\":\"Count\",\"formatter\":12,\"formatOptions\":{\"palette\":\"redGreen\"}},\"showBorder\":true,\"size\":\"auto\"}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},\"customWidth\":\"50\",\"name\":\"query-pentest-alert-kpi\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let TotalAlerts = PrancerFindings\\n    | where isnotempty(Snapshots) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize count()\\n    | extend AlertType = \\\"Total Failed Infra Alerts\\\";\\nlet HighRiskAlerts = PrancerFindings\\n    | where isnotempty(Snapshots) and Severity == \\\"High\\\" and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize count()\\n    | extend AlertType = \\\"High Risk Alerts\\\";\\nunion TotalAlerts, HighRiskAlerts\\n| project AlertType, Count = count_\\n| order by AlertType desc\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"AlertType\",\"formatter\":1,\"numberFormat\":{\"unit\":0,\"options\":{\"style\":\"decimal\"},\"emptyValCustomText\":\"Total Alerts\"}},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"redGreen\"}},\"showBorder\":true,\"size\":\"auto\"}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},\"customWidth\":\"50\",\"name\":\"query-infra-alert-kpi\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isempty(Snapshots) and isnotempty(Severity) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| summarize Count = count() by Severity\\n| extend Order = case(Severity == \\\"High\\\", 1, Severity == \\\"Medium\\\", 2, Severity == \\\"Low\\\", 3, Severity == \\\"Informational\\\", 4, 5)\\n| order by Order asc\\n| project Severity, Count\",\"size\":1,\"timeContextFromParameter\":\"Time_Range\",\"exportFieldName\":\"series\",\"exportParameterName\":\"pRisk\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\"},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},\"customWidth\":\"50\",\"name\":\"query-pentest-severity-distribution\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(Snapshots) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| summarize count() by Severity\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"exportFieldName\":\"series\",\"exportParameterName\":\"pInfraPassFail\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"Critical\",\"color\":\"redBright\"},{\"seriesName\":\"High\",\"color\":\"red\"},{\"seriesName\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"Informational\",\"color\":\"blue\"}]}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},\"customWidth\":\"50\",\"name\":\"query-infra-severity-distribution\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isempty(Snapshots) and Severity == '{pRisk}' and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| project Name = Title, Severity, Config_ID = ConfigId, URL = ResourceUrl, Collection = ApplicationName, Company = CompanyName, MITRE_ID = MitreIds, CWE_ID = CweId, Description = Title, Solution = AlertSolution\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"showRefreshButton\":true,\"exportedParameters\":[{\"parameterName\":\"pAlertRow\",\"parameterType\":1},{\"fieldName\":\"Name\",\"parameterName\":\"pAlertName\",\"parameterType\":1},{\"fieldName\":\"Severity\",\"parameterName\":\"pAlertSeverity\",\"parameterType\":1},{\"fieldName\":\"URL\",\"parameterName\":\"pUrls\",\"parameterType\":1},{\"fieldName\":\"CWE_ID\",\"parameterName\":\"pAlertCWEID\",\"parameterType\":1},{\"fieldName\":\"Description\",\"parameterName\":\"pAlertDesc\",\"parameterType\":1},{\"fieldName\":\"Solution\",\"parameterName\":\"pAlertSolution\",\"parameterType\":1}],\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Collection\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Collection\",\"sortOrder\":2}]},\"conditionalVisibilities\":[{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},{\"parameterName\":\"pRisk\",\"comparison\":\"isNotEqualTo\"}],\"name\":\"query-pentest-alert-list\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isempty(Snapshots) and Severity == '{pRisk}' and Title == '{pAlertName}' and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| project Company = CompanyName, Collection = ApplicationName, Name = Title, Severity, MITRE = MitreIds, URL = ResourceUrl, Solution = AlertSolution, CWE_ID = CweId, Request_Body = RequestBody, Request_Header = RequestHeader, Response_Header = ResponseHeader, Response_Body = ResponseBody, Description = Title, Evidence = AlertEvidence\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"showRefreshButton\":true,\"exportedParameters\":[{\"parameterName\":\"pAlertRow\",\"parameterType\":1},{\"fieldName\":\"Severity\",\"parameterName\":\"pAlertSeverity\",\"parameterType\":1},{\"fieldName\":\"URL\",\"parameterName\":\"pUrls\",\"parameterType\":1},{\"fieldName\":\"CWE_ID\",\"parameterName\":\"pAlertCWEID\",\"parameterType\":1},{\"fieldName\":\"Description\",\"parameterName\":\"pAlertDesc\",\"parameterType\":1},{\"fieldName\":\"Solution\",\"parameterName\":\"pAlertSolution\",\"parameterType\":1},{\"fieldName\":\"Request_Header\",\"parameterName\":\"pRH\",\"parameterType\":1},{\"fieldName\":\"Request_Body\",\"parameterName\":\"pRB\",\"parameterType\":1},{\"fieldName\":\"Response_Header\",\"parameterName\":\"pRsH\",\"parameterType\":1},{\"fieldName\":\"Response_Body\",\"parameterName\":\"pRsB\",\"parameterType\":1},{\"fieldName\":\"MITRE\",\"parameterName\":\"pMitre\",\"parameterType\":1},{\"fieldName\":\"Evidence\",\"parameterName\":\"pEvidence\",\"parameterType\":1}],\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"conditionalVisibilities\":[{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pAlert\"},{\"parameterName\":\"pRisk\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"}],\"name\":\"query-pentest-alert-detail\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(Snapshots) and Severity == '{pInfraPassFail}' and iff('{Subscription}' != \\\"\\\", tostring(Snapshots) contains '{Subscription}', true)\\n| mv-expand Snapshots\\n| extend\\n    id = tostring(Snapshots.id),\\n    structure = tostring(Snapshots.structure),\\n    type = tostring(Snapshots.type),\\n    region = tostring(Snapshots.region),\\n    path = tostring(Snapshots.path)\\n| where structure == 'azure'\\n| project id, structure, Finding = Title, Severity, Type = type, Region = region, Resource = path, Description = Title, Remediation = RemediationDescription\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"exportedParameters\":[{\"parameterType\":1},{\"fieldName\":\"Finding\",\"parameterName\":\"pInfraTitle\",\"parameterType\":1},{\"fieldName\":\"Description\",\"parameterName\":\"pInfraDesc\",\"parameterType\":1},{\"fieldName\":\"Resource\",\"parameterName\":\"pInfraPath\",\"parameterType\":1},{\"fieldName\":\"Remediation\",\"parameterName\":\"pInfraRemediation\",\"parameterType\":1}],\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"id\",\"formatter\":5},{\"columnMatch\":\"structure\",\"formatter\":5}]}},\"conditionalVisibility\":{\"parameterName\":\"pInfraPassFail\",\"comparison\":\"isNotEqualTo\"},\"name\":\"query-infra-findings-by-severity\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(ResourceID) and DeviceProduct in ('cspm', 'iac')\\n| summarize count_unique_resourceID = dcount(ResourceID)\\n| extend label = \\\"Vulnerable VMs\\\"\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"label\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_unique_resourceID\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"}},\"showBorder\":true}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},\"customWidth\":\"50\",\"name\":\"query-vulnerable-resource-count-tile\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where DeviceProduct in ('cspm', 'iac') and isnotempty(Snapshots)\\n| mv-expand Snapshots\\n| extend Path = tostring(Snapshots.path)\\n| summarize arg_min(FindingId, *) by Path, Title\\n| summarize TotalCount = count(), UniqueCount = dcount(DeviceProduct), PathUniqueCount = dcount(Path)\\n| project Resource = \\\"Total Resource Alerts\\\", Count = TotalCount, UniqueCount, PathUniqueCount\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"Resource\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"Count\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"}},\"showBorder\":true}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},\"customWidth\":\"25\",\"name\":\"query-total-resource-alert-count-tile\",\"styleSettings\":{\"maxWidth\":\"25\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where DeviceProduct in ('cspm', 'iac') and isnotempty(Snapshots)\\n| extend Path = tostring(Snapshots[0].path)\\n| summarize TotalCount = count(), UniqueCount = dcount(DeviceProduct), PathUniqueCount = dcount(Path)\\n| project Resource = \\\"<Total Count>\\\", Count = TotalCount, UniqueCount, PathUniqueCount, unique = 'Unique Resources'\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"unique\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"PathUniqueCount\",\"formatter\":12,\"formatOptions\":{\"min\":1,\"palette\":\"red\"}},\"showBorder\":true}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},\"customWidth\":\"25\",\"name\":\"query-unique-resource-count-tile\",\"styleSettings\":{\"maxWidth\":\"25\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(ResourceID) and ResourceID contains \\\"/\\\" and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| extend Resource = ResourceID\\n| extend resourceId = tostring(split(ResourceID, \\\"/\\\")[-1])\\n| extend Type = tostring(split(ResourceID, \\\"/\\\")[-3])\\n| extend Subscription = tostring(split(ResourceID, \\\"/\\\")[2])\\n| extend SeverityValue = case(\\n    CVSSScore >= 9.0, 4,\\n    CVSSScore >= 7.0, 3,\\n    CVSSScore >= 4.0, 2,\\n    CVSSScore > 0.0, 1,\\n    0)\\n| extend Severity = case(\\n    CVSSScore >= 9.0, \\\"Critical\\\",\\n    CVSSScore >= 7.0, \\\"High\\\",\\n    CVSSScore >= 4.0, \\\"Medium\\\",\\n    CVSSScore > 0.0, \\\"Low\\\",\\n    \\\"Unknown\\\")\\n| summarize Count = count(), Severity = arg_max(SeverityValue, Severity) by Resource, resourceId, Type, Subscription\",\"size\":0,\"title\":\"App Findings\",\"timeContextFromParameter\":\"Time_Range\",\"exportMultipleValues\":true,\"exportedParameters\":[{\"fieldName\":\"Resource\",\"parameterName\":\"resourceID\",\"parameterType\":1}],\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"resourceId\",\"formatter\":5}]}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},\"customWidth\":\"50\",\"name\":\"query-app-findings-by-resource\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where DeviceProduct in ('cspm', 'iac') and isnotempty(Snapshots) and iff('{Subscription}' != \\\"\\\", tostring(Snapshots) contains '{Subscription}', true)\\n| project Resource = tostring(Snapshots[0].path), Type = tostring(Snapshots[0].type), Subscription = tostring(split(tostring(Snapshots[0].path), \\\"/\\\")[2])\\n| summarize Types = make_set(Type), Subscriptions = make_set(Subscription), Count = count() by Resource\",\"size\":0,\"title\":\"Infra findings\",\"timeContextFromParameter\":\"Time_Range\",\"exportMultipleValues\":true,\"exportedParameters\":[{\"fieldName\":\"Resource\",\"parameterName\":\"SI_resourceid\",\"parameterType\":1}],\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"Resource\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"Count\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"style\":\"decimal\",\"maximumFractionDigits\":2,\"maximumSignificantDigits\":3}}},\"showBorder\":false}},\"conditionalVisibility\":{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},\"customWidth\":\"50\",\"name\":\"query-infra-findings-by-resource\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where DeviceProduct in ('cspm', 'iac') and isnotempty(Snapshots)\\n| mv-expand Snapshots\\n| extend Path = tostring(Snapshots.path)\\n| where iff('{SI_resourceid}' != \\\"\\\", Path == '{SI_resourceid}', true)\\n| project Finding = Title, Severity, Path, Description = Title, remediation = RemediationDescription\\n| order by Severity asc\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"exportedParameters\":[{\"fieldName\":\"Finding\",\"parameterName\":\"pInfraTitle\",\"parameterType\":1},{\"fieldName\":\"Description\",\"parameterName\":\"pInfraDesc\",\"parameterType\":1},{\"fieldName\":\"Path\",\"parameterName\":\"pInfraPath\",\"parameterType\":1},{\"fieldName\":\"remediation\",\"parameterName\":\"pInfraRemediation\",\"parameterType\":1}],\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"conditionalVisibility\":{\"parameterName\":\"SI_resourceid\",\"comparison\":\"isNotEqualTo\"},\"name\":\"query-infra-findings-detail-by-resource\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where ResourceID == replace('\\\"', '', '{resourceID}')\\n| where isnotempty(Title)\\n| project Name = Title, Config_ID = ConfigId, URL = ResourceUrl, Severity, Collection = ApplicationName, Company = CompanyName, MITRE = MitreIds, Description = Title, Request_Header = RequestHeader, Request_Body = RequestBody, Response_Header = ResponseHeader, Response_Body = ResponseBody, Solution = AlertSolution, Evidence = AlertEvidence, TimeGenerated\\n| order by TimeGenerated\",\"size\":0,\"timeContextFromParameter\":\"Time_Range\",\"showRefreshButton\":true,\"exportedParameters\":[{\"parameterName\":\"pAlertRow\",\"parameterType\":1},{\"fieldName\":\"Name\",\"parameterName\":\"pAlertName\",\"parameterType\":1},{\"fieldName\":\"Severity\",\"parameterName\":\"pAlertSeverity\",\"parameterType\":1},{\"fieldName\":\"URL\",\"parameterName\":\"pUrls\",\"parameterType\":1},{\"fieldName\":\"Description\",\"parameterName\":\"pAlertDesc\",\"parameterType\":1},{\"fieldName\":\"Solution\",\"parameterName\":\"pAlertSolution\",\"parameterType\":1},{\"fieldName\":\"Request_Header\",\"parameterName\":\"pRH\",\"parameterType\":1},{\"fieldName\":\"Request_Body\",\"parameterName\":\"pRB\",\"parameterType\":1},{\"fieldName\":\"Response_Header\",\"parameterName\":\"pRsH\",\"parameterType\":1},{\"fieldName\":\"Response_Body\",\"parameterName\":\"pRsB\",\"parameterType\":1},{\"fieldName\":\"MITRE\",\"parameterName\":\"pMitre\",\"parameterType\":1},{\"fieldName\":\"Evidence\",\"parameterName\":\"pEvidence\",\"parameterType\":1}],\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"conditionalVisibilities\":[{\"parameterName\":\"Dashboard_Mode\",\"comparison\":\"isEqualTo\",\"value\":\"pResource\"},{\"parameterName\":\"resourceID\",\"comparison\":\"isNotEqualTo\"}],\"name\":\"query-resource-alert-detail\"},{\"type\":1,\"content\":{\"json\":\"# {pAlertName}\\n\\n## Url: \\n{pUrls}\\n\\n## Description: \\n{pAlertDesc}\\n\\n{pOther}\\n\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"}],\"customWidth\":\"75\",\"name\":\"text-alert-header\",\"styleSettings\":{\"maxWidth\":\"75\"}},{\"type\":1,\"content\":{\"json\":\"### SEVERITY: {pAlertSeverity}\\n\\n### CWE ID: {pAlertCWEID}\\n\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pMitre\",\"comparison\":\"isNotEqualTo\"}],\"customWidth\":\"25\",\"name\":\"text-alert-severity-cwe\",\"styleSettings\":{\"maxWidth\":\"25\"}},{\"type\":1,\"content\":{\"json\":\"### SEVERITY: {pAlertSeverity}\\n\\n### CWE ID: {pAlertCWEID}\\n\\n### MITRE ID: {pMitre}\\n\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pMitre\",\"comparison\":\"isNotEqualTo\"}],\"customWidth\":\"25\",\"name\":\"text-alert-severity-cwe-mitre\",\"styleSettings\":{\"maxWidth\":\"25\"}},{\"type\":1,\"content\":{\"json\":\"## Solution: \\n{pAlertSolution}\\n\\n\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"}],\"name\":\"text-alert-solution\"},{\"type\":1,\"content\":{\"json\":\"## Evidence\\n\\n{pEvidence}\",\"style\":\"info\"},\"conditionalVisibility\":{\"parameterName\":\"pEvidence\",\"comparison\":\"isNotEqualTo\"},\"name\":\"text-alert-evidence\"},{\"type\":1,\"content\":{\"json\":\"## Request Header: \\n{pRH}\\n\\n\\n\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pRB\",\"comparison\":\"isEqualTo\"}],\"customWidth\":\"50\",\"name\":\"text-alert-request-header-only\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":1,\"content\":{\"json\":\"## Request Header: \\n{pRH}\\n\\n## Request Body:\\n{pRB}\\n\\n\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pRB\",\"comparison\":\"isNotEqualTo\"}],\"customWidth\":\"50\",\"name\":\"text-alert-request-details\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":1,\"content\":{\"json\":\"## Response Header: \\n{pRsH}\\n\\n## Response Body:\\n{pRsB}\\n\\n\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pRsB\",\"comparison\":\"isNotEqualTo\"}],\"customWidth\":\"50\",\"name\":\"text-alert-response-details\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":1,\"content\":{\"json\":\"## Response Header: \\n{pRsH}\\n\\n\\n\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pAlertName\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pAlertDesc\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pRsB\",\"comparison\":\"isEqualTo\"}],\"customWidth\":\"50\",\"name\":\"text-alert-response-header-only\",\"styleSettings\":{\"maxWidth\":\"50\"}},{\"type\":1,\"content\":{\"json\":\"# {pInfraTitle}\\n\\n#### Resource Path: {pInfraPath}\\n\\n## Description: \\n\\n### {pInfraDesc}\\n\\n\\n\"},\"conditionalVisibility\":{\"parameterName\":\"pInfraTitle\",\"comparison\":\"isNotEqualTo\"},\"name\":\"text-infra-finding-header\"},{\"type\":1,\"content\":{\"json\":\"## Remediation: \\n\\n### {pInfraRemediation}\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pInfraTitle\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"pInfraPassFail\",\"comparison\":\"isEqualTo\",\"value\":\"failed\"}],\"name\":\"text-infra-remediation\"},{\"type\":1,\"content\":{\"json\":\"## Remediation: \\n\\n### {pInfraRemediation}\",\"style\":\"info\"},\"conditionalVisibilities\":[{\"parameterName\":\"pInfraTitle\",\"comparison\":\"isNotEqualTo\"},{\"parameterName\":\"Si_Severity\",\"comparison\":\"isNotEqualTo\",\"value\":\"\"}],\"name\":\"text-infra-remediation-resource-detail\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where IsDataQualityIssue and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| summarize Count = count(), SampleFindingIds = make_set(FindingId, 5) by DataQualityNotes, ScanType, DeviceProduct\\n| order by Count desc\",\"size\":1,\"title\":\"Data Quality Issues\",\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"noDataMessage\":\"No data quality issues detected in the selected time range - all findings have the expected fields populated.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-data-quality-issues\"},{\"type\":1,\"content\":{\"json\":\"## Tier 2 Flagship Analytics: Kill-Chain, Crown-Jewel & AI-Correlation\\n---\\nThe tiles below are unique to SwarmHack's AI-adversarial schema (`RiskScore`, `Confidence`, `KillChain`, `CrownJewels`) and to cross-`ScanType` correlation against SAST/SCA/DAST/CSPM findings in the same `PrancerFindings_CL` table.\\n\"},\"name\":\"text-tier2-flagship-header\"},{\"type\":1,\"content\":{\"json\":\"### Kill-Chain Attack-Path Flow\\nDecomposes each SwarmHack finding's `KillChain` free-text stage-arrow path (e.g. `Initial Access via exposed RDP -> Credential Access via Mimikatz -> Lateral Movement to DC01`) into adjacent Source/Target stage transitions, aggregated across all engagements by how many distinct findings traverse each edge. **Visualization note:** a native Sankey flow diagram is the ideal visualization for this data, but this tile uses `table` as a validated fallback (Source/Target/PathCount) since the exact `sankeySettings` JSON schema could not be confirmed with confidence — see report for detail. **Validation note (2026-08-11):** live-tested against real production data — the query runs cleanly with no errors, but real `KillChain` values observed so far are a flat scan-level string (e.g. `\\\"full\\\"`), not a per-finding stage-arrow path, so this tile will show its no-data message until SwarmHack populates a richer per-finding value.\\n\",\"style\":\"info\"},\"name\":\"text-killchain-sankey-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(KillChain) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| project FindingId, KillChain\\n| extend Stages = split(KillChain, \\\"->\\\")\\n| mv-expand with_itemindex=StageIndex Stages to typeof(string)\\n| extend Stage = trim(@\\\"^\\\\s+|\\\\s+$\\\", tostring(Stages))\\n| where isnotempty(Stage)\\n| order by FindingId asc, StageIndex asc\\n| serialize\\n| extend NextStage = next(Stage, 1), NextFindingId = next(FindingId, 1)\\n| where FindingId == NextFindingId\\n| project FindingId, Source = Stage, Target = NextStage\\n| summarize PathCount = dcount(FindingId) by Source, Target\\n| order by PathCount desc\",\"size\":0,\"title\":\"Kill-Chain Attack-Path Transitions\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"noDataMessage\":\"No multi-stage kill chains found in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-killchain-sankey\"},{\"type\":1,\"content\":{\"json\":\"### Crown-Jewel Exposure Heatmap\\nEvery crown-jewel asset (`CrownJewels`, mv-expanded and parsed from JSON) reached by a SwarmHack finding, by customer, sized/colored by the maximum `RiskScore` of any finding reaching that asset.\\n\",\"style\":\"info\"},\"name\":\"text-crownjewel-heatmap-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(CrownJewels) and DeviceProduct == \\\"swarmhack\\\" and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| mv-expand CrownJewel = parse_json(CrownJewels)\\n| extend AssetCategory = tostring(CrownJewel.category), AssetConfidence = todouble(CrownJewel.confidence)\\n| where isnotempty(AssetCategory)\\n| summarize MaxRiskScore = max(RiskScore), MaxAssetConfidence = max(AssetConfidence), FindingCount = dcount(FindingId) by AssetCategory, CompanyName\\n| order by MaxRiskScore desc\",\"size\":0,\"title\":\"Crown-Jewel Exposure by Asset x Customer\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"MaxRiskScore\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"min\":0,\"max\":10}}]},\"noDataMessage\":\"No crown-jewel-reaching SwarmHack findings in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-crownjewel-exposure-heatmap\"},{\"type\":1,\"content\":{\"json\":\"### Crown-Jewel Blast-Radius Graph\\nNode-link view of which resources/configs (`ResourceID`/`ConfigId` as source) reach which crown-jewel assets (`CrownJewels` entries as sink), with edge weight = `RiskScore`; complements the kill-chain flow above with a topology view for environments where multiple paths converge on the same crown jewel. **Visualization note:** a native graph/node-link visualization is the ideal fit, but this tile uses `table` as a validated fallback (SourceNode/TargetNode/Weight/FindingId/CompanyName) since the exact graph-visualization JSON schema could not be confirmed with confidence — see report for detail.\\n\",\"style\":\"info\"},\"name\":\"text-crownjewel-blast-radius-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where isnotempty(CrownJewels) and DeviceProduct == \\\"swarmhack\\\" and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| mv-expand CrownJewel = parse_json(CrownJewels)\\n| extend TargetNode = tostring(CrownJewel.category)\\n| where isnotempty(TargetNode)\\n| extend SourceNode = iff(isnotempty(ResourceID), ResourceID, ConfigId)\\n| project SourceNode, TargetNode, Weight = RiskScore, FindingId, CompanyName\\n| order by Weight desc\",\"size\":0,\"title\":\"Crown-Jewel Blast-Radius Edges\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"noDataMessage\":\"No crown-jewel blast-radius edges found in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-crownjewel-blast-radius-graph\"},{\"type\":1,\"content\":{\"json\":\"### RiskScore vs. Confidence Triage Quadrants\\nSwarmHack findings plotted by `RiskScore` (X) vs. `Confidence` (Y), quadrant-tagged: **Act Now** (RiskScore>=7 & Confidence>=0.7), **Investigate** (RiskScore>=7 & Confidence<0.7), **Monitor** (RiskScore<7 & Confidence>=0.7), **Backlog** (otherwise) — operationalizing AI trust directly into a triage tool.\\n\",\"style\":\"info\"},\"name\":\"text-riskscore-confidence-scatter-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where DeviceProduct == \\\"swarmhack\\\" and isnotempty(RiskScore) and isnotempty(Confidence) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| extend Quadrant = case(\\n    RiskScore >= 7 and Confidence >= 0.7, \\\"Act Now\\\",\\n    RiskScore >= 7 and Confidence < 0.7, \\\"Investigate\\\",\\n    RiskScore < 7 and Confidence >= 0.7, \\\"Monitor\\\",\\n    \\\"Backlog\\\")\\n| project FindingId, Title, CompanyName, RiskScore, Confidence, Quadrant, ConfigId\",\"size\":0,\"title\":\"RiskScore vs. Confidence (Act Now / Investigate / Monitor / Backlog)\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"scatterchart\",\"noDataMessage\":\"No SwarmHack findings with both RiskScore and Confidence populated in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-riskscore-confidence-scatter\"},{\"type\":1,\"content\":{\"json\":\"### Confirmed vs. Theoretical MITRE ATT&CK Coverage\\nContrasts MITRE techniques static scanners (`sast`/`sca`/`dast`/`iac`/`cspm`) merely *tag* (\\\"Theoretical\\\") against techniques SwarmHack actually *walked through* in a confirmed kill chain (\\\"Confirmed\\\"), grouped by technique.\\n\",\"style\":\"info\"},\"name\":\"text-mitre-confirmed-vs-theoretical-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let Theoretical = PrancerFindings\\n    | where DeviceProduct in (\\\"sast\\\", \\\"sca\\\", \\\"dast\\\", \\\"iac\\\", \\\"cspm\\\") and isnotempty(MitreIds) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | mv-expand Technique = parse_json(MitreIds)\\n    | extend Technique = tostring(Technique)\\n    | where isnotempty(Technique)\\n    | summarize TheoreticalCount = dcount(FindingId) by Technique;\\nlet Confirmed = PrancerFindings\\n    | where DeviceProduct == \\\"swarmhack\\\" and isnotempty(MitreIds) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | mv-expand Technique = parse_json(MitreIds)\\n    | extend Technique = tostring(Technique)\\n    | where isnotempty(Technique)\\n    | summarize ConfirmedCount = dcount(FindingId) by Technique;\\nTheoretical\\n| join kind=fullouter Confirmed on Technique\\n| project Technique = iff(isnotempty(Technique), Technique, Technique1), TheoreticalCount = coalesce(TheoreticalCount, 0), ConfirmedCount = coalesce(ConfirmedCount, 0)\\n| order by ConfirmedCount desc, TheoreticalCount desc\",\"size\":0,\"title\":\"MITRE ATT&CK Coverage: Confirmed (SwarmHack) vs. Theoretical (Static Scanners)\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"noDataMessage\":\"No MITRE technique data found in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-mitre-confirmed-vs-theoretical\"},{\"type\":1,\"content\":{\"json\":\"### Executive Risk-Trend / Burn-Down\\nDaily Critical+High finding counts combined with average SwarmHack `RiskScore`, per customer — board-deck-ready reporting on whether risk is trending down over time.\\n\",\"style\":\"info\"},\"name\":\"text-executive-risk-trend-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| summarize CriticalHigh = countif(Severity in (\\\"Critical\\\", \\\"High\\\")), AvgRisk = avgif(RiskScore, DeviceProduct == \\\"swarmhack\\\") by bin(TimeGenerated, 1d), CompanyName\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"Critical+High Count and Avg RiskScore Over Time\",\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\",\"noDataMessage\":\"No findings in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-executive-risk-trend\"},{\"type\":1,\"content\":{\"json\":\"### Finding-Persistence Tracker\\nFindings that survive multiple scan cycles unremediated, by `ConfigId`/`CweId`/`Title`, sorted by days persisted — reframes the finding store from a discovery tool into an accountability tool.\\n\",\"style\":\"info\"},\"name\":\"text-finding-persistence-tracker-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PrancerFindings\\n| where iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), ScanCount = dcount(ScanId) by ConfigId, CompanyName, CweId, Title, Severity\\n| extend DaysPersisted = datetime_diff(\\\"day\\\", LastSeen, FirstSeen)\\n| order by DaysPersisted desc\",\"size\":0,\"title\":\"Findings Persisting Across Scan Cycles\",\"timeContextFromParameter\":\"Time_Range\",\"showExportToExcel\":true,\"exportToExcelOptions\":\"all\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"noDataMessage\":\"No findings in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-finding-persistence-tracker\"},{\"type\":1,\"content\":{\"json\":\"### Time-to-Weaponization\\nAverage and max days between a static scanner's (`sast`/`sca`) first discovery of a `CweId` on a `ConfigId` and SwarmHack's later confirmed exploitation of the same `CweId`+`ConfigId` — a window-of-exposure metric requiring both static and AI-adversarial data in one schema.\\n\",\"style\":\"info\"},\"name\":\"text-time-to-weaponization-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let StaticFirstSeen = PrancerFindings\\n    | where DeviceProduct in (\\\"sast\\\", \\\"sca\\\") and isnotempty(CweId) and isnotempty(ConfigId) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize StaticFirstSeen = min(TimeGenerated) by ConfigId, CweId;\\nlet SwarmhackConfirmed = PrancerFindings\\n    | where DeviceProduct == \\\"swarmhack\\\" and isnotempty(CweId) and isnotempty(ConfigId) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize SwarmhackConfirmed = min(TimeGenerated) by ConfigId, CweId;\\nlet Gaps = StaticFirstSeen\\n    | join kind=inner SwarmhackConfirmed on ConfigId, CweId\\n    | extend DaysToWeaponize = datetime_diff(\\\"day\\\", SwarmhackConfirmed, StaticFirstSeen)\\n    | where DaysToWeaponize >= 0;\\nlet AvgMetric = Gaps | summarize Value = round(avg(DaysToWeaponize), 1) | extend Metric = \\\"Avg Days to Weaponization\\\";\\nlet MaxMetric = Gaps | summarize Value = toreal(max(DaysToWeaponize)) | extend Metric = \\\"Max Days to Weaponization\\\";\\nunion AvgMetric, MaxMetric\\n| project Metric, Value\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"Metric\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"Value\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"}},\"showBorder\":true,\"size\":\"auto\"},\"noDataMessage\":\"No CweId+ConfigId pairs found in both static-scanner and SwarmHack findings in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-time-to-weaponization\"},{\"type\":1,\"content\":{\"json\":\"### AI-Validated vs. Static-Only Findings\\nWhat percentage of `sast`/`sca`/`dast` findings were independently corroborated by a SwarmHack finding on the same `CweId`+`ConfigId` — frames SwarmHack as a triage multiplier that cuts through static-scanner noise.\\n\",\"style\":\"info\"},\"name\":\"text-ai-validated-vs-static-only-header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let StaticFindings = PrancerFindings\\n    | where DeviceProduct in (\\\"sast\\\", \\\"sca\\\", \\\"dast\\\") and isnotempty(CweId) and isnotempty(ConfigId) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize by ConfigId, CweId;\\nlet SwarmhackConfirmed = PrancerFindings\\n    | where DeviceProduct == \\\"swarmhack\\\" and isnotempty(CweId) and isnotempty(ConfigId) and iff('{Subscription}' != \\\"\\\", ResourceID contains '{Subscription}', true)\\n    | summarize by ConfigId, CweId\\n    | extend IsCorroborated = true;\\nStaticFindings\\n| join kind=leftouter SwarmhackConfirmed on ConfigId, CweId\\n| extend IsCorroborated = iff(isnotempty(IsCorroborated), true, false)\\n| summarize TotalStaticFindings = count(), CorroboratedCount = countif(IsCorroborated)\\n| extend AIValidatedPercent = round(100.0 * CorroboratedCount / max_of(TotalStaticFindings, 1), 1)\\n| project AIValidatedPercent, TotalStaticFindings, CorroboratedCount\",\"size\":4,\"timeContextFromParameter\":\"Time_Range\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"AIValidatedPercent\",\"formatter\":1,\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"},\"emptyValCustomText\":\"% AI-Validated\"}},\"leftContent\":{\"columnMatch\":\"TotalStaticFindings\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"}},\"showBorder\":true,\"size\":\"auto\"},\"noDataMessage\":\"No sast/sca/dast findings in the selected time range.\",\"noDataMessageStyle\":\"Info\"},\"name\":\"query-ai-validated-vs-static-only\"}],\"fromTemplateId\":\"sentinel-Prancer\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=PrancerSentinelAnalyticsWorkbook; description=Monitor and analyze Prancer PAC and CSPM scan results.; logoFileName=Prancer.svg; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Prancer Microsoft Sentinel Analytics Workbook; templateRelativePath=PrancerSentinelAnalytics.json; subtitle=; provider=Prancer}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Prancer PenSuiteAI Integration",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Prancer"
+                },
+                "support": {
+                  "name": "Prancer PenSuiteAI Integration",
+                  "email": "support@prancer.io",
+                  "tier": "Partner",
+                  "link": "https://www.prancer.io"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "prancer_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "PrancerLogData",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
@@ -711,10 +806,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -725,13 +820,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "path"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -744,29 +839,29 @@
                   "ResourceType": "type"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "{{Title}}",
                   "alertDescriptionFormat": "{{Title}} detected on resource {{path}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "{{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "RemediationDescription",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "RemediationDescription"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "5h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "5h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -848,10 +943,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -862,22 +957,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "Resource"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "URL"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -887,29 +982,29 @@
                   "UniqueFindingId": "Finding_ID"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "{{Name}}",
                   "alertDescriptionFormat": "{{Name}} - {{Evidence}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "{{Name}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "Solution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "Solution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "5h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "5h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -991,10 +1086,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1005,56 +1100,60 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "Resource"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "URL"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "Confidence": "Confidence",
+                  "Risk_Score": "Risk_Score",
+                  "Solution": "Solution",
                   "UniqueFindingId": "Finding_ID",
-                  "Risk_Score": "Risk_Score"
+                  "URL": "URL",
+                  "Confidence": "Confidence",
+                  "Crown_Jewels": "Crown_Jewels",
+                  "Kill_Chain": "Kill_Chain"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "{{Name}} (RiskScore {{Risk_Score}}, Confidence {{Confidence}})",
                   "alertDescriptionFormat": "{{Name}} - kill chain: {{Kill_Chain}} - crown jewels: {{Crown_Jewels}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "{{Name}} (RiskScore {{Risk_Score}}, Confidence {{Confidence}})",
                   "alertDynamicProperties": [
                     {
-                      "value": "Solution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "Solution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "5h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "5h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1136,10 +1235,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1152,48 +1251,48 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "SwarmResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "RiskScore": "RiskScore",
-                  "Confidence": "Confidence",
                   "UniqueFindingId": "FindingId",
-                  "CorroboratingCspmFinding": "CspmFindingId"
+                  "RiskScore": "RiskScore",
+                  "CorroboratingCspmFinding": "CspmFindingId",
+                  "Confidence": "Confidence"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Confirmed exploit of known misconfig: {{Title}}",
                   "alertDescriptionFormat": "{{CorrelationReason}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "Confirmed exploit of known misconfig: {{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "CspmRemediation",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "CspmRemediation"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "30d",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "30d",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1275,10 +1374,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1291,41 +1390,41 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "ResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
+                  "UniqueFindingId": "FindingId",
                   "RiskScore": "RiskScore",
-                  "Confidence": "Confidence",
-                  "UniqueFindingId": "FindingId"
+                  "Confidence": "Confidence"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Kill chain pivots through known misconfig: {{Title}}",
                   "alertDescriptionFormat": "{{PivotSummary}} - {{KillChain}}",
+                  "alertDisplayNameFormat": "Kill chain pivots through known misconfig: {{Title}}",
                   "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "30d",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "30d",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1407,10 +1506,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1423,42 +1522,42 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "ResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "OriginalSeverity": "OriginalSeverity",
-                  "Confidence": "Confidence",
                   "UniqueFindingId": "FindingId",
-                  "RiskScore": "RiskScore"
+                  "RiskScore": "RiskScore",
+                  "OriginalSeverity": "OriginalSeverity",
+                  "Confidence": "Confidence"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Crown-jewel escalation: {{Title}}",
                   "alertDescriptionFormat": "{{EscalationReason}}",
+                  "alertDisplayNameFormat": "Crown-jewel escalation: {{Title}}",
                   "alertSeverityColumnName": "EscalatedSeverity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1540,10 +1639,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1558,42 +1657,42 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "ResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "RiskScore": "RiskScore",
-                  "Confidence": "Confidence",
                   "UniqueFindingId": "FindingId",
-                  "StageCount": "StageCount"
+                  "RiskScore": "RiskScore",
+                  "StageCount": "StageCount",
+                  "Confidence": "Confidence"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Kill chain decomposition: {{Title}}",
                   "alertDescriptionFormat": "{{DecompositionSummary}}",
+                  "alertDisplayNameFormat": "Kill chain decomposition: {{Title}}",
                   "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1675,10 +1774,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1692,13 +1791,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "ResourceUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1706,33 +1805,33 @@
                 },
                 "customDetails": {
                   "UniqueFindingId": "FindingId",
-                  "CweCategory": "CweCategory",
-                  "CweNumber": "CweId"
+                  "CweNumber": "CweId",
+                  "CweCategory": "CweCategory"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "SAST {{CweCategory}}: {{Title}}",
                   "alertDescriptionFormat": "{{Title}} - {{AlertEvidence}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "SAST {{CweCategory}}: {{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "AlertSolution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "AlertSolution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1814,10 +1913,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1830,34 +1929,34 @@
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "BlastRadiusConfigCount": "BlastRadiusConfigCount",
                   "UniqueFindingId": "FindingId",
+                  "BlastRadiusConfigCount": "BlastRadiusConfigCount",
                   "AlertReason": "AlertReason"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "SCA {{AlertReason}}: {{Title}}",
                   "alertDescriptionFormat": "{{AlertSummary}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "SCA {{AlertReason}}: {{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "Solution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "Solution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "7d",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "7d",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1939,10 +2038,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1953,22 +2052,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "ResourceUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "ResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1979,29 +2078,29 @@
                   "AlertEvidence": "AlertEvidence"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Confirmed reflected exploitation: {{Title}}",
                   "alertDescriptionFormat": "{{ExploitationProof}} - evidence: {{AlertEvidence}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "Confirmed reflected exploitation: {{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "AlertSolution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "AlertSolution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -2083,10 +2182,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2097,56 +2196,56 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
                         "columnName": "ResourceID"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "ResourceUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "PersistenceDurationDays": "PersistenceDurationDays",
                   "UniqueFindingId": "FindingId",
+                  "PersistenceDurationDays": "PersistenceDurationDays",
                   "ScanCycleCount": "ScanCycleCount"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Persisting finding ({{ScanCycleCount}} scan cycles): {{Title}}",
                   "alertDescriptionFormat": "{{PersistenceSummary}}",
-                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "Persisting finding ({{ScanCycleCount}} scan cycles): {{Title}}",
                   "alertDynamicProperties": [
                     {
-                      "value": "Solution",
-                      "alertProperty": "RemediationSteps"
+                      "alertProperty": "RemediationSteps",
+                      "value": "Solution"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "Severity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "30d",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "30d",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -2228,10 +2327,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -2243,22 +2342,22 @@
                   "BaselineIssueRatePct": "BaselineIssueRatePct"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "{{SpikeSummary}}",
-                  "alertDisplayNameFormat": "Data-quality regression: {{ScanType}}"
+                  "alertDisplayNameFormat": "Data-quality regression: {{ScanType}}",
+                  "alertDescriptionFormat": "{{SpikeSummary}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1d",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "ScanType"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1d",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -2326,10 +2425,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Escalates ANY finding - not just SwarmHack findings - whose ResourceID or ResourceUrl matches an asset a\ncustomer has declared in the \"Prancer Crown Jewel Assets\" watchlist (see Watchlists/CrownJewelAssets.json),\nto at least that asset''s declared CriticalityTier. This is the customer-declared counterpart to\nCrownJewel_Severity_Escalation.yaml (which only fires on SwarmHack''s own in-the-moment discoveries): it\nmakes crown-jewel-aware prioritization useful for every ScanType/DeviceProduct - SAST/SCA/DAST/CSPM/IaC\nfindings included - even for customers who have never run a SwarmHack engagement, directly addressing the\nADR''s stated goal of making crown-jewel content valuable independent of SwarmHack engagement history.\nOnly fires when the watchlist-declared tier is strictly higher than the finding''s nominal Severity.",
+                "description": "Escalates ANY finding - not just SwarmHack findings - whose ResourceID or ResourceUrl matches an asset a\ncustomer has declared in the \"Prancer Crown Jewel Assets\" watchlist (see Watchlists/PrancerCrownJewelAssets.json),\nto at least that asset''s declared CriticalityTier. This is the customer-declared counterpart to\nCrownJewel_Severity_Escalation.yaml (which only fires on SwarmHack''s own in-the-moment discoveries): it\nmakes crown-jewel-aware prioritization useful for every ScanType/DeviceProduct - SAST/SCA/DAST/CSPM/IaC\nfindings included - even for customers who have never run a SwarmHack engagement, directly addressing the\nADR''s stated goal of making crown-jewel content valuable independent of SwarmHack engagement history.\nOnly fires when the watchlist-declared tier is strictly higher than the finding''s nominal Severity.",
                 "displayName": "Finding touches a watchlist-declared crown-jewel asset",
                 "enabled": false,
-                "query": "// Cheap filters (isnotempty ResourceID/ResourceUrl) run before the watchlist join. The watchlist is small\n// (customer-declared, not per-finding), so joining it in is cheap regardless of which side is \"left\".\n// _GetWatchlist() flattens the watchlist's CSV columns into named top-level columns matching the CSV\n// header (ResourceId, AssetName, CriticalityTier, AssetCategory, Owner, Notes) once watchlist items have\n// propagated - live-confirmed against a real deployed watchlist (2026-08-12), 4 real findings correctly\n// matched. Caution for future maintainers: querying _GetWatchlist() against a watchlist with zero\n// propagated items returns a different, generic placeholder schema (_DTItemId/LastUpdatedTimeUTC/\n// SearchKey/WatchlistItem-as-dynamic) that can look like the \"real\" schema but isn't - always verify\n// against a watchlist with at least one real item present, not an empty one.\nlet CrownJewelWatchlist = (_GetWatchlist('PrancerCrownJewelAssets')\n    | project\n        WatchlistResourceId = ResourceId,\n        AssetName,\n        CriticalityTier,\n        AssetCategory,\n        Owner);\nlet SeverityRankFn = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nPrancerFindings\n| where isnotempty(ResourceID) or isnotempty(ResourceUrl)\n| extend MatchKey = iff(isnotempty(ResourceID), ResourceID, ResourceUrl)\n| join kind=inner (CrownJewelWatchlist) on $left.MatchKey == $right.WatchlistResourceId\n| extend\n    NominalSeverityRank = SeverityRankFn(Severity),\n    DeclaredSeverityRank = SeverityRankFn(CriticalityTier)\n| where DeclaredSeverityRank < NominalSeverityRank\n| extend\n    EscalatedSeverity = CriticalityTier,\n    EscalationReason = strcat(\n        'Nominal severity ', Severity, ' escalated to ', CriticalityTier, ': resource matches watchlist-declared crown jewel \"',\n        AssetName, '\" (', AssetCategory, ', owner: ', Owner, ')')\n",
+                "query": "// Cheap filters (isnotempty ResourceID/ResourceUrl) run before the watchlist join. The watchlist is small\n// (customer-declared, not per-finding), so joining it in is cheap regardless of which side is \"left\".\n// _GetWatchlist() flattens the watchlist's CSV columns into named top-level columns matching the CSV\n// header (ResourceId, AssetName, CriticalityTier, AssetCategory, Owner, Notes) once watchlist items have\n// propagated - live-confirmed against a real deployed watchlist (2026-08-12), 4 real findings correctly\n// matched. Caution for future maintainers: querying _GetWatchlist() against a watchlist with zero\n// propagated items returns a different, generic placeholder schema (_DTItemId/LastUpdatedTimeUTC/\n// SearchKey/WatchlistItem-as-dynamic) that can look like the \"real\" schema but isn't - always verify\n// against a watchlist with at least one real item present, not an empty one.\nlet CrownJewelWatchlist = (_GetWatchlist('PrancerCrownJewelAssets')\n    | project\n        WatchlistResourceId = ResourceId,\n        AssetName,\n        CriticalityTier,\n        AssetCategory,\n        Owner);\nlet SeverityRankFn = (sev: string) {\n    case(\n        sev == 'Critical', 1,\n        sev == 'High', 2,\n        sev == 'Medium', 3,\n        sev == 'Low', 4,\n        sev == 'Info' or sev == 'Informational', 5,\n        99\n    )\n};\nPrancerFindings\n| where isnotempty(ResourceID) or isnotempty(ResourceUrl)\n| extend MatchKey = iff(isnotempty(ResourceID), ResourceID, ResourceUrl)\n| join kind=inner (CrownJewelWatchlist) on $left.MatchKey == $right.WatchlistResourceId\n| extend\n    NominalSeverityRank = SeverityRankFn(Severity),\n    DeclaredSeverityRank = SeverityRankFn(CriticalityTier)\n| where DeclaredSeverityRank < NominalSeverityRank\n| extend\n    EscalatedSeverity = CriticalityTier,\n    EscalationReason = strcat(\n        'Nominal severity ', Severity, ' escalated to ', CriticalityTier, ': resource matches watchlist-declared crown jewel \"',\n        AssetName, '\" (', AssetCategory, ', owner: ', Owner, ')')\n// MatchKey is whichever of ResourceID/ResourceUrl the watchlist match came from - split it back\n// into type-specific columns so entity mapping doesn't tag a URL as an AzureResource ResourceId.\n| extend\n    MatchedResourceId = iff(isnotempty(ResourceID), MatchKey, ''),\n    MatchedUrl = iff(isnotempty(ResourceID), '', MatchKey)\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "High",
@@ -2340,10 +2439,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PrancerLogData",
                     "dataTypes": [
                       "PrancerFindings_CL"
-                    ],
-                    "connectorId": "PrancerLogData"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2354,44 +2453,53 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
                         "identifier": "ResourceId",
-                        "columnName": "MatchKey"
+                        "columnName": "MatchedResourceId"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
+                  },
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "MatchedUrl"
+                      }
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "ScanType": "ScanType",
                   "WatchlistAssetName": "AssetName",
-                  "WatchlistOwner": "Owner",
                   "UniqueFindingId": "FindingId",
                   "DeviceProduct": "DeviceProduct",
-                  "OriginalSeverity": "Severity"
+                  "ScanType": "ScanType",
+                  "OriginalSeverity": "Severity",
+                  "WatchlistOwner": "Owner"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Crown-jewel watchlist match: {{Title}}",
                   "alertDescriptionFormat": "{{EscalationReason}}",
+                  "alertDisplayNameFormat": "Crown-jewel watchlist match: {{Title}}",
                   "alertSeverityColumnName": "EscalatedSeverity"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "matchingMethod": "Selected",
                     "groupByAlertDetails": [],
-                    "groupByEntities": [],
-                    "lookbackDuration": "1h",
                     "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "UniqueFindingId"
-                    ]
-                  },
-                  "createIncident": true
+                    ],
+                    "lookbackDuration": "1h",
+                    "groupByEntities": [],
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -3148,6 +3256,27 @@
                           "No_Finding_ID_available_noop": {
                             "type": "Compose",
                             "inputs": "No UniqueFindingId custom detail was present on this incident; enrichment skipped. Ensure the triggering analytic rule includes UniqueFindingId in customDetails."
+                          },
+                          "Add_skipped_note_to_incident_(V3)": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "body": {
+                                "incidentArmId": "@variables('IncidentArmId')",
+                                "message": "@{outputs('No_Finding_ID_available_noop')}"
+                              },
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                              "No_Finding_ID_available_noop": [
+                                "Succeeded"
+                              ]
+                            }
                           }
                         }
                       },
@@ -3433,7 +3562,7 @@
                               "description": "Auto-filed by Prancer RiskScore/Confidence-thresholded ticketing playbook. RiskScore=@{variables('RiskScore')} Confidence=@{variables('Confidence')}",
                               "cwe_id": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Cwe_Id'], '')}",
                               "solution": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Solution'], '')}",
-                              "resource_url": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Resource_Url'], '')}",
+                              "resource_url": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['URL'], '')}",
                               "kill_chain": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Kill_Chain'], '')}",
                               "risk_score": "@{variables('RiskScore')}",
                               "confidence": "@{variables('Confidence')}"
@@ -4788,7 +4917,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Prancer PenSuiteAI Integration",
         "publisherDisplayName": "Prancer PenSuiteAI Integration",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Prancer%20PenSuiteAI%20Integration/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Prancer solution for Microsoft Sentinel enables you to ingest data from the Prancer portal for PAC and CSPM scans. Refer to <a href=\"https://docs.prancer.io/web/\">Prancer Documentation Site</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution is dependent on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a> (optional connectivity health-check companion, see <code>Data Connectors/PrancerConnectivityHealthCheck/</code>)</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Analytic Rules:</strong> 13, <strong>Hunting Queries:</strong> 6, <strong>Watchlists:</strong> 1, <strong>Playbooks:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Prancer%20PenSuiteAI%20Integration/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Prancer solution for Microsoft Sentinel enables you to ingest data from the Prancer portal for PAC and CSPM scans. Refer to <a href=\"https://docs.prancer.io/web/\">Prancer Documentation Site</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution is dependent on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a> (optional connectivity health-check companion, see <code>Data Connectors/PrancerConnectivityHealthCheck/</code>)</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 13, <strong>Hunting Queries:</strong> 6, <strong>Watchlists:</strong> 1, <strong>Playbooks:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -4821,6 +4950,11 @@
               "kind": "Parser",
               "contentId": "[variables('parserObject1').parserContentId1]",
               "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
             },
             {
               "kind": "AnalyticsRule",

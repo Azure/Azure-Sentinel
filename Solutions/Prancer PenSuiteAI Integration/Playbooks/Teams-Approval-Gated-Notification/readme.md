@@ -56,11 +56,10 @@ GitHub URL once merged into `Azure/Azure-Sentinel`.)*
 1. The Prancer Sentinel solution's Data Connector, Parser, and `PrancerFindings_CL` table
    must already be deployed and receiving data.
 2. An analytic rule that sets `Crown_Jewels`, `Kill_Chain`, `Risk_Score`, `Confidence`, and
-   `URL` in `customDetails` must be enabled (today's published `SwarmHack High Confidence
-   Critical Findings From Prancer` rule projects `Crown_Jewels`/`Kill_Chain` in its query
-   but only lists `UniqueFindingId`/`Risk_Score`/`Confidence` under `customDetails:` — add
-   `Crown_Jewels` and `Kill_Chain` there, or in whichever rule this playbook is attached
-   to, for the approval card to have data to show).
+   `URL` in `customDetails` must be enabled — `SwarmHack High Confidence Critical Findings
+   From Prancer` sets all five today. If you attach this playbook to a different rule, make
+   sure that rule's `customDetails:` includes the same five keys or the approval card will
+   have missing data.
 3. A Microsoft Teams team and channel to post approval cards to, and the ability to obtain
    its `TeamsGroupId`/`TeamsChannelId`.
 4. Explicit internal sign-off on **who is authorized to approve/reject** these cards and
