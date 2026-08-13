@@ -2,7 +2,7 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "functionAppName": {
+        "FunctionAppName": {
             "type": "string",
             "defaultValue": "ANYRUN-Sentinel-FA"
         },
@@ -23,6 +23,13 @@
             "metadata": {
                 "description": "Log Analytics Workspace Name."
             }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
         }
     },
     "variables": {
@@ -33,12 +40,12 @@
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
-            "name": "[parameters('functionAppName')]",
-            "location": "[resourceGroup().location]",
+            "name": "[parameters('FunctionAppName')]",
+            "location": "[parameters('location')]",
             "kind": "web",
             "properties": {
                 "Application_Type": "web",
-                "ApplicationId": "[parameters('functionAppName')]",
+                "ApplicationId": "[parameters('FunctionAppName')]",
                 "WorkspaceResourceId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('LogAnalyticsWorkspaceName'))]"
             }
         },
@@ -46,7 +53,7 @@
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-05-01",
             "name": "[parameters('AzureStorageAccountName')]",
-            "location": "[resourceGroup().location]",
+            "location": "[parameters('location')]",
             "kind": "StorageV2",
             "sku": {
                 "name": "Standard_LRS"
@@ -78,9 +85,9 @@
         },
         {
             "type": "Microsoft.Web/serverfarms",
-            "apiVersion": "2023-12-01",
-            "name": "[parameters('functionAppName')]",
-            "location": "[resourceGroup().location]",
+            "apiVersion": "2024-11-01",
+            "name": "[parameters('FunctionAppName')]",
+            "location": "[parameters('location')]",
             "kind": "functionapp",
             "sku": {
                 "tier": "FlexConsumption",
@@ -93,19 +100,19 @@
         {
             "type": "Microsoft.Web/sites",
             "apiVersion": "2024-11-01",
-            "name": "[parameters('functionAppName')]",
-            "location": "[resourceGroup().location]",
+            "name": "[parameters('FunctionAppName')]",
+            "location": "[parameters('location')]",
             "kind": "functionapp,linux",
             "identity": {
                 "type": "SystemAssigned"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', parameters('FunctionAppName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('AzureStorageAccountName'))]",
-                "[resourceId('Microsoft.Insights/components', parameters('functionAppName'))]"
+                "[resourceId('Microsoft.Insights/components', parameters('FunctionAppName'))]"
             ],
             "properties": {
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppName'))]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('FunctionAppName'))]",
                 "functionAppConfig": {
                     "deployment": {
                         "storage": {
@@ -129,11 +136,11 @@
                     "appSettings": [
                         {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                            "value": "[reference(resourceId('Microsoft.insights/components', parameters('functionAppName')), '2020-02-02').InstrumentationKey]"
+                            "value": "[reference(resourceId('Microsoft.insights/components', parameters('FunctionAppName')), '2020-02-02').InstrumentationKey]"
                         },
                         {
                             "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
-                            "value": "[reference(resourceId('Microsoft.Insights/components', parameters('functionAppName')), '2020-02-02').ConnectionString]"
+                            "value": "[reference(resourceId('Microsoft.Insights/components', parameters('FunctionAppName')), '2020-02-02').ConnectionString]"
                         },
                         {
                             "name": "AzureWebJobsStorage",
@@ -150,20 +157,20 @@
             "scope": "[concat('Microsoft.Storage/storageAccounts', '/', parameters('AzureStorageAccountName'))]",
             "properties": {
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('storageRoleDefinitionId'))]",
-                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'Full').identity.principalId]"
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('FunctionAppName')), '2024-11-01', 'Full').identity.principalId]"
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('AzureStorageAccountName'))]",
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                "[resourceId('Microsoft.Web/sites', parameters('FunctionAppName'))]"
             ]
         },
         {
             "type": "Microsoft.Resources/deploymentScripts",
             "apiVersion": "2020-10-01",
             "name": "WaitSection",
-            "location": "[resourceGroup().location]",
+            "location": "[parameters('location')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                "[resourceId('Microsoft.Web/sites', parameters('FunctionAppName'))]"
             ],
             "kind": "AzurePowerShell",
             "properties": {
@@ -176,12 +183,12 @@
         {
             "type": "Microsoft.Web/sites/extensions",
             "apiVersion": "2022-09-01",
-            "name": "[format('{0}/{1}', parameters('functionAppName'), 'onedeploy')]",
+            "name": "[format('{0}/{1}', parameters('FunctionAppName'), 'onedeploy')]",
             "dependsOn": [
                 "WaitSection"
             ],
             "properties": {
-                "packageUri": "https://github.com/Azure/Azure-Sentinel/raw/refs/heads/master/Solutions/ANY.RUN/Playbooks/Sentinel-FA/Sentinel-FA.zip",
+                "packageUri": "https://github.com/Azure/Azure-Sentinel/raw/refs/heads/master/Solutions/ANYRUN/Playbooks/Sentinel-FA/Sentinel-FA.zip",
                 "remoteBuild": true
             }
         },

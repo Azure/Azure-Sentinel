@@ -33,7 +33,7 @@ Additionally, your Threat Intelligence portal in Sentinel will be enriched with 
 
 This playbook extracts URLs from incidents and submits them for analysis in ANY.RUN Sandbox to enrich the incident with a verdict using a single Azure Logic App.
 
-[Open connector's page](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-URL)
+[Open connector's page](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-URL)
 
 ## Analyze Files from Microsoft Sentinel Incidents via ANY.RUN Sandbox
 
@@ -47,7 +47,7 @@ Templates are provided for endpoints running the following operating systems:
 - Ubuntu
 - Debian
 
-[Open Playbooks folder](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks)
+[Open Playbooks folder](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks)
 
 ## Analyze All Entities from Microsoft Sentinel Incidents via ANY.RUN Sandbox and Microsoft Defender for Endpoint
 
@@ -56,7 +56,7 @@ Templates are provided for endpoints running the following operating systems:
 
 This playbook makes the incident enrichment process in Microsoft Sentinel even more automated if you are also using Microsoft Defender for Endpoint (MDE). In this case, the entire automation mechanism can be combined into Azure Logic App and Azure Function App, leveraging MDE's capabilities to extract files from endpoints via API.
 
-[Open connector's page](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-File-Defender)
+[Open connector's page](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-File-Defender)
 
 ## Prerequisites
 
@@ -236,7 +236,7 @@ This playbook makes the incident enrichment process in Microsoft Sentinel even m
 
 - Click below to deploy Azure Function App with **Flex Consumption plan**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSentinel-FA%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSentinel-FA%2Fazuredeploy.json)
 
 - Enter the parameters required for deploying the Function App and click **Review + create**.
 
@@ -271,7 +271,7 @@ This playbook extracts URLs from incidents and submits them for analysis in ANY.
 
 Click below to deploy Azure Logic App with **Flex Consumption plan**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSandbox-URL%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSandbox-URL%2Fazuredeploy.json)
 
 Enter the parameters required for deploying the Logic App and click **Review + create**.
 
@@ -341,7 +341,7 @@ To increase the speed of incident enrichment, you can analyze objects simultaneo
 ###### Overview
 
 > Note:  
-> If you are using the Microsoft Sentinel & Microsoft Defender for Endpoint bundle in your infrastructure, we strongly recommend using the [corresponding connector](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-File-Defender) for this case.
+> If you are using the Microsoft Sentinel & Microsoft Defender for Endpoint bundle in your infrastructure, we strongly recommend using the [corresponding connector](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-File-Defender) for this case.
 
 This playbook allows you to send files from incidents for analysis in the ANY.RUN Sandbox. It uploads the file from the endpoint to Azure Blob Storage and then forwards it to ANY.RUN Sandbox using Azure Logic App and Azure Function App.
 
@@ -364,11 +364,11 @@ Templates are provided for endpoints running the following operating systems:
 The connector consists of two Azure Logic Apps:
 
 * **Parent workflow** (varies depending on the host operating system):
-  * [ANYRUN-Sandbox-File-Windows](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-File-Windows)
-  * [ANYRUN-Sandbox-File-Ubuntu](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-File-Ubuntu)
-  * [ANYRUN-Sandbox-File-Debian](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Sandbox-File-Debian)
+  * [ANYRUN-Sandbox-File-Windows](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-File-Windows)
+  * [ANYRUN-Sandbox-File-Ubuntu](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-File-Ubuntu)
+  * [ANYRUN-Sandbox-File-Debian](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Sandbox-File-Debian)
 * **Child workflow** (uniform for all operating systems):
-  * [ANYRUN-Submit-File-to-Blob](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANY.RUN/Playbooks/Submit-File-to-Blob)
+  * [ANYRUN-Submit-File-to-Blob](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ANYRUN/Playbooks/Submit-File-to-Blob)
 
 ###### Logic Apps description
 
@@ -388,7 +388,7 @@ First, you need to deploy the child Logic App, as its parameters are required fo
 
 Click below to deploy Child Azure Logic App with **Flex Consumption plan**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSubmit-File-to-Blob%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSubmit-File-to-Blob%2Fazuredeploy.json)
 
 ![child_logic_app_deployment](Images/File_004.png)
 
@@ -410,11 +410,11 @@ You can deploy all the proposed parent Logic Apps or select specific ones depend
 Click below to deploy Parent Azure Logic App with **Flex Consumption plan**
 
 * ANYRUN-Sandbox-File-Windows  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSandbox-File-Windows%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSandbox-File-Windows%2Fazuredeploy.json)
 * ANYRUN-Sandbox-File-Ubuntu  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSandbox-File-Ubuntu%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSandbox-File-Ubuntu%2Fazuredeploy.json)
 * ANYRUN-Sandbox-File-Debian  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSandbox-File-Debian%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSandbox-File-Debian%2Fazuredeploy.json)
 
 ![parent_logic_app_deployment](Images/File_015.png)
 
@@ -520,7 +520,7 @@ After the analysis is completed in ANY.RUN Sandbox, its key results (verdict, sc
 
 Click below to deploy Azure Logic App with **Flex Consumption plan**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANY.RUN%2FPlaybooks%2FSandbox-File-Defender%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FANYRUN%2FPlaybooks%2FSandbox-File-Defender%2Fazuredeploy.json)
 
 ![logic_app_deployment](Images/Defender_011.png)
 
@@ -581,10 +581,6 @@ Click on `...` in the upper right corner and then **Initiate Live Response Sessi
 Click **Upload file to library**.
 
 ![click_upload_file](Images/Defender_004.png)
-
-Click **Upload file to library** again, select the script from your file system (after downloading it from our [library](https://github.com/rollehfoh/ANY.RUN/tree/main/scripts)), or create your own script. After that, click **Submit**.
-
-![select_file_to_upload](Images/Defender_005.png)
 
 ###### Logic App configuration (Optional)
 
