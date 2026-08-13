@@ -2,16 +2,18 @@ id: 1d060727-32ff-4c0d-b3ca-ba997df48f2b
 name: Crown-jewel blast radius forces severity escalation
 description: |
   'Force-escalates SwarmHack findings where CrownJewels contains a high-confidence sensitive target/asset
-  identification (confidence >= 0.8 on at least one CrownJewels entry) to Critical, overriding the nominal
-  Severity - correcting for the case where Severity scores the entry vulnerability rather than the value of
-  what SwarmHack actually identified as reachable. Only fires when the nominal Severity is not already
-  Critical. NOTE: validated against real production CrownJewels data (2026-08-11) - the real per-entry shape
-  is {category, value, confidence, context} (e.g. category="asrep_roast_target_list"), NOT the {name, type}
-  asset-taxonomy shape ({domain_controller, key_vault, ...}) originally assumed in the design ADR. This rule
-  was corrected to use the real shape; the category value space is not yet fully characterized against
-  production data (only one category observed so far), so the escalation trigger uses the per-entry
-  `confidence` field rather than a category allowlist that would need a larger, verified category taxonomy.'
-severity: Critical
+  identification (confidence >= 0.8 on at least one CrownJewels entry) to High - Sentinel''s analytic-rule
+  Severity has no tier above High, so escalation targets the ceiling rather than a "Critical" value the
+  platform does not accept - overriding the nominal Severity - correcting for the case where Severity
+  scores the entry vulnerability rather than the value of what SwarmHack actually identified as reachable.
+  Only fires when the nominal Severity is not already High. NOTE: validated against real production
+  CrownJewels data (2026-08-11) - the real per-entry shape is {category, value, confidence, context} (e.g.
+  category="asrep_roast_target_list"), NOT the {name, type} asset-taxonomy shape ({domain_controller,
+  key_vault, ...}) originally assumed in the design ADR. This rule was corrected to use the real shape; the
+  category value space is not yet fully characterized against production data (only one category observed
+  so far), so the escalation trigger uses the per-entry `confidence` field rather than a category allowlist
+  that would need a larger, verified category taxonomy.'
+severity: High
 requiredDataConnectors:
 - connectorId: PrancerLogData
   dataTypes:
@@ -35,13 +37,13 @@ query: |
   // A fixed asset-type-taxonomy allowlist ({domain_controller, key_vault, ...}) is NOT used here since
   // real `category` values observed so far (e.g. "asrep_roast_target_list") don't match that taxonomy and
   // the full category value space isn't yet characterized. Cheap equality/isnotempty filters (DeviceProduct,
-  // CrownJewels, Severity != Critical) run before parse_json/mv-expand so rows already at Critical never pay
+  // CrownJewels, Severity != High) run before parse_json/mv-expand so rows already at the Severity ceiling never pay
   // the json-parse cost.
   let ConfidenceThreshold = 0.8;
   PrancerFindings
   | where DeviceProduct == 'swarmhack'
   | where isnotempty(CrownJewels)
-  | where Severity != 'Critical'
+  | where Severity != 'High'
   | extend CrownJewelEntries = parse_json(CrownJewels)
   | mv-expand CrownJewelEntry = CrownJewelEntries
   | extend
@@ -56,9 +58,9 @@ query: |
     by FindingId, ConfigId, CustomerId, CompanyName, Title, OriginalSeverity = Severity, RiskScore, Confidence,
        ResourceID, KillChain, CrownJewels, TimeGenerated
   | extend
-      EscalatedSeverity = 'Critical',
+      EscalatedSeverity = 'High',
       EscalationReason = strcat(
-          'Nominal severity ', OriginalSeverity, ' escalated to Critical: CrownJewels identifies high-confidence (>=',
+          'Nominal severity ', OriginalSeverity, ' escalated to High: CrownJewels identifies high-confidence (>=',
           tostring(ConfidenceThreshold), ') target(s) - ', tostring(HighConfidenceCategories), ': ',
           tostring(HighConfidenceContexts))
 entityMappings:

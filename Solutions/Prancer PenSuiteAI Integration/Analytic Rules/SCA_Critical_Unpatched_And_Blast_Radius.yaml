@@ -34,29 +34,34 @@ query: |
   let UnpatchedCritical = ScaFindings
       | where CVSSScore >= 9
       | where isempty(Solution) and isempty(RemediationDescription)
-      | extend AlertReason = 'unpatched_critical_no_fix', BlastRadiusConfigCount = 1
+      | extend AlertReason = 'unpatched_critical_no_fix', BlastRadiusCount = 1
       | project FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, CweId, CVSSScore, CVSSVector,
-                 Solution, RemediationDescription, AlertReason, BlastRadiusConfigCount, TimeGenerated;
+                 Solution, RemediationDescription, AlertReason, BlastRadiusCount, ResourceUrl, TimeGenerated;
   let BlastRadius = ScaFindings
       | where isnotempty(Title) and isnotempty(CweId)
       | summarize
-          BlastRadiusConfigCount = dcount(ConfigId),
+          BlastRadiusCount = dcount(ConfigId),
           AffectedConfigIds = make_set(ConfigId, 100),
-          arg_max(TimeGenerated, FindingId, CustomerId, CompanyName, Severity, CVSSScore, CVSSVector, Solution, RemediationDescription, ConfigId)
+          arg_max(TimeGenerated, FindingId, CustomerId, CompanyName, Severity, CVSSScore, CVSSVector, Solution, RemediationDescription, ConfigId, ResourceUrl)
         by Title, CweId
-      | where BlastRadiusConfigCount >= BlastRadiusThreshold
+      | where BlastRadiusCount >= BlastRadiusThreshold
       | extend AlertReason = 'org_wide_blast_radius'
       | project FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, CweId, CVSSScore, CVSSVector,
-                 Solution, RemediationDescription, AlertReason, BlastRadiusConfigCount, AffectedConfigIds, TimeGenerated;
+                 Solution, RemediationDescription, AlertReason, BlastRadiusCount, AffectedConfigIds, ResourceUrl, TimeGenerated;
   UnpatchedCritical
   | union BlastRadius
   | extend AlertSummary = iff(AlertReason == 'unpatched_critical_no_fix',
       strcat('Critical CVSS ', CVSSScore, ' with no documented fix or remediation'),
-      strcat('Same vulnerable component recurring across ', BlastRadiusConfigCount, ' distinct ConfigIds'))
+      strcat('Same vulnerable component recurring across ', BlastRadiusCount, ' distinct ConfigIds'))
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
 customDetails:
   UniqueFindingId: FindingId
   AlertReason: AlertReason
-  BlastRadiusConfigCount: BlastRadiusConfigCount
+  BlastRadiusCount: BlastRadiusCount
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:

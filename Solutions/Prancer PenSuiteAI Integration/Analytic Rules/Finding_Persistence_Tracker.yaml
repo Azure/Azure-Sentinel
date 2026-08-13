@@ -3,29 +3,31 @@ name: Critical/High findings persisting across scan cycles unremediated
 description: |
   'Reframes the finding store from a discovery tool into an accountability tool: flags Critical/High
   (SeverityRank <= 2) findings that recur across 3 or more distinct ScanIds for the same ConfigId/Title/
-  CweId over a 30-day window, i.e. survived multiple scan cycles unremediated. Uses first/last-seen
-  aggregation to surface how long each finding has been outstanding.'
+  CweId over a 14-day window (the maximum queryPeriod Sentinel allows for a scheduled rule), i.e.
+  survived multiple scan cycles unremediated. Uses first/last-seen aggregation to surface how long each
+  finding has been outstanding.'
 severity: Medium
 requiredDataConnectors:
 - connectorId: PrancerLogData
   dataTypes:
     - PrancerFindings_CL
 queryFrequency: 1d
-queryPeriod: 30d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 eventGroupingSettings:
   aggregationKind: SingleAlert
 status: Available
 tactics:
-  - Discovery
+  - Reconnaissance
 relevantTechniques:
   - T1592
 query: |
   // This is a process/accountability signal rather than a specific attacker technique, so it runs on a
-  // daily cadence over a 30-day window rather than near-real-time. SeverityRank <= 2 filters to
-  // Critical/High before the group-by aggregation that computes scan-cycle persistence.
-  let LookbackWindow = 30d;
+  // daily cadence over a 14-day window (Sentinel's max allowed queryPeriod) rather than near-real-time.
+  // SeverityRank <= 2 filters to Critical/High before the group-by aggregation that computes
+  // scan-cycle persistence.
+  let LookbackWindow = 14d;
   let MinScanCyclesToFlag = 3;
   PrancerFindings
   | where TimeGenerated > ago(LookbackWindow)
@@ -39,9 +41,9 @@ query: |
       arg_max(TimeGenerated, FindingId, Severity, SeverityRank, CompanyName, CustomerId, DeviceProduct, ScanType, ResourceID, ResourceUrl, Solution, RemediationDescription)
     by ConfigId, Title, CweId
   | where ScanCycleCount >= MinScanCyclesToFlag
-  | extend PersistenceDurationDays = datetime_diff('day', LastSeen, FirstSeen)
+  | extend PersistenceDays = datetime_diff('day', LastSeen, FirstSeen)
   | extend PersistenceSummary = strcat(
-      'Unremediated across ', ScanCycleCount, ' scan cycles over ', PersistenceDurationDays, ' days (', SeverityRank, ')')
+      'Unremediated across ', ScanCycleCount, ' scan cycles over ', PersistenceDays, ' days (', SeverityRank, ')')
 entityMappings:
   - entityType: AzureResource
     fieldMappings:
@@ -54,13 +56,13 @@ entityMappings:
 customDetails:
   UniqueFindingId: FindingId
   ScanCycleCount: ScanCycleCount
-  PersistenceDurationDays: PersistenceDurationDays
+  PersistenceDays: PersistenceDays
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: true
     reopenClosedIncident: false
-    lookbackDuration: 30d
+    lookbackDuration: 14d
     matchingMethod: Selected
     groupByEntities: []
     groupByAlertDetails: []
