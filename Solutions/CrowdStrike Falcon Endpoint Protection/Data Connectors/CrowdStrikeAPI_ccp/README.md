@@ -138,10 +138,6 @@ CrowdStrikeCasesV2_CL
 CrowdStrikeDetectionsV2_CL
 | take 10
 
-// Check CrowdStrike Incidents
-CrowdStrikeIncidentsV2_CL
-| take 10
-
 // Check CrowdStrike Hosts
 CrowdStrikeHostsV2_CL
 | take 10

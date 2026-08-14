@@ -1,10 +1,10 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
-| 3.4.0       | 13-08-2026                     | Updated **Crowdstrike API connector** by adding V2 tables and a new parser |
+| 3.4.0       | 13-08-2026                     | Updated **CrowdStrike API connector** by adding V2 tables and a new parser |
 | 3.3.9       | 24-07-2026                     | Updated titles for both **CrowdStrike Falcon Data Replicator** connectors |
 | 3.3.8       | 24-07-2026                     | Updated **CrowdStrike API Data Connector** polling to use updated time instead of created time |
 | 3.3.7       | 13-07-2026                     | Updated **CrowdStrike API Data Connector** UI labels |
-| 3.3.6       | 28-05-2026                     | Added support of multiple domains to **Crowdstrike API Data Connector** |
+| 3.3.6       | 28-05-2026                     | Added support of multiple domains to **CrowdStrike API Data Connector** |
 | 3.3.5       | 20-05-2026                     | Updated **Analytic Rules** (v1.0.5): improved descriptions, added MITRE ATT&CK tactics, and optimized KQL queries. Updated **Workbook** to remove hardcoded resource IDs. Added non-analytics tier queries to *CrowdStrike Falcon Data Replicator (AWS S3)* **Data Connector** to support Basic/Auxiliary plan tables (Usage-based fallback, 14h window). |
 | 3.3.4       | 30-04-2026                     | remove deprecated tag. CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) is not deprecated |
 | 3.3.3       | 13-04-2026                     | Deprecate CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) (using Azure Function) |
