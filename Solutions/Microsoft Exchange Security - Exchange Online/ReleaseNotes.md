@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 4.0.0       | 29-07-2026                      | Migrate from Log Analytics API to Azure Monitor API     |
+| 4.0.0       | 29-07-2026                     | Migrate from Log Analytics API to Azure Monitor API     |
 | 3.1.7       | 26-03-2025                     | Update documentation link to new repository     |
 | 3.1.6       | 30-08-2024                     | Correct bug on LasdtReceivedData of DataConnector. and change parser     |
 | 3.1.5       | 15-05-2024                     | Enhancement in existing **Parser**       |
