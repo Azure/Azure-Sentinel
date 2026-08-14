@@ -1,0 +1,88 @@
+id: d45021a4-1e09-4246-9739-1c37738df1aa
+Function:
+  Title: Parser for SecurityScorecard Ratings (day-over-day overall score change)
+  Version: '2.0.3'
+  LastUpdated: '2026-06-26'
+Category: Microsoft Sentinel Parser
+FunctionName: SecurityScorecardRatings
+FunctionAlias: SecurityScorecardRatings
+FunctionQuery: |
+    let SecurityScorecardRatingsLegacy = view () {
+        SecurityScorecardRatings_CL
+        | extend
+            body_s = tostring(column_ifexists("body_s", "OverAll")),
+            src_s = tostring(column_ifexists("src_s", "OverallScore")),
+            subject_s = tostring(column_ifexists("subject_s", "")),
+            dateYesterday_s = tostring(column_ifexists("dateYesterday_s", "")),
+            dateToday_s = tostring(column_ifexists("dateToday_s", "")),
+            scoreYesterday_d = todouble(column_ifexists("scoreYesterday_d", real(null))),
+            scoreToday_d = todouble(column_ifexists("scoreToday_d", real(null))),
+            scoreChange_d = todouble(column_ifexists("scoreChange_d", real(null))),
+            diff_d = todouble(column_ifexists("diff_d", real(null))),
+            ss_time_t = todatetime(column_ifexists("ss_time_t", column_ifexists("ss_time_s", ""))),
+            industry_s = tostring(column_ifexists("industry_s", "")),
+            portfolioId_g = toguid(column_ifexists("portfolioId_s", "")),
+            portfolioName_s = tostring(column_ifexists("portfolioName_s", "NA")),
+            severity_s = tostring(column_ifexists("severity_s", "NA"))
+        | project
+            TimeGenerated,
+            body_s,
+            src_s,
+            subject_s,
+            dateYesterday_s,
+            dateToday_s,
+            scoreYesterday_d,
+            scoreToday_d,
+            scoreChange_d,
+            diff_d,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s,
+            severity_s
+    };
+    let SecurityScorecardRatingsCCF = view () {
+        SecurityScorecardRatingsHistory_CL
+        | where TimeGenerated > ago(365d)
+        | summarize arg_max(TimeGenerated, *) by domain, score_date, portfolio_id
+        | sort by domain asc, portfolio_id asc, score_date asc
+        | serialize
+        | extend
+            prev_domain = prev(domain, 1),
+            prev_portfolio = prev(portfolio_id, 1),
+            prev_date = prev(score_date, 1),
+            prev_score = prev(score, 1)
+        | extend has_prev = (domain == prev_domain and portfolio_id == prev_portfolio)
+        | extend
+            body_s = "OverAll",
+            src_s = "OverallScore",
+            subject_s = domain,
+            dateYesterday_s = iff(has_prev, tostring(prev_date), ""),
+            dateToday_s = tostring(score_date),
+            scoreYesterday_d = iff(has_prev, todouble(prev_score), real(null)),
+            scoreToday_d = todouble(score),
+            scoreChange_d = iff(has_prev, todouble(score - prev_score), real(null)),
+            diff_d = iff(has_prev, todouble(score - prev_score), real(null)),
+            ss_time_t = score_date,
+            industry_s = tostring(industry),
+            portfolioId_g = toguid(portfolio_id),
+            portfolioName_s = tostring(portfolio_name),
+            severity_s = "NA"
+        | project
+            TimeGenerated,
+            body_s,
+            src_s,
+            subject_s,
+            dateYesterday_s,
+            dateToday_s,
+            scoreYesterday_d,
+            scoreToday_d,
+            scoreChange_d,
+            diff_d,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s,
+            severity_s
+    };
+    union isfuzzy=true SecurityScorecardRatingsLegacy, SecurityScorecardRatingsCCF
