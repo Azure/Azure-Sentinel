@@ -326,7 +326,10 @@ def build_solutions_table_data(
         content_count = len(content_items.get(sol_name, []))
         content_in_solution = sum(1 for i in content_items.get(sol_name, []) if i.get('not_in_solution_json', 'false') != 'true')
         content_discovered = content_count - content_in_solution
-        is_published = first.get('is_published', 'true') != 'false'
+        # Use the solution's own metadata for publication status (not the first
+        # connector's), so a solution published to the marketplace is not shown
+        # as Unpublished just because a connector is unpublished.
+        is_published = sol_meta.get('is_published', 'true') != 'false'
         is_deprecated = first.get('solution_is_deprecated', 'false') == 'true'
         support_tier = first.get('solution_support_tier', '')
         publisher = first.get('solution_support_name', sol_meta.get('support_name', ''))
