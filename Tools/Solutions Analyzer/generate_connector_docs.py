@@ -3666,7 +3666,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         # Build a set of unpublished solutions
         unpublished_solutions: Set[str] = set()
         for sol_name, connectors in solutions.items():
-            if connectors and connectors[0].get('is_published', 'true') == 'false':
+            if connectors and connectors[0].get('solution_is_published', 'true') == 'false':
                 unpublished_solutions.add(sol_name)
         published_solutions_count = len(solutions) - len(unpublished_solutions)
         
@@ -5961,7 +5961,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         release_notes = get_release_notes(solution_name, solutions_dir)
     
     # Check if solution is published
-    is_published = metadata.get('is_published', 'true') == 'true'
+    is_published = metadata.get('solution_is_published', 'true') == 'true'
     
     # Check if solution is deprecated
     is_deprecated = metadata.get('solution_is_deprecated', 'false') == 'true'
@@ -7992,7 +7992,7 @@ def generate_statistics_page(
         # Build unpublished solutions set
         unpublished_solutions: Set[str] = set()
         for sol_name, connectors in solutions.items():
-            if connectors and connectors[0].get('is_published', 'true') == 'false':
+            if connectors and connectors[0].get('solution_is_published', 'true') == 'false':
                 unpublished_solutions.add(sol_name)
         published_solutions_count = len(solutions) - len(unpublished_solutions)
         
@@ -9916,6 +9916,7 @@ def main() -> None:
             row['solution_dependencies'] = sol_info.get('solution_dependencies', '')
             row['solution_is_deprecated'] = sol_info.get('is_deprecated', 'false')
             row['solution_deprecation_date'] = sol_info.get('deprecation_date', '')
+            row['solution_is_published'] = sol_info.get('is_published', 'true')
             row['marketplace_url'] = sol_info.get('marketplace_url', '')
             row['mp_display_name'] = sol_info.get('mp_display_name', '')
             row['mp_summary'] = sol_info.get('mp_summary', '')
@@ -9968,6 +9969,7 @@ def main() -> None:
             'connector_files': '',
             'is_unique': '',
             'is_published': sol_info.get('is_published', 'true'),
+            'solution_is_published': sol_info.get('is_published', 'true'),
             'not_in_solution_json': 'false',
             'solution_logo_url': sol_info.get('solution_logo_url', ''),
             'solution_description': sol_info.get('solution_description', ''),
