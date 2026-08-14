@@ -1,0 +1,592 @@
+{
+ "version": "Notebook/1.0",
+ "fromTemplateId": "sentinel-MicrosoftSecurityLicenseUtilization",
+ "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+ "items": [
+  {
+   "type": 9,
+   "content": {
+    "version": "KqlParameterItem/1.0",
+    "parameters": [
+     {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "version": "KqlParameterItem/1.0",
+      "name": "parameterTab",
+      "type": 1,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": "overview",
+      "isHiddenWhenLocked": true
+     },
+     {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "version": "KqlParameterItem/1.0",
+      "name": "TimeRange",
+      "label": "Time Range",
+      "type": 4,
+      "isRequired": true,
+      "isGlobal": true,
+      "value": {
+       "durationMs": 2592000000
+      },
+      "typeSettings": {
+       "selectableValues": [
+        {
+         "durationMs": 604800000,
+         "label": "Last 7 days"
+        },
+        {
+         "durationMs": 2592000000,
+         "label": "Last 30 days"
+        },
+        {
+         "durationMs": 7776000000,
+         "label": "Last 90 days"
+        }
+       ]
+      }
+     }
+    ],
+    "style": "above",
+    "queryType": 0,
+    "resourceType": "microsoft.operationalinsights/workspaces"
+   },
+   "name": "parameters - tabs"
+  },
+  {
+   "type": 11,
+   "content": {
+    "version": "LinkItem/1.0",
+    "style": "tabs",
+    "links": [
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Overview",
+      "subTarget": "overview",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Identity",
+      "subTarget": "identity",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Endpoint / XDR",
+      "subTarget": "endpoint",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Email & Collaboration",
+      "subTarget": "email",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Data Protection",
+      "subTarget": "dataprotection",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Defender for Cloud",
+      "subTarget": "mdc",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Sentinel Utilization",
+      "subTarget": "sentinel",
+      "style": "link"
+     },
+     {
+      "cellValue": "parameterTab",
+      "linkTarget": "parameter",
+      "linkLabel": "Next Steps",
+      "subTarget": "recommendations",
+      "style": "link"
+     }
+    ]
+   },
+   "name": "linksTabs"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Microsoft Security Feature & Telemetry Utilization\n\nA summary view of which Microsoft security product telemetry is flowing into this Sentinel workspace. The tiles below show **signal-presence per product family** — empty rows mean that product's data is not reaching the workspace.\n\nAdjust the **Time Range** parameter above to broaden or narrow the window.",
+       "style": "markdown"
+      },
+      "name": "text - overview"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Sources = union isfuzzy=true\n    SigninLogs, AuditLogs, OfficeActivity, DeviceInfo, DeviceEvents,\n    DeviceTvmSecureConfigurationAssessment, SecurityNestedRecommendation,\n    MicrosoftPurviewInformationProtection, SecurityAlert,\n    (datatable(Type:string)[])\n| summarize Rows = count() by Source = Type;\nlet Products = datatable(ProductName:string, SignalSource:string)[\n    \"Microsoft Entra ID\", \"SigninLogs\",\n    \"Microsoft Entra ID\", \"AuditLogs\",\n    \"Microsoft 365 Defender - Email (MDO)\", \"OfficeActivity\",\n    \"Defender for Endpoint\", \"DeviceInfo\",\n    \"Defender for Cloud\", \"SecurityNestedRecommendation\",\n    \"Microsoft Purview\", \"MicrosoftPurviewInformationProtection\"\n];\nProducts\n| join kind=leftouter Sources on $left.SignalSource == $right.Source\n| extend HasData = iff(isnotempty(Rows), \"Data Flowing\", \"No Data Collected\")\n| project ProductName, SignalSource, HasData, Rows\n| order by ProductName asc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 40
+       }
+      },
+      "name": "query - licensed products"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Missing = datatable(ProductName:string, SignalSource:string)[\n    \"Microsoft Entra ID\", \"SigninLogs\",\n    \"Defender for Endpoint\", \"DeviceInfo\",\n    \"Microsoft 365 Defender - Email (MDO)\", \"OfficeActivity\",\n    \"Defender for Cloud\", \"SecurityNestedRecommendation\",\n    \"Microsoft Purview\", \"MicrosoftPurviewInformationProtection\"\n];\nlet Present = union isfuzzy=true\n    SigninLogs, DeviceInfo, OfficeActivity,\n    SecurityNestedRecommendation, MicrosoftPurviewInformationProtection,\n    (datatable(Type:string)[])\n| summarize Rows = count() by Source = Type;\nMissing\n| join kind=leftanti Present on $left.SignalSource == $right.Source\n| project ProductName, SignalSource\n| order by ProductName asc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 20
+       }
+      },
+      "name": "query - products missing data"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "overview"
+   },
+   "name": "groupOverview"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Identity: Conditional Access, MFA and privileged access\n\nSummarizes Entra ID sign-in telemetry in this workspace. Empty results usually mean the Azure Active Directory connector is not onboarded; large 'not applied' populations mean Conditional Access is not gating successful logons. Time window is controlled by the Time Range parameter above.",
+       "style": "markdown"
+      },
+      "name": "text - identity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let S = union isfuzzy=true\n    (SigninLogs\n        | where ResultType == \"0\"\n        | project UserPrincipalName, ConditionalAccessStatus),\n    (datatable(UserPrincipalName:string, ConditionalAccessStatus:string)[]);\nS\n| where isnotempty(UserPrincipalName)\n| extend Status = case(\n        ConditionalAccessStatus =~ \"success\", \"CA Applied\",\n        ConditionalAccessStatus =~ \"notApplied\", \"CA Not Applied\",\n        ConditionalAccessStatus =~ \"failure\", \"CA Failure\",\n        ConditionalAccessStatus =~ \"notEnabled\", \"CA Not Enabled\",\n        ConditionalAccessStatus =~ \"reportOnlySuccess\", \"Report Only: Success\",\n        ConditionalAccessStatus =~ \"reportOnlyFailure\", \"Report Only: Failure\",\n        \"Unknown\")\n| summarize Users = dcount(UserPrincipalName), SignIns = count() by Status\n| order by SignIns desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - ca coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Privileged = union isfuzzy=true\n    (IdentityInfo\n        | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)\n        | project AccountObjectId = tostring(AccountObjectId), AccountUpn = tostring(AccountUpn)),\n    (datatable(AccountObjectId:string, AccountUpn:string)[]);\nlet RecentSignins = union isfuzzy=true\n    (SigninLogs\n        | where TimeGenerated > ago(90d)\n        | where ResultType == \"0\"\n        | project AccountObjectId = tostring(UserId)),\n    (datatable(AccountObjectId:string)[]);\nPrivileged\n| where isnotempty(AccountObjectId)\n| join kind=leftanti RecentSignins on AccountObjectId\n| summarize DormantPrivilegedAccounts = dcount(AccountUpn)",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - dormant privileged"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Privileged = union isfuzzy=true\n    (IdentityInfo\n        | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)\n        | project AccountObjectId = tostring(AccountObjectId), AccountUpn = tostring(AccountUpn)),\n    (datatable(AccountObjectId:string, AccountUpn:string)[]);\nlet S = union isfuzzy=true\n    (SigninLogs\n        | where ResultType == \"0\"\n        | where ClientAppUsed has_any (dynamic([\"IMAP\",\"POP\",\"SMTP\",\"ActiveSync\",\"ExchangeWebServices\"]))\n        | project UserId, ClientAppUsed, TimeGenerated),\n    (datatable(UserId:string, ClientAppUsed:string, TimeGenerated:datetime)[]);\nS\n| where isnotempty(UserId)\n| join kind=inner Privileged on $left.UserId == $right.AccountObjectId\n| summarize SignIns = count(), LastSeen = max(TimeGenerated) by AccountUpn, ClientAppUsed\n| order by SignIns desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - legacy auth privileged"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "identity"
+   },
+   "name": "groupIdentity"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Endpoint / XDR: Defender for Endpoint coverage\n\nHealthy, reporting devices are the baseline for EDR value. Devices in silent states or non-compliant configurations indicate endpoints that are not actively producing protection telemetry in this workspace.",
+       "style": "markdown"
+      },
+      "name": "text - endpoint"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let D = union isfuzzy=true\n    (DeviceInfo\n        | summarize arg_max(TimeGenerated, *) by DeviceId),\n    (datatable(DeviceId:string, DeviceHealthStatus:string, DeviceName:string, OSPlatform:string)[]);\nD\n| where isnotempty(DeviceId)\n| extend Health = iff(isnotempty(DeviceHealthStatus), DeviceHealthStatus, \"Unknown\")\n| summarize Devices = dcount(DeviceId) by Health",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - device health"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Devices = union isfuzzy=true\n    (DeviceInfo\n        | where TimeGenerated > ago(7d)\n        | project DeviceId, DeviceName = tostring(DeviceName), DeviceHealthStatus = tostring(DeviceHealthStatus)),\n    (datatable(DeviceId:string, DeviceName:string, DeviceHealthStatus:string)[]);\nlet Active = union isfuzzy=true\n    (DeviceEvents | where TimeGenerated > ago(7d) | project DeviceId),\n    (datatable(DeviceId:string)[]);\nDevices\n| where isnotempty(DeviceId)\n| join kind=leftanti Active on DeviceId\n| summarize SilentDevices = dcount(DeviceId)",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - silent devices"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let TVM = union isfuzzy=true\n    (DeviceTvmSecureConfigurationAssessment\n        | where IsCompliant == false),\n    (datatable(DeviceId:string, ConfigurationId:string, ConfigurationName:string, IsCompliant:bool)[]);\nTVM\n| where isnotempty(ConfigurationId)\n| summarize NonCompliantDevices = dcount(DeviceId) by ConfigurationName\n| top 20 by NonCompliantDevices desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 20
+       }
+      },
+      "name": "query - tvm gaps"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "endpoint"
+   },
+   "name": "groupEndpoint"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Email & Collaboration: Defender for Office 365\n\nMailbox and transport rule activity, plus MDO-detected email threats via EmailEvents and URL/attachment intelligence, indicate whether email-protection telemetry is reaching Sentinel. Empty tiles for MDO queries mean the Microsoft 365 Defender connector may not be fully onboarded.",
+       "style": "markdown"
+      },
+      "name": "text - email"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let O = union isfuzzy=true\n    (OfficeActivity\n        | where Operation in~ (\"New-InboxRule\", \"Set-Mailbox\", \"Set-MailboxAutoReplyConfiguration\", \"Set-TransportRule\")\n        | project Operation, UserId),\n    (datatable(Operation:string, UserId:string)[]);\nO\n| where isnotempty(Operation)\n| summarize Operations = count() by Operation, UserId\n| order by Operations desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - mail rule activity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let E = union isfuzzy=true\n    (EmailEvents\n        | where isnotempty(ThreatTypes)\n        | project ThreatTypes, DeliveryAction),\n    (datatable(ThreatTypes:string, DeliveryAction:string)[]);\nE\n| where isnotempty(ThreatTypes)\n| summarize Emails = count() by ThreatTypes, DeliveryAction\n| order by Emails desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - mdo threat detections"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let E = union isfuzzy=true\n    (EmailEvents\n        | where isnotempty(ThreatTypes)\n        | extend Category = case(\n            ThreatTypes has \"Phish\", \"Phish\",\n            ThreatTypes has \"Malware\", \"Malware\",\n            ThreatTypes has \"Spam\", \"Spam\",\n            \"Other\")\n        | summarize Events = count() by Category, bin(TimeGenerated, {TimeRange:grain})),\n    (datatable(Category:string, TimeGenerated:datetime, Events:long)[]);\nE\n| where isnotempty(Category)\n| order by TimeGenerated desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 40
+       }
+      },
+      "name": "query - phish malware volume"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let U = union isfuzzy=true\n    (EmailUrlInfo\n        | where UrlDisplayLocation has_any (\"Quarantine\", \"Junk\", \"Phish\")\n        | project DisplayLocation = UrlDisplayLocation, TimeGenerated),\n    (datatable(DisplayLocation:string, TimeGenerated:datetime)[]);\nU\n| where isnotempty(DisplayLocation)\n| summarize URLs = count() by DisplayLocation\n| order by URLs desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 15
+       }
+      },
+      "name": "query - url attachment threats"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "email"
+   },
+   "name": "groupEmail"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Data Protection: Purview Information Protection\n\nSensitivity label usage, DLP policy rule matches, and overall signal health from the Microsoft Purview Information Protection diagnostic pipeline. If these tiles are empty, Purview diagnostic settings may not be sending events to this workspace.",
+       "style": "markdown"
+      },
+      "name": "text - dp"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let P = union isfuzzy=true\n    (MicrosoftPurviewInformationProtection\n        | where Operation in~ (\"SensitivityLabelApplied\", \"SensitivityLabelRemoved\", \"SensitivityLabelChanged\")\n        | project LabelName = tostring(SensitivityLabel), Operation),\n    (datatable(LabelName:string, Operation:string)[]);\nP\n| where isnotempty(LabelName)\n| summarize Events = count() by LabelName, Operation\n| order by Events desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - label coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let D = union isfuzzy=true\n    (MicrosoftPurviewInformationProtection\n        | where Activity has \"DLP\"\n        | project Policy = tostring(Policy), Severity = tostring(RuleSeverity)),\n    (datatable(Policy:string, Severity:string)[]);\nD\n| where isnotempty(Policy)\n| summarize Matches = count() by Policy, Severity\n| order by Matches desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 20
+       }
+      },
+      "name": "query - dlp policy matches"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "union isfuzzy=true\n    MicrosoftPurviewInformationProtection,\n    (datatable(TimeGenerated:datetime, Type:string)[])\n| summarize Events = count(), LastSeen = max(TimeGenerated) by Source = Type\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"No Recent Data\")",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 10
+       }
+      },
+      "name": "query - signal health"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "dataprotection"
+   },
+   "name": "groupDataProtection"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Defender for Cloud: recommendations and coverage\n\nNested recommendation data is only present when Defender for Cloud is enabled and exporting to this workspace. Unhealthy findings that persist indicate recommendations are not being remediated.",
+       "style": "markdown"
+      },
+      "name": "text - mdc"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let R = union isfuzzy=true\n    (SecurityNestedRecommendation\n        | where RecommendationState == \"UnHealthy\"\n        | project RecommendationSeverity, AssessedResourceId),\n    (datatable(RecommendationSeverity:string, AssessedResourceId:string)[]);\nR\n| where isnotempty(RecommendationSeverity)\n| summarize Findings = count(), Resources = dcount(AssessedResourceId) by RecommendationSeverity\n| order by Findings desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 15
+       }
+      },
+      "name": "query - findings by severity"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let R = union isfuzzy=true\n    (SecurityNestedRecommendation\n        | where RecommendationState == \"UnHealthy\"\n        | project Category),\n    (datatable(Category:string)[]);\nR\n| where isnotempty(Category)\n| summarize Findings = count() by Category\n| top 15 by Findings desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 15
+       }
+      },
+      "name": "query - findings by category"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "mdc"
+   },
+   "name": "groupMDC"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Sentinel Utilization: coverage and operational health\n\nThe data sources below are the pipelines your detection content depends on. 'Stale / Stopped' rows point at connectors that have been onboarded but are no longer producing data.",
+       "style": "markdown"
+      },
+      "name": "text - sentinel"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let Sources = union isfuzzy=true\n    SigninLogs, AuditLogs, AADNonInteractiveUserSignInLogs, OfficeActivity, DeviceInfo,\n    DeviceEvents, DeviceTvmSecureConfigurationAssessment, SecurityNestedRecommendation,\n    SecurityAlert, DnsEvents, CommonSecurityLog, Syslog, Heartbeat,\n    (datatable(TimeGenerated:datetime, Type:string)[])\n| summarize Rows = count(), LastSeen = max(TimeGenerated) by Source = Type;\nSources\n| where isnotempty(Source)\n| extend Status = iff(LastSeen > ago(7d), \"Active\", \"Stale / Stopped\")\n| order by Source asc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 40
+       }
+      },
+      "name": "query - data source coverage"
+     },
+     {
+      "type": 3,
+      "content": {
+       "version": "KqlItem/1.0",
+       "query": "let A = union isfuzzy=true\n    (SecurityAlert\n        | project ProductName, TimeGenerated),\n    (datatable(ProductName:string, TimeGenerated:datetime)[]);\nA\n| where isnotempty(ProductName)\n| summarize Alerts = count(), LastAlert = max(TimeGenerated) by ProductName\n| order by Alerts desc",
+       "size": 0,
+       "timeContextFromParameter": "TimeRange",
+       "queryType": 0,
+       "resourceType": "microsoft.operationalinsights/workspaces",
+       "gridSettings": {
+        "rowLimit": 25
+       }
+      },
+      "name": "query - alert volume"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "sentinel"
+   },
+   "name": "groupSentinel"
+  },
+  {
+   "type": 12,
+   "content": {
+    "version": "NotebookGroup/1.0",
+    "groupType": "editable",
+    "items": [
+     {
+      "type": 1,
+      "content": {
+       "json": "## Next Steps: Remediation Guidance\n\nUse the signal presence observed in the other tabs to decide which remediation steps apply. Workbook signal presence does not prove connector health or complete coverage; validate connector configuration, expected tables, and ingestion freshness before drawing conclusions.\n\n---\n\n### Recommended Reviews\n\n- Review analytics rules in Microsoft Sentinel to ensure detections align with your data sources\n- Set up UEBA (User and Entity Behavior Analytics) for identity-based anomaly detection\n- Configure watchlists for threat intelligence enrichment\n\n---\n\n### What Needs Attention\n\n#### Identity (Entra ID)\nIf SigninLogs has no data in this workspace, review the identity connector configuration.\n\n**To fix:**\n1. Go to **Microsoft Sentinel > Data connectors**\n2. Search for **Azure Active Directory** and open the connector page\n3. Under **Configuration**, enable **Sign-in logs** and **Audit logs**\n4. Ensure your Entra ID diagnostic settings are sending logs to this workspace\n5. Data should appear within 15 minutes of enabling\n\n#### Endpoint (Defender for Endpoint)\nIf DeviceInfo has no data in this workspace, review Defender for Endpoint onboarding and ingestion.\n\n**To fix:**\n1. Go to **Microsoft Sentinel > Data connectors**\n2. Search for **Microsoft 365 Defender** and open the connector page\n3. Enable the connector and verify **Microsoft Defender for Endpoint** events are selected\n4. Confirm devices are onboarded in the Microsoft Defender portal (security.microsoft.com)\n5. Check that the M365 Defender connector is pointing to this workspace\n\n#### Email (Defender for Office 365)\nIf both EmailEvents and OfficeActivity have no data in this workspace, review the Defender for Office 365 and Office 365 connectors.\n\n**To fix:**\n1. Go to **Microsoft Sentinel > Data connectors**\n2. Search for **Microsoft 365 Defender** and open the connector page\n3. Enable **Microsoft Defender for Office 365** events\n4. Also enable the **Office 365** connector for Exchange/SharePoint activity\n5. Verify MDO policies are active in the Microsoft Defender portal\n\n#### Data Protection (Purview)\nIf MicrosoftPurviewInformationProtection has no data in this workspace, review the Purview diagnostic settings.\n\n**To fix:**\n1. Go to the **Microsoft Purview compliance portal** (purview.microsoft.com)\n2. Navigate to **Settings > Diagnostic settings**\n3. Create a diagnostic setting to send **Information Protection events** to this Log Analytics workspace\n4. Verify sensitivity labels are published and actively applied in your tenant\n\n#### Defender for Cloud\nIf SecurityNestedRecommendation has no data in this workspace, review Defender for Cloud continuous export.\n\n**To fix:**\n1. Go to **Microsoft Defender for Cloud** in the Azure portal\n2. Navigate to **Environment settings > Your subscription > Continuous export**\n3. Create an export for **Security recommendations** to this Log Analytics workspace\n4. Ensure Defender for Cloud plans are enabled for your subscription\n\n#### Sentinel Data Sources\nIf one or more data sources show \"Stale / Stopped\" status, investigate their connector and ingestion health.\n\n**To fix:**\n1. Go to **Microsoft Sentinel > Data connectors**\n2. Identify connectors with \"Stale\" or disconnected status\n3. For each stale connector, open the connector page and verify configuration\n4. Check the Log Analytics workspace for ingestion errors\n5. Common causes: credential expiry, permission changes, network connectivity issues\n\n---\n\n### Quick Wins\n\nApply these priorities when the corresponding telemetry is missing or stale.\n\n| Priority | Action | Effort | Impact |\n|---|---|---|---|\n| 1 | Enable Entra ID Sign-in and Audit logs | Low | High - enables identity-based detections |\n| 2 | Onboard Microsoft 365 Defender connector | Low | High - unlocks EDR, email, and XDR telemetry |\n| 3 | Enable Purview diagnostic settings | Low | Medium - enables DLP and label monitoring |\n| 4 | Configure Defender for Cloud continuous export | Medium | Medium - enables compliance monitoring |\n| 5 | Review and tune analytics rules | Medium | Medium - ensures detections match data sources |",
+       "style": "markdown"
+      },
+      "name": "text - recommendations"
+     }
+    ]
+   },
+   "conditionalVisibility": {
+    "parameterName": "parameterTab",
+    "comparison": "isEqualTo",
+    "value": "recommendations"
+   },
+   "name": "groupRecommendations"
+  }
+ ]
+}
