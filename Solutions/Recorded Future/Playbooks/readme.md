@@ -287,10 +287,20 @@ Information about latest released version number can be found in Recorded Future
 ### Log Ingestion API migration (deadline: 2026-09-14)
 Six playbooks in this solution used the deprecated Azure Log Analytics Data Collector connector (`azureloganalyticsdatacollector`), which Microsoft is retiring on September 14, 2026.
 
-Notable solution changes:
-- `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, and `RecordedFuture-Sandbox_Outlook_Attachment` have been updated to use the Log Ingestion API instead, which authenticates via managed identity and routes data through a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) rather than a shared workspace key.
-- Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't allow us to target an existing "v1" table with DCR/DCE without running migration scripts, so new tables were needed): `RecordedFuturePlaybookAlerts_CL` → `RecordedFuturePlaybookAlerts_V2_CL`, `RecordedFuturePortalAlerts_CL` → `RecordedFutureClassicAlerts_V2_CL`, `RecordedFutureThreatMap_CL` → `RecordedFutureThreatMap_V2_CL`, `RecordedFutureThreatMapMalware_CL` → `RecordedFutureThreatMapMalware_V2_CL`, `RecordedFutureSandboxResults_CL` → `RecordedFutureSandboxResults_V2_CL`.
+**Notable solution changes:**
 
+The following Playbooks have been updated to use the Log Ingestion API instead, which authenticates via managed identity and routes data through a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) rather than a shared workspace key.
+
+Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't allow us to target an existing "v1" table with DCR/DCE without running migration scripts)
+
+|Playbook Name|Old Table Name|New Table Name
+|-|-|-|
+`RecordedFuture-Alert-Importer` | `RecordedFuturePortalAlerts_CL`|`RecordedFutureClassicAlerts_V2_CL`
+`RecordedFuture-Playbook-Alert-Importer`|`RecordedFuturePlaybookAlerts_CL`|`RecordedFuturePlaybookAlerts_V2_CL`
+`RecordedFuture-ThreatMap-Importer`|`RecordedFutureThreatMap_CL`|`RecordedFutureThreatMap_V2_CL`
+`RecordedFuture-ThreatMapMalware-Importer`|`RecordedFutureThreatMapMalware_CL`|`RecordedFutureThreatMapMalware_V2_CL`
+`RecordedFuture-Sandbox_StorageAccount`|`RecordedFutureSandboxResults_CL`|`RecordedFutureSandboxResults_V2_CL`
+`RecordedFuture-Sandbox_Outlook_Attachment`|`RecordedFutureSandboxResults_CL`|`RecordedFutureSandboxResults_V2_CL`
 **Migration path:**
 1. Deploy the [Data Connectors infrastructure](#data-connectors-infrastructure) (DCE, DCRs, Log Analytics tables, and the connector tile) into the same resource group as your Log Analytics Workspace.
 2. Deploy the Recorded Future Custom Connector, if not already deployed — it's shared by the playbooks.

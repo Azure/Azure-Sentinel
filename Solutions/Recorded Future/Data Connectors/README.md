@@ -35,14 +35,3 @@ The connector UI tile content exists in two forms due to limitations of the pack
 
 If you update one (queries, description, instruction steps, connectivity criteria, etc.), update
 its counterpart.
-
-## Connector `kind`: `Customizable`
-
-The tile uses `type: Microsoft.SecurityInsights/dataConnectorDefinitions` with `kind: Customizable`
-(not `GenericUI`/`Microsoft.OperationalInsights/workspaces/providers/dataConnectors`, used in an
-earlier iteration). Note the field name difference: `Customizable` uses the singular
-`connectivityCriteria`, not the plural `connectivityCriterias` used by `GenericUI`. This was
-verified live in `rf-erik` — the tile shows "Connected" in the Sentinel Data Connectors blade
-with fresh data in all 5 tables, even though the raw REST API's cached
-`isConnectivityCriteriasMatchSome` field can lag behind (the portal UI evaluates connectivity
-live, not from that cached field).
