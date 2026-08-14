@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String",
+      "metadata": {
+        "description": "The Microsoft Sentinel / Log Analytics workspace name."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', guid('FortiNDR_HighSeverityEvents'))]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "FortiNDR Cloud - High Severity Event Detected",
+        "description": "Triggers an alert for any high or critical severity event across FortiNDR Cloud detections, Suricata alerts, or observations.",
+        "severity": "High",
+        "enabled": true,
+        "query": "Fortinet_FortiNDR_Cloud\n| where (Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'))\n     or (Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2)\n     or (Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'))\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IncidentDevice"
+              }
+            ]
+          }
+        ],
+        "customDetails": {
+          "EventDescription": "Description",
+          "EventType": "Type"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "FortiNDR Alert: {{Description}} on {{IncidentDevice}}"
+        }
+      }
+    }
+  ]
+}
