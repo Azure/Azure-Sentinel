@@ -542,6 +542,9 @@ def fetch_azure_monitor_table_index(verbose: bool = False) -> Set[str]:
     if verbose:
         print(f"  Found {len(names)} Azure Monitor table reference files")
     return names
+
+
+def parse_defender_xdr_schema(content: str, verbose: bool = False) -> Dict[str, TableInfo]:
     """Parse the Defender XDR advanced hunting schema page (from raw markdown)."""
     tables = {}
     

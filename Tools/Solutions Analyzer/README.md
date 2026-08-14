@@ -62,6 +62,7 @@ pip install azure-kusto-data azure-kusto-ingest azure-identity
   - [`asim_vendors_products.csv`](asim_vendors_products.csv) - Allowed EventVendor and EventProduct values
 - Relationships:
   - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+  - [`playbook_connectors.csv`](playbook_connectors.csv) - Logic App connectors and built-in actions used by each playbook (managed, custom, and built-in APIs)
   - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and optional ASIM-based)
   - [`table_schemas.csv`](table_schemas.csv) - Table column schemas from DCR definition files, Azure Monitor documentation, and KQL validation tables
   - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
@@ -225,6 +226,14 @@ See the script documentation for details:
 - `supports_transformations`, `basic_logs_eligible`, and `ingestion_api_supported` are now resolved to a definitive `Yes`/`No` for every table, since the consolidated page lists all tables and treats a blank cell as "not supported" (previously the transformations page only listed supported tables, and the Ingestion API list depended on an article section that no longer exists).
 - New: the reference's **Auxiliary / Lake** column now enriches `lake_only_supported` for tables not covered by the Sentinel connectors reference (Auxiliary and lake-only ingestion are the same capability), giving more complete lake-only coverage.
 - Updated the `source` deep-links on generated table pages (feature-support and Ingestion API) to the consolidated reference, plus the data-flow diagram and script/CSV docs.
+
+**Defender XDR schema parsing fix (`collect_table_info.py`):**
+- Restored the `parse_defender_xdr_schema` function definition, whose `def` header had been dropped (leaving its body as unreachable dead code after `fetch_azure_monitor_table_index`). The `parse_defender_xdr_schema` call therefore raised `NameError`, was swallowed by the surrounding `try/except`, and silently produced **zero** Defender XDR tables — so `source_defender_xdr` tables and their column schemas were missing from `tables_reference.csv` / `la_table_schemas.csv`. XDR tables (≈64) are collected again.
+
+**Documentation coverage and repository cleanup:**
+- Documented the previously-unlisted `playbook_connectors.csv` mapper output in the `map_solutions_connectors_tables.py` output list, the CSV reference index, and the README pre-generated files section.
+- Removed three research-only generated artifacts and their generation code: `connector_table_ingestion.csv` (from `map_solutions_connectors_tables.py`) and `asim_extraction_failures.csv` / `asim_fields_summary.md` (from `collect_asim_fields.py`, along with the now-obsolete `--no-report` flag).
+- Removed the ad-hoc `automation/daily-solution-analyzer-upload-function/` Function App and the stale, unreferenced `solutions_with_connectors.csv` from the repository.
 
 ### v9.10 - Schema reference documentation links for table pages
 
