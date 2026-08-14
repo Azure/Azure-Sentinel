@@ -10,8 +10,7 @@ Comprehensive table-level metadata fetched from Microsoft documentation:
 
 - Azure Monitor table reference (categories, descriptions, resource types, basic-logs eligibility)
 - Defender XDR schema reference
-- Tables Feature Support page (transformation support)
-- Logs Ingestion API overview (which tables support DCR-based ingestion)
+- Azure Monitor Logs table feature support (consolidated reference: Basic plan, Auxiliary / Lake plan, DCR workspace transformations, Logs Ingestion API)
 - Sentinel Tables/Connectors reference (lake-only, DCR support)
 
 This file is the upstream input for [`tables.csv`](tables.md) (which filters down to tables actually used by connectors) and is also consumed by the static and interactive doc generators.
@@ -39,15 +38,15 @@ This file is the upstream input for [`tables.csv`](tables.md) (which filters dow
 | `source_azure_monitor` | `Yes` if table is in the Azure Monitor reference. Set from the tables-category page, and additionally from the complete per-table reference index (Git Trees API) so categoryless tables omitted from the category page (e.g. `ApiManagementGatewayLlmLog`) are still detected. | Azure Monitor tables-category + reference index |
 | `source_defender_xdr` | `true` if table is in Defender XDR schema | Defender XDR schema |
 | `xdr_only` | `true` if table is only in Defender XDR (not in Azure Monitor) | Computed |
-| `source_feature_support` | `true` if table has feature-support info | Tables feature support |
-| `source_ingestion_api` | `true` if table supports the Ingestion API | Logs Ingestion API overview |
+| `source_feature_support` | `true` if table has feature-support info | Azure Monitor Logs table feature support |
+| `source_ingestion_api` | `true` if table supports the Ingestion API | Azure Monitor Logs table feature support (API column) |
 | `source_sentinel_tables` | `true` if table has Sentinel connector reference info | Sentinel tables/connectors include |
 | `azure_monitor_doc_link` | Link to Azure Monitor documentation | Azure Monitor tables-category |
 | `defender_xdr_doc_link` | Link to Defender XDR documentation | Defender XDR schema |
-| `basic_logs_eligible` | `Yes`/`No`/empty — supports Basic Logs plan | Azure Monitor individual pages |
-| `supports_transformations` | `Yes`/`No`/empty — supports ingestion-time transformations | Tables feature support (primary), Sentinel tables/connectors (fallback) |
-| `ingestion_api_supported` | `Yes`/`No`/empty — supports Logs Ingestion API | Logs Ingestion API overview |
-| `lake_only_supported` | `Yes`/`No`/empty — supports lake-only ingestion | Sentinel tables/connectors include |
+| `basic_logs_eligible` | `Yes`/`No`/empty — supports Basic Logs plan | Azure Monitor Logs table feature support (Basic column), Azure Monitor individual pages |
+| `supports_transformations` | `Yes`/`No`/empty — supports ingestion-time transformations | Azure Monitor Logs table feature support (DCR column, primary), Sentinel tables/connectors (fallback) |
+| `ingestion_api_supported` | `Yes`/`No`/empty — supports Logs Ingestion API | Azure Monitor Logs table feature support (API column) |
+| `lake_only_supported` | `Yes`/`No`/empty — supports lake-only (Auxiliary) ingestion | Sentinel tables/connectors include, Azure Monitor Logs table feature support (Auxiliary column) |
 
 ## Custom-log table rules
 

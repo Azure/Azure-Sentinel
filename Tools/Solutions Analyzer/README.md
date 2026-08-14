@@ -199,7 +199,7 @@ See the script documentation for details:
 
 ## Version History
 
-### v9.11 - Parser, table discovery, and mapping accuracy
+### v9.11 - Parser/table discovery, mapping accuracy, and consolidated table feature reference
 
 **Unifying ASIM parser deduplication and dual-variant parser pages:**
 - Unifying (union) parser deduplication now happens at **CSV generation** in `map_solutions_connectors_tables.py` (root cause), not just in the display layer: `asim_parsers.csv` no longer emits a separate row for the `im`/`vim` (filtering) variant of each unifying parser, keeping only the `ASim` (parameter-less) row. The dropped variant is preserved on the surviving `ASim` row via two new columns, `filtering_parser_name` and `filtering_equivalent_builtin`. Pairing is by `(schema, action)` so the irregular `RegistryEvent` and three-way `ProcessEvent` (base/Create/Terminate) cases pair correctly.
@@ -219,6 +219,12 @@ See the script documentation for details:
 **Parser names no longer surface as phantom tables:**
 - Content mappings that contain a known parser function name instead of a physical table now resolve that parser recursively to its underlying tables before the mapping and table CSVs are written. The rewritten mapping records the originating function in `source_parser`.
 - The resolver preserves genuine tables that share a parser name, including `*_CL` custom logs, self-referential parsers, and tables documented by Azure Monitor or Defender XDR. Parser functions with no physical-table expansion are removed rather than emitted as empty phantom table pages.
+
+**Table feature source migration (`collect_table_info.py`):**
+- Switched the table feature source from the retired standalone articles to the consolidated [Azure Monitor Logs table feature support](https://learn.microsoft.com/azure/azure-monitor/reference/tables-features) reference. This single matrix (Basic / Aux / DCR / API columns) replaces `tables-feature-support` (transformations), `basic-logs-azure-tables` (Basic plan), and the Logs Ingestion API supported-tables list that was removed from the `logs-ingestion-api-overview` article.
+- `supports_transformations`, `basic_logs_eligible`, and `ingestion_api_supported` are now resolved to a definitive `Yes`/`No` for every table, since the consolidated page lists all tables and treats a blank cell as "not supported" (previously the transformations page only listed supported tables, and the Ingestion API list depended on an article section that no longer exists).
+- New: the reference's **Auxiliary / Lake** column now enriches `lake_only_supported` for tables not covered by the Sentinel connectors reference (Auxiliary and lake-only ingestion are the same capability), giving more complete lake-only coverage.
+- Updated the `source` deep-links on generated table pages (feature-support and Ingestion API) to the consolidated reference, plus the data-flow diagram and script/CSV docs.
 
 ### v9.10 - Schema reference documentation links for table pages
 

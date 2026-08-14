@@ -12,11 +12,13 @@ Sources:
 2. Microsoft Defender XDR Advanced Hunting Schema
    https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
 
-3. Azure Monitor Tables Feature Support
-   https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tables-feature-support
-
-4. Azure Monitor Logs Ingestion API Supported Tables
-   https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables
+3. Azure Monitor Logs table feature support (consolidated reference)
+   https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-features
+   This single page lists every Azure Monitor Logs table with its support for the
+   Basic table plan, Auxiliary / Lake table plan, DCR workspace transformations, and
+   the Logs Ingestion API. It replaces the retired standalone reference articles
+   (tables-feature-support, basic-logs-azure-tables) and the Logs Ingestion API
+   supported-tables list that used to live in the logs-ingestion-api-overview article.
 
 Additional potential sources (for future enhancement):
 - Azure Resource Graph tables
@@ -59,11 +61,15 @@ AZURE_MONITOR_TABLES_CATEGORY_RAW = 'https://raw.githubusercontent.com/Microsoft
 DEFENDER_XDR_SCHEMA = 'https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables'
 DEFENDER_XDR_SCHEMA_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/defender-docs/main/defender-xdr/advanced-hunting-schema-tables.md'
 
-TABLES_FEATURE_SUPPORT = 'https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tables-feature-support'
-TABLES_FEATURE_SUPPORT_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/logs/tables-feature-support.md'
-
-INGESTION_API_OVERVIEW = 'https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview'
-INGESTION_API_OVERVIEW_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/logs/logs-ingestion-api-overview.md'
+# Consolidated Azure Monitor Logs table feature reference.
+# This single page replaced the previously separate reference articles for
+# tables-feature-support (ingestion-time / DCR workspace transformations),
+# basic-logs-azure-tables (Basic table plan) and the Logs Ingestion API
+# supported-tables list that used to live in the logs-ingestion-api-overview
+# article. It lists every Azure Monitor Logs table with columns for Basic,
+# Auxiliary / Lake, DCR workspace transformation, and Logs Ingestion API support.
+TABLES_FEATURES = 'https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-features'
+TABLES_FEATURES_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/reference/tables-features.md'
 
 # Azure Monitor table reference base URL
 AZURE_MONITOR_TABLE_REF_BASE = 'https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/'
@@ -605,108 +611,65 @@ def fetch_azure_monitor_table_index(verbose: bool = False) -> Set[str]:
     return tables
 
 
-def parse_tables_feature_support(content: str, verbose: bool = False) -> Dict[str, Dict]:
-    """Parse the tables-feature-support page.
-    
-    This page lists tables that support ingestion-time transformations.
-    All tables listed on this page support transformations (Yes).
-    The page format is: | Table | Limitations |
+def parse_tables_features(content: str, verbose: bool = False) -> Dict[str, Dict]:
+    """Parse the consolidated "Azure Monitor Logs table feature support" reference.
+
+    The page (reference/tables-features) contains a single matrix that lists every
+    Azure Monitor Logs table with one column per feature:
+
+        | Table | Basic | Aux | DCR | API |
+
+    A cell contains an icon (Basic/Auxiliary/DCR image, or a checkmark for API) when
+    the table supports that feature, and is blank otherwise. Because the page lists
+    all tables, a blank cell authoritatively means the feature is not supported, so
+    each feature can be resolved to a definitive ``Yes``/``No``.
+
+    Returns a dict mapping table name to
+    ``{basic_logs, auxiliary, transformations, search_jobs, ingestion_api}``.
     """
     feature_info = {}
-    
-    lines = content.split('\n')
-    in_table = False
-    
-    for line in lines:
-        # Detect table separator row
-        if re.match(r'^\s*\|[-:\s|]+\|', line):
-            in_table = True
+
+    for line in content.split('\n'):
+        if '|' not in line:
             continue
-        
-        if in_table and '|' in line:
-            parts = [p.strip() for p in line.split('|')]
-            parts = [p for p in parts if p]  # Remove empty parts
-            
-            if not parts:
-                continue
-            
-            # Extract table name from first column (may be a link like [TableName](path))
-            table_name_match = re.search(r'\[([A-Za-z0-9_]+)\]', parts[0])
-            if table_name_match:
-                table_name = table_name_match.group(1)
-            else:
-                table_name = parts[0].strip()
-            
-            # Skip header row
-            if not table_name or table_name.lower() == 'table':
-                continue
-            
-            # All tables on this page support transformations
-            # The second column contains limitations (if any)
-            limitations = parts[1].strip() if len(parts) > 1 else ''
-            
-            feature_info[table_name] = {
-                'basic_logs': '',
-                'auxiliary': '',
-                'transformations': 'Yes',  # All tables on this page support transformations
-                'search_jobs': '',
-                'limitations': limitations
-            }
-        elif in_table and '|' not in line:
-            in_table = False
-    
+
+        # Standard markdown rows are wrapped in a single leading and trailing pipe.
+        # Drop exactly one bounding empty cell on each side so that interior empty
+        # cells (blank feature columns) are preserved.
+        cells = line.split('|')
+        if cells and cells[0].strip() == '':
+            cells = cells[1:]
+        if cells and cells[-1].strip() == '':
+            cells = cells[:-1]
+        cells = [c.strip() for c in cells]
+
+        # The feature matrix has exactly five columns.
+        if len(cells) != 5:
+            continue
+
+        # First column is a link to the table reference page: [TableName](./tables/TableName.md)
+        name_match = re.search(r'\[([A-Za-z0-9_]+)\]\([^)]*tables/', cells[0])
+        if not name_match:
+            continue
+        table_name = name_match.group(1)
+
+        feature_info[table_name] = {
+            'basic_logs': 'Yes' if cells[1] else 'No',
+            'auxiliary': 'Yes' if cells[2] else 'No',
+            'transformations': 'Yes' if cells[3] else 'No',
+            'search_jobs': '',
+            'ingestion_api': 'Yes' if cells[4] else 'No',
+        }
+
     if verbose:
-        print(f"  Found {len(feature_info)} tables that support transformations")
-    
+        transforms = sum(1 for f in feature_info.values() if f['transformations'] == 'Yes')
+        basic = sum(1 for f in feature_info.values() if f['basic_logs'] == 'Yes')
+        aux = sum(1 for f in feature_info.values() if f['auxiliary'] == 'Yes')
+        api = sum(1 for f in feature_info.values() if f['ingestion_api'] == 'Yes')
+        print(f"  Found {len(feature_info)} tables in the feature reference "
+              f"({basic} Basic, {aux} Auxiliary/Lake, {transforms} transformations, {api} Ingestion API)")
+
     return feature_info
-
-
-def parse_ingestion_api_tables(content: str, verbose: bool = False) -> Set[str]:
-    """Parse the Logs Ingestion API supported tables section."""
-    supported_tables = set()
-    
-    # Look for the "Supported tables" section
-    in_section = False
-    
-    lines = content.split('\n')
-    for line in lines:
-        # Find section header
-        if 'supported tables' in line.lower() and '#' in line:
-            in_section = True
-            continue
-        
-        # End of section (next major header)
-        if in_section and re.match(r'^##\s', line):
-            break
-        
-        if in_section:
-            # Find table names in markdown links with <br> separators
-            # Pattern: * [TableName](/azure/azure-monitor/reference/tables/tablename)<br>
-            # or just: * TableName<br>
-            link_pattern = r'\*\s*\[([A-Za-z0-9_]+)\]\([^)]+\)'
-            for match in re.finditer(link_pattern, line):
-                table_name = match.group(1)
-                if table_name and table_name[0].isupper():
-                    supported_tables.add(table_name)
-            
-            # Plain table names without links
-            plain_pattern = r'\*\s*([A-Za-z][A-Za-z0-9_]+)(?:<br>|$)'
-            for match in re.finditer(plain_pattern, line):
-                table_name = match.group(1).strip()
-                if table_name and table_name[0].isupper() and not table_name.startswith('['):
-                    supported_tables.add(table_name)
-            
-            # Also check for list items
-            list_match = re.match(r'^\s*[-*]\s*`?([A-Za-z0-9_]+)`?', line)
-            if list_match:
-                table_name = list_match.group(1)
-                if table_name and table_name[0].isupper():
-                    supported_tables.add(table_name)
-    
-    if verbose:
-        print(f"  Found {len(supported_tables)} tables supported by Ingestion API")
-    
-    return supported_tables
 
 
 def parse_sentinel_tables_connectors(content: str, verbose: bool = False) -> Dict[str, Dict[str, str]]:
@@ -1049,6 +1012,15 @@ def merge_table_info(tables: Dict[str, TableInfo],
                     lake_only_supported=info_dict.get('lake_only_supported', '')
                 )
     
+    # Enrich lake-only (Auxiliary) support from the consolidated feature reference.
+    # The reference's Auxiliary / Lake column is authoritative for all Azure Monitor
+    # Logs tables, so use it to fill lake_only_supported where the Sentinel reference
+    # (which only covers connector tables) has no value. Auxiliary and lake-only
+    # ingestion are the same capability.
+    for info in merged.values():
+        if not info.lake_only_supported and info.auxiliary_table_eligible:
+            info.lake_only_supported = info.auxiliary_table_eligible
+
     # Apply rules for custom log tables (_CL suffix):
     # - All _CL tables support Ingestion API (they are custom tables created via DCR/ingestion)
     # - _CL tables that support lake-only also support transformations
@@ -1289,25 +1261,25 @@ Examples:
         print(f"   Error: {e}")
         defender_tables = {}
     
-    # 3. Fetch feature support info
+    # 3. Fetch consolidated table feature support (Basic, Auxiliary/Lake, DCR transformations, Ingestion API)
     if verbose:
-        print("\n3. Fetching tables feature support...")
+        print("\n3. Fetching Azure Monitor Logs table feature support (consolidated reference)...")
     try:
-        content = fetch_content(TABLES_FEATURE_SUPPORT_RAW, verbose)
-        feature_info = parse_tables_feature_support(content, verbose)
+        content = fetch_content(TABLES_FEATURES_RAW, verbose)
+        feature_info = parse_tables_features(content, verbose)
     except Exception as e:
         print(f"   Error: {e}")
         feature_info = {}
     
-    # 4. Fetch ingestion API supported tables
+    # 4. Derive Logs Ingestion API supported tables from the consolidated reference.
+    #    The standalone supported-tables list was removed from the
+    #    logs-ingestion-api-overview article, so the API column of the feature
+    #    reference is now the source of truth.
+    ingestion_tables = {name for name, feats in feature_info.items()
+                        if feats.get('ingestion_api') == 'Yes'}
     if verbose:
-        print("\n4. Fetching Logs Ingestion API supported tables...")
-    try:
-        content = fetch_content(INGESTION_API_OVERVIEW_RAW, verbose)
-        ingestion_tables = parse_ingestion_api_tables(content, verbose)
-    except Exception as e:
-        print(f"   Error: {e}")
-        ingestion_tables = set()
+        print(f"\n4. Derived {len(ingestion_tables)} tables supporting the Logs Ingestion API "
+              f"from the consolidated reference")
     
     # 5. Fetch Sentinel tables/connectors reference (DCR and lake-only support)
     if verbose:
@@ -1513,7 +1485,7 @@ Examples:
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write("# Transformation Support Mismatch Report\n\n")
             f.write("This report identifies tables where transformation support information differs between sources:\n")
-            f.write("- **Feature Support Page**: From [Tables Feature Support](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support)\n")
+            f.write("- **Feature Support Page**: From [Azure Monitor Logs table feature support](https://learn.microsoft.com/azure/azure-monitor/reference/tables-features)\n")
             f.write("- **Sentinel Reference**: From [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference)\n\n")
             f.write(f"**Total mismatches found: {len(dcr_mismatches)}**\n\n")
             f.write("| Table | Feature Support Page | Sentinel Reference |\n")

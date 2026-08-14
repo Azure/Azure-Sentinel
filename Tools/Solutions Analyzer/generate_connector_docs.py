@@ -4899,7 +4899,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             
             # Table characteristics from reference CSV
             # Build source links for inline attribution
-            feature_support_link = ' ([source](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support))' if table_ref.get('source_feature_support', '').lower() == 'yes' else ''
+            feature_support_link = ' ([source](https://learn.microsoft.com/azure/azure-monitor/reference/tables-features))' if table_ref.get('source_feature_support', '').lower() == 'yes' else ''
             sentinel_tables_link = ' ([source](https://learn.microsoft.com/azure/sentinel/data-connectors-reference))' if table_ref.get('source_sentinel_tables', '').lower() == 'yes' else ''
 
             basic_logs = table_ref.get('basic_logs_eligible', '')
@@ -8542,8 +8542,8 @@ def generate_statistics_page(
             ('source_azure_monitor', 'Azure Monitor Tables Reference', 'https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-resourcetype'),
             ('source_defender_xdr', 'Defender XDR Advanced Hunting Schema', 'https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables'),
             ('source_sentinel_tables', 'Sentinel Tables and Connectors Reference', 'https://learn.microsoft.com/azure/sentinel/data-connectors-reference'),
-            ('source_feature_support', 'Azure Monitor Tables Feature Support', 'https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support'),
-            ('source_ingestion_api', 'Azure Monitor Logs Ingestion API', 'https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview'),
+            ('source_feature_support', 'Azure Monitor Logs Table Feature Support', 'https://learn.microsoft.com/azure/azure-monitor/reference/tables-features'),
+            ('source_ingestion_api', 'Azure Monitor Logs Ingestion API', 'https://learn.microsoft.com/azure/azure-monitor/reference/tables-features'),
         ]
         
         # Primary discovery source by priority: Connector > Content > Doc sub-sources (by priority) > Schema
