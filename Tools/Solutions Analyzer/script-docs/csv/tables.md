@@ -34,7 +34,7 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 | `collection_method_candidates` | Comma-separated distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables) | Computed |
 | `feeding_connector_ids` | Comma-separated IDs of every connector that ingests the table | Computed |
 | `resource_types` | Azure resource types that emit to this table | `tables_reference.csv` |
-| `source_azure_monitor` | `Yes` if documented in Azure Monitor reference (includes categoryless tables flagged via the reference index) | `tables_reference.csv` |
+| `source_azure_monitor` | `Yes` if documented in Azure Monitor reference (includes categoryless tables flagged via the tables-features reference) | `tables_reference.csv` |
 | `source_defender_xdr` | `true` if documented in Defender XDR schema | `tables_reference.csv` |
 | `azure_monitor_doc_link` | Link to Azure Monitor documentation | `tables_reference.csv` |
 | `defender_xdr_doc_link` | Link to Defender XDR documentation | `tables_reference.csv` |

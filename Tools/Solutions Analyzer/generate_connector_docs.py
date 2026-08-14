@@ -5099,7 +5099,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             # Prefer the table-specific Azure Monitor / Defender XDR reference
             # page (which documents the actual column schema) over the generic
             # fallback. Recomputed locally so it stays correct for categoryless
-            # Azure Monitor tables flagged via the reference index.
+            # Azure Monitor tables flagged via the tables-features reference.
             sr_am_link = table_ref.get('azure_monitor_doc_link', '')
             if not sr_am_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
                 sr_am_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"

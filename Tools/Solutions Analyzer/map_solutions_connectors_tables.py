@@ -9397,27 +9397,6 @@ def main() -> None:
                 if table_name:
                     tables_reference[table_name] = row
 
-    # Flag categoryless Azure Monitor tables. collect_table_info.py derives
-    # source_azure_monitor from the tables-category page, which omits tables
-    # that have no category (e.g. ApiManagementGatewayLlmLog). The companion
-    # azure_monitor_tables_index.txt holds the authoritative complete set of
-    # Azure Monitor table reference pages, so any referenced table present there
-    # but flagged 'No' is corrected here (and given its reference doc link).
-    am_index_path = tables_reference_path.parent / "azure_monitor_tables_index.txt"
-    if am_index_path.exists():
-        with am_index_path.open("r", encoding="utf-8") as f:
-            am_index = {line.strip().lower() for line in f if line.strip()}
-        am_ref_base = "https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/"
-        am_fixed = 0
-        for table_name, ref in tables_reference.items():
-            if ref.get('source_azure_monitor', '').strip().lower() != 'yes' and table_name.lower() in am_index:
-                ref['source_azure_monitor'] = 'Yes'
-                if not ref.get('azure_monitor_doc_link', '').strip():
-                    ref['azure_monitor_doc_link'] = f"{am_ref_base}{table_name.lower()}"
-                am_fixed += 1
-        if am_fixed:
-            log_print(f"Flagged {am_fixed} categoryless table(s) as Azure Monitor via reference index")
-
     # Load overrides from CSV file
     overrides: List[Override] = load_overrides(args.overrides_csv.resolve())
     if overrides:

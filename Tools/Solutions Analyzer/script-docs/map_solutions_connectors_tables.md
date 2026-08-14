@@ -103,7 +103,7 @@ The mapping script automatically loads `tables_reference.csv` if present and use
 - Determine collection method based on table properties (e.g., "Azure Resources" category → Azure Diagnostics)
 - Include transformation support and ingestion API compatibility information
 
-If the companion `azure_monitor_tables_index.txt` (written by `collect_table_info.py`) is present, the mapper also flags any referenced table whose `source_azure_monitor` is `No` but whose name appears in that authoritative index — correcting categoryless Azure Monitor tables (e.g. `ApiManagementGatewayLlmLog`) to `source_azure_monitor=Yes` and giving them their `…/reference/tables/{name}` documentation link. This in turn lets the `source_azure_monitor` collection-method fallback (Azure Diagnostics) and the correct schema-reference link fire for those tables.
+Categoryless Azure Monitor tables (e.g. `ApiManagementGatewayLlmLog`) are already corrected to `source_azure_monitor=Yes` with their `…/reference/tables/{name}` documentation link by `collect_table_info.py` (which derives the flag from the tables-features reference) when it writes `tables_reference.csv`; the mapper consumes those values directly. This in turn lets the `source_azure_monitor` collection-method fallback (Azure Diagnostics) and the correct schema-reference link fire for those tables.
 
 See [collect_table_info.md](collect_table_info.md) for details.
 
