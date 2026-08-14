@@ -1,9 +1,15 @@
 # Release Notes
 
-Microsoft Sentinel Solution for SAP ERP and S/4HANA. Used with SAP Integration Suite.
+Microsoft Sentinel Solution for SAP ERP and S/4HANA package officially available through [SAP API Business Accelerator Hub](https://api.sap.com/package/MicrosoftSentinelSolutionforSAP/integrationflow). Used with SAP Integration Suite.
+
+This repo serves the editable version of the solution package intended for hot fixes. The official release served through SAP API Business Accelerator Hub is in configure-only mode.
+
+> [!NOTE]
+> For solution release notes and version history, see [Release Notes](../ReleaseNotes.md).
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
+| 1.1.13| 11-08-2026 | Fix UserDetails OPTION_NOT_VALID handling. Prevent SAP-screened usernames and empty batches from producing invalid RFC_READ_TABLE clauses while preserving user visibility and adding redacted failure context. |
 | 1.1.12| 22-07-2026 | Audit log performance enhancements and force-sal-filesystem parameter addition |
 | 1.1.11 | 15-06-2026 | MPL handling improvements for search on web ui |
 | 1.1.10 | 10-04-2026 | Security and usability improvements |
