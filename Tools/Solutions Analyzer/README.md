@@ -217,6 +217,11 @@ See the script documentation for details:
 **Solution publication status uses authoritative solution metadata (solution pages, static index, statistics, interactive `index.html`):**
 - Solution publication status is now derived from the solution's own marketplace metadata (`is_published` / `solution_is_published`) instead of the first connector's `is_published`. Previously a marketplace-published solution (e.g. `Agari`) was shown as **Unpublished** whenever one of its connectors happened to be unpublished. This applies to the static solution pages/index/statistics (`generate_connector_docs.py`) and the interactive `index.html` Solutions tab (`generate_interactive_docs.py`). Connector-level publication status (Connectors tab) is intentionally unchanged.
 
+**Code review follow-ups (minor):**
+- Corrected the `get_schema_references()` mapping comment to state exact table-name matching (prefix matching was never implemented).
+- The categoryless Azure Monitor schema-reference fallback URL now includes the `/en-us/` locale segment, matching the other Microsoft Learn links.
+- `connector_history.py` `find_connector_objects()` now mirrors the mapper for ARM-variable publishers (relabels them `Unknown (ARM variable)`) and retains `publisher` in the returned object; its docstring was clarified accordingly.
+
 **Ingestion API pipe-escaping on connector pages (`connectors` pages):**
 - Multi-value `ingestion_api` values (pipe-joined, e.g. `Log Ingestion API|Undetermined`) are now split into one Markdown link per API and joined with an escaped ` \| ` so they render correctly in the connector page table instead of breaking the Markdown table layout (`get_ingestion_api_link()` now escapes `|`, matching `get_collection_method_link()`), and the pipe-joined reason text is rendered with `; ` separators.
 

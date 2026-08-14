@@ -99,7 +99,7 @@ LOGIC_APPS_BUILTIN_LEARN_URLS: Dict[str, str] = {
 }
 
 # ----- Schema Reference Mappings -----
-# Maps specific table names (or table prefixes) to their official Microsoft Learn schema documentation URLs.
+# Maps specific table names to their official Microsoft Learn schema documentation URLs.
 # These links provide comprehensive field/column information for tables.
 TABLE_SCHEMA_REFERENCES: Dict[str, str] = {
     # General data source schema reference (master index of all Sentinel table schemas)
@@ -5102,7 +5102,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             # Azure Monitor tables flagged via the tables-features reference.
             sr_am_link = table_ref.get('azure_monitor_doc_link', '')
             if not sr_am_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
-                sr_am_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"
+                sr_am_link = f"https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/{table.lower()}"
             sr_xdr_link = table_ref.get('defender_xdr_doc_link', '')
             specific_refs: List[Tuple[str, str]] = []
             if sr_am_link:

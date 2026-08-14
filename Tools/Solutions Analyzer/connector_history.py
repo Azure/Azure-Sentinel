@@ -15,9 +15,12 @@ writing):
   ``dataConnectorDefinitions`` resource inside a solution
   ``mainTemplate.json``.
 * A connector object is a JSON dict carrying string ``id``, ``publisher`` and
-  ``title`` keys (``title`` must be a literal, not an ARM ``[variables(...)]``
-  reference). When ``id`` is an ARM variable reference it is regenerated from
-  the title (spaces and dashes stripped), matching the mapper.
+  ``title`` keys, where ``title`` must be a literal (not an ARM
+  ``[variables(...)]`` reference); ``id`` and ``publisher`` may be ARM variable
+  references. Matching the mapper, an ARM-variable ``id`` is regenerated from
+  the title (spaces and dashes stripped) and an ARM-variable ``publisher`` is
+  relabeled ``"Unknown (ARM variable)"``. The returned object carries the
+  resolved ``id``, ``publisher``, ``title`` and ``availability``.
 * "Deprecated" — a connector is excluded when ANY of:
     - its title contains ``[DEPRECATED]`` (case-insensitive) or starts with
       ``[Deprecated]``;
@@ -99,7 +102,9 @@ def _title_deprecated(title: str) -> bool:
 def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
     """Find connector objects (id/publisher/title dicts) anywhere in ``data``.
 
-    Mirrors the mapper's detection, including ARM-variable id regeneration.
+    Mirrors the mapper's detection: ``title`` must be a literal string, while an
+    ARM-variable ``id`` is regenerated from the title and an ARM-variable
+    ``publisher`` is relabeled ``"Unknown (ARM variable)"``.
     """
     connectors: List[Dict[str, Any]] = []
     stack = [data]
@@ -119,8 +124,12 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
                     resolved_id = id_value
                     if "[variables(" in id_value.lower():
                         resolved_id = title_value.replace(" ", "").replace("-", "")
+                    resolved_publisher = publisher_value
+                    if "[variables(" in publisher_value.lower():
+                        resolved_publisher = "Unknown (ARM variable)"
                     connectors.append({
                         "id": resolved_id,
+                        "publisher": resolved_publisher,
                         "title": title_value,
                         "availability": current.get("availability"),
                     })
