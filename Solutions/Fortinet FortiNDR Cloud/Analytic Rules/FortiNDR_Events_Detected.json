@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String",
+      "metadata": {
+        "description": "The Microsoft Sentinel / Log Analytics workspace name."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', guid(resourceGroup().id, parameters('workspace'), 'FortiNDR_MultiSeverityEvents'))]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "FortiNDR Cloud - Multi-Severity Security Event Detected",
+        "description": "Triggers an alert for High, Medium, or Low severity FortiNDR events with dynamic incident severity.",
+        "severity": "High",
+        "enabled": true,
+        "query": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(\n    Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High',\n    Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High',\n    Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High',\n    Type == 'FncEventsDetections_CL' and de_severity =~ 'medium', 'Medium',\n    Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium',\n    Type == 'FncEventsObservation_CL' and ob_confidence =~ 'medium', 'Medium',\n    'Low'\n)\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IncidentDevice"
+              }
+            ]
+          }
+        ],
+        "customDetails": {
+          "EventDescription": "Description",
+          "EventType": "Type"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "FortiNDR Alert: {{Description}} on {{IncidentDevice}}",
+          "alertSeverityColumnName": "AlertSeverity"
+        }
+      }
+    }
+  ]
+}
