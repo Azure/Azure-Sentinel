@@ -1,0 +1,86 @@
+id: 511445a6-6f4c-4e6a-a655-76c25b66597b
+name: Cisco Firepower - Signature and ML corroboration
+description: |
+  'Detects dual-signal corroboration on Cisco Firepower CEF: a classic high-priority IDS classification
+  (Generator ID not SnortML GID 411) co-occurring with an ML-only (GID 411 / SnortML) alert for the same
+  source and destination within a short window.
+  Signature + ML corroboration is a stronger remediation candidate than ML-only paths.
+  Prefer Gate/Prove HITL before BlockIP playbooks. Do not equate standalone ML confidence to signature TP.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1041
+query: |
+  let lookback = 30m;
+  let HighPriorityClassifications = dynamic([
+      "A Network Trojan was Detected",
+      "A Network Trojan was detected",
+      "Successful Administrator Privilege Gain",
+      "Successful User Privilege Gain",
+      "Attempted Administrator Privilege Gain",
+      "Attempted User Privilege Gain",
+      "Known malware command and control traffic",
+      "Malware Command and Control Activity Detected",
+      "Large Scale Information Leak"
+  ]);
+  let Base = CommonSecurityLog
+  | where TimeGenerated > ago(lookback)
+  | where DeviceVendor =~ "Cisco"
+  | where DeviceProduct has_any ("Firepower", "Secure Firewall", "FTD", "NGFW")
+  | where isnotempty(SourceIP) and isnotempty(DestinationIP)
+  | extend Combined = strcat(
+      tostring(Message), " ",
+      tostring(AdditionalExtensions), " ",
+      tostring(Activity), " ",
+      tostring(DeviceEventClassID), " ",
+      tostring(column_ifexists("FlexString1", "")), " ",
+      tostring(column_ifexists("FlexString2", "")), " ",
+      tostring(column_ifexists("DeviceCustomString1", "")), " ",
+      tostring(column_ifexists("DeviceCustomString2", ""))
+    )
+  | extend IsMlOnly = Combined matches regex @"(?i)(?:gid|generator[\s_-]?id)[\s:=]*411"
+      or Combined has_any ("SnortML", "snortml", "is_ml_only")
+  | extend IsSignatureHigh = not(IsMlOnly)
+      and (
+          Combined has_any (HighPriorityClassifications)
+          or Activity has_any (HighPriorityClassifications)
+      );
+  let Signatures = Base
+  | where IsSignatureHigh
+  | project SigTime = TimeGenerated, SourceIP, DestinationIP, SigActivity = Activity, SigMessage = Message, DeviceName;
+  let MlOnly = Base
+  | where IsMlOnly
+  | project MlTime = TimeGenerated, SourceIP, DestinationIP, MlActivity = Activity, MlMessage = Message;
+  Signatures
+  | join kind=inner MlOnly on SourceIP, DestinationIP
+  | where abs(datetime_diff('minute', SigTime, MlTime)) <= 5
+  | extend HostCustomEntity = DeviceName, SrcIpCustomEntity = SourceIP, DstIpCustomEntity = DestinationIP
+  | project SigTime, MlTime, DeviceName, SourceIP, DestinationIP, SigActivity, MlActivity, SigMessage, MlMessage,
+      HostCustomEntity, SrcIpCustomEntity, DstIpCustomEntity
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpCustomEntity
+version: 1.0.0
+kind: Scheduled
