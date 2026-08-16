@@ -2,49 +2,63 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Block IP - Cisco Firepower", 
-        "description": "This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.",
-        "mainSteps": ["When a new Sentinel incident is created, this playbook gets triggered and performs below actions.",
+        "title": "Block IP - Cisco Firepower",
+        "description": "Blocks IPs in Cisco Firepower via a Network Group object, with a Gate/Prove pre-check that DENIES automatic BlockIP when the incident is ML-only (SnortML / GID 411 / is_ml_only). Machine-learning confidence is not treated as a classic signature true positive. Signature or corroborated incidents still block.",
+        "mainSteps": [
+            "When a new Sentinel incident is created, this playbook gets triggered and performs below actions.",
+            "0. Gate/Prove: if incident title/description indicates ML-only (SnortML, GID 411, is_ml_only) without corroboration, comment and cancel - do not call FMC BlockIP.",
             "1. For the IPs we check if they are already selected for the Network Group object",
             "2. For the IPs not already selected for the Network Group object, add it so it gets blocked",
-            "3. Comment is added to Microsoft Sentinel incident", 
-            "![Microsoft Sentinel comment](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockFQDN-NetworkGroup/Images/BlockFQDN-NetworkGroup-AzureSentinel-Comments.png)",
-            "** IP is added to Cisco Firepower Network Group object:**", 
-            "![Cisco Firepower Network Group object](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockFQDN-NetworkGroup/Images/BlockFQDN-NetworkGroup-CiscoFirepowerAdd.png)"
+            "3. Comment is added to Microsoft Sentinel incident"
         ],
-        "prerequisites": ["1. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc pages.",
+        "prerequisites": [
+            "1. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc pages.",
             "2. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)"
         ],
         "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
-        "postDeployment": ["**a. Authorize connections**", 
-            "Once deployment is complete, you will need to authorize each connection.", 
-            "1. Click the Microsoft Sentinel connection resource", 
-            "2. Click edit API connection", 
-            "3. Click Authorize", 
-            "4. Sign in", 
-            "5. Click Save", 
-            "6. Repeat steps for other connections such as Cisco Firepower (For authorizing the Cisco Firepower API connection, the username and password needs to be provided)", 
-            "**b. Configurations in Sentinel**", 
-            "1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.", 
-            "2. Configure the automation rules to trigger this playbook"
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, you will need to authorize each connection.",
+            "1. Click the Microsoft Sentinel connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections such as Cisco Firepower (For authorizing the Cisco Firepower API connection, the username and password needs to be provided)",
+            "**b. Configurations in Sentinel**",
+            "1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.",
+            "2. Configure the automation rules to trigger this playbook",
+            "**c. Dual-signal / Gate-Prove**",
+            "Do not attach this playbook to ML-only analytics (SnortML GID 411). Pair with the dual-signal analytic rules in this solution. Attach auto-BlockIP only to signature-high or signature+ML corroboration incidents. ML-only must escalate, not contain."
         ],
-        "lastUpdateTime": "2022-07-20T00:00:00.000Z", 
-        "entities": ["Ip"], 
-        "tags": ["Remediation"],
+        "lastUpdateTime": "2026-08-16T00:00:00.000Z",
+        "entities": [
+            "Ip"
+        ],
+        "tags": [
+            "Remediation"
+        ],
         "support": {
-            "tier": "Microsoft" 
+            "tier": "Microsoft"
         },
         "author": {
             "name": "Lior Tamir"
         },
         "releaseNotes": [
-        {
-            "version": "1.0.0",
-            "title": "Block IP - Cisco Firepower",
-            "notes": [
-            "Initial version"
-            ]
-        }
+            {
+                "version": "1.0.0",
+                "title": "Block IP - Cisco Firepower",
+                "notes": [
+                    "Initial version"
+                ]
+            },
+            {
+                "version": "1.1.0",
+                "title": "Gate/Prove ML-only deny auto-contain",
+                "notes": [
+                    "Deny automatic BlockIP when incident context is ML-only (SnortML / GID 411). Signature and corroborated paths unchanged."
+                ]
+            }
         ]
     },
     "parameters": {
@@ -114,7 +128,7 @@
             ],
             "tags": {
                 "hidden-SentinelTemplateName": "BlockIP-CiscoFirepower",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -152,7 +166,11 @@
                     },
                     "actions": {
                         "Entities_-_Get_IPs": {
-                            "runAfter": {},
+                            "runAfter": {
+                                "Gate_Prove_ML_only_deny_auto_contain": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
@@ -693,6 +711,137 @@
                                 "method": "post",
                                 "path": "/api/fmc_platform/v1/auth/revokeaccess"
                             }
+                        },
+                        "Initialize_Dual_signal_context": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DualSignalContext",
+                                        "type": "string",
+                                        "value": "@{toLower(concat(coalesce(triggerBody()?['object']?['properties']?['title'], ''), ' ', coalesce(triggerBody()?['object']?['properties']?['description'], '')))}"
+                                    }
+                                ]
+                            },
+                            "description": "Concatenate incident title+description for dual-signal Gate/Prove (ML-only vs signature/corroborated)."
+                        },
+                        "Gate_Prove_ML_only_deny_auto_contain": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3):_ML_only_deny_auto_contain": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Gate/Prove: ML-only - auto-contain DENIED</strong></span><br>This incident matches an ML-only path (SnortML / GID 411 / is_ml_only). Machine-learning confidence is <strong>not</strong> equivalent to a classic signature true positive. Automatic BlockIP was not applied. Escalate for corroboration (signature or dual-signal) before containment. Do not attach this playbook to ML-only analytics.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate:_ML_only_deny_auto_contain": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3):_ML_only_deny_auto_contain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    },
+                                    "description": "Kill-switch: do not call FMC BlockIP / Network Group APIs on ML-only incidents."
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Dual_signal_context": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "or": [
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "gid 411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "gid:411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "generator id 411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "snortml"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "is_ml_only"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "ml-only"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "dual-signal:ml-only"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": {
+                                            "or": [
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "is_corroborated"
+                                                    ]
+                                                },
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "dual-signal:corroborated"
+                                                    ]
+                                                },
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "signature and ml"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Gate/Prove: deny auto-contain when ML-only (GID 411 / SnortML). Signature or corroborated incidents continue to BlockIP."
                         }
                     },
                     "outputs": {}

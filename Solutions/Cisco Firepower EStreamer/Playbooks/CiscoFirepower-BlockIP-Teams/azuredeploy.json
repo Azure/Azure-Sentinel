@@ -3,8 +3,9 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Block IP - Take Action from Teams - Cisco Firepower", 
-        "description": "This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.",
+        "description": "HITL BlockIP via Teams Adaptive Card. Adds a Gate/Prove warning when the incident is ML-only (SnortML / GID 411 / is_ml_only). Analysts must not treat ML confidence as a signature true positive. Teams confirmation remains required before BlockIP.",
         "mainSteps":  ["When a new Sentinel incident is created, this playbook gets triggered and performs below actions.",
+            "0. Gate/Prove: if incident title/description indicates ML-only without corroboration, add an incident comment warning. Do not auto-block; Teams HITL continues.",
             "1. For the IPs we check if they are already selected for the Network Group object",
             "2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depending on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object", 
             "![Teams Adaptive Card preview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockIP-Teams/Images/BlockIP-Teams-AdaptiveCard.png)", 
@@ -19,7 +20,7 @@
             "2. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)"
         ],
         "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
-        "lastUpdateTime": "2022-07-20T00:00:00.000Z", 
+        "lastUpdateTime": "2026-08-16T00:00:00.000Z", 
         "entities": ["Ip"], 
         "tags": ["Remediation", "Response from teams"],
         "postDeployment":["**a. Authorize connections**", 
@@ -39,7 +40,9 @@
             "5. Save the Logic App", 
             "**c. Configurations in Sentinel**", 
             "1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.", 
-            "2. Configure the automation rules to trigger this playbook"
+            "2. Configure the automation rules to trigger this playbook",
+            "**d. Dual-signal / Gate-Prove**",
+            "Prefer this HITL playbook for ML-only analytics (SnortML GID 411). Auto-BlockIP (NetworkGroup) must not be attached to ML-only incidents. Do not treat ML confidence as a signature true positive."
         ],
         "support": {
             "tier": "Microsoft" 
@@ -53,6 +56,13 @@
             "title": "Block IP - Take Action from Teams - Cisco Firepower",
             "notes": [
             "Initial version"
+            ]
+        },
+        {
+            "version": "1.1.0",
+            "title": "Gate/Prove ML-only HITL warning",
+            "notes": [
+            "Warn Teams operators when incident context is ML-only (SnortML / GID 411) before offering BlockIP. Does not auto-contain."
             ]
         }
         ]
@@ -139,7 +149,7 @@
             "tags": {
                 "LogicAppsCategory": "security",
                 "hidden-SentinelTemplateName": "BlockIP-Firepower-Teams",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -176,8 +186,131 @@
                         }
                     },
                     "actions": {
-                        "Entities_-_Get_IPs": {
+                        "Initialize_Dual_signal_context": {
                             "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DualSignalContext",
+                                        "type": "string",
+                                        "value": "@{toLower(concat(coalesce(triggerBody()?['object']?['properties']?['title'], ''), ' ', coalesce(triggerBody()?['object']?['properties']?['description'], '')))}"
+                                    }
+                                ]
+                            },
+                            "description": "Concatenate incident title+description for dual-signal Gate/Prove warning on HITL BlockIP."
+                        },
+                        "Gate_Prove_ML_only_HITL_warning": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3):_ML_only_HITL_warning": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Gate/Prove HITL warning: ML-only</strong></span><br>This incident matches an ML-only path (SnortML / GID 411 / is_ml_only). Do <strong>not</strong> equate ML confidence to a signature true positive. Prefer Ignore unless a classic signature or dual-signal corroboration is present. Analyst confirmation in Teams is still required before BlockIP.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Dual_signal_context": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "or": [
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "gid 411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "gid:411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "generator id 411"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "snortml"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "is_ml_only"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "ml-only"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@variables('DualSignalContext')",
+                                                    "dual-signal:ml-only"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": {
+                                            "or": [
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "is_corroborated"
+                                                    ]
+                                                },
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "dual-signal:corroborated"
+                                                    ]
+                                                },
+                                                {
+                                                    "contains": [
+                                                        "@variables('DualSignalContext')",
+                                                        "signature and ml"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Gate/Prove: warn HITL operators when the incident is ML-only. Does not auto-block; Teams confirmation remains required."
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Gate_Prove_ML_only_HITL_warning": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
