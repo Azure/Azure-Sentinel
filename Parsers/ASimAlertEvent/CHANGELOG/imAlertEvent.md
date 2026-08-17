@@ -1,5 +1,9 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.1.8
+
+- (2026-08-07) SentinelOne Singularity Alerts - AlertEvent ASIM Parser - [PR #14771](https://github.com/Azure/Azure-Sentinel/pull/14771)
+
 ## Version 0.1.7
 
 - (2026-07-01) Google Threat Intelligence - AlertEvent ASIM Parser - [PR #14420](https://github.com/Azure/Azure-Sentinel/pull/14420)
