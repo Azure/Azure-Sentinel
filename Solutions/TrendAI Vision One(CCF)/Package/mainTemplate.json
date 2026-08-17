@@ -4734,6 +4734,136 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', guid(variables('analyticRuleObject1')._analyticRulecontentId1, resourceGroup().id))]",
+      "apiVersion": "2022-11-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "displayName": "TrendAI Vision One - Create Incident for Workbench Alerts",
+        "description": "Creates an incident based on TrendAI Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.",
+        "severity": "High",
+        "enabled": true,
+        "query": "TrendAI_XDR_WORKBENCH_V2_CL\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                        severity_s == \"medium\", \"Low\",\n                        severity_s == \"high\", \"Medium\",\n                        \"High\"\n                        )\n| extend\n    UserAccountName_s = todynamic(column_ifexists(\"UserAccountName_s\", \"[]\")),\n    UserAccountNTDomain_s = todynamic(column_ifexists(\"UserAccountNTDomain_s\", \"[]\")),\n    FileName_s = todynamic(column_ifexists(\"FileName_s\", \"[]\")),\n    FileDirectory_s = todynamic(column_ifexists(\"FileDirectory_s\", \"[]\")),\n    ProcessCommandLine_s = todynamic(column_ifexists(\"ProcessCommandLine_s\", \"[]\")),\n    RegistryKey_s = todynamic(column_ifexists(\"RegistryKey_s\", \"[]\")),\n    RegistryValue_s = todynamic(column_ifexists(\"RegistryValue_s\", \"[]\")),\n    RegistryValueName_s = todynamic(column_ifexists(\"RegistryValueName_s\", \"[]\"))\n",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "groupByCustomDetails": [
+              "WorkbenchID"
+            ],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false
+          }
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{description_s}}",
+          "alertDisplayNameFormat": "{{workbenchName_s}}",
+          "alertSeverityColumnName": "Severity"
+        },
+        "customDetails": {
+          "XDRCustomerID": "xdrCustomerID_g",
+          "Provider": "alertProvider_s",
+          "WorkbenchName": "workbenchName_s",
+          "ImpactScopeSummary": "impactScope_Summary_s",
+          "WorkbenchLink": "workbenchLink_s",
+          "WorkbenchID": "workbenchId_s",
+          "CreatedAt": "createdTime_t",
+          "PriorityScore": "priorityScore_d",
+          "Severity": "severity_s"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserAccountName_s",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UserAccountNTDomain_s",
+                "identifier": "NTDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "columnName": "FileName_s",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "FileDirectory_s",
+                "identifier": "Directory"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "columnName": "ProcessCommandLine_s",
+                "identifier": "CommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "RegistryKey",
+            "fieldMappings": [
+              {
+                "columnName": "RegistryKey_s",
+                "identifier": "Key"
+              }
+            ]
+          },
+          {
+            "entityType": "RegistryValue",
+            "fieldMappings": [
+              {
+                "columnName": "RegistryValueName_s",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "RegistryValue_s",
+                "identifier": "Value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/workbooks",
+      "name": "[guid(variables('workbookContentId1'), parameters('workspace'))]",
+      "location": "[parameters('workspace-location')]",
+      "kind": "shared",
+      "apiVersion": "2022-04-01",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "displayName": "[parameters('workbook1-name')]",
+        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## TrendAI Vision One - Workbench Alerts\\n---\\n[TrendAI Success Portal](https://success.trendmicro.com)\\n\\nIf you have any feedback, please send to <xdrfeedback@trendmicro.com>\"},\"name\":\"text - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendAI_XDR_WORKBENCH_V2_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(7d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Workbench Alerts Last 7 Days\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendAI_XDR_WORKBENCH_V2_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Workbench Alerts Last 30 Days\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendAI_XDR_WORKBENCH_V2_CL\\n| summarize Alerts = count() by severity_s\\n| render piechart\",\"size\":0,\"title\":\"Alerts by Severity\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendAI_XDR_WORKBENCH_V2_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), model_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Detection Models Last 30 Days\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendAI_XDR_WORKBENCH_V2_CL\\n| where isnotempty(HostHostName_s) and HostHostName_s != '[]'\\n| summarize Alerts = count() by HostHostName_s\\n| top 10 by Alerts desc\",\"size\":0,\"title\":\"Top 10 Affected Hosts\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 5\"}],\"fromTemplateId\":\"sentinel-TrendAIVisionOneWorkbench\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
+        "version": "1.0",
+        "sourceId": "[variables('workspaceResourceId')]",
+        "category": "sentinel"
+      }
     }
   ],
   "outputs": {}
