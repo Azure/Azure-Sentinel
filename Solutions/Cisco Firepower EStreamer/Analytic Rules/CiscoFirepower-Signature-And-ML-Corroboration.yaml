@@ -50,22 +50,26 @@ query: |
       tostring(column_ifexists("DeviceCustomString1", "")), " ",
       tostring(column_ifexists("DeviceCustomString2", ""))
     )
-  | extend IsMlOnly = Combined matches regex @"(?i)(?:gid|generator[\s_-]?id)[\s:=]*411"
-      or Combined has_any ("SnortML", "snortml", "is_ml_only")
+  | extend IsMlOnly = Combined matches regex @"(?i)(?:gid|generator[\s_-]?id)[\s:=]*411(?!\d)"
+      or Combined has "is_ml_only"
   | extend IsSignatureHigh = not(IsMlOnly)
+      and not(Combined has_any ("SnortML", "snortml"))
       and (
           Combined has_any (HighPriorityClassifications)
           or Activity has_any (HighPriorityClassifications)
       );
   let Signatures = Base
   | where IsSignatureHigh
-  | project SigTime = TimeGenerated, SourceIP, DestinationIP, SigActivity = Activity, SigMessage = Message, DeviceName;
+  | summarize SigTime=max(TimeGenerated), SigActivity=take_any(Activity), SigMessage=take_any(Message), DeviceName=take_any(DeviceName)
+      by SourceIP, DestinationIP, DestinationPort=tostring(DestinationPort), TimeBin=bin(TimeGenerated, 1m);
   let MlOnly = Base
-  | where IsMlOnly
-  | project MlTime = TimeGenerated, SourceIP, DestinationIP, MlActivity = Activity, MlMessage = Message;
+  | where IsMlOnly and not(Combined has "is_corroborated")
+  | summarize MlTime=max(TimeGenerated), MlActivity=take_any(Activity), MlMessage=take_any(Message)
+      by SourceIP, DestinationIP, DestinationPort=tostring(DestinationPort), TimeBin=bin(TimeGenerated, 1m);
   Signatures
   | join kind=inner MlOnly on SourceIP, DestinationIP
   | where abs(datetime_diff('minute', SigTime, MlTime)) <= 5
+  | summarize arg_max(SigTime, *) by SourceIP, DestinationIP
   | extend HostCustomEntity = DeviceName, SrcIpCustomEntity = SourceIP, DstIpCustomEntity = DestinationIP
   | project SigTime, MlTime, DeviceName, SourceIP, DestinationIP, SigActivity, MlActivity, SigMessage, MlMessage,
       HostCustomEntity, SrcIpCustomEntity, DstIpCustomEntity
@@ -82,5 +86,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: DstIpCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled

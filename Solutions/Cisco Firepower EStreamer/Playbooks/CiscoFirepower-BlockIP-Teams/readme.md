@@ -5,11 +5,12 @@
 This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions.
-1. For the IPs we check if they are already selected for the Network Group object
-2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depending on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object
+1. **Gate/Prove:** if the incident title/description indicates **ML-only** (SnortML / GID 411 / `is_ml_only`) without corroboration, an incident comment warns the operator. The playbook does **not** auto-block; Teams confirmation is still required. Do not treat ML confidence as a signature true positive.
+2. For the IPs we check if they are already selected for the Network Group object
+3. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depending on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object
     ![Teams Adaptive Card preview](./Images/BlockIP-Teams-AdaptiveCard.png)
-3. The chosen changes are applied to the Network Group object
-4. Comment is added to Microsoft Sentinel incident
+4. The chosen changes are applied to the Network Group object
+5. Comment is added to Microsoft Sentinel incident
     ![Microsoft Sentinel comment](./Images/BlockIP-Teams-AzureSentinel-Comments.png)
 
 ** IP is added to Cisco Firepower Network Group object:**
@@ -58,3 +59,4 @@ The Teams channel to which the adaptive card will be posted will need to be conf
 #### c. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
+3. Prefer this HITL playbook for ML-only analytics (SnortML GID 411). Do not attach the auto-contain NetworkGroup playbook to ML-only incidents.
