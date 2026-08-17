@@ -1,3 +1,8 @@
+## 2.5.0
+- Added optional per-plugin proxy configuration for authentication and ingestion traffic using `proxy`, `proxy_aad`, and `proxy_endpoint`.
+- Updated Netty handler, HTTP, HTTP/2, and DNS components from 4.1.133.Final to 4.1.136.Final.
+- Updated Jackson Databind and Jackson Core from 2.18.6 to 2.18.8.
+
 ## 2.4.0
 - Worker threads now run as bounded, executor-scheduled passes: recoverable exceptions are logged and the worker resumes on the next cycle; fatal JVM errors are logged and re-thrown.
 - Fixed graceful shutdown so in-flight batches are drained (batchers, then unifiers, then senders) before workers stop, bounded by `max_graceful_shutdown_time_seconds`.
