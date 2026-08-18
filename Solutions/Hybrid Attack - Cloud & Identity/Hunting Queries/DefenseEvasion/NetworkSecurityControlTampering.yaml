@@ -1,0 +1,151 @@
+id: 455ffadf-ce55-4a0e-b339-fd3c2d67c71c
+name: Azure Network Configuration Tampered by Compromised Identity
+description: Hunts for successful Azure network configuration write and delete operations by user or service principal identities, including NSGs, 
+  firewall policies, route tables, VPN gateways, subnets, and role assignments, with UEBA and appliance-IP enrichment.
+description-detailed: |
+  Hunts for successful write and delete operations on Azure network security resources
+  (NSGs, Firewall policies, Route Tables, VPN gateways) performed by compromised human
+  accounts or service principals - consistent with an attacker modifying network controls
+  post-appliance-compromise. Covers attack step S4 - "Attacker modifies ACLs, adds local
+  users, changes auth methods or permissions." Classifies callers as User vs ServicePrincipal,
+  enriches with UEBA signals, and flags operations originating from known internet-facing
+  appliance IPs (highest confidence). NOTE: ApplianceIPs enrichment requires MDE network
+  device Discovery enabled - returns 0 rows otherwise; detection still fires on AzureActivity.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - DeviceInfo
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - DefenseEvasion
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1686.001
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let NetworkConfigOps = dynamic([
+      "Microsoft.Network/networkSecurityGroups/write",
+      "Microsoft.Network/networkSecurityGroups/delete",
+      "Microsoft.Network/networkSecurityGroups/securityRules/write",
+      "Microsoft.Network/networkSecurityGroups/securityRules/delete",
+      "Microsoft.Network/azureFirewalls/write",
+      "Microsoft.Network/azureFirewalls/delete",
+      "Microsoft.Network/firewallPolicies/write",
+      "Microsoft.Network/firewallPolicies/delete",
+      "Microsoft.Network/firewallPolicies/ruleCollectionGroups/write",
+      "Microsoft.Network/firewallPolicies/ruleCollectionGroups/delete",
+      "Microsoft.Network/frontDoorWebApplicationFirewallPolicies/write",
+      "Microsoft.Network/frontDoorWebApplicationFirewallPolicies/delete",
+      "Microsoft.Network/virtualNetworkGateways/write",
+      "Microsoft.Network/virtualNetworkGateways/delete",
+      "Microsoft.Network/routeTables/write",
+      "Microsoft.Network/routeTables/delete",
+      "Microsoft.Network/routeTables/routes/write",
+      "Microsoft.Network/routeTables/routes/delete",
+      "Microsoft.Network/virtualNetworks/subnets/write",
+      "Microsoft.Network/virtualNetworks/subnets/delete",
+      "Microsoft.Authorization/roleAssignments/write",
+      "Microsoft.Authorization/roleAssignments/delete"
+  ]);
+  let ApplianceIPs =
+      DeviceInfo
+      | where TimeGenerated between (starttime .. endtime)
+      | where IsInternetFacing == true
+      | where DeviceCategory in~ ("Network device", "Unknown")
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | join kind=inner (
+          DeviceNetworkInfo
+          | where TimeGenerated between (starttime .. endtime)
+          | mv-expand IP = parse_json(IPAddresses)
+          | extend ApplianceIP = tostring(IP.IPAddress)
+          | where isnotempty(ApplianceIP)
+          | where ApplianceIP !in ("127.0.0.1", "::1", "0.0.0.0")
+      ) on DeviceId
+      | project ApplianceIP, ApplianceName = DeviceName, ApplianceOS = OSPlatform;
+  let UEBASignals =
+      BehaviorAnalytics
+      | where TimeGenerated between (starttime .. endtime)
+      | summarize
+          UEBAInvestigationPriority = max(InvestigationPriority),
+          UEBAFirstTimeOp           = countif(tostring(ActivityInsights.FirstTimeUserUsedApp) == "True"),
+          UEBAFirstTimeCountry      = countif(tostring(ActivityInsights.FirstTimeUserConnectedFromCountry) == "True")
+        by UserPrincipalName;
+  AzureActivity
+  | where TimeGenerated between (starttime .. endtime)
+  | where ActivityStatusValue == "Success"
+  | where OperationNameValue in~ (NetworkConfigOps)
+  | extend Auth = parse_json(Authorization_d)
+  | where not (
+      OperationNameValue =~ "Microsoft.Authorization/roleAssignments/delete"
+      and tostring(Auth.evidence.role) =~ "PIM Contributor"
+  )
+  | extend CallerType = case(
+      tostring(Auth.evidence.principalType) =~ "ServicePrincipal", "ServicePrincipal",
+      Caller contains "@",                                          "User",
+      tostring(Auth.evidence.principalType) =~ "User",             "User",
+      "Unknown")
+  | extend CallerUPN = iff(Caller contains "@", Caller, "")
+  | extend ResourceCategory = case(
+      OperationNameValue contains "networkSecurityGroup",   "NSG",
+      OperationNameValue contains "firewallPolicies"
+          or OperationNameValue contains "azureFirewall",   "Firewall",
+      OperationNameValue contains "WebApplicationFirewall", "WAF",
+      OperationNameValue contains "virtualNetworkGateway",  "VPN Gateway",
+      OperationNameValue contains "routeTable"
+          or OperationNameValue contains "routes/",         "Route Table",
+      OperationNameValue contains "subnets",                "Subnet",
+      OperationNameValue contains "roleAssignments",        "Role Assignment",
+      OperationNameValue)
+  | extend ChangeAction = iff(OperationNameValue endswith "/delete", "Delete", "Write")
+  | project
+      EventTime        = TimeGenerated,
+      ResourceCategory,
+      ChangeAction,
+      OperationName    = OperationNameValue,
+      ResourceGroup,
+      ResourceId       = _ResourceId,
+      Caller,
+      CallerType,
+      CallerUPN,
+      CallerIpAddress,
+      SubscriptionId
+  | join kind=leftouter UEBASignals on $left.CallerUPN == $right.UserPrincipalName
+  | extend UEBAFlagged = isnotempty(UEBAInvestigationPriority) and UEBAInvestigationPriority > 0
+  | join kind=leftouter ApplianceIPs on $left.CallerIpAddress == $right.ApplianceIP
+  | extend FromApplianceIP = isnotempty(ApplianceName)
+  | project-away UserPrincipalName, ApplianceIP
+  | extend SignalStrength = case(
+      FromApplianceIP,                                               "High - caller IP matches known appliance",
+      CallerType == "ServicePrincipal" and ChangeAction == "Delete", "High - SPN deleting network control",
+      CallerType == "ServicePrincipal",                              "Medium - SPN modifying network config",
+      UEBAFlagged and ChangeAction == "Delete",                      "Medium - UEBA-flagged user deleting control",
+      UEBAFlagged,                                                   "Medium - UEBA-flagged user",
+      "Low - review for context")
+  | extend
+      AccountNameOnly  = tostring(split(CallerUPN, "@")[0]),
+      AccountUPNSuffix = tostring(split(CallerUPN, "@")[1])
+  | sort by EventTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountNameOnly
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.0

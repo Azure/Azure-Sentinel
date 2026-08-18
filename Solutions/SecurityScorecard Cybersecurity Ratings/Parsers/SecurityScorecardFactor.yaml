@@ -1,0 +1,110 @@
+id: ee795930-e709-48fc-9fa7-d67708a3eeb5
+Function:
+  Title: Parser for SecurityScorecard Factor scores (day-over-day per-factor change with metadata)
+  Version: '2.0.3'
+  LastUpdated: '2026-06-26'
+Category: Microsoft Sentinel Parser
+FunctionName: SecurityScorecardFactor
+FunctionAlias: SecurityScorecardFactor
+FunctionQuery: |
+    let FactorMetadata = datatable(key:string, name:string, description:string) [
+        "application_security", "Application Security", "Detects common website application vulnerabilities and security issues.",
+        "cubit_score", "Cubit Score", "Proprietary algorithms checking for implementation of security best practices.",
+        "dns_health", "DNS Health", "Detects DNS misconfigurations and proper configuration of email security.",
+        "endpoint_security", "Endpoint Security", "Detects measures used to protect employee workstations, laptops, mobile devices.",
+        "hacker_chatter", "Hacker Chatter", "Monitors hacker forums and chat rooms for company mentions.",
+        "ip_reputation", "IP Reputation", "Detects suspicious activity from company IP addresses, such as malware infections.",
+        "leaked_information", "Information Leak", "Identifies if information leaks have occurred on internet sites.",
+        "network_security", "Network Security", "Detects insecure network settings.",
+        "patching_cadence", "Patching Cadence", "Analyzes how quickly a company reacts to vulnerabilities they may be exposed to.",
+        "social_engineering", "Social Engineering", "Determines an organization's susceptibility to a targeted social engineering attack."
+    ];
+    let SecurityScorecardFactorLegacy = view () {
+        SecurityScorecardFactor_CL
+        | extend
+            body_s = tostring(column_ifexists("body_s", "Factor")),
+            Factor_s = tostring(column_ifexists("Factor_s", "")),
+            Factor_Name_s = tostring(column_ifexists("Factor_Name_s", "Not Available")),
+            subject_s = tostring(column_ifexists("subject_s", "")),
+            dateYesterday_s = tostring(column_ifexists("dateYesterday_s", "")),
+            dateToday_s = tostring(column_ifexists("dateToday_s", "")),
+            scoreYesterday_d = todouble(column_ifexists("scoreYesterday_d", real(null))),
+            scoreToday_d = todouble(column_ifexists("scoreToday_d", real(null))),
+            scoreChange_d = todouble(column_ifexists("scoreChange_d", real(null))),
+            diff_d = todouble(column_ifexists("diff_d", real(null))),
+            factorDescription_s = tostring(column_ifexists("factorDescription_s", "data is not there")),
+            ss_time_t = todatetime(column_ifexists("ss_time_t", column_ifexists("ss_time_s", ""))),
+            industry_s = tostring(column_ifexists("industry_s", "")),
+            portfolioId_g = toguid(column_ifexists("portfolioId_s", "")),
+            portfolioName_s = tostring(column_ifexists("portfolioName_s", "NA"))
+        | project
+            TimeGenerated,
+            body_s,
+            Factor_s,
+            Factor_Name_s,
+            subject_s,
+            dateYesterday_s,
+            dateToday_s,
+            scoreYesterday_d,
+            scoreToday_d,
+            scoreChange_d,
+            diff_d,
+            factorDescription_s,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s
+    };
+    let SecurityScorecardFactorCCF = view () {
+        SecurityScorecardFactorHistory_CL
+        | where TimeGenerated > ago(365d)
+        | mv-expand factor = factors
+        | extend
+            factor_name = tostring(factor["name"]),
+            factor_score = toreal(factor["score"])
+        | summarize arg_max(TimeGenerated, *) by domain, factor_name, score_date, portfolio_id
+        | sort by domain asc, factor_name asc, portfolio_id asc, score_date asc
+        | serialize
+        | extend
+            prev_domain = prev(domain, 1),
+            prev_factor = prev(factor_name, 1),
+            prev_portfolio = prev(portfolio_id, 1),
+            prev_date = prev(score_date, 1),
+            prev_score = prev(factor_score, 1)
+        | extend has_prev = (domain == prev_domain and factor_name == prev_factor and portfolio_id == prev_portfolio)
+        | lookup kind=leftouter FactorMetadata on $left.factor_name == $right.key
+        | extend
+            body_s = "Factor",
+            Factor_s = factor_name,
+            Factor_Name_s = coalesce(name, "Not Available"),
+            subject_s = domain,
+            dateYesterday_s = iff(has_prev, tostring(prev_date), ""),
+            dateToday_s = tostring(score_date),
+            scoreYesterday_d = iff(has_prev, todouble(prev_score), real(null)),
+            scoreToday_d = todouble(factor_score),
+            scoreChange_d = iff(has_prev, todouble(factor_score - prev_score), real(null)),
+            diff_d = iff(has_prev, todouble(factor_score - prev_score), real(null)),
+            factorDescription_s = coalesce(description, "data is not there"),
+            ss_time_t = score_date,
+            industry_s = tostring(industry),
+            portfolioId_g = toguid(portfolio_id),
+            portfolioName_s = tostring(portfolio_name)
+        | project
+            TimeGenerated,
+            body_s,
+            Factor_s,
+            Factor_Name_s,
+            subject_s,
+            dateYesterday_s,
+            dateToday_s,
+            scoreYesterday_d,
+            scoreToday_d,
+            scoreChange_d,
+            diff_d,
+            factorDescription_s,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s
+    };
+    union isfuzzy=true SecurityScorecardFactorLegacy, SecurityScorecardFactorCCF

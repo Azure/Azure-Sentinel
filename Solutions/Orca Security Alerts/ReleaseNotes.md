@@ -1,0 +1,4 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
+|-------------|--------------------------------|--------------------|
+| 3.0.1       | 11-08-2026                     | Extended the **OrcaAlerts_CL** table schema and DCR stream declaration of the Microsoft Entra ID based data connector with additional Orca alert fields (account, asset, rule and tag attributes, including **custom_tags**). Existing columns are unchanged. |
+| 3.0.0       | 23-06-2026                     | Added Orca Security Alerts data connector using Microsoft Entra ID authentication (Push CCF connector with DCR/DCE and the Azure Monitor Logs Ingestion API). Updated the connector logo. The legacy Shared Key based connector is retained for backward compatibility and both connectors ingest into the same **OrcaAlerts_CL** table. |

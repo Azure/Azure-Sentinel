@@ -1,0 +1,81 @@
+id: fed80b62-1836-4e06-a01f-7ec467d46e24
+name: Azure Storage Access via AccountKey or SAS Token from First-Seen External IP
+description: Detects Azure Blob Storage access using AccountKey or SAS token authentication from an external IP address not seen in the prior 7-day baseline for that storage account. Consistent with a stolen storage credential being used from attacker-controlled infrastructure.
+requiredDataConnectors:
+  - connectorId: AzureStorageAccount
+    dataTypes:
+      - StorageBlobLogs
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1530
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let baselineDays = 7d;
+  let opsThreshold = 10;
+  let bytesThreshold = 10485760;
+  let riskyAuthTypes = dynamic(["AccountKey", "SAS", "DSas"]);
+  let knownBackupAgents = dynamic([
+      "Microsoft BITS", "CVLT", "SQLBLOBACCESS",
+      "WA-Storage", "AzureStorage/CopyEngine",
+      "Veeam", "Komprise", "Nasuni", "Cohesity", "HYCU", "Panzura"]);
+  let knownIPs =
+      StorageBlobLogs
+      | where TimeGenerated between ((starttime - baselineDays) .. starttime)
+      | where AuthenticationType in (riskyAuthTypes)
+      | where StatusCode in ("200", "206")
+      | where isnotempty(CallerIpAddress)
+      | where not (CallerIpAddress startswith "10."
+                or CallerIpAddress startswith "192.168."
+                or (CallerIpAddress startswith "172."
+                    and toint(split(CallerIpAddress, ".")[1]) between (16 .. 31))
+                or CallerIpAddress startswith "169.254."
+                or CallerIpAddress startswith "127.")
+      | distinct CallerIpAddress, AccountName;
+  StorageBlobLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where AuthenticationType in (riskyAuthTypes)
+  | where OperationName in (
+      "GetBlob", "ListBlobs",
+      "ListContainersSegment", "ListBlobsHierarchySegment")
+  | where StatusCode in ("200", "206")
+  | where isnotempty(CallerIpAddress)
+  | where not (CallerIpAddress startswith "10."
+            or CallerIpAddress startswith "192.168."
+            or (CallerIpAddress startswith "172."
+                and toint(split(CallerIpAddress, ".")[1]) between (16 .. 31))
+            or CallerIpAddress startswith "169.254."
+            or CallerIpAddress startswith "127.")
+  | where not (UserAgentHeader has_any (knownBackupAgents)
+            or UserAgentHeader contains "rubrik")
+  | join kind=leftanti knownIPs on CallerIpAddress, AccountName
+  | summarize
+      FirstSeen            = min(TimeGenerated),
+      LastSeen             = max(TimeGenerated),
+      TotalOperations      = count(),
+      TotalBytesDownloaded = sum(tolong(ResponseBodySize)),
+      DistinctBlobs        = dcount(Uri),
+      AuthTypes            = make_set(AuthenticationType),
+      UserAgents           = make_set(UserAgentHeader),
+      StorageAccountResourceId = take_any(_ResourceId)
+      by CallerIpAddress, AccountName
+  | where TotalOperations >= opsThreshold
+      or TotalBytesDownloaded >= bytesThreshold
+  | extend TotalBytesGB = round(TotalBytesDownloaded / 1073741824.0, 2)
+  | project-reorder
+      FirstSeen, LastSeen,
+      CallerIpAddress, AccountName,
+      TotalOperations, TotalBytesGB, DistinctBlobs,
+      AuthTypes, UserAgents
+  | order by TotalBytesGB desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: StorageAccountResourceId
+version: 1.0.0

@@ -12,6 +12,6 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDhcpEventARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDhcpEventARMgov)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDhcpEventARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://aka.ms/ASimDhcpEventARMgov)
 
 <br>

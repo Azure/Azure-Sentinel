@@ -1,0 +1,89 @@
+id: 8ccbe013-d93f-4db2-ad52-e4ad2d0ad7fd
+name: Cross-subscription and resource-group enumeration sweep by single identity
+description: |
+  Detects broad cloud estate mapping where one caller enumerates many subscriptions and resource groups in a tight window.
+description-detailed: |
+  This hunt focuses on high-fidelity cloud discovery by requiring breadth and velocity in control-plane read activity.
+  It helps identify attacker blast-radius mapping immediately after identity compromise.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1526
+  - T1087.004
+  - T1069.003
+tags:
+  - Azure reconnaissance
+  - Subscription discovery
+  - Resource group discovery
+  - IAM mapping
+query: |
+  // Parameterized execution window supplied by the hunting framework.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  // Bin window used to detect high-velocity discovery bursts.
+  let BurstBin = 30m;
+  let SuccessActivityStatusValues = dynamic(["succeeded", "success"]);
+  // IAM/resource discovery operations in scope.
+  let IamReconOps = dynamic([
+    "microsoft.authorization/roleassignments/read",
+    "microsoft.authorization/roledefinitions/read",
+    "microsoft.resources/subscriptions/read",
+    "microsoft.resources/subscriptions/resourcegroups/read",
+    "microsoft.resources/subscriptions/resourcegroups/resources/read",
+    "microsoft.resources/subscriptions/providers/read"
+  ]);
+  // Identify successful and deduplicated control-plane discovery events.
+  AzureActivity
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+  | extend CallerNorm = tolower(Caller), CallerIp = tolower(tostring(CallerIpAddress)), Op = tolower(OperationNameValue),
+           StatusNorm = tolower(tostring(ActivityStatusValue)), SubStatusNorm = tolower(tostring(ActivitySubstatusValue))
+  | where Op in (IamReconOps)
+  | where StatusNorm in (SuccessActivityStatusValues) or SubStatusNorm has "ok"
+  // Dedupe multi-stage AzureActivity records for one logical read action.
+  | extend ActionKey = iff(
+      isnotempty(CorrelationId),
+      strcat(CorrelationId, "|", Op, "|", CallerNorm),
+      strcat(CallerNorm, "|", CallerIp, "|", Op, "|", tostring(SubscriptionId), "|", tostring(ResourceId), "|", tostring(bin(TimeGenerated, 1m)))
+    )
+  | summarize arg_min(TimeGenerated, *) by ActionKey
+  // Compute breadth and velocity indicators per caller and time bucket.
+  | summarize
+      ReconCount=count(),
+      DistinctOps=dcount(Op),
+      DistinctSubscriptions=dcount(SubscriptionId),
+      DistinctResourceGroups=dcountif(ResourceGroup, isnotempty(ResourceGroup)),
+      Subscriptions=make_set(SubscriptionId, 100),
+      ResourceGroups=make_set_if(ResourceGroup, isnotempty(ResourceGroup), 200),
+      ReconOps=make_set(OperationNameValue, 20),
+      ReconCorrelationIds=make_set_if(CorrelationId, isnotempty(CorrelationId), 30),
+      FirstSeen=min(TimeGenerated),
+      LastSeen=max(TimeGenerated)
+    by CallerNorm, CallerIp, TimeBucket=bin(TimeGenerated, BurstBin)
+  // High-fidelity thresholds for broad environment mapping.
+  | where ReconCount >= 15 and DistinctOps >= 3
+  | where DistinctSubscriptions >= 2 or DistinctResourceGroups >= 8
+  | extend IdentityName = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[0]), CallerNorm),
+           IdentityUPNSuffix = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[1]), "")
+  | project TimeGenerated=FirstSeen, Caller=CallerNorm, CallerIp,
+            IdentityName, IdentityUPNSuffix,
+            TimeBucket, FirstSeen, LastSeen,
+            ReconCount, DistinctOps, DistinctSubscriptions, DistinctResourceGroups,
+            Subscriptions, ResourceGroups, ReconOps, ReconCorrelationIds
+  | order by ReconCount desc, DistinctSubscriptions desc, DistinctResourceGroups desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: IdentityName
+      - identifier: UPNSuffix
+        columnName: IdentityUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIp
+version: 1.0.0
