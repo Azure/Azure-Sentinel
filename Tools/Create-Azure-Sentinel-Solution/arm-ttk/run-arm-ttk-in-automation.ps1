@@ -11,10 +11,11 @@ param(
 # Paths
 $repoRoot = $(git rev-parse --show-toplevel)
 $root="$repoRoot/Solutions"
-$tmp="$PSScriptRoot/tmp"
+$tmp = Join-Path (Split-Path -Parent $PSScriptRoot) "tmp"
+$moduleManifest = Join-Path (Join-Path $tmp "arm-ttk") "arm-ttk.psd1"
 
 if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
-    Import-Module "$tmp/arm-ttk/arm-ttk.psd1"
+    Import-Module $moduleManifest
 }
 
 # Run 'Test-AzTemplate' from the arm-ttk for given solution package
