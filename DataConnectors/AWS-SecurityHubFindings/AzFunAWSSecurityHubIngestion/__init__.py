@@ -1,4 +1,3 @@
-import ast
 import base64
 import datetime
 import hashlib
@@ -21,6 +20,8 @@ from azure.identity import (
     ChainedTokenCredential,
     ManagedIdentityCredential,
 )
+
+from .securityhub_filters import parse_securityhub_filters
 
 client_id = os.environ.get("ClientID")
 sentinel_customer_id = os.environ.get("WorkspaceID")
@@ -100,9 +101,7 @@ def main(mytimer: func.TimerRequest) -> None:
     )
     securityhub_filters_dict = {}
     if aws_securityhub_filters:
-        securityhub_filters_dict = ast.literal_eval(aws_securityhub_filters)
-        if not isinstance(securityhub_filters_dict, dict):
-            raise ValueError("SecurityHubFilters must evaluate to a dictionary.")
+        securityhub_filters_dict = parse_securityhub_filters(aws_securityhub_filters)
 
     results = securityHubSession.getFindings(securityhub_filters_dict)
     fresh_events_after_this_time = securityHubSession.freshEventTimestampGenerator(
