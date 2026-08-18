@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.5.1       | 13-08-2026                     | Updated **Salesforce RTEM connector** to include the API URL in ingested events and promote the connector to GA |
 | 3.5.0       | 23-07-2026                     | Marked Salesforce Audit Logs connector as GA and made poller resource names unique per connection. |
 | 3.4.2       | 22-07-2026                     | Updated **SalesforceRTEM connector** to use SELECT FIELDS(STANDARD) with corresponding DCR updates. |
 | 3.4.1       | 22-07-2026                     | Added SecureConnectionStart column to **Salesforce event log file CCP data connector** table schema and DCR transform. |
