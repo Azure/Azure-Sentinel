@@ -1,0 +1,95 @@
+id: a14106c1-af19-41fb-9fbd-6d9ef402537b
+name: Conditional Access policy exclusion added
+description: |
+  Identifies Conditional Access policy updates that narrow scope via exclusions rather than change the enabled state, a technique attackers use to bypass enforcement without triggering state-change monitoring.
+description-detailed: |
+  An attacker with Conditional Access Administrator or Global Administrator
+  access can narrow a policy's scope by adding their own account, a compromised
+  guest account, or a service principal to its exclusion list. This achieves the
+  same practical bypass as disabling the policy, without the state change that
+  most defenses monitor for, and without interrupting enforcement for every other
+  user in the tenant.
+  This query intentionally excludes plain enabled/disabled state transitions,
+  which are covered separately, and instead surfaces condition-level edits so
+  analysts can review the raw old and new values for scope-narrowing changes
+  such as a growing exclude-users or exclude-groups list.
+  Analysts must validate every result. Benign matches include legitimate policy
+  tuning, break-glass account exclusions documented in change records, and
+  scheduled policy reviews. The signal is highest when the excluded identity is
+  privileged, recently created, or not a known break-glass account.
+  MITRE ATT&CK documents this exact pattern under T1556.009: threat actors,
+  including Scattered Spider, have added trusted locations and exclusions to
+  Conditional Access policies in real intrusions to maintain access after
+  initial compromise.
+  References:
+  - https://learn.microsoft.com/entra/identity/conditional-access/overview
+  - https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1556/009/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1556.009
+query: |
+  let timeframe = 14d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "Policy"
+  | where OperationName =~ "Update conditional access policy"
+  | where Result =~ "success"
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | extend PropName = tostring(ModProp.displayName)
+  | extend OldValue = tostring(ModProp.oldValue)
+  | extend NewValue = tostring(ModProp.newValue)
+  | where PropName !~ "State"
+  | where PropName has "Condition" or NewValue has "exclude" or OldValue has "exclude"
+  | extend PolicyName = tostring(TargetResources[0].displayName)
+  | extend PolicyId   = tostring(TargetResources[0].id)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      PolicyName,
+      PolicyId,
+      PropName,
+      OldValue,
+      NewValue,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
