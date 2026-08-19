@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
+|-------------|--------------------------------|--------------------------------------------------------------------------|   
+| 3.0.0       | 19-08-2026                     | Added ReleaseNotes and updated the Solution to version `3.0.0` by migrating from `TemplateSpec` to `contentTemplates`/`contentPackages`. 					  |
