@@ -1,0 +1,48 @@
+id: 5d3a1c77-2b40-4e6c-9f2d-71c0a8e4b912
+name: HoneyLabs TI Map IP Entity to Network Session (ASIM)
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Identifies network sessions whose source IP addresses HoneyLabs honeypot telemetry has observed running exploit or loader commands. Uses the ASIM NetworkSession parser, so it works across any normalised network source (firewalls, VPN, cloud NSG flow logs) without requiring CEF. Only the structured source IP is matched; destination IPs are intentionally excluded. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let HoneyLabs_IPs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = tostring(ObservableValue),
+             HoneyLabsConfidence = Confidence,
+             IndicatorDescription = tostring(Data.description),
+             HoneyLabsReport = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue));
+  HoneyLabs_IPs
+  | join kind=innerunique (
+      _Im_NetworkSession(starttime=ago(dt_lookBack))
+      | where isnotempty(SrcIpAddr)
+      | extend NS_ipEntity = SrcIpAddr
+      | extend NetworkSession_TimeGenerated = TimeGenerated
+  ) on $left.TI_ipEntity == $right.NS_ipEntity
+  | where NetworkSession_TimeGenerated < ValidUntil
+  | summarize NetworkSession_TimeGenerated = arg_max(NetworkSession_TimeGenerated, *) by Id, NS_ipEntity
+  | project NetworkSession_TimeGenerated, IndicatorDescription, Id, ValidUntil, HoneyLabsConfidence,
+    HoneyLabsReport, TI_ipEntity, NS_ipEntity, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, EventResult
+  | extend timestamp = NetworkSession_TimeGenerated
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NS_ipEntity
