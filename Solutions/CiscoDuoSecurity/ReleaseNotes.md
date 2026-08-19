@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
+|  3.1.2      |  12-08-2026                    | Added CCF data connectors for Cisco Duo authentication, activity, and telephony logs. Updated analytics, hunting queries, and the workbook to use the CCF tables. Excluded the deprecated Azure Functions connector from the generated solution package. |
 |  3.1.1      |  17-02-2026                    | Bumped solution version to **3.1.1**. Updated ARM template apiVersions to meet ARM-TTK "< 2 years old" requirements. |
 |  3.1.0      |  03-02-2026                    | Python runtime compatibility fix (breaking for connector deployments running on Python 3.11). Fixed solution installation via Azure portal by deriving deployment **location** from selected workspace (prevents empty location). |
 |  3.0.4      |  26-09-2025                    | Updated support **Microsoft** to **Partner**                   |
