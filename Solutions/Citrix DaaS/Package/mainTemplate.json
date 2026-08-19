@@ -1,0 +1,1150 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Citrix DaaS"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Citrix DaaS",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-citrixdaas",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "CitrixDaaSActionsConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CitrixDaaSActionsConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Citrix DaaS Audit & Sessions (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CitrixDaaSActionsConnector",
+                  "title": "Citrix DaaS Audit & Sessions (via Codeless Connector Framework)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Ingest configuration audit logs and session activity from Citrix DaaS (Citrix Virtual Apps and Desktops service). Provides audit trails for security investigations, compliance monitoring, and operational troubleshooting.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Config Operations",
+                      "legend": "All Config Operations",
+                      "baseQuery": "CitrixDaaSConfigOps_CL"
+                    },
+                    {
+                      "metricName": "Failed Operations",
+                      "legend": "Failed Operations",
+                      "baseQuery": "CitrixDaaSConfigOps_CL | where IsSuccessful == false"
+                    },
+                    {
+                      "metricName": "Sessions",
+                      "legend": "CitrixDaaSSessions_CL",
+                      "baseQuery": "CitrixDaaSSessions_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of 20 recent operations",
+                      "query": "CitrixDaaSConfigOps_CL\n| take 20"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CitrixDaaSConfigOps_CL",
+                      "lastDataReceivedQuery": "CitrixDaaSConfigOps_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "CitrixDaaSSessions_CL",
+                      "lastDataReceivedQuery": "CitrixDaaSSessions_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Citrix Cloud API Access",
+                        "description": "Required permissions: Citrix Cloud API client credentials with read access to CVAD Manage APIs"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Configure Citrix Cloud API Access",
+                      "description": "Follow these steps to enable API access:\n\n1. Log in to **Citrix Cloud** console\n2. Navigate to **Identity and Access Management** > **API Access**\n3. Click **Create Client** (Secure Client)\n4. Copy the **Client ID** and **Client Secret**\n5. Note your **Customer ID** and **Site ID** (Instance ID)\n\nTo collect logs from multiple Citrix tenants, add a separate connection for each tenant. Every record is tagged with its **CitrixCustomerId** so you can differentiate tenants.",
+                      "instructions": [
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Citrix Customer ID",
+                                "columnValue": "properties.addOnAttributes.CitrixCustomerId"
+                              },
+                              {
+                                "columnName": "Data Type",
+                                "columnValue": "properties.dataType"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "label": "Add Citrix tenant",
+                            "title": "Add Citrix DaaS Connection",
+                            "subtitle": "Connect to the Citrix DaaS REST API",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Markdown",
+                                    "parameters": {
+                                      "content": "## Authentication\n\nProvide the Citrix Cloud API credentials for the tenant. These are used to obtain a bearer token for the CVAD Manage APIs."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Base API URL",
+                                      "placeholder": "https://api.cloud.com/cvad/manage",
+                                      "type": "text",
+                                      "name": "baseApiUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Citrix Customer ID",
+                                      "placeholder": "Enter your Citrix-CustomerId",
+                                      "type": "text",
+                                      "name": "customerId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Citrix Site ID (Instance ID)",
+                                      "placeholder": "Enter your Citrix-InstanceId",
+                                      "type": "text",
+                                      "name": "siteId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "OAuth Client ID",
+                                      "placeholder": "Enter your OAuth Client ID",
+                                      "type": "text",
+                                      "name": "clientId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "OAuth Client Secret",
+                                      "placeholder": "Enter your OAuth Client Secret",
+                                      "type": "password",
+                                      "name": "clientSecret",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Create a separate connection for each Citrix tenant you want to collect logs from.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CitrixDaaSActionsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CitrixDaaSConfigOps_CL": {
+                    "columns": [
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Text",
+                        "type": "string"
+                      },
+                      {
+                        "name": "User",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UserIdentity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AdminMachineIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FormattedStartTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "FormattedEndTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "IsSuccessful",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "OperationType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CitrixCustomerId",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "Custom-CitrixDaaSSessions_CL": {
+                    "columns": [
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SessionType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "State",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AppState",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UntrustedUserName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FormattedStartTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "FormattedStateChangeTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "IsAnonymousUser",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "CitrixCustomerId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Connection",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "Client",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CitrixDaaSConfigOps_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-CitrixDaaSConfigOps_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotempty(FormattedEndTime), todatetime(FormattedEndTime), iff(isnotempty(FormattedStartTime), todatetime(FormattedStartTime), now())) , OperationId = ['Id'] , OperationText = ['Text'] , AdminMachineIp = ['AdminMachineIP'] , StartTime = ['FormattedStartTime'] , EndTime = ['FormattedEndTime'] | project TimeGenerated , OperationId , OperationText , User , UserIdentity , Source , AdminMachineIp , StartTime , EndTime , IsSuccessful , OperationType , CitrixCustomerId"
+                  },
+                  {
+                    "streams": [
+                      "Custom-CitrixDaaSSessions_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-CitrixDaaSSessions_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotempty(FormattedStartTime), todatetime(FormattedStartTime), now()) , SessionId = ['Id'] , UserName = ['UntrustedUserName'] , StartTime = ['FormattedStartTime'] , StateChangeTime = ['FormattedStateChangeTime'] , ConnectionProtocol = tostring(Connection.Protocol) , ConnectedViaIp = tostring(Connection.ConnectedViaIP) , ClientIpAddress = tostring(Client.IPAddress) , ClientName = tostring(Client.Name) | project TimeGenerated , SessionId , SessionType , State , AppState , UserName , StartTime , StateChangeTime , IsAnonymousUser , ConnectionProtocol , ConnectedViaIp , ClientIpAddress , ClientName , CitrixCustomerId"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CitrixDaaSConfigOps_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "CitrixDaaSConfigOps_CL",
+                  "description": "Citrix DaaS configuration audit operation logs",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "OperationId",
+                      "type": "string",
+                      "description": "Unique operation identifier"
+                    },
+                    {
+                      "name": "OperationText",
+                      "type": "string",
+                      "description": "Human-readable operation description"
+                    },
+                    {
+                      "name": "User",
+                      "type": "string",
+                      "description": "User who performed the operation"
+                    },
+                    {
+                      "name": "UserIdentity",
+                      "type": "string",
+                      "description": "User identity GUID"
+                    },
+                    {
+                      "name": "Source",
+                      "type": "string",
+                      "description": "Operation source (Studio, SDK, etc.)"
+                    },
+                    {
+                      "name": "AdminMachineIp",
+                      "type": "string",
+                      "description": "IP of the admin machine"
+                    },
+                    {
+                      "name": "StartTime",
+                      "type": "datetime",
+                      "description": "Operation start time"
+                    },
+                    {
+                      "name": "EndTime",
+                      "type": "datetime",
+                      "description": "Operation end time"
+                    },
+                    {
+                      "name": "IsSuccessful",
+                      "type": "boolean",
+                      "description": "Whether the operation succeeded"
+                    },
+                    {
+                      "name": "OperationType",
+                      "type": "string",
+                      "description": "Type of operation performed"
+                    },
+                    {
+                      "name": "CitrixCustomerId",
+                      "type": "string",
+                      "description": "Citrix Cloud Customer ID of the connection that produced this record; enables multi-tenant differentiation."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CitrixDaaSSessions_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "CitrixDaaSSessions_CL",
+                  "description": "Citrix DaaS session activity logs",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SessionId",
+                      "type": "string",
+                      "description": "Unique session identifier"
+                    },
+                    {
+                      "name": "SessionType",
+                      "type": "string",
+                      "description": "Type of session (Desktop, Application)"
+                    },
+                    {
+                      "name": "State",
+                      "type": "string",
+                      "description": "Session state (Active, Disconnected, etc.)"
+                    },
+                    {
+                      "name": "AppState",
+                      "type": "string",
+                      "description": "Application state"
+                    },
+                    {
+                      "name": "UserName",
+                      "type": "string",
+                      "description": "User name for the session"
+                    },
+                    {
+                      "name": "StartTime",
+                      "type": "datetime",
+                      "description": "Session start time"
+                    },
+                    {
+                      "name": "StateChangeTime",
+                      "type": "datetime",
+                      "description": "Last state change time"
+                    },
+                    {
+                      "name": "IsAnonymousUser",
+                      "type": "boolean",
+                      "description": "Whether user is anonymous"
+                    },
+                    {
+                      "name": "ConnectionProtocol",
+                      "type": "string",
+                      "description": "Connection protocol"
+                    },
+                    {
+                      "name": "ConnectedViaIp",
+                      "type": "string",
+                      "description": "IP connected via"
+                    },
+                    {
+                      "name": "ClientIpAddress",
+                      "type": "string",
+                      "description": "Client IP address"
+                    },
+                    {
+                      "name": "ClientName",
+                      "type": "string",
+                      "description": "Client device name"
+                    },
+                    {
+                      "name": "CitrixCustomerId",
+                      "type": "string",
+                      "description": "Citrix Cloud Customer ID of the connection that produced this record; enables multi-tenant differentiation."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CitrixDaaSActionsConnector",
+          "title": "Citrix DaaS Audit & Sessions (via Codeless Connector Framework)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Ingest configuration audit logs and session activity from Citrix DaaS (Citrix Virtual Apps and Desktops service). Provides audit trails for security investigations, compliance monitoring, and operational troubleshooting.",
+          "graphQueries": [
+            {
+              "metricName": "Config Operations",
+              "legend": "All Config Operations",
+              "baseQuery": "CitrixDaaSConfigOps_CL"
+            },
+            {
+              "metricName": "Failed Operations",
+              "legend": "Failed Operations",
+              "baseQuery": "CitrixDaaSConfigOps_CL | where IsSuccessful == false"
+            },
+            {
+              "metricName": "Sessions",
+              "legend": "CitrixDaaSSessions_CL",
+              "baseQuery": "CitrixDaaSSessions_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of 20 recent operations",
+              "query": "CitrixDaaSConfigOps_CL\n| take 20"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CitrixDaaSConfigOps_CL",
+              "lastDataReceivedQuery": "CitrixDaaSConfigOps_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "CitrixDaaSSessions_CL",
+              "lastDataReceivedQuery": "CitrixDaaSSessions_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Citrix Cloud API Access",
+                "description": "Required permissions: Citrix Cloud API client credentials with read access to CVAD Manage APIs"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Configure Citrix Cloud API Access",
+              "description": "Follow these steps to enable API access:\n\n1. Log in to **Citrix Cloud** console\n2. Navigate to **Identity and Access Management** > **API Access**\n3. Click **Create Client** (Secure Client)\n4. Copy the **Client ID** and **Client Secret**\n5. Note your **Customer ID** and **Site ID** (Instance ID)\n\nTo collect logs from multiple Citrix tenants, add a separate connection for each tenant. Every record is tagged with its **CitrixCustomerId** so you can differentiate tenants.",
+              "instructions": [
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Citrix Customer ID",
+                        "columnValue": "properties.addOnAttributes.CitrixCustomerId"
+                      },
+                      {
+                        "columnName": "Data Type",
+                        "columnValue": "properties.dataType"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "label": "Add Citrix tenant",
+                    "title": "Add Citrix DaaS Connection",
+                    "subtitle": "Connect to the Citrix DaaS REST API",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Markdown",
+                            "parameters": {
+                              "content": "## Authentication\n\nProvide the Citrix Cloud API credentials for the tenant. These are used to obtain a bearer token for the CVAD Manage APIs."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Base API URL",
+                              "placeholder": "https://api.cloud.com/cvad/manage",
+                              "type": "text",
+                              "name": "baseApiUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Citrix Customer ID",
+                              "placeholder": "Enter your Citrix-CustomerId",
+                              "type": "text",
+                              "name": "customerId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Citrix Site ID (Instance ID)",
+                              "placeholder": "Enter your Citrix-InstanceId",
+                              "type": "text",
+                              "name": "siteId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "OAuth Client ID",
+                              "placeholder": "Enter your OAuth Client ID",
+                              "type": "text",
+                              "name": "clientId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "OAuth Client Secret",
+                              "placeholder": "Enter your OAuth Client Secret",
+                              "type": "password",
+                              "name": "clientSecret",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Create a separate connection for each Citrix tenant you want to collect logs from.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Citrix DaaS Audit & Sessions (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Citrix DaaS Audit & Sessions (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "baseApiUrl": {
+              "defaultValue": "baseApiUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "customerId": {
+              "defaultValue": "customerId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "siteId": {
+              "defaultValue": "siteId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','CitrixDaaSSessions' , uniqueString(parameters('customerId')), uniqueString('Sessions') )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "JwtToken",
+                  "userName": {
+                    "key": "client_id",
+                    "value": "[[parameters('clientId')]"
+                  },
+                  "password": {
+                    "key": "client_secret",
+                    "value": "[[parameters('clientSecret')]"
+                  },
+                  "TokenEndpoint": "https://api.cloud.com/cctrustoauth2/root/tokens/clients",
+                  "Headers": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "JwtTokenJsonPath": "$.access_token",
+                  "UserTokenPrepend": "CWSAuth bearer="
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('baseApiUrl'), '/Sessions')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 15,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Citrix-CustomerId": "[[parameters('customerId')]",
+                    "Citrix-InstanceId": "[[parameters('siteId')]",
+                    "Accept": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.Items[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.ContinuationToken",
+                  "NextPageParaName": "ContinuationToken",
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "checkConnectivityRequest": {
+                  "apiEndpoint": "https://postman-echo.com/status/200",
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 20
+                },
+                "connectorDefinitionName": "CitrixDaaSActionsConnector",
+                "dataType": "CitrixDaaSSessions",
+                "dcrConfig": {
+                  "streamName": "Custom-CitrixDaaSSessions_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "CitrixCustomerId": "[[parameters('customerId')]"
+                }
+              }
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','CitrixDaaSConfigOps' , uniqueString(parameters('customerId')), uniqueString('ConfigOps') )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "JwtToken",
+                  "userName": {
+                    "key": "client_id",
+                    "value": "[[parameters('clientId')]"
+                  },
+                  "password": {
+                    "key": "client_secret",
+                    "value": "[[parameters('clientSecret')]"
+                  },
+                  "TokenEndpoint": "https://api.cloud.com/cctrustoauth2/root/tokens/clients",
+                  "Headers": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "JwtTokenJsonPath": "$.access_token",
+                  "UserTokenPrepend": "CWSAuth bearer="
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('baseApiUrl'), '/ConfigLog/Operations')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 15,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Citrix-CustomerId": "[[parameters('customerId')]",
+                    "Citrix-InstanceId": "[[parameters('siteId')]",
+                    "Accept": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.Items[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.ContinuationToken",
+                  "NextPageParaName": "ContinuationToken",
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "checkConnectivityRequest": {
+                  "apiEndpoint": "https://postman-echo.com/status/200",
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 20
+                },
+                "connectorDefinitionName": "CitrixDaaSActionsConnector",
+                "dataType": "CitrixDaaSConfigOps",
+                "dcrConfig": {
+                  "streamName": "Custom-CitrixDaaSConfigOps_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "CitrixCustomerId": "[[parameters('customerId')]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Citrix DaaS",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Citrix%20DaaS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Citrix DaaS solution for Microsoft Sentinel provides the capability to ingest configuration audit logs and session activity from <a href=\"https://www.citrix.com/products/citrix-daas/\">Citrix DaaS</a> (Citrix Virtual Apps and Desktops service) into Microsoft Sentinel using the <a href=\"https://developer.cloud.com/citrixworkspace/citrix-daas/citrix-virtual-apps-and-desktops-service-apis/docs/overview\">Citrix CVAD Manage REST APIs</a>. It provides audit trails for security investigations, compliance monitoring, and operational troubleshooting. Multiple Citrix tenants can be connected from a single data connector, with each record tagged with its Citrix Customer ID for multi-tenant differentiation.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This Solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/citrix_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Citrix DaaS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-07-23",
+        "providers": [
+          "Citrix"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
