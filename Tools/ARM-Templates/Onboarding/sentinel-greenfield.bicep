@@ -43,8 +43,8 @@ param skuName string = 'PerGB2018'
 @maxValue(730)
 param retentionInDays int = 90
 
-@description('Set to true if the workspace uses a customer-managed key (CMK).')
-param customerManagedKey bool = false
+@description('Sentinel onboarding CMK status flag. Set to true only if the underlying workspace is already backed by a customer-managed key (configured via a dedicated Log Analytics cluster + Key Vault). This does NOT configure workspace encryption itself.')
+param sentinelCustomerManagedKey bool = false
 
 @description('Tags to apply to the workspace.')
 param tags object = {}
@@ -71,8 +71,8 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
 resource sentinelOnboarding 'Microsoft.SecurityInsights/onboardingStates@2025-09-01' = {
   scope: workspace
   name: 'default'
-  properties: {
-    customerManagedKey: customerManagedKey
+ properties: {
+    customerManagedKey: sentinelCustomerManagedKey
   }
 }
 
