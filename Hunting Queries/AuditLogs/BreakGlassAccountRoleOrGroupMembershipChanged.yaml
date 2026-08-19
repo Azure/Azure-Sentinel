@@ -51,7 +51,11 @@ query: |
   // A base row is always kept even when the property lookup below finds nothing, so a
   // removal event whose modifiedProperties happen to be shaped differently than expected
   // still surfaces instead of silently disappearing.
-  let RoleChangesBase =
+  // materialize() is required here: RoleChangesBase is referenced twice below (once to
+  // build the name lookup, once as the left side of the join back to it). Without pinning
+  // it to a single computed result, the two references would each re-evaluate new_guid()
+  // independently, so the RowId used to join would never match itself.
+  let RoleChangesBase = materialize(
       AuditLogs
       | where TimeGenerated between (starttime .. endtime)
       | where Category =~ "RoleManagement"
@@ -68,7 +72,8 @@ query: |
       | extend ActorIp  = iff(
             isnotempty(tostring(InitiatedBy.user.ipAddress)),
             tostring(InitiatedBy.user.ipAddress),
-            tostring(InitiatedBy.app.ipAddress));
+            tostring(InitiatedBy.app.ipAddress))
+  );
   let RoleNames =
       RoleChangesBase
       | project RowId, RoleProps
@@ -80,7 +85,10 @@ query: |
       | join kind=leftouter RoleNames on RowId
       | extend ChangedObject = iff(isempty(ChangedObject), "(role name unavailable)", ChangedObject)
       | project TimeGenerated, OperationName, ChangeType, ChangedObject, TargetUpn, Actor, ActorIp, CorrelationId;
-  let GroupChangesBase =
+  // Same reasoning as RoleChangesBase above: materialize() pins the result, including
+  // RowId, so the two references below see identical values instead of two independent
+  // new_guid() evaluations that would never match each other.
+  let GroupChangesBase = materialize(
       AuditLogs
       | where TimeGenerated between (starttime .. endtime)
       | where Category =~ "GroupManagement"
@@ -107,7 +115,8 @@ query: |
                      Properties = TargetResource.modifiedProperties
         )
       | where TargetUpn in (BreakGlassAccounts)
-      | extend RowId = new_guid();
+      | extend RowId = new_guid()
+  );
   let GroupNames =
       GroupChangesBase
       | project RowId, Properties
