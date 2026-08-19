@@ -22,7 +22,7 @@ namespace Veeam.Sentinel.FunctionApp.Tests.Client
             return SendAsync(request, cancellationToken);
         }
 
-        public bool HasCustomServerCertificateValidationCallback =>
+        public bool HasCustomRemoteCertificateValidationCallback =>
             _apiConfig.ApiClient.RestClient.RemoteCertificateValidationCallback != null;
     }
 }

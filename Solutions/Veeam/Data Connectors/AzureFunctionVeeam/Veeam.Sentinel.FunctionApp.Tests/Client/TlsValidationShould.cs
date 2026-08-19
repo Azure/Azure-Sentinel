@@ -1,4 +1,7 @@
-﻿namespace Veeam.Sentinel.FunctionApp.Tests.Client
+﻿using Sentinel.Client;
+using Veeam.Sentinel.FunctionApp.Tests.Logger;
+
+namespace Veeam.Sentinel.FunctionApp.Tests.Client
 {
     [TestFixture]
     [Category("UnitTests")]
@@ -7,15 +10,21 @@
         [Test]
         public void UsePlatformCertificateValidationForVbr()
         {
-            Assert.That(AuthenticatedClientHandler.HasCustomServerCertificateValidationCallback, Is.False);
+            TestableAuthenticatedVbrClientHandler vbrClientHandler = AuthenticatedClientHandler;
+
+            Assert.That(vbrClientHandler.HasCustomRemoteCertificateValidationCallback, Is.False);
         }
 
         [Test]
         public void UsePlatformCertificateValidationForVone()
         {
-            using var handler = TestableAuthenticatedVoneClientHandler.InvokeCreateHttpClientHandler();
+            using var voneClientHandler = new TestableAuthenticatedVoneClientHandler(
+                TestConstants.BaseUrl,
+                "test-vone",
+                SecretsManager,
+                new TestLogger<AuthenticatedVoneClientHandler>());
 
-            Assert.That(handler.ServerCertificateCustomValidationCallback, Is.Null);
+            Assert.That(voneClientHandler.HasCustomServerCertificateValidationCallback, Is.False);
         }
     }
 }

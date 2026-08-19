@@ -15,9 +15,7 @@ namespace Veeam.Sentinel.FunctionApp.Tests.Client
         {
         }
 
-        public static HttpClientHandler InvokeCreateHttpClientHandler()
-        {
-            return CreateHttpClientHandler();
-        }
+        public bool HasCustomServerCertificateValidationCallback =>
+            _httpClientHandler.ServerCertificateCustomValidationCallback != null;
     }
 }
