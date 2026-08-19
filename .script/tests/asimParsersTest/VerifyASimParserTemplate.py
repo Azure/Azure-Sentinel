@@ -87,7 +87,11 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml', f'vim{schema_name}Empty.yaml')):
+        if parser.endswith((
+            f'ASim{schema_name}.yaml', f'im{schema_name}.yaml', f'vim{schema_name}Empty.yaml',
+            f'ASimProcessEventCreate.yaml', f'imProcessEventCreate.yaml',
+            f'ASimProcessEventTerminate.yaml', f'imProcessEventTerminate.yaml'
+        )):
             print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
