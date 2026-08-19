@@ -24,6 +24,8 @@ All ASIM (Advanced Security Information Model) parsers, with full schema metadat
 |--------|-------------|-------------|
 | `parser_name` | Parser function name (e.g., `ASimDnsAzureFirewall`) | YAML `ParserName` |
 | `equivalent_builtin` | Built-in parser alias (e.g., `_ASim_Dns_AzureFirewall`) | YAML `EquivalentBuiltInParser` |
+| `filtering_parser_name` | For deduplicated **unifying** parsers only: the function name of the dropped filtering (`im`/`vim`) variant paired with this `ASim` row (e.g., `imDns`). Empty for source parsers. | Computed (union dedup) |
+| `filtering_equivalent_builtin` | For deduplicated **unifying** parsers only: the built-in alias of the dropped filtering variant (e.g., `_Im_Dns`). Empty for source parsers. | Computed (union dedup) |
 | `schema` | ASIM schema name (e.g., `Dns`, `NetworkSession`, `Authentication`) | Inferred from folder name (`ASim{Schema}`) |
 | `schema_version` | Schema version number | YAML `Normalization.Version` |
 | `parser_type` | `union` (schema-level aggregator), `source` (product-specific), or `empty` (placeholder) | Computed |
@@ -42,7 +44,7 @@ All ASIM (Advanced Security Information Model) parsers, with full schema metadat
 | `source_file` | Relative path to the YAML source | File system |
 | `github_url` | GitHub URL | Computed |
 
-> ASIM parsers are loaded from YAML files under `/Parsers/ASim*/Parsers`. Union parsers typically have empty `tables` but populated `sub_parsers`. The `vim*` (vendor-independent model) wrappers around `ASim*` parsers are skipped because they have identical filters.
+> ASIM parsers are loaded from YAML files under `/Parsers/ASim*/Parsers`. Union parsers typically have empty `tables` but populated `sub_parsers`. The `vim*` (vendor-independent model) wrappers around `ASim*` source parsers are skipped because they have identical filters. **Unifying** parsers are also deduplicated: only the `ASim` (parameter-less) variant is emitted, and the dropped `im`/`vim` (filtering) variant is preserved on that row via `filtering_parser_name` / `filtering_equivalent_builtin`. Pairing is by `(schema, action)` so the irregular `RegistryEvent` and three-way `ProcessEvent` (base/Create/Terminate) cases pair correctly.
 
 ## Related CSVs
 
