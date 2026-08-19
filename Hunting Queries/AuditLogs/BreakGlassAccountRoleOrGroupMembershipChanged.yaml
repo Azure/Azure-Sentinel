@@ -47,7 +47,11 @@ query: |
       _GetWatchlist('BreakGlassAccounts')
       | project AccountUPN = tolower(tostring(AccountUPN))
   );
-  let RoleChanges =
+  // Role and group names are extracted from modifiedProperties as an enrichment step only.
+  // A base row is always kept even when the property lookup below finds nothing, so a
+  // removal event whose modifiedProperties happen to be shaped differently than expected
+  // still surfaces instead of silently disappearing.
+  let RoleChangesBase =
       AuditLogs
       | where TimeGenerated between (starttime .. endtime)
       | where Category =~ "RoleManagement"
@@ -55,19 +59,28 @@ query: |
       | where Result =~ "success"
       | extend TargetUpn = tolower(tostring(TargetResources[0].userPrincipalName))
       | where TargetUpn in (BreakGlassAccounts)
-      | mv-expand ModProp = TargetResources[0].modifiedProperties
-      | where tostring(ModProp.displayName) =~ "Role.DisplayName"
-      | extend ChangedObject = trim('"', tostring(coalesce(ModProp.newValue, ModProp.oldValue)))
+      | extend RowId      = new_guid()
       | extend ChangeType = iff(OperationName has "Add", "RoleAdded", "RoleRemoved")
+      | extend RoleProps  = TargetResources[0].modifiedProperties
       | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
       | extend ActorApp = tostring(InitiatedBy.app.displayName)
       | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
       | extend ActorIp  = iff(
             isnotempty(tostring(InitiatedBy.user.ipAddress)),
             tostring(InitiatedBy.user.ipAddress),
-            tostring(InitiatedBy.app.ipAddress))
+            tostring(InitiatedBy.app.ipAddress));
+  let RoleNames =
+      RoleChangesBase
+      | project RowId, RoleProps
+      | mv-expand ModProp = RoleProps
+      | where tostring(ModProp.displayName) =~ "Role.DisplayName"
+      | project RowId, ChangedObject = trim('"', tostring(coalesce(ModProp.newValue, ModProp.oldValue)));
+  let RoleChanges =
+      RoleChangesBase
+      | join kind=leftouter RoleNames on RowId
+      | extend ChangedObject = iff(isempty(ChangedObject), "(role name unavailable)", ChangedObject)
       | project TimeGenerated, OperationName, ChangeType, ChangedObject, TargetUpn, Actor, ActorIp, CorrelationId;
-  let GroupChanges =
+  let GroupChangesBase =
       AuditLogs
       | where TimeGenerated between (starttime .. endtime)
       | where Category =~ "GroupManagement"
@@ -80,21 +93,31 @@ query: |
             isnotempty(tostring(InitiatedBy.user.ipAddress)),
             tostring(InitiatedBy.user.ipAddress),
             tostring(InitiatedBy.app.ipAddress))
+      | extend ChangeType = case(
+            OperationName has_cs "Add" and OperationName has_cs "owner", "GroupOwnerAdded",
+            OperationName has_cs "Add", "GroupMemberAdded",
+            OperationName has_cs "owner", "GroupOwnerRemoved",
+            "GroupMemberRemoved")
+      // The break-glass account is identified from the same TargetResources entry that
+      // carries its own modifiedProperties, not from a fixed array index, since an audit
+      // event can carry multiple resources and their ordering is not guaranteed.
       | mv-apply TargetResource = TargetResources on (
             where TargetResource.type =~ "User"
             | extend TargetUpn  = tolower(tostring(TargetResource.userPrincipalName)),
                      Properties = TargetResource.modifiedProperties
         )
       | where TargetUpn in (BreakGlassAccounts)
-      | mv-apply Property = Properties on (
-            where Property.displayName =~ "Group.DisplayName"
-            | extend ChangedObject = trim('"', tostring(Property.newValue))
-        )
-      | extend ChangeType = case(
-            OperationName has_cs "Add" and OperationName has_cs "owner", "GroupOwnerAdded",
-            OperationName has_cs "Add", "GroupMemberAdded",
-            OperationName has_cs "owner", "GroupOwnerRemoved",
-            "GroupMemberRemoved")
+      | extend RowId = new_guid();
+  let GroupNames =
+      GroupChangesBase
+      | project RowId, Properties
+      | mv-expand Property = Properties
+      | where tostring(Property.displayName) =~ "Group.DisplayName"
+      | project RowId, ChangedObject = trim('"', tostring(Property.newValue));
+  let GroupChanges =
+      GroupChangesBase
+      | join kind=leftouter GroupNames on RowId
+      | extend ChangedObject = iff(isempty(ChangedObject), "(group name unavailable)", ChangedObject)
       | project TimeGenerated, OperationName, ChangeType, ChangedObject, TargetUpn, Actor, ActorIp, CorrelationId;
   union RoleChanges, GroupChanges
   | extend AccountName      = tostring(split(TargetUpn, "@")[0])
