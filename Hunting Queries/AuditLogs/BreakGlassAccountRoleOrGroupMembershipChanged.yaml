@@ -1,0 +1,140 @@
+id: 4f529b32-a4ed-40d0-b40b-7ac337a705be
+name: Break-glass account role or group membership changed
+description: |
+  Identifies role and group membership changes on an account designated as an emergency
+  break-glass account, whose access is meant to stay fixed to the single role documented
+  in the tenant's emergency-access runbook.
+description-detailed: |
+  A break-glass account earns its trust from being boring: it is provisioned once with a
+  single static directory role, usually Global Administrator, no group memberships, and no
+  further changes until the next scheduled test. That predictability is exactly what lets an
+  analyst treat every membership change on the account as significant rather than trying to
+  separate signal from routine administrative noise.
+  Two paths lead to the same outcome and both are covered here. A direct role assignment or
+  removal shows up as an "Add member to role" or "Remove member from role" event with the
+  break-glass account as the target. A group-mediated change, where the account is added to
+  or removed from a group, including a role-assignable group, is read from the same
+  TargetResources entry as the membership event itself rather than from a fixed array index,
+  since an audit event can carry multiple resources and their ordering is not guaranteed;
+  this mirrors the extraction used elsewhere in this repository for the same operations. An
+  attacker who quietly folds a break-glass account into a role-assignable group inherits
+  whatever role that group holds without ever generating a role-assignment event against the
+  account directly, which is precisely why both paths need to be watched together.
+  This query depends on the same watchlist as the two companion break-glass hunting queries:
+  a watchlist named `BreakGlassAccounts` with a single column, `AccountUPN`, listing the user
+  principal names of the tenant's designated emergency access accounts.
+  Every match should be checked against the change calendar for a documented emergency-access
+  review or test. A change with no corresponding record, an unfamiliar actor, or one that
+  lands close in time to a sign-in or credential change on the same account (see the two
+  companion hunting queries) should be treated as high priority.
+  References:
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/security-emergency-access
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/groups-concept
+  - https://attack.mitre.org/techniques/T1098/003/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.003
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let BreakGlassAccounts = (
+      _GetWatchlist('BreakGlassAccounts')
+      | project AccountUPN = tolower(tostring(AccountUPN))
+  );
+  let RoleChanges =
+      AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where Category =~ "RoleManagement"
+      | where OperationName in~ ("Add member to role", "Add member to role.", "Remove member from role")
+      | where Result =~ "success"
+      | extend TargetUpn = tolower(tostring(TargetResources[0].userPrincipalName))
+      | where TargetUpn in (BreakGlassAccounts)
+      | mv-expand ModProp = TargetResources[0].modifiedProperties
+      | where tostring(ModProp.displayName) =~ "Role.DisplayName"
+      | extend ChangedObject = trim('"', tostring(coalesce(ModProp.newValue, ModProp.oldValue)))
+      | extend ChangeType = iff(OperationName has "Add", "RoleAdded", "RoleRemoved")
+      | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+      | extend ActorApp = tostring(InitiatedBy.app.displayName)
+      | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      | extend ActorIp  = iff(
+            isnotempty(tostring(InitiatedBy.user.ipAddress)),
+            tostring(InitiatedBy.user.ipAddress),
+            tostring(InitiatedBy.app.ipAddress))
+      | project TimeGenerated, OperationName, ChangeType, ChangedObject, TargetUpn, Actor, ActorIp, CorrelationId;
+  let GroupChanges =
+      AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where Category =~ "GroupManagement"
+      | where OperationName in~ ("Add member to group", "Add owner to group", "Remove member from group", "Remove owner from group")
+      | where Result =~ "success"
+      | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+      | extend ActorApp = tostring(InitiatedBy.app.displayName)
+      | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      | extend ActorIp  = iff(
+            isnotempty(tostring(InitiatedBy.user.ipAddress)),
+            tostring(InitiatedBy.user.ipAddress),
+            tostring(InitiatedBy.app.ipAddress))
+      | mv-apply TargetResource = TargetResources on (
+            where TargetResource.type =~ "User"
+            | extend TargetUpn  = tolower(tostring(TargetResource.userPrincipalName)),
+                     Properties = TargetResource.modifiedProperties
+        )
+      | where TargetUpn in (BreakGlassAccounts)
+      | mv-apply Property = Properties on (
+            where Property.displayName =~ "Group.DisplayName"
+            | extend ChangedObject = trim('"', tostring(Property.newValue))
+        )
+      | extend ChangeType = case(
+            OperationName has_cs "Add" and OperationName has_cs "owner", "GroupOwnerAdded",
+            OperationName has_cs "Add", "GroupMemberAdded",
+            OperationName has_cs "owner", "GroupOwnerRemoved",
+            "GroupMemberRemoved")
+      | project TimeGenerated, OperationName, ChangeType, ChangedObject, TargetUpn, Actor, ActorIp, CorrelationId;
+  union RoleChanges, GroupChanges
+  | extend AccountName      = tostring(split(TargetUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(TargetUpn, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      ChangeType,
+      ChangedObject,
+      TargetUpn,
+      AccountName,
+      AccountUPNSuffix,
+      Actor,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+customDetails:
+  ChangeType: ChangeType
+  ChangedObject: ChangedObject
+  Actor: Actor
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
