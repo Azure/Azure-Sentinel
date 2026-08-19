@@ -282,12 +282,13 @@ function Get-ArmResource($name, $type, $kind, $properties) {
         apiVersion = $apiVersion[$type]
         type       = $type;
         location   = "[parameters('workspace-location')]";
-        properties = $properties;
     }
 
     if (-not [string]::IsNullOrEmpty($kind)) {
-        $resource.Insert(4, "kind", $kind)
+        $resource["kind"] = $kind
     }
+
+    $resource["properties"] = $properties
 
     return [PSCustomObject]$resource
 }
