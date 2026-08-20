@@ -1,0 +1,212 @@
+{
+  "name": "AirlockDigitalPoll",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "AirlockDigitalPoll",
+      "title": "Airlock Digital (Poll)",
+      "publisher": "Airlock Digital",
+      "descriptionMarkdown": "The [Airlock Digital](https://www.airlockdigital.com/) **Poll** connector periodically pulls execution history and server activity logs from the REST API of a self-hosted Airlock Digital server, authenticating with a user API key. It is intended for servers older than v7.0 that do not support push-based logging, and it does not collect policy change logs. For self-hosted servers or Airlock Digital SaaS running v7.0 or higher, the **Airlock Digital (Push)** connector delivers events in near real time; for Airlock Digital SaaS, the **Airlock Digital (Poll - SaaS)** connector is also available.\n\n>**NOTE:** Use one connector per Airlock Digital server. If the same server is collected by more than one Airlock Digital connector, duplicate data is populated in the tables.",
+      "graphQueries": [
+        {
+          "metricName": "Execution history events received",
+          "legend": "Execution History",
+          "baseQuery": "AirlockDigitalExecutionHistories_CL"
+        },
+        {
+          "metricName": "Server activity events received",
+          "legend": "Server Activity",
+          "baseQuery": "AirlockDigitalServerActivities_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Recent execution history events",
+          "query": "AirlockDigitalExecutionHistories_CL | sort by TimeGenerated desc | take 10"
+        },
+        {
+          "description": "Recent server activity events",
+          "query": "AirlockDigitalServerActivities_CL | sort by TimeGenerated desc | take 10"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "AirlockDigitalExecutionHistories_CL",
+          "lastDataReceivedQuery": "AirlockDigitalExecutionHistories_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+        },
+        {
+          "name": "AirlockDigitalServerActivities_CL",
+          "lastDataReceivedQuery": "AirlockDigitalServerActivities_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "AirlockDigitalExecutionHistories_CL | where TimeGenerated > ago(1h) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Airlock Digital API key",
+            "description": "An API key for your Airlock Digital server."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Configure access to the Airlock Digital API",
+          "description": "Set up API access on your Airlock Digital server before connecting.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "The Airlock Digital REST API listens on port 3129 by default, so your server URL looks like `https://airlock.company.com:3129`. The server must be reachable from Azure.\n\nCreate an API key in Airlock Digital under **User Menu** > **My Profile** > **API Keys**.\n\nLogs are polled every five minutes."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Connect Airlock Digital servers to Microsoft Sentinel",
+          "description": "This connector supports multiple simultaneous connections. Add one connection per Airlock Digital server; each connection ingests the selected data types in parallel. Use the grid below to review existing connections or add a new one.",
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Connector Name",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.addOnAttributes.dataType"
+                  },
+                  {
+                    "columnName": "Endpoint",
+                    "columnValue": "properties.request.apiEndpoint"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Connect an Airlock Digital server",
+                "subtitle": "Airlock Digital",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## Connection details\n\nProvide the Airlock Digital server URL and API key, then choose which data types to collect. Create a separate connection for each Airlock Digital server."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Airlock server URL",
+                          "placeholder": "https://your-airlock-server:3129",
+                          "type": "text",
+                          "name": "BaseUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "API key",
+                          "placeholder": "Enter your Airlock Digital API key",
+                          "type": "password",
+                          "name": "apiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data Types",
+                          "name": "selectedDataTypes",
+                          "options": [
+                            {
+                              "key": "AirlockDigitalExecutionHistories",
+                              "text": "Execution Histories"
+                            },
+                            {
+                              "key": "AirlockDigitalServerActivities",
+                              "text": "Server Activities"
+                            }
+                          ],
+                          "placeholder": "Select data types to collect...",
+                          "isMultiSelect": true,
+                          "defaultAllSelected": true,
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connector Friendly Name",
+                          "placeholder": "Enter a unique friendly name for this connection",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The friendly name helps you identify this connection in the grid and appears in the ConnectorName column of the collected data.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": true
+    }
+  }
+}
