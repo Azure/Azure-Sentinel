@@ -1,7 +1,5 @@
 # Multi-account setup (Semperis Lightning CCF)
 
-**Status: reference only. Do not merge.**
-
 One workspace. Many Semperis tenants. Each row must say which tenant it came from.
 
 ## The mechanism
