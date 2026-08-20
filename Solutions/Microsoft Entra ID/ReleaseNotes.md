@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.16      | 06-08-2026                     | Removed locale-dependent **ResultDescription** filtering from the **Attempts to sign in to disabled accounts Analytic Rule** while retaining ResultType 50057 matching. |
 | 3.3.15       | 10-07-2026                    | Updated **SigninAttemptsByIPviaDisabledAccounts** **Analytic Rule** to include the additional "ResultDescription" value: "The user account is disabled." |
 | 3.3.14       | 30-06-2026                    | Updated **BruteForceAgainstanEntraAuthenticatedWindowsDevice** Analytic rule to add an explicit "sort by TimeGenerated asc" before building "make_list" arrays. |
 | 3.3.13       | 22-06-2026                    | Updated Description of **AccountCreatedandDeletedinShortTimeframe** Analytic Rule. |

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Whisper Security - External Attack Surface Overview\nThis workbook maps the external attack surface using infrastructure context data from the Whisper Security knowledge graph. Review ASN prefix distribution, nameserver patterns, SPF and DNSSEC adoption rates, and a complete inventory of monitored assets."
+      },
+      "name": "header-markdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| where isnotempty(asns)\n| mv-expand ASN = split(asns, ',')\n| extend ASN = tostring(trim(' ', tostring(ASN)))\n| where isnotempty(ASN)\n| mv-expand AsnName = split(asnNames, ',')\n| extend AsnName = tostring(trim(' ', tostring(AsnName)))\n| mv-expand Prefix = split(prefixes, ',')\n| extend Prefix = tostring(trim(' ', tostring(Prefix)))\n| where isnotempty(Prefix)\n| summarize PrefixCount = dcount(Prefix), IndicatorCount = dcount(indicator) by ASN, AsnName\n| order by PrefixCount desc\n| take 20",
+        "size": 0,
+        "title": "ASN Prefix Distribution (Top 20 ASNs)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": {
+          "xAxis": "ASN",
+          "yAxis": [
+            "PrefixCount"
+          ],
+          "seriesLabelSettings": [
+            {
+              "series": "PrefixCount",
+              "label": "Prefix Count"
+            }
+          ]
+        }
+      },
+      "name": "asn-prefix-map"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| where indicatorType == 'domain'\n| where isnotempty(nameservers)\n| mv-expand NS = split(nameservers, ',')\n| extend NS = tostring(trim(' ', tostring(NS)))\n| where isnotempty(NS)\n| extend NSProvider = extract(@'([^.]+\\.[^.]+)$', 1, NS)\n| summarize DomainCount = dcount(indicator) by NSProvider\n| order by DomainCount desc\n| take 15",
+        "size": 0,
+        "title": "Nameserver Distribution by Provider",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "nameserver-distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| where indicatorType == 'domain'\n| extend HasSPF = isnotempty(spfIncludes)\n| extend HasDNSSEC = isnotempty(dnssecAlgorithm)\n| summarize TotalDomains = count(), SPFEnabled = countif(HasSPF), DNSSECEnabled = countif(HasDNSSEC)\n| extend SPFPercentage = round(100.0 * SPFEnabled / TotalDomains, 1), DNSSECPercentage = round(100.0 * DNSSECEnabled / TotalDomains, 1)\n| project Category = pack_array('SPF Configured', 'SPF Missing', 'DNSSEC Enabled', 'DNSSEC Missing'), Count = pack_array(SPFEnabled, TotalDomains - SPFEnabled, DNSSECEnabled, TotalDomains - DNSSECEnabled)\n| mv-expand Category to typeof(string), Count to typeof(long)",
+        "size": 0,
+        "title": "SPF and DNSSEC Coverage Statistics",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "name": "spf-dnssec-coverage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| extend ASN = tostring(split(asns, ',')[0])\n| extend AsnName = tostring(split(asnNames, ',')[0])\n| extend Country = tostring(split(countries, ',')[0])\n| project indicator, indicatorType, ASN, AsnName, Country, registrar, nameservers, domainAge, cohostedCount, dnssecAlgorithm, spfIncludes, bgpStatus\n| order by indicatorType asc, indicator asc",
+        "size": 0,
+        "title": "Attack Surface Inventory",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "cohostedCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "domainAge",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "attack-surface-inventory"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-ExternalAttackSurfaceOverviewWorkbook"
+}
