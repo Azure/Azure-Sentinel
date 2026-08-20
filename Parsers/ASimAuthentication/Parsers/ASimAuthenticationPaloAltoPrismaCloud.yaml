@@ -1,0 +1,152 @@
+Parser:
+  Title: Authentication ASIM parser for Palo Alto Prisma Cloud Compute
+  Version: '0.1.0'
+  LastUpdated: Jul 16, 2026
+Product:
+  Name: Palo Alto Prisma Cloud Compute
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Palo Alto Prisma Cloud Compute audit logging
+  Link: https://docs.prismacloud.io/en/compute-edition/33/admin-guide/audit/logging
+Description: |
+  This ASIM parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table. It supports successful logins, invalid credentials, and expired-token authentication failures.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAuthenticationPaloAltoPrismaCloud
+EquivalentBuiltInParser: _ASim_Authentication_PaloAltoPrismaCloud
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+  Syslog
+  | where not(disabled)
+  | where ProcessName == "Twistlock-Console"
+  | parse-kv SyslogMessage as (
+      ['time']:string,
+      ['type']:string,
+      id:string,
+      log_type:string,
+      username:string,
+      source_ip:string,
+      api:string,
+      status:string
+  )
+  with (pair_delimiter=' ', kv_delimiter='=', quote='"')
+  | where ['type'] == "management_audit" and log_type == "login"
+  | invoke _ASIM_ResolveDvcFQDN('HostName')
+  | extend
+      EventStartTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
+      EventEndTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
+      EventResult = case(
+          status == "successful login attempt", "Success",
+          status in ("invalid credentials", "expired token"), "Failure",
+          "NA"
+      ),
+      EventResultDetails = case(
+          status == "invalid credentials", "No such user or password",
+          status == "expired token", "Session expired",
+          ""
+      ),
+      EventSeverity = case(
+          SeverityLevel =~ "info", "Informational",
+          SeverityLevel =~ "warning", "Medium",
+          SeverityLevel =~ "error", "High",
+          SeverityLevel =~ "critical", "High",
+          "Informational"
+      ),
+      SrcIpAddr = iff(isnotnull(parse_ipv4(source_ip)) or isnotempty(parse_ipv6(source_ip)), source_ip, ""),
+      DvcIpAddr = iff(isnotnull(parse_ipv4(HostIP)) or isnotempty(parse_ipv6(HostIP)), HostIP, ""),
+      DvcId = _ResourceId,
+      DvcIdType = iff(isnotempty(_ResourceId), "AzureResourceId", ""),
+      TargetUsername = username,
+      TargetUsernameType = iff(isnotempty(username), "Simple", ""),
+      TargetAppName = "Prisma Cloud Compute",
+      TargetAppType = "Service",
+      EventUid = _ItemId
+  | extend
+      TargetHostname = DvcHostname,
+      TargetDomain = DvcDomain,
+      TargetDomainType = DvcDomainType,
+      TargetFQDN = DvcFQDN,
+      Src = source_ip,
+      IpAddr = SrcIpAddr,
+      Dst = coalesce(DvcFQDN, DvcHostname, TargetAppName),
+      Dvc = coalesce(DvcFQDN, DvcHostname, TargetAppName),
+      User = TargetUsername,
+      Application = TargetAppName,
+      AdditionalFields = iff(
+          pack,
+          bag_pack(
+              "MG", MG,
+              "HostIP", HostIP,
+              "HostName", HostName,
+              "Computer", Computer,
+              "Facility", Facility,
+              "ProcessName", ProcessName,
+              "ProcessID", ProcessID,
+              "SourceSystem", SourceSystem,
+              "WorkspaceId", TenantId,
+              "MessageId", id
+          ),
+          dynamic({})
+      )
+  | project
+      TimeGenerated,
+      Type,
+      EventCount = int(1),
+      EventStartTime,
+      EventEndTime,
+      EventType = "Logon",
+      EventResult,
+      EventResultDetails,
+      EventOriginalType = ['type'],
+      EventOriginalSubType = log_type,
+      EventOriginalResultDetails = status,
+      EventSeverity,
+      EventOriginalSeverity = SeverityLevel,
+      EventUid,
+      EventMessage = SyslogMessage,
+      EventProduct = "Prisma Cloud Compute",
+      EventVendor = "Palo Alto",
+      EventSchema = "Authentication",
+      EventSchemaVersion = "0.1.4",
+      LogonMethod = iff(api == "/api/v1/authenticate", "Username & Password", "Other"),
+      TargetUsername,
+      TargetUsernameType,
+      User,
+      SrcIpAddr,
+      Src,
+      IpAddr,
+      TargetAppName,
+      TargetAppType,
+      Application,
+      TargetHostname,
+      TargetDomain,
+      TargetDomainType,
+      TargetFQDN,
+      Dst,
+      DvcId,
+      DvcIdType,
+      DvcIpAddr,
+      DvcHostname,
+      DvcDomain,
+      DvcDomainType,
+      DvcFQDN,
+      DvcOs = SourceSystem,
+      Dvc,
+      AdditionalFields
+  };
+  parser(disabled=disabled, pack=pack)

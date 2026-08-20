@@ -10,7 +10,7 @@ This logic app helps to ingest summarized DNS data into custom tables. Please no
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deployDNSDataSummarizationPlaybookPublic)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/deployDNSDataSummarizationPlaybookGov)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://aka.ms/deployDNSDataSummarizationPlaybookGov)
 
 2. Fill in the required parameter:
     * Playbook Name: Enter the playbook name here (Ex: SummarizeDNSData)

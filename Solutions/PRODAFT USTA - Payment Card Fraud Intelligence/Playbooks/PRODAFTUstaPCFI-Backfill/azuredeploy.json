@@ -1,0 +1,327 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "PRODAFTUstaPCFI-Backfill",
+    "description": "On-demand backfill playbook for PRODAFT USTA - Payment Card Fraud Intelligence. Pages through the USTA credit-card API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (PAN redaction, field mapping) as live polling. The deployment is self-contained: it creates the PRODAFTUstaCompromisedCards_CL table if it does not exist yet, its own Data Collection Endpoint and Rule, and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
+    "prerequisites": [
+      "The PRODAFT USTA - Payment Card Fraud Intelligence solution installed. The backfill can run before the data connector has ingested anything: it creates the PRODAFTUstaCompromisedCards_CL table itself if the connector has not yet done so. Connecting the data connector starts forward polling.",
+      "A PRODAFT USTA long-lived API key.",
+      "Permission to create role assignments in the workspace resource group (Owner or User Access Administrator), since the template grants its identity 'Monitoring Metrics Publisher' automatically."
+    ],
+    "postDeployment": [
+      "Run the playbook's trigger once to start the backfill (see readme.md)."
+    ],
+    "lastUpdateTime": "2026-07-08T00:00:00.000Z",
+    "entities": [],
+    "tags": [ "Backfill", "Threat Intelligence" ],
+    "support": {
+      "tier": "Partner"
+    },
+    "author": {
+      "name": "PRODAFT"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0",
+        "title": "PRODAFTUstaPCFI-Backfill",
+        "notes": [ "Initial version" ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "PRODAFTUstaPCFI-Backfill",
+      "type": "string",
+      "metadata": { "description": "Name of the Logic App playbook." }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": { "description": "Name of the existing Microsoft Sentinel / Log Analytics workspace that the PCFI connector ingests into." }
+    },
+    "WorkspaceLocation": {
+      "type": "string",
+      "metadata": { "description": "Region of the workspace. The backfill Data Collection Endpoint and Rule are created in this region." }
+    },
+    "WorkspaceResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": { "description": "Resource group of the workspace. Leave as default if it is in the same resource group as this deployment." }
+    },
+    "UstaBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://usta.prodaft.com",
+      "metadata": { "description": "PRODAFT USTA API base URL." }
+    },
+    "UstaApiKey": {
+      "type": "securestring",
+      "metadata": { "description": "PRODAFT USTA long-lived API key." }
+    },
+    "BackfillDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "metadata": { "description": "Number of days of history to backfill." }
+    },
+    "TableRetentionDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "metadata": { "description": "Retention in days applied to the PRODAFTUstaCompromisedCards_CL table. Only relevant when this deployment has to create the table; set it to the table's current retention if the table already exists and you have changed it from the 90-day default." }
+    }
+  },
+  "variables": {
+    "BackfillWorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "TableName": "PRODAFTUstaCompromisedCards_CL",
+    "TableDeploymentName": "[concat(parameters('PlaybookName'), '-table')]",
+    "TableDeploymentResourceId": "[resourceId('Microsoft.Resources/deployments', concat(parameters('PlaybookName'), '-table'))]",
+    "DceName": "[concat(parameters('PlaybookName'), '-DCE')]",
+    "DcrName": "[concat(parameters('PlaybookName'), '-DCR')]",
+    "DceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+    "DcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+    "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]"
+  },
+  "resources": [
+    {
+      "comments": "Ensures the destination table exists. The codeless connector only materialises PRODAFTUstaCompromisedCards_CL once it ingests its first record, so a backfill run before any live data would otherwise fail with the table not found. Deploying the table is a PUT: it creates the table when absent and is a no-op when the connector already created it. Runs in the workspace's resource group, which may differ from this deployment's.",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('TableDeploymentName')]",
+      "resourceGroup": "[parameters('WorkspaceResourceGroup')]",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[concat(parameters('WorkspaceName'), '/', variables('TableName'))]",
+              "properties": {
+                "totalRetentionInDays": "[parameters('TableRetentionDays')]",
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "schema": {
+                  "name": "[variables('TableName')]",
+                  "description": "PRODAFT USTA Payment Card Fraud Intelligence - compromised payment cards (PAN redacted). TimeGenerated reflects ingestion time; Created and StatusTimestamp carry the true event time reported by USTA. Only BIN (first 6), last 4 digits, brand, and length of the card number are retained.",
+                  "columns": [
+                    { "name": "TimeGenerated", "type": "dateTime" },
+                    { "name": "TicketId", "type": "long" },
+                    { "name": "Status", "type": "string" },
+                    { "name": "StatusTimestamp", "type": "dateTime" },
+                    { "name": "Created", "type": "dateTime" },
+                    { "name": "ContentType", "type": "string" },
+                    { "name": "CompanyId", "type": "int" },
+                    { "name": "CompanyName", "type": "string" },
+                    { "name": "CardBin", "type": "string" },
+                    { "name": "CardLast4", "type": "string" },
+                    { "name": "CardMasked", "type": "string" },
+                    { "name": "CardBrand", "type": "string" },
+                    { "name": "CardLength", "type": "int" },
+                    { "name": "ExpirationDate", "type": "dateTime" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('DceName')]",
+      "location": "[parameters('WorkspaceLocation')]",
+      "properties": {
+        "description": "Data Collection Endpoint for the PRODAFT USTA PCFI backfill playbook (Logs Ingestion API).",
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('DcrName')]",
+      "location": "[parameters('WorkspaceLocation')]",
+      "dependsOn": [
+        "[variables('DceResourceId')]",
+        "[variables('TableDeploymentResourceId')]"
+      ],
+      "properties": {
+        "description": "DCR for the PRODAFT USTA PCFI backfill playbook. Applies the same transform as the connector DCR and writes to the existing PRODAFTUstaCompromisedCards_CL table.",
+        "dataCollectionEndpointId": "[variables('DceResourceId')]",
+        "streamDeclarations": {
+          "Custom-PRODAFTUstaCompromisedCards_CL": {
+            "columns": [
+              { "name": "id", "type": "long" },
+              { "name": "status", "type": "string" },
+              { "name": "status_timestamp", "type": "datetime" },
+              { "name": "created", "type": "datetime" },
+              { "name": "content_type", "type": "string" },
+              { "name": "company", "type": "dynamic" },
+              { "name": "content", "type": "dynamic" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('BackfillWorkspaceResourceId')]",
+              "name": "clv2ws1"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-PRODAFTUstaCompromisedCards_CL" ],
+            "destinations": [ "clv2ws1" ],
+            "transformKql": "source | extend c = content, co = company | extend n = tostring(c.number) | project TimeGenerated = now(), TicketId = tolong(id), Status = tostring(status), StatusTimestamp = todatetime(status_timestamp), Created = todatetime(created), ContentType = tostring(content_type), CompanyId = toint(co.id), CompanyName = tostring(co.name), CardBin = iff(strlen(n) >= 6, substring(n, 0, 6), ''), CardLast4 = iff(strlen(n) >= 4, substring(n, strlen(n) - 4, 4), n), CardMasked = strcat(iff(strlen(n) >= 6, substring(n, 0, 6), ''), '******', iff(strlen(n) >= 4, substring(n, strlen(n) - 4, 4), n)), CardBrand = case(substring(n, 0, 1) == '4', 'Visa', toint(substring(n, 0, 2)) >= 51 and toint(substring(n, 0, 2)) <= 55, 'Mastercard', toint(substring(n, 0, 2)) >= 22 and toint(substring(n, 0, 2)) <= 27, 'Mastercard', substring(n, 0, 2) == '34' or substring(n, 0, 2) == '37', 'Amex', substring(n, 0, 4) == '6011' or substring(n, 0, 2) == '65', 'Discover', substring(n, 0, 2) == '36' or substring(n, 0, 2) == '38', 'Diners Club', 'Other'), CardLength = toint(strlen(n)), ExpirationDate = todatetime(c.expiration_date)",
+            "outputStream": "Custom-PRODAFTUstaCompromisedCards_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[variables('DceResourceId')]",
+        "[variables('DcrResourceId')]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PRODAFTUstaPCFI-Backfill",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "DataCollectionEndpointUri": { "type": "String", "defaultValue": "[reference(variables('DceResourceId'), '2024-03-11').logsIngestion.endpoint]" },
+            "DataCollectionRuleImmutableId": { "type": "String", "defaultValue": "[reference(variables('DcrResourceId'), '2024-03-11').immutableId]" },
+            "UstaBaseUrl": { "type": "String", "defaultValue": "[parameters('UstaBaseUrl')]" },
+            "UstaApiKey": { "type": "SecureString", "defaultValue": "[parameters('UstaApiKey')]" },
+            "BackfillDays": { "type": "Int", "defaultValue": "[parameters('BackfillDays')]" }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": { "schema": {} }
+            }
+          },
+          "actions": {
+            "Initialize_NextUrl": {
+              "type": "InitializeVariable",
+              "runAfter": {},
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "NextUrl",
+                    "type": "string",
+                    "value": "@{concat(parameters('UstaBaseUrl'), '/api/threat-stream/v4/fraud-intelligence/credit-card-tickets?ordering=created&size=100&start=', encodeUriComponent(addDays(utcNow(), mul(-1, parameters('BackfillDays')), 'yyyy-MM-ddTHH:mm:ssZ')))}"
+                  }
+                ]
+              }
+            },
+            "Until_All_Pages_Ingested": {
+              "type": "Until",
+              "expression": "@empty(variables('NextUrl'))",
+              "limit": { "count": 1000, "timeout": "PT4H" },
+              "runAfter": { "Initialize_NextUrl": [ "Succeeded" ] },
+              "actions": {
+                "Fetch_USTA_Page": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "runtimeConfiguration": { "secureData": { "properties": [ "inputs", "outputs" ] } },
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@variables('NextUrl')",
+                    "headers": {
+                      "Accept": "application/json",
+                      "Authorization": "Bearer @{parameters('UstaApiKey')}",
+                      "User-Agent": "Azure-Sentinel-USTA-Integration/1.0"
+                    }
+                  }
+                },
+                "If_Page_Has_Records": {
+                  "type": "If",
+                  "runAfter": { "Fetch_USTA_Page": [ "Succeeded" ] },
+                  "expression": {
+                    "and": [
+                      { "greater": [ "@length(coalesce(body('Fetch_USTA_Page')?['results'], json('[]')))", 0 ] }
+                    ]
+                  },
+                  "actions": {
+                    "Ingest_Page_Via_DCR": {
+                      "type": "Http",
+                      "runAfter": {},
+                      "runtimeConfiguration": { "secureData": { "properties": [ "inputs" ] } },
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{concat(parameters('DataCollectionEndpointUri'), '/dataCollectionRules/', parameters('DataCollectionRuleImmutableId'), '/streams/Custom-PRODAFTUstaCompromisedCards_CL?api-version=2023-01-01')}",
+                        "headers": { "Content-Type": "application/json" },
+                        "body": "@body('Fetch_USTA_Page')?['results']",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com"
+                        }
+                      }
+                    }
+                  },
+                  "else": { "actions": {} }
+                },
+                "Update_NextUrl": {
+                  "type": "SetVariable",
+                  "runAfter": { "If_Page_Has_Records": [ "Succeeded" ] },
+                  "inputs": {
+                    "name": "NextUrl",
+                    "value": "@{coalesce(body('Fetch_USTA_Page')?['next'], '')}"
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('DcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+      "scope": "[variables('DcrResourceId')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+        "[variables('DcrResourceId')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "playbookName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "dataCollectionEndpoint": {
+      "type": "string",
+      "value": "[reference(variables('DceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+    },
+    "dataCollectionRuleName": {
+      "type": "string",
+      "value": "[variables('DcrName')]"
+    },
+    "dataCollectionRuleImmutableId": {
+      "type": "string",
+      "value": "[reference(variables('DcrResourceId'), '2024-03-11').immutableId]"
+    }
+  }
+}
