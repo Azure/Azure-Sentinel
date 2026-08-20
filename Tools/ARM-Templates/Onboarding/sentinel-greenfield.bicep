@@ -19,7 +19,7 @@ targetScope = 'resourceGroup'
 @description('Name of the Log Analytics workspace. 4-63 chars; letters, numbers and hyphens; must start and end alphanumeric.')
 @minLength(4)
 @maxLength(63)
-@pattern('^[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9]$')
+//@pattern('^[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9]$')
 param workspaceName string
 
 @description('Azure region for the workspace. Defaults to the resource group location.')
