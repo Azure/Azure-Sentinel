@@ -1,0 +1,251 @@
+{
+    "name": "ESI-ModernExchangeOnPremisesCollector",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "[parameters('workspace-location')]",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "ESI-ModernExchangeOnPremisesCollector",
+            "title": "Exchange Security Insights On-Premises Collector (Azure Monitor)",
+            "publisher": "Microsoft",
+        "descriptionMarkdown": "Connector used to push Exchange On-Premises Security configuration for Microsoft Sentinel Analysis using Azure Monitor Ingestion API.",
+            "graphQueries": [
+                {
+                    "metricName": "Total data received",
+                    "legend": "ESIAPIExchangeOnPremisesConfig_CL",
+                    "baseQuery": "ESIAPIExchangeOnPremisesConfig_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description" : "View how many Configuration entries exist on the table",
+                    "query": "ESIAPIExchangeOnPremisesConfig_CL | summarize by GenerationInstanceID_g, EntryDate_s, ESIEnvironment_s"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "ESIAPIExchangeOnPremisesConfig_CL",
+                    "lastDataReceivedQuery": "ESIAPIExchangeOnPremisesConfig_CL | summarize Time = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s  | where isnotempty(Time) |summarize Time = max(Time) | project Time"
+                }
+            ],
+            "connectivityCriterias": [
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "ESIAPIExchangeOnPremisesConfig_CL | summarize LastLogReceived = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s |take 1  | project IsConnected = true"
+                    ]
+                }
+            ],
+            "availability": {
+                "status": 1,
+                "isPreview": false
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                    },
+                    {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User   Access Administrator role."
+                    },
+                    {
+                        "name": "Microsoft.Graph permissions",
+                        "description": "Groups.Read, Users.Read and Auditing.Read permissions are required to retrieve user/group information linked to Exchange Online assignments. [See the documentation to learn more](https://aka.ms/sentinel-ESI-OnlineCollectorPermissions)."
+                    },
+                    {
+                        "name": "Service Account with Organization Management role",
+                        "description": "The service Account that launch the script as scheduled task needs to be Organization Management to be able to retrieve all the needed security Information."
+                    },
+                    {
+                        "name": "Detailled documentation",
+                        "description": ">**NOTE:** Detailled documentation on Installation procedure and usage can be found [here](https://aka.ms/MicrosoftExchangeSecurityGithub)"
+                    }  
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "description": ">**NOTE - UPDATE**",
+                    "instructions": [ 
+                        {
+                            "parameters": {
+                                "text": "<H1><b><u>NOTE - UPDATE:</u></b></H1>We recommend to Update the Collector to Version <b>8.0.0.0</b> or higher <b>AND</b> switching to new Log Monitor API. <br/>The Collector Script Update procedure could be found here : <a href='https://aka.ms/sentinel-ESI-OnpremisesCollectorUpdate'>ESI On-Premises Collector Update</a>, Update to Log Monitor API procedure could be found here : <a href='https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI'>Migrate From Log Analytics API To Log Ingestion API</a>.<br/>The new version of the Collector is using DCR (Data Collection Rules) for data collection. You need to configure DCR before running the script.",
+                                "visible": true,
+                                "inline": false
+                            },
+                            "type": "InfoMessage"
+                        }
+                    ]
+                },
+                {
+                    "title": "1. Create ARM Resources and Provide the Required Permissions",
+                    "description": "This connector enables your Exchange Online Collector to push Exchange Configuration/Audit directly to Microsoft Sentinel via the Azure Monitor Ingestion API.",
+                    "instructions": [
+                        {
+                            "type": "Markdown",
+                            "parameters": {
+                                "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application \nClicking on \"Deploy\" will trigger the creation of a Log Analytics table and a Data Collection Rule (DCR). \nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                            }
+                        },
+                        {
+                            "type": "DeployPushConnectorButton",
+                            "parameters": {
+                                "label": "Deploy Exchange Collector Push connector resources",
+                                "applicationDisplayName": "Microsoft Exchange On-Premises Collector Push Connector Application"
+                            }
+                        }
+                    ]
+                },
+        {
+            "title": "2. Install the ESI Collector Script on a server with Exchange Admin PowerShell console",
+            "description": "This is the script that will collect Exchange Information to push content in Microsoft Sentinel.\n ",
+            "instructions": [
+                {
+                    "parameters": {
+                        "title": "Script Deployment",
+                        "instructionSteps": [
+                            {
+                                "title": "Download the latest version of ESI Collector",
+                                "description": "The latest version can be found here : https://aka.ms/ESI-ExchangeCollector-Script. The file to download is CollectExchSecIns.zip"
+                            },
+                            {
+                                "title": "Copy the script folder",
+                                "description": "Unzip the content and copy the script folder on a server where Exchange PowerShell Cmdlets are present."
+                            },
+                            {
+                                "title": "Unblock the PS1 Scripts",
+                                "description": "Click right on each PS1 Script and go to Properties tab.\n If the script is marked as blocked, unblock it. You can also use the Cmdlet 'Unblock-File *.* in the unzipped folder using PowerShell."
+                            },
+                            {
+                                "title": "Configure Network Access ",
+                                "description": "Ensure that the script can contact Azure Analytics (*.ods.opinsights.azure.com)."
+                            }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]
+        },
+        {
+            "title": "3. Configure the ESI Collector Script",
+            "description": "Be sure to be local administrator of the server.\nIn 'Run as Administrator' mode, launch the 'WinformConfig/SetupCollectExchSecConfiguration.ps1' script to configure the collector.\n Fill the Log Analytics (Microsoft Sentinel) Workspace information.\n Fill the Environment name or leave empty. By default, choose 'Def' as Default analysis. The other choices are for specific usage.",
+            "instructions": [
+                {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Tenant ID (Directory ID)",
+                                "fillWith": [
+                                    "TenantId"
+                                ]
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Entra App Registration Application ID",
+                                "fillWith": [
+                                    "ApplicationId"
+                                ],
+                                "placeholder": "Deploy push connector to get the App Registration Application ID"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Entra App Registration Secret",
+                                "fillWith": [
+                                    "ApplicationSecret"
+                                ],
+                                "placeholder": "Deploy push connector to get the App Registration Secret"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Endpoint Uri",
+                                "fillWith": [
+                                    "DataCollectionEndpoint"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Rule Immutable ID",
+                                "fillWith": [
+                                    "DataCollectionRuleId"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Stream Name",
+                                "value": "Custom-ESIExchangeConfig"
+                            }
+                        }
+            ]
+        },
+        {
+            "title": "3. Schedule the ESI Collector Script (If not done by the Install Script due to lack of permission or ignored during installation)",
+            "description": "The script needs to be scheduled to send Exchange configuration to Microsoft Sentinel.\n We recommend to schedule the script once a day.\n The account used to launch the Script needs to be member of the group Organization Management"
+        },
+        {
+            "title": "",
+            "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected. Parsers are automatically deployed with the solution. Follow the steps to create the Kusto Functions alias : [**ExchangeAdminAuditLogs**](https://aka.ms/sentinel-ESI-ExchangeCollector-ExchangeAdminAuditLogs-parser)",
+            "instructions": [
+                {
+                    "parameters": {
+                        "title": "Parsers are automatically deployed during Solution deployment. If you want to deploy manually, follow the steps below",
+                        "instructionSteps": [
+                            {
+                                "title": "Manual Parser Deployment",
+                                "instructions": [
+                                    {
+                                        "parameters": {
+                                            "instructionSteps": [
+                                                {
+                                                    "title": "1. Download the Parser file",
+                                                    "description": "The latest version of the file [**ExchangeAdminAuditLogs**](https://aka.ms/sentinel-ESI-ExchangeCollector-ExchangeAdminAuditLogs-parser)"
+                                                },
+                                                {
+                                                    "title": "2. Create Parser **ExchangeAdminAuditLogs** function",
+                                                    "description": "In 'Logs' explorer of your Microsoft Sentinel's log analytics, copy the content of the file to Log explorer"
+                                                },
+                                                {
+                                                    "title": "3. Save Parser **ExchangeAdminAuditLogs** function",
+                                                    "description": "Click on save button.\n No parameter is needed for this parser.\nClick save again."
+                                                }
+                                            ]
+                                        },
+                                        "type": "InstructionStepsGroup"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]
+        }
+            ]
+        }
+    }
+}
