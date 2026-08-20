@@ -543,6 +543,47 @@
             }
         },
         {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "apiVersion": "2023-02-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', guid(resourceGroup().id, parameters('workspace'), 'FortiNDR_MultiSeverityEvents'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Fortinet_FortiNDR_Cloud')]"
+            ],
+            "kind": "Scheduled",
+            "properties": {
+                "displayName": "FortiNDR Cloud - Security Event Detected",
+                "description": "Triggers an alert for high, medium, or low severity events across FortiNDR Cloud detections, Suricata alerts, or observations.",
+                "severity": "High",
+                "enabled": true,
+                "query": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(\n    Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High',\n    Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High',\n    Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High',\n    Type == 'FncEventsDetections_CL' and de_severity =~ 'medium', 'Medium',\n    Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium',\n    Type == 'FncEventsObservation_CL' and ob_confidence =~ 'medium', 'Medium',\n    'Low'\n)\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IncidentDevice"
+                            }
+                        ]
+                    }
+                ],
+                "customDetails": {
+                    "EventDescription": "Description",
+                    "EventType": "Type"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "FortiNDR Alert: {{Description}} on {{IncidentDevice}}",
+                    "alertSeverityColumnName": "AlertSeverity"
+                }
+            }
+        },
+        {
             "type": "Microsoft.Web/sites/extensions",
             "apiVersion": "2022-09-01",
             "name": "[format('{0}/{1}', parameters('functionAppName'), 'onedeploy')]",
