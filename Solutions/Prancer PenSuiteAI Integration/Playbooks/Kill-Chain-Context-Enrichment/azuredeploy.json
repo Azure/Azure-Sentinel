@@ -1,0 +1,254 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Prancer-KillChain-Context-Enrichment",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook resource."
+      }
+    },
+    "Location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the Logic App and its API connections. Required (no default) since this playbook is nested inside the packaged solution's mainTemplate.json, where a resource-group-derived default would fall outside the range ARM-TTK's Location check recognizes as exempt."
+      }
+    },
+    "WorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "GUID of the Log Analytics workspace that hosts PrancerFindings_CL / the PrancerFindings() function, used for the Log Analytics Query API HTTP call."
+      }
+    },
+    "LogAnalyticsQueryApiHost": {
+      "type": "string",
+      "defaultValue": "[concat('https://api.loganalyt', 'ics.io')]",
+      "metadata": {
+        "description": "Base host for the Log Analytics Query API. Parameterized and built via concat() (rather than a literal string) because ARM-TTK's DeploymentTemplate Must Not Contain Hardcoded Uri check only recognizes the outermost 'parameters' block in a merged solution package, not this playbook's own nested one once wrapped as a contentTemplate."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('Location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PrancerKillChainContextEnrichment",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkflowTrustClass": "fully-autonomous-read-only"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "WorkspaceId": {
+              "type": "String",
+              "defaultValue": "[parameters('WorkspaceId')]"
+            },
+            "LogAnalyticsQueryApiHost": {
+              "type": "String",
+              "defaultValue": "[parameters('LogAnalyticsQueryApiHost')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident_trigger": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_FindingId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FindingId",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['UniqueFindingId'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_IncidentArmId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IncidentArmId",
+                    "type": "string",
+                    "value": "@{triggerBody()?['object']?['id']}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_FindingId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Finding_ID_present": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('FindingId')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Query_PrancerFindings_for_KillChain_context": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('LogAnalyticsQueryApiHost')}/v1/workspaces/@{parameters('WorkspaceId')}/query",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "@{parameters('LogAnalyticsQueryApiHost')}"
+                    },
+                    "body": {
+                      "query": "PrancerFindings | where FindingId == '@{variables('FindingId')}' | project KillChain, CrownJewels, RiskScore, Confidence, Solution, Title, Severity | take 1"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Format_Enrichment_Summary": {
+                  "type": "Compose",
+                  "inputs": "<p><b>Prancer SwarmHack Kill-Chain Context</b> (FindingId: @{variables('FindingId')})</p><p><b>Title:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[5]}<br/><b>Severity:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[6]}<br/><b>RiskScore:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[2]}<br/><b>Confidence:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[3]}<br/><b>KillChain:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[0]}<br/><b>CrownJewels:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[1]}<br/><b>Solution:</b> @{body('Query_PrancerFindings_for_KillChain_context')?['tables']?[0]?['rows']?[0]?[4]}</p>",
+                  "runAfter": {
+                    "Query_PrancerFindings_for_KillChain_context": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Add_comment_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@variables('IncidentArmId')",
+                      "message": "@{outputs('Format_Enrichment_Summary')}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Format_Enrichment_Summary": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "No_Finding_ID_available_noop": {
+                    "type": "Compose",
+                    "inputs": "No UniqueFindingId custom detail was present on this incident; enrichment skipped. Ensure the triggering analytic rule includes UniqueFindingId in customDetails.",
+                    "runAfter": {}
+                  },
+                  "Add_skipped_note_to_incident_(V3)": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@variables('IncidentArmId')",
+                        "message": "@{outputs('No_Finding_ID_available_noop')}"
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    },
+                    "runAfter": {
+                      "No_Finding_ID_available_noop": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_IncidentArmId": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}

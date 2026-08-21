@@ -1,4 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                           |
 |-------------|--------------------------------|----------------------------------------------|
+| 3.0.2       | 20-08-2026                     | Modernized the solution for Prancer's Logs Ingestion API architecture: added a **Parser** (`PrancerFindings`) over the new `PrancerFindings_CL` table, rewrote the **Data Connector** for DCR-based push ingestion in place of the retired HTTP Data Collector API, and reworked the **Analytic Rules**, **Hunting Queries** and **Workbook** to query through the parser; added correlation, confidence and kill-chain **Analytic Rules** and **Hunting Queries**, a trust-tiered **Playbooks** set, a **Watchlist** (`Prancer Crown Jewel Assets`) with a rule that escalates findings matching a declared crown jewel, and an optional **Azure Function** that verifies `PrancerFindings_CL` ingestion is still flowing |
 | 3.0.1       | 19-03-2024                     | Updated **Workbook**, **Analytic Rules** and **Hunting Queries**                    |
 | 3.0.0       | 20-09-2023                     | Initial Solution Release                    |
