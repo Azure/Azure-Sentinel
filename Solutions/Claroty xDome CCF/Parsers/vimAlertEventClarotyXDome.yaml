@@ -1,0 +1,133 @@
+id: b2000000-0000-4a2b-8c3d-000000000004
+Category: Microsoft Sentinel Parser
+Function:
+  Title: Alert Event ASIM filtering parser for Claroty xDome device alerts
+  Version: '1.0.0'
+  LastUpdated: '2026-08-01'
+Product:
+  Name: Claroty xDome
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Claroty xDome device-alert relations,
+  ingested into the ClarotyXDomeDeviceAlert_CL table, to the ASIM Alert Event normalized schema.
+FunctionName: vimAlertEventClarotyXDome
+FunctionAlias: vimAlertEventClarotyXDome
+EquivalentBuiltInParser: _Im_AlertEvent_ClarotyXDome
+FunctionParams:
+- Name: starttime
+  Type: datetime
+  Default: datetime(null)
+- Name: endtime
+  Type: datetime
+  Default: datetime(null)
+- Name: ipaddr_has_any_prefix
+  Type: dynamic
+  Default: dynamic([])
+- Name: hostname_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: username_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: attacktactics_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: attacktechniques_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: threatcategory_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: alertverdict_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: eventseverity_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: disabled
+  Type: bool
+  Default: false
+FunctionQuery: |
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      ipaddr_has_any_prefix:dynamic=dynamic([]),
+      hostname_has_any:dynamic=dynamic([]),
+      username_has_any:dynamic=dynamic([]),
+      attacktactics_has_any:dynamic=dynamic([]),
+      attacktechniques_has_any:dynamic=dynamic([]),
+      threatcategory_has_any:dynamic=dynamic([]),
+      alertverdict_has_any:dynamic=dynamic([]),
+      eventseverity_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+  ) {
+      ClarotyXDomeDeviceAlert_CL
+      | where not(disabled)
+          and (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (array_length(hostname_has_any) == 0 or DeviceName has_any (hostname_has_any))
+          and (array_length(threatcategory_has_any) == 0 or AlertCategory has_any (threatcategory_has_any))
+      | extend
+          EventCount = int(1),
+          EventStartTime = DeviceAlertDetectedTime,
+          EventEndTime = DeviceAlertUpdatedTime,
+          EventType = 'Alert',
+          EventProduct = 'xDome',
+          EventVendor = 'Claroty',
+          EventSchema = 'AlertEvent',
+          EventSchemaVersion = '0.1',
+          EventOriginalUid = RecordKey,
+          EventOriginalType = AlertClass,
+          EventMessage = AlertDescription,
+          AlertId = tostring(AlertId),
+          AlertName = AlertName,
+          AlertType = AlertTypeName,
+          EventOriginalSeverity = NetworkSignatureSeverity,
+          AlertVerdict = 'Unknown',
+          ThreatCategory = AlertCategory,
+          AttackTactics = '',
+          AttackTechniques = tostring(array_strcat(set_union(coalesce(todynamic(MitreTechniqueIcsIds), dynamic([])), coalesce(todynamic(MitreTechniqueEnterpriseIds), dynamic([]))), ', ')),
+          DvcHostname = DeviceName,
+          DvcId = DeviceUid,
+          DvcIpAddr = tostring(DeviceIpList[0]),
+          SrcIpAddr = tostring(DeviceIpList[0]),
+          DstIpAddr = ExternalIP,
+          Username = ''
+      | extend
+          EventSeverity = case(
+              tolower(NetworkSignatureSeverity) == 'critical', 'Critical',
+              tolower(NetworkSignatureSeverity) == 'high', 'High',
+              tolower(NetworkSignatureSeverity) == 'medium', 'Medium',
+              tolower(NetworkSignatureSeverity) == 'low', 'Low',
+              'Informational')
+      | extend
+          IpAddr = DvcIpAddr,
+          Hostname = DvcHostname,
+          User = Username
+      | where (array_length(ipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix))
+          and (array_length(username_has_any) == 0 or Username has_any (username_has_any))
+          and (array_length(attacktactics_has_any) == 0 or AttackTactics has_any (attacktactics_has_any))
+          and (array_length(attacktechniques_has_any) == 0 or AttackTechniques has_any (attacktechniques_has_any))
+          and (array_length(alertverdict_has_any) == 0 or AlertVerdict has_any (alertverdict_has_any))
+          and (array_length(eventseverity_has_any) == 0 or EventSeverity has_any (eventseverity_has_any))
+  };
+  parser(
+      starttime = starttime,
+      endtime = endtime,
+      ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+      hostname_has_any = hostname_has_any,
+      username_has_any = username_has_any,
+      attacktactics_has_any = attacktactics_has_any,
+      attacktechniques_has_any = attacktechniques_has_any,
+      threatcategory_has_any = threatcategory_has_any,
+      alertverdict_has_any = alertverdict_has_any,
+      eventseverity_has_any = eventseverity_has_any,
+      disabled = disabled
+  )

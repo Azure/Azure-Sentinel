@@ -1,0 +1,69 @@
+id: b2000000-0000-4a2b-8c3d-000000000003
+Category: Microsoft Sentinel Parser
+Function:
+  Title: Alert Event ASIM parser for Claroty xDome device alerts
+  Version: '1.0.0'
+  LastUpdated: '2026-08-01'
+Product:
+  Name: Claroty xDome
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Claroty xDome device-alert relations,
+  ingested into the ClarotyXDomeDeviceAlert_CL table, to the ASIM Alert Event normalized schema.
+FunctionName: ASimAlertEventClarotyXDome
+FunctionAlias: ASimAlertEventClarotyXDome
+EquivalentBuiltInParser: _ASim_AlertEvent_ClarotyXDome
+FunctionParams:
+- Name: disabled
+  Type: bool
+  Default: false
+FunctionQuery: |
+  let parser = (disabled: bool = false) {
+      ClarotyXDomeDeviceAlert_CL
+      | where not(disabled)
+      | extend
+          EventCount = int(1),
+          EventStartTime = DeviceAlertDetectedTime,
+          EventEndTime = DeviceAlertUpdatedTime,
+          EventType = 'Alert',
+          EventProduct = 'xDome',
+          EventVendor = 'Claroty',
+          EventSchema = 'AlertEvent',
+          EventSchemaVersion = '0.1',
+          EventOriginalUid = RecordKey,
+          EventOriginalType = AlertClass,
+          EventMessage = AlertDescription,
+          AlertId = tostring(AlertId),
+          AlertName = AlertName,
+          AlertType = AlertTypeName,
+          EventOriginalSeverity = NetworkSignatureSeverity,
+          AlertVerdict = 'Unknown',
+          ThreatCategory = AlertCategory,
+          AttackTactics = '',
+          AttackTechniques = tostring(array_strcat(set_union(coalesce(todynamic(MitreTechniqueIcsIds), dynamic([])), coalesce(todynamic(MitreTechniqueEnterpriseIds), dynamic([]))), ', ')),
+          DvcHostname = DeviceName,
+          DvcId = DeviceUid,
+          DvcIpAddr = tostring(DeviceIpList[0]),
+          SrcIpAddr = tostring(DeviceIpList[0]),
+          DstIpAddr = ExternalIP,
+          Username = ''
+      | extend
+          EventSeverity = case(
+              tolower(NetworkSignatureSeverity) == 'critical', 'Critical',
+              tolower(NetworkSignatureSeverity) == 'high', 'High',
+              tolower(NetworkSignatureSeverity) == 'medium', 'Medium',
+              tolower(NetworkSignatureSeverity) == 'low', 'Low',
+              'Informational')
+      | extend
+          IpAddr = DvcIpAddr,
+          Hostname = DvcHostname,
+          User = Username
+  };
+  parser(disabled = disabled)
