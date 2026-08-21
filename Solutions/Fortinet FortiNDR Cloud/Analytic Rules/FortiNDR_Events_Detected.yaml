@@ -1,0 +1,35 @@
+id: 1e6a8802-9129-44d4-a4f9-c6010b5725e8
+name: FortiNDR Cloud - Security Event Detected
+displayName: FortiNDR Cloud - Security Event Detected
+description: Triggers an alert for High, Medium, or Low severity FortiNDR events with dynamic incident severity.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: FortinetFortiNdrCloudDataConnector
+    dataTypes:
+      - FncEventsSuricata_CL
+      - FncEventsObservation_CL
+      - FncEventsDetections_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics: []
+techniques: []
+query: |
+  Fortinet_FortiNDR_Cloud
+  | extend AlertSeverity = case(Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High', Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High', Type == 'FncEventsDetections_CL' and de_severity =~ 'medium', 'Medium', Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium', Type == 'FncEventsObservation_CL' and ob_confidence =~ 'medium', 'Medium', 'Low')
+  | extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)
+  | extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IncidentDevice
+customDetails:
+  EventDescription: Description
+  EventType: Type
+alertDetailsOverride:
+  alertDisplayNameFormat: "FortiNDR Alert: {{Description}} on {{IncidentDevice}}"
+  alertSeverityColumnName: AlertSeverity
+kind: Scheduled
