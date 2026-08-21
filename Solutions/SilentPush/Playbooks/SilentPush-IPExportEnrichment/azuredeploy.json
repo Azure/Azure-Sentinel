@@ -1,0 +1,165 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "SilentPush-IPExportEnrichment",
+      "type": "String",
+      "metadata": {
+        "description": "Silent Push IPs export with enrichment"
+      }
+    },
+    "CustomConnectorName": {
+      "defaultValue": "SilentPush-API",
+      "type": "String",
+      "metadata": {
+        "description": "The SilentPush custom API connector"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name where Microsoft Sentinel is enabled"
+      }
+    }
+  },
+  "variables": {
+    "SilentPushConnectionName": "[concat('SilentPush-', parameters('PlaybookName'))]",
+    "silentpushAPI_Id1": "[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('SilentPushConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('SilentPushConnectionName')]",
+        "api": {
+          "id": "[variables('silentpushAPI_Id1')]"
+        },
+        "parameterValues": {
+          "api_key": ""
+        }
+      }
+    },
+    {
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2019-05-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('SilentPushConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Disabled",
+        "definition": {
+          "$schema": "https://schema.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "interval": 3,
+                "frequency": "Minute"
+              }
+            }
+          },
+          "actions": {
+            "Export_IOFA": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_ips.txt')}/"
+              }
+            },
+            "Extract_Location": {
+              "type": "Compose",
+              "runAfter": {
+                "Export_IOFA": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "inputs": "@outputs('Export_IOFA')['headers']?['Location']"
+            },
+            "Follow_Redirect": {
+              "type": "Http",
+              "runAfter": {
+                "Extract_Location": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "uri": "@outputs('Extract_Location')",
+                "method": "GET"
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+            "Extract_Body_Response": {
+              "type": "Compose",
+              "runAfter": {
+                "Follow_Redirect": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@take(split(trim(body('Follow_Redirect')), '\n'), 100)"
+            },
+            "Bulk_Enrich_IPv4s": {
+              "type": "ApiConnection",
+              "runAfter": {
+                "Extract_Body_Response": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "ipv4s": "@outputs('Extract_Body_Response')"
+                },
+                "path": "/api/v1/enrich/ipv4/bulk/"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "SilentPushCustomConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SilentPushConnectionName'))]",
+                "connectionName": "[variables('SilentPushConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
