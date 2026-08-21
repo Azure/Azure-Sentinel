@@ -1,0 +1,57 @@
+id: e4905b78-2c3d-4e5f-9a0b-1c2d3e4f5a6b
+name: HoneyForge - Repeated Probes from Same Source
+description: |
+  Finds source IPs that have probed HoneyForge sensors on multiple distinct
+  occasions separated by at least one hour, suggesting deliberate or scripted
+  reconnaissance rather than a one-off event.
+
+  A legitimate network scanner that hits a sensor once might be an
+  oversight. One that returns hours or days later is a persistent threat.
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Reconnaissance
+relevantTechniques: []
+query: |
+  let lookback = 14d;
+  let minSessionGap = 1h;
+  let minReturnVisits = 2;
+  CommonSecurityLog
+  | where TimeGenerated >= ago(lookback)
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SrcIpAddr  = tostring(SourceIP),
+      SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))
+  | where isnotempty(SrcIpAddr)
+  | sort by SrcIpAddr asc, TimeGenerated asc
+  | serialize
+  | extend
+      PrevTime = prev(TimeGenerated, 1),
+      PrevSrc  = prev(SrcIpAddr, 1)
+  | extend
+      IsNewSession = iff(SrcIpAddr == PrevSrc and (TimeGenerated - PrevTime) < minSessionGap, 0, 1)
+  | summarize
+      TotalEvents   = count(),
+      SessionCount  = sumif(IsNewSession, IsNewSession == 1),
+      SensorsHit    = dcount(SensorName),
+      FirstSeen     = min(TimeGenerated),
+      LastSeen      = max(TimeGenerated),
+      SensorList    = make_set(SensorName, 20)
+      by SrcIpAddr
+  | where SessionCount >= minReturnVisits
+  | extend DaySpan = datetime_diff('day', LastSeen, FirstSeen)
+  | sort by SessionCount desc, TotalEvents desc
+  | extend SensorListStr = strcat_array(SensorList, ", ")
+  | project
+      SrcIpAddr,
+      SessionCount,
+      TotalEvents,
+      SensorsHit,
+      DaySpan,
+      FirstSeen,
+      LastSeen,
+      SensorListStr
+version: 1.0.0
