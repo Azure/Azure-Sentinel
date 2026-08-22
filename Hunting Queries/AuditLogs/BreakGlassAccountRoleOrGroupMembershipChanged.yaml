@@ -13,10 +13,11 @@ description-detailed: |
   Two paths lead to the same outcome and both are covered here. A direct role assignment or
   removal shows up as an "Add member to role" or "Remove member from role" event with the
   break-glass account as the target. A group-mediated change, where the account is added to
-  or removed from a group, including a role-assignable group, is read from the same
-  TargetResources entry as the membership event itself rather than from a fixed array index,
-  since an audit event can carry multiple resources and their ordering is not guaranteed;
-  this mirrors the extraction used elsewhere in this repository for the same operations. An
+  or removed from a group, including a role-assignable group, shows up as a group membership
+  event instead. In both paths the account and the changed object are read from whichever
+  TargetResources entry describes the user rather than from a fixed array index, since an
+  audit event can carry multiple resources and their ordering is not guaranteed; this mirrors
+  the extraction used elsewhere in this repository for the same operations. An
   attacker who quietly folds a break-glass account into a role-assignable group inherits
   whatever role that group holds without ever generating a role-assignment event against the
   account directly, which is precisely why both paths need to be watched together.
@@ -55,17 +56,23 @@ query: |
   // build the name lookup, once as the left side of the join back to it). Without pinning
   // it to a single computed result, the two references would each re-evaluate new_guid()
   // independently, so the RowId used to join would never match itself.
+  // The break-glass account and the role name are both read from whichever TargetResources
+  // entry describes the user, not from a fixed array index, for the same reason as the
+  // group section below.
   let RoleChangesBase = materialize(
       AuditLogs
       | where TimeGenerated between (starttime .. endtime)
       | where Category =~ "RoleManagement"
-      | where OperationName in~ ("Add member to role", "Add member to role.", "Remove member from role")
+      | where OperationName in~ ("Add member to role", "Add member to role.", "Remove member from role", "Remove member from role.")
       | where Result =~ "success"
-      | extend TargetUpn = tolower(tostring(TargetResources[0].userPrincipalName))
+      | mv-apply TargetResource = TargetResources on (
+            where TargetResource.type =~ "User"
+            | extend TargetUpn = tolower(tostring(TargetResource.userPrincipalName)),
+                     RoleProps = TargetResource.modifiedProperties
+        )
       | where TargetUpn in (BreakGlassAccounts)
       | extend RowId      = new_guid()
       | extend ChangeType = iff(OperationName has "Add", "RoleAdded", "RoleRemoved")
-      | extend RoleProps  = TargetResources[0].modifiedProperties
       | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
       | extend ActorApp = tostring(InitiatedBy.app.displayName)
       | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
@@ -122,7 +129,7 @@ query: |
       | project RowId, Properties
       | mv-expand Property = Properties
       | where tostring(Property.displayName) =~ "Group.DisplayName"
-      | project RowId, ChangedObject = trim('"', tostring(Property.newValue));
+      | project RowId, ChangedObject = trim('"', tostring(coalesce(Property.newValue, Property.oldValue)));
   let GroupChanges =
       GroupChangesBase
       | join kind=leftouter GroupNames on RowId
