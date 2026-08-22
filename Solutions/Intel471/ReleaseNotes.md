@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 4.0.0       | 10-07-2026                     |  Consolidated the **Cyborg Security HUNTER** hunting queries into the Intel 471 solution and refreshed them to the latest 25-query community hunting set. Removed the 'Open in Tool' data connector.|
 | 3.0.0       | 02-12-2025                     |  Added **Playbook** 'Intel 471 Malware Intelligence to Graph Security' using new upload indicators API to Intel 471 Solution. <br/> Added the Verity471 backend in the Intel471 solution for ingesting malware indicators.|
