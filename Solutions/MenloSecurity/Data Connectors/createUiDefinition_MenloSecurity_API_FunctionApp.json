@@ -1,0 +1,87 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/MenloSecurity/MenloSecurity.svg\" width=\"75px\" height=\"75px\">\n\nDeploys the **Menlo Security** connector infrastructure (Function App, Key Vault, Storage, Data Collection Endpoint, Data Collection Rule) and creates the `MenloAudit_CL`, `MenloBandwidth_CL`, and `MenloWeb_CL` custom tables in your Log Analytics workspace.\n\n**Tip:** choose **Create new** for the resource group (e.g. `MenloSecurityLogs`) so the connector can be removed in one step later. Connector resources are deployed automatically in the **same region as the selected workspace** — you do not need to match regions manually.",
+        "location": {
+          "label": "Resource group region",
+          "toolTip": "Region for the resource group only. The connector resources are deployed in the same region as the selected Log Analytics workspace.",
+          "visible": true
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "workspaceResourceGroup",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Log Analytics Workspace Resource Group",
+        "toolTip": "The resource group that contains your existing Log Analytics workspace.",
+        "placeholder": "e.g. my-sentinel-rg",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-zA-Z0-9._\\-()]{1,90}$",
+          "validationMessage": "Enter the name of the resource group that contains your Log Analytics workspace."
+        }
+      },
+      {
+        "name": "getWorkspaces",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "condition": "[greater(length(basics('workspaceResourceGroup')), 0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id, '/resourceGroups/', basics('workspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces?api-version=2022-10-01')]"
+        }
+      },
+      {
+        "name": "workspaceName",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Log Analytics Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "The workspace linked to your Microsoft Sentinel instance. Connector resources are deployed in this workspace's region.",
+        "constraints": {
+          "allowedValues": "[map(basics('getWorkspaces').value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": "[greater(length(basics('workspaceResourceGroup')), 0)]"
+      },
+      {
+        "name": "workspaceRegionNote",
+        "type": "Microsoft.Common.InfoBox",
+        "visible": "[greater(length(basics('workspaceName')), 0)]",
+        "options": {
+          "text": "Connector resources (DCE, DCR, Function App, etc.) will be deployed in the region of the selected workspace.",
+          "style": "Info"
+        }
+      },
+      {
+        "name": "menloApiToken",
+        "type": "Microsoft.Common.PasswordBox",
+        "label": {
+          "password": "Menlo Security API Token",
+          "confirmPassword": "Confirm API Token"
+        },
+        "toolTip": "The API token from the Menlo Security admin console used to authenticate log retrieval.",
+        "constraints": {
+          "required": true
+        },
+        "options": {
+          "hideConfirmation": false
+        }
+      }
+    ],
+    "steps": [],
+    "outputs": {
+      "workspaceName": "[basics('workspaceName')]",
+      "workspaceResourceGroup": "[basics('workspaceResourceGroup')]",
+      "location": "[first(map(filter(basics('getWorkspaces').value, (ws) => equals(ws.name, basics('workspaceName'))), (ws) => ws.location))]",
+      "menloApiToken": "[basics('menloApiToken')]"
+    }
+  }
+}
