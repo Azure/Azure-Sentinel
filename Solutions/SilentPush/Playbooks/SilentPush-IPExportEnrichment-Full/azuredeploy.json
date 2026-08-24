@@ -39,7 +39,7 @@
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "SilentPushConnectionName": "[concat('SilentPush-', parameters('PlaybookName'))]",
     "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-    "silentpushAPI_Id1": "[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
+    "silentPushApiId": "[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
     "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
     "SentinelContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]"
   },
@@ -53,7 +53,7 @@
       "properties": {
         "displayName": "[variables('SilentPushConnectionName')]",
         "api": {
-          "id": "[variables('silentpushAPI_Id1')]"
+          "id": "[variables('silentPushApiId')]"
         },
         "parameterValues": {
           "api_key": ""
@@ -137,7 +137,7 @@
                   "Succeeded"
                 ]
               },
-              "expression": "@not(empty(outputs('Extract_Location')))",
+              "expression": "@startsWith(coalesce(outputs('Extract_Location'), ''), 'https://silentpush-feeds.s3.amazonaws.com/')",
               "actions": {
                 "Follow_Redirect": {
                   "type": "Http",
@@ -169,6 +169,11 @@
                       "Succeeded"
                     ]
                   },
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  },
                   "actions": {
                     "Bulk_Enrich_IPv4s": {
                       "type": "ApiConnection",
@@ -182,7 +187,14 @@
                         "body": {
                           "ipv4s": "@items('For_Each_Batch')"
                         },
-                        "path": "/api/v1/enrich/ipv4/bulk/"
+                        "path": "/api/v1/enrich/ipv4/bulk/",
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 10,
+                          "interval": "PT20S",
+                          "minimumInterval": "PT10S",
+                          "maximumInterval": "PT1H"
+                        }
                       }
                     },
                     "Filter_Enriched_Only": {
@@ -256,7 +268,14 @@
                           "sourcesystem": "Silent Push - IOFA Export",
                           "indicators": "@body('Build_TI_Indicators')"
                         },
-                        "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]"
+                        "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]",
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 10,
+                          "interval": "PT20S",
+                          "minimumInterval": "PT10S",
+                          "maximumInterval": "PT1H"
+                        }
                       }
                     }
                   }
@@ -270,7 +289,7 @@
                       "runStatus": "Failed",
                       "error": {
                         "code": "ExportFailed",
-                        "message": "Silent Push IOFA IP export did not return a valid redirect Location - the export request likely failed (authentication, rate limiting, or a server error)."
+                        "message": "Silent Push IOFA IP export did not return a redirect Location to a trusted host (https://silentpush-feeds.s3.amazonaws.com/) - the export request likely failed, or the response was unexpected/untrusted."
                       }
                     }
                   }
