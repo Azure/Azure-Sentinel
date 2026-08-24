@@ -2,7 +2,7 @@
 
 ## Version 0.1.3
 
-- (2026-08-20) Restore support for the legacy `lookup` event type used by the DNS unifying parser - [PR #14958](https://github.com/Azure/Azure-Sentinel/pull/14958)
+- (2026-08-20) Accept legacy `lookup` as an alias for the `Query` event type used by the DNS unifying parser - [PR #14958](https://github.com/Azure/Azure-Sentinel/pull/14958)
 
 ## Version 0.1.2
 
