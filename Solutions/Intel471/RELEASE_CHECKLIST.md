@@ -17,6 +17,19 @@ bitten us at least once.
       never receive the update, and customers have to uninstall the solution first.
 - [ ] **Add a `ReleaseNotes.md` entry.** Mandatory for marketplace certification. State the new
       playbook template versions alongside the solution version, in customer-facing language.
+- [ ] **Validate every hunting query YAML before packaging.** The packaging tool stops at the
+      first unparseable file and still writes a package, silently, so a single bad file ships a
+      solution with only the queries that preceded it alphabetically:
+
+      ```bash
+      pwsh -NoProfile -Command 'foreach ($f in Get-ChildItem "Solutions/Intel471/Hunting Queries/*.yaml") {
+        try { $null = ConvertFrom-Yaml (Get-Content -Raw $f.FullName) -ErrorAction Stop }
+        catch { Write-Host "INVALID:" $f.Name } }'
+      ```
+
+      The usual cause is indentation inside the `query: |` block: a line at column 0 ends the
+      block scalar, and everything after it is parsed as top-level YAML. Any continuation line
+      must stay indented, even when editing only the KQL.
 - [ ] **Hunting query IDs must be globally unique.** Content hub keys hunting queries on their
       `id`, so a GUID reused from another solution collides for any customer with both
       installed. Never copy a query from another solution without reissuing its GUID.
@@ -38,10 +51,21 @@ pwsh Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 \
   `Package/mainTemplate.json`.
 - Delete the zip of any version that was built but never published, so the folder does not
   advertise a version that does not exist.
+- **Re-apply the `learn.microsoft.com` hunting URI in `Package/createUiDefinition.json` after
+  every packaging run.** The tool hardcodes `https://docs.microsoft.com/azure/sentinel/hunting`
+  (`Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1`), so regeneration reverts the
+  fix each time. After patching the file, rebuild the zip so the two agree:
+  `zip -X -j <version>.zip createUiDefinition.json mainTemplate.json`.
 
 ## 3. Validate
 
 ```bash
+# the zip must match the loose files it was built from
+python3 -c "import zipfile,hashlib,io;z=zipfile.ZipFile('Package/<version>.zip');[print(n, hashlib.sha256(z.read(n)).hexdigest()==hashlib.sha256(io.open('Package/'+n,'rb').read()).hexdigest()) for n in z.namelist()]"
+
+# the content counts must match what the solution actually ships
+python3 -c "import json;from collections import Counter;d=json.load(open('Package/mainTemplate.json'));print(Counter(r['properties'].get('contentKind') for r in d['resources']))"
+
 # UA and solution version must agree
 grep -rho '"User-Agent": "[^"]*"' Playbooks/*/azuredeploy.json Package/mainTemplate.json | sort -u
 grep -o '"_solutionVersion": "[^"]*"' Package/mainTemplate.json
