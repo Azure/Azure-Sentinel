@@ -1,0 +1,1475 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Summarize Data for Network Session Essentials",
+    "description": "This playbook summarizes data for Network Session Essentials and lands it into custom tables.",
+    "prerequisites": [
+      "1. Ensure all the details appearing in the deployment are correct."
+    ],
+        "postDeployment": [
+            "1. Authorize the 'Azure Monitor Logs' API connection. Log ingestion uses the playbook's managed identity."
+        ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2026-08-24T00:00:00.000Z",
+    "entities": [],
+    "tags": [ "Security - Network" ],
+    "support": {
+      "tier": "microsoft",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "microsoft"
+    }
+  },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SummarizeData_NSE",
+            "type": "string"
+        },
+        "logAnalyticsName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for logAnalyticsName"
+            }
+        },
+      "resourceGroupName": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().name]",
+        "metadata": {
+          "description": "Enter value for resourceGroupName"
+        }
+      },
+      "subscriptionId": {
+        "type": "string",
+        "defaultValue": "[subscription().subscriptionId]",
+        "metadata": {
+          "description": "Enter value for subscriptionId"
+        }
+      }
+    },
+    "variables": {
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "suffix": "[uniqueString(resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName')))]",
+        "DCEName": "[concat('network-session-summarization-dce-', variables('suffix'))]",
+        "DCRName": "[concat('network-session-summarization-dcr-', variables('suffix'))]",
+        "workspaceResourceId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]",
+        "destinationName": "[concat('networkSessionSummarizationDestination', variables('suffix'))]",
+        "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "roleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName')), resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), variables('monitoringMetricsPublisherRoleId'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCEName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for Network Session Essentials summarized logs",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCRName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "streamDeclarations": {
+                    "Custom-NetworkCustomAnalytics_ip": { "columns": [ { "name": "SrcIpAddr", "type": "string" }, { "name": "DstIpAddr", "type": "string" }, { "name": "NetworkDirection", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_source_port": { "columns": [ { "name": "SrcPortNumber", "type": "long" }, { "name": "NetworkDirection", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_country": { "columns": [ { "name": "SrcGeoCountry", "type": "string" }, { "name": "DstGeoCountry", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "NetworkDirection", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics": { "columns": [ { "name": "EventResult", "type": "string" }, { "name": "NetworkDirection", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "EventSeverity", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_protocol": { "columns": [ { "name": "NetworkProtocol", "type": "string" }, { "name": "DstPortNumber", "type": "long" }, { "name": "DstAppName", "type": "string" }, { "name": "NetworkDirection", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_sourceInfo": { "columns": [ { "name": "EventProduct", "type": "string" }, { "name": "DvcHostname", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_threat": { "columns": [ { "name": "Threat", "type": "string" }, { "name": "ThreatCategory", "type": "string" }, { "name": "EventSeverity", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_threat_ioc": { "columns": [ { "name": "SrcIpAddr", "type": "string" }, { "name": "DstIpAddr", "type": "string" }, { "name": "SrcHostname", "type": "string" }, { "name": "DstHostname", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-NetworkCustomAnalytics_rule": { "columns": [ { "name": "Rule", "type": "string" }, { "name": "NetworkDirection", "type": "string" }, { "name": "DvcAction", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "count_", "type": "long" }, { "name": "EventTime", "type": "datetime" } ] }
+                },
+                "destinations": {
+                    "logAnalytics": [ {
+                        "workspaceResourceId": "[variables('workspaceResourceId')]",
+                        "name": "[variables('destinationName')]"
+                    } ]
+                },
+                "dataFlows": [
+                    { "streams": [ "Custom-NetworkCustomAnalytics_ip" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_ip_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_source_port" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_source_port_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_country" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_country_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_protocol" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_protocol_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_sourceInfo" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_sourceInfo_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_threat" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_threat_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_threat_ioc" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_threat_ioc_CL" },
+                    { "streams": [ "Custom-NetworkCustomAnalytics_rule" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source", "outputStream": "Custom-NetworkCustomAnalytics_rule_CL" }
+                ]
+            }
+        },
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "logAnalyticsName": {
+                            "type": "string",
+                            "defaultValue": "[parameters('logAnalyticsName')]"
+                        },
+                        "resourceGroupName": {
+                            "type": "string",
+                            "defaultValue": "[parameters('resourceGroupName')]"
+                        },
+                        "subscriptionId": {
+                            "type": "string",
+                            "defaultValue": "[parameters('subscriptionId')]"
+                        },
+                        "ingestionEndpoint": {
+                            "type": "string",
+                            "defaultValue": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/')]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Condition_-_If_data_-_IP": {
+                                    "actions": {
+                                        "For_each_-_SubArray_-_IP": {
+                                            "foreach": "@variables('multipleArraysIP')",
+                                            "actions": {
+                                                "Send_Data_-_IP": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "body": "@items('For_each_-_SubArray_-_IP')",
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com/"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_ip', '?api-version=2023-01-01')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_variable_-_multipleArrays_-_IP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Set_variable_-_multipleArrays_-_IP": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "multipleArraysIP",
+                                                "value": "@chunk(body('Run_query_and_list_results_-_IP')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthIP'),variables('ArraySizeIP'))))"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_TotalCharacterLength_-_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@variables('ArraySizeIP')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_-_If_data_-_Port": {
+                                    "actions": {
+                                        "For_each_-_SubArray_-_Port": {
+                                            "foreach": "@variables('multipleArraysPort')",
+                                            "actions": {
+                                                "Send_Data_-_Port": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "body": "@items('For_each_-_SubArray_-_Port')",
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com/"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_source_port', '?api-version=2023-01-01')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_variable_-_multipleArrays_-_Port": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Set_variable_-_multipleArrays_-_Port": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "multipleArraysPort",
+                                                "value": "@chunk(body('Run_query_and_list_results_-_Port')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthPort'),variables('ArraySizePort'))))"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_TotalCharacterLength_-_Port": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@variables('ArraySizePort')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Run_query_and_list_results_-_IP": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_ip_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated < bin(nowTime,1h)\n| summarize count() by SrcIpAddr, DstIpAddr, NetworkDirection, DvcAction, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@parameters('resourceGroupName')",
+                                            "resourcename": "@parameters('logAnalyticsName')",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@parameters('subscriptionId')",
+                                            "timerange": "Last 1 day"
+                                        }
+                                    }
+                                },
+                                "Run_query_and_list_results_-_Port": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_source_port_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated < bin(nowTime,1h)\n| summarize count() by SrcPortNumber, NetworkDirection, DvcAction, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@parameters('resourceGroupName')",
+                                            "resourcename": "@parameters('logAnalyticsName')",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@parameters('subscriptionId')",
+                                            "timerange": "Last 1 day"
+                                        }
+                                    }
+                                },
+                                "Set_variable_-_ArraySize_-_IP": {
+                                    "runAfter": {
+                                        "Run_query_and_list_results_-_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ArraySizeIP",
+                                        "value": "@length(body('Run_query_and_list_results_-_IP')?['value'])"
+                                    }
+                                },
+                                "Set_variable_-_ArraySize_-_Port": {
+                                    "runAfter": {
+                                        "Run_query_and_list_results_-_Port": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ArraySizePort",
+                                        "value": "@length(body('Run_query_and_list_results_-_Port')?['value'])"
+                                    }
+                                },
+                                "Set_variable_-_TotalCharacterLength_-_IP": {
+                                    "runAfter": {
+                                        "Set_variable_-_ArraySize_-_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "TotalCharacterLengthIP",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_IP')?['value']))"
+                                    }
+                                },
+                                "Set_variable_-_TotalCharacterLength_-_Port": {
+                                    "runAfter": {
+                                        "Set_variable_-_ArraySize_-_Port": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "TotalCharacterLengthPort",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Port')?['value']))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArraysPort": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "lessOrEquals": [
+                                            "@div(sub(ticks(variables('nowTime')),ticks(startOfHour(variables('nowTime')))),10000000)",
+                                            600
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_GeoCountry": {
+                            "actions": {
+                                "For_each_-_SubArray_-_GeoCountry": {
+                                    "foreach": "@variables('multipleArraysGeoCountry')",
+                                    "actions": {
+                                        "Send_Data_-_GeoCountry": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_GeoCountry')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_country', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArrays_-_GeoCountry": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArrays_-_GeoCountry": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysGeoCountry",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_GeoCountry')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthGeoCountry'),variables('ArraySizeGeoCountry'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_GeoCountry": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeGeoCountry')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_Overall": {
+                            "actions": {
+                                "For_each_-_SubArray_-_Overall": {
+                                    "foreach": "@variables('multipleArraysOverall')",
+                                    "actions": {
+                                        "Send_Data_-_Overall": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_Overall')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArrays_-_Overall": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArrays_-_Overall": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysOverall",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_Overall')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthOverall'),variables('ArraySizeOverall'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_Overall": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeOverall')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_Protocol": {
+                            "actions": {
+                                "For_each_-_SubArray_-_Protocol": {
+                                    "foreach": "@variables('multipleArraysProtocol')",
+                                    "actions": {
+                                        "Send_Data_-_Protocol": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_Protocol')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_protocol', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArrays_-_Protocol": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArrays_-_Protocol": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysProtocol",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_Protocol')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthProtocol'),variables('ArraySizeProtocol'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_Protocol": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeProtocol')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_SourceInfo": {
+                            "actions": {
+                                "For_each_-_SubArray_-_SourceInfo": {
+                                    "foreach": "@variables('multipleArraysSourceInfo')",
+                                    "actions": {
+                                        "Send_Data_-_SourceInfo": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_SourceInfo')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_sourceInfo', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArrays_-_SourceInfo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArrays_-_SourceInfo": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysSourceInfo",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_SourceInfo')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthSourceInfo'),variables('ArraySizeSourceInfo'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_SourceInfo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeSourceInfo')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_Threat": {
+                            "actions": {
+                                "For_each_-_SubArray_-_Threat": {
+                                    "foreach": "@variables('multipleArraysThreat')",
+                                    "actions": {
+                                        "Send_Data_-_Threat": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_Threat')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_threat', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArrays_-_Threat": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArrays_-_Threat": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysThreat",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_Threat')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthThreat'),variables('ArraySizeThreat'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_Threat": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeThreat')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_If_data_-_ThreatIOC": {
+                            "actions": {
+                                "For_each_-_SubArray_-_Threat_IOC": {
+                                    "foreach": "@variables('multipleArrayThreatIOC')",
+                                    "actions": {
+                                        "Send_Data_-_Threat_IOC": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_Threat_IOC')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_threat_ioc', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_multipleArray_-_ThreatIOC": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable_-_multipleArray_-_ThreatIOC": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArrayThreatIOC",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_Threat_IOC')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthThreatIOC'),variables('ArraySizeThreatIOC'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArray_-_Threat_IOC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeThreatIOC')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_if_data_-_Rule": {
+                            "actions": {
+                                "For_each_-_SubArray_-_Rule": {
+                                    "foreach": "@variables('multipleArraysRule')",
+                                    "actions": {
+                                        "Send_Data_-_Rule": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": "@items('For_each_-_SubArray_-_Rule')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-NetworkCustomAnalytics_rule', '?api-version=2023-01-01')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable__-_multipleArrays_-_Rule": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable__-_multipleArrays_-_Rule": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "multipleArraysRule",
+                                        "value": "@chunk(body('Run_query_and_list_results_-_Rules')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthRule'),variables('ArraySizeRule'))))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArrays_-_Rule": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('ArraySizeRule')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_variable_-_ArraySizeIP": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeIP",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySizePort": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySizeIP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizePort",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_GeoCountry": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_GeoCountry": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeGeoCountry",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_GeoCountry')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_Overall": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Overall": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeOverall",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_Overall')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_Protocol": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Protocol": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeProtocol",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_Protocol')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_Rule": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Rules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeRule",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_Rules')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_SourceInfo": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_SourceInfo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeSourceInfo",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_SourceInfo')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_Threat": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Threat": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeThreat",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_Threat')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_Threat_IOC": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Threat_IOC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ArraySizeThreatIOC",
+                                        "type": "integer",
+                                        "value": "@length(body('Run_query_and_list_results_-_Threat_IOC')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLengthIP": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySizePort": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthIP",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLengthPort": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLengthIP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthPort",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_GeoCountry": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_GeoCountry": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthGeoCountry",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_GeoCountry')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_Overall": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_Overall": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthOverall",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Overall')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_Protocol": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_Protocol": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthProtocol",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Protocol')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_Rule": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_Rule": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthRule",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Rules')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_SourceInfo": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_SourceInfo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthSourceInfo",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_SourceInfo')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_Threat": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_Threat": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthThreat",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Threat')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_Threat_IOC": {
+                            "runAfter": {
+                                "Initialize_variable_-_ArraySize_-_Threat_IOC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TotalCharacterLengthThreatIOC",
+                                        "type": "integer",
+                                        "value": "@length(string(body('Run_query_and_list_results_-_Threat_IOC')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_maxRequestSizeAllowed": {
+                            "runAfter": {
+                                "Initialize_variable_-_nowTime": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MaxByteSizeAllowed",
+                                        "type": "integer",
+                                        "value": 26214400
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArray_-_Threat_IOC": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_Threat_IOC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArrayThreatIOC",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArraysIP": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLengthPort": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysIP",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArraysPort": {
+                            "runAfter": {
+                                "Initialize_variable_-_multipleArraysIP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysPort",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_GeoCountry": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_GeoCountry": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysGeoCountry",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_Overall": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_Overall": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysOverall",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_Protocol": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_Protocol": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysProtocol",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_Rule": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_Rule": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysRule",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_SourceInfo": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_SourceInfo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysSourceInfo",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_Threat": {
+                            "runAfter": {
+                                "Initialize_variable_-_TotalCharacterLength_-_Threat": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "multipleArraysThreat",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_nowTime": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "nowTime",
+                                        "type": "string",
+                                        "value": "@{utcNow()}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results_-_GeoCountry": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_country_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| summarize count() by SrcGeoCountry, DstGeoCountry, DvcAction, NetworkDirection, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Overall": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| summarize count() by EventResult, NetworkDirection, DvcAction, EventSeverity, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Protocol": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_protocol_CL\n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| summarize count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Rules": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_rule_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| summarize count() by Rule, NetworkDirection, DvcAction, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_SourceInfo": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_sourceInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| extend EventProduct = strcat(EventVendor,\"-\",EventProduct)\n| summarize count() by EventProduct, DvcHostname, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Threat": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_threat_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| extend Threat = coalesce(ThreatId,ThreatName)\n| where isnotempty(Threat) or isnotempty(ThreatCategory)\n| summarize count() by Threat, ThreatCategory, EventSeverity, DvcAction, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Threat_IOC": {
+                            "runAfter": {
+                                "Initialize_variable_-_maxRequestSizeAllowed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           NetworkCustomAnalytics_threat_ioc_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_NetworkSession(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated < bin(nowTime,10m)\n| extend Threat = coalesce(ThreatId,ThreatName)\n| where isnotempty(Threat) or isnotempty(ThreatCategory)\n| summarize count() by SrcIpAddr, DstIpAddr, SrcHostname, DstHostname, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('resourceGroupName')",
+                                    "resourcename": "@parameters('logAnalyticsName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@parameters('subscriptionId')",
+                                    "timerange": "Last 1 day"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "SummarizeData",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('roleAssignmentName')]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        }
+    ]
+}
