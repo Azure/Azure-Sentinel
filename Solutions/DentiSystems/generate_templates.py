@@ -2,7 +2,7 @@
 import json
 import os
 
-azure_sentinel_dir = "/home/sadmanthedentian/Documents/DENTISYSTEMS/Azure-Sentinel"
+azure_sentinel_dir = os.path.dirname(os.path.abspath(__file__))
 package_dir = os.path.join(azure_sentinel_dir, "Package")
 connectors_dir = os.path.join(azure_sentinel_dir, "DataConnectors")
 rules_dir = os.path.join(azure_sentinel_dir, "AnalyticRules")
@@ -65,48 +65,35 @@ create_ui_definition = {
     "steps": [
       {
         "name": "dentiSystemsConfig",
-        "label": "Data Connector Configuration",
+        "label": "DentiSystems Setup",
         "subLabel": {
-          "preValidation": "Configure connection parameters for DentiSystems Threat Intelligence ingestion",
-          "postValidation": "Connector configuration complete."
+          "preValidation": "Configure your DentiSystems API endpoint and authentication token.",
+          "postValidation": "Configuration valid."
         },
-        "bladeTitle": "DentiSystems Connection Settings",
+        "blurb": "Provide your DentiSystems tenant credentials to enable automated threat intelligence ingestion into Microsoft Sentinel.",
         "elements": [
-          {
-            "name": "infoText",
-            "type": "Microsoft.Common.TextBlock",
-            "options": {
-              "text": "The DentiSystems Codeless Data Connector (CCP) polls the DentiGrid threat intelligence API endpoint for newly detected honeypot interactions, active scanner breaches, and GATE zero-trust gateway blocks. Generate your API token from the DentiGrid Admin Console under **Integrations > SIEM & SOAR > API Keys**."
-            }
-          },
           {
             "name": "apiEndpoint",
             "type": "Microsoft.Common.TextBox",
-            "label": "DentiGrid Feed API Endpoint",
-            "defaultValue": "https://api.grid.denti.systems/api/attacks/recent",
-            "toolTip": "The REST API endpoint providing real-time threat telemetry and attack logs.",
-            "constraints": {
-              "required": True,
-              "regex": "^https?://.*",
-              "validationMessage": "Please specify a valid HTTP/HTTPS URL."
-            }
+            "label": "DentiSystems API Endpoint URL",
+            "defaultValue": "https://api.grid.denti.systems/api/attacks/recent?format=json",
+            "toolTip": "Enter your DentiGrid Threat Intelligence API URL.",
+            "required": True
           },
           {
             "name": "apiKey",
             "type": "Microsoft.Common.PasswordBox",
             "label": "DentiSystems API Bearer Token",
-            "toolTip": "Enter your DentiSystems API Bearer Token.",
-            "constraints": {
-              "required": True,
-              "validationMessage": "An API key is required to authenticate with the DentiSystems Threat Feed."
-            }
+            "defaultValue": "",
+            "toolTip": "Enter your secure DentiSystems API Bearer Token.",
+            "required": True
           },
           {
             "name": "enableDataConnector",
             "type": "Microsoft.Common.CheckBox",
-            "label": "Enable Codeless REST API Data Connector (CCP)",
+            "label": "Enable Codeless REST API Data Connector",
             "defaultValue": True,
-            "toolTip": "Automatically creates and enables the scheduled polling data connector in Microsoft Sentinel."
+            "toolTip": "Enables automatic scheduled polling of DentiGrid threat feeds directly into your Sentinel workspace."
           }
         ]
       },
@@ -114,13 +101,13 @@ create_ui_definition = {
         "name": "securityContent",
         "label": "Security Content & Analytics",
         "subLabel": {
-          "preValidation": "Choose analytic detection rules, interactive workbooks, and hunting queries",
-          "postValidation": "Content selection complete."
+          "preValidation": "Select detection rules, workbooks, and hunting queries to deploy.",
+          "postValidation": "Content selection valid."
         },
-        "bladeTitle": "Sentinel Content Hub Package Options",
+        "blurb": "Choose the pre-built Microsoft Sentinel security content artifacts you wish to deploy:",
         "elements": [
           {
-            "name": "contentInfoText",
+            "name": "contentInfo",
             "type": "Microsoft.Common.TextBlock",
             "options": {
               "text": "Select the security artifacts you wish to deploy alongside the DentiSystems integration:"
@@ -151,9 +138,9 @@ create_ui_definition = {
       }
     ],
     "outputs": {
-      "workspace": "[steps('basics').workspace.name]",
-      "workspaceLocation": "[steps('basics').workspace.location]",
-      "location": "[steps('basics').workspace.location]",
+      "workspace": "[basics('workspace').name]",
+      "workspaceLocation": "[basics('workspace').location]",
+      "location": "[basics('workspace').location]",
       "dentiSystemsApiEndpoint": "[steps('dentiSystemsConfig').apiEndpoint]",
       "dentiSystemsApiKey": "[steps('dentiSystemsConfig').apiKey]",
       "enableDataConnector": "[steps('dentiSystemsConfig').enableDataConnector]",
