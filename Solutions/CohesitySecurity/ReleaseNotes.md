@@ -1,6 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          									|
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
-| 3.1.4       | 16-08-2026                     | Stopped the Cohesity incident consumer from logging ARM access tokens. |
 | 3.1.2       | 21-10-2024                     | Corrected Param for JobId for recovery API 									|
 | 3.1.1       | 10-10-2024                     | Updating Solution with fix for Restore **Playbook**   							|
 | 3.1.0       | 19-07-2024                     | added missing helioID using anomaly strength   								|
