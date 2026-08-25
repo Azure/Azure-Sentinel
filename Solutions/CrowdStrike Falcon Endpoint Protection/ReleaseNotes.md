@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
-| 3.4.1       | 25-08-2026                     | Fixed the broken Deploy to Azure Gov badge image across connector and playbook docs |
+| 3.4.1       | 25-08-2026                     | Fixed the broken **Deploy to Azure Gov** badge image across **Data Connector** and **Playbook** docs |
 | 3.4.0       | 13-08-2026                     | Updated **Crowdstrike API connector** by adding V2 tables and a new parser |
 | 3.3.9       | 24-07-2026                     | Updated titles for both **CrowdStrike Falcon Data Replicator** connectors |
 | 3.3.8       | 24-07-2026                     | Updated **CrowdStrike API Data Connector** polling to use updated time instead of created time |
