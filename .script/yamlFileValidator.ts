@@ -5,7 +5,7 @@ import fs from "fs";
 import * as logger from "./utils/logger.js";
 
 export async function IsValidYamlFile(filePath: string): Promise<ExitCode> {
-  yaml.safeLoad(fs.readFileSync(filePath, "utf8"));
+  yaml.load(fs.readFileSync(filePath, "utf8"));
   return ExitCode.SUCCESS;
 }
 

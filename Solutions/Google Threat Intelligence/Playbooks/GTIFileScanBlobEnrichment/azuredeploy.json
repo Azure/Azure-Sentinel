@@ -1,0 +1,931 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Google Threat Intelligence - FileScan Blob Enrichment",
+    "description": "This playbook monitors an Azure Blob Storage container and automatically submits newly added or modified files to Google Threat Intelligence (GTI/VirusTotal) for scanning. Analysis results are ingested into a custom Log Analytics table (GTI_FileScan_CL) via the Log Ingestion API for further investigation in Microsoft Sentinel.",
+    "prerequisites": [
+      "An Azure Blob Storage account and container to monitor.",
+      "A Google Threat Intelligence API key stored in Azure Key Vault.",
+      "The Logic App managed identity must be granted the 'Monitoring Metrics Publisher' role on the auto-created DCR.",
+      "The Logic App managed identity must have 'Key Vault Secrets User' role on the Key Vault.",
+      "The Logic App managed identity must have 'Storage Blob Data Reader' role on the Storage Account.",
+      "The shared GTIFileUpload Azure Function (Solutions/Google Threat Intelligence/Playbooks/CustomConnector/GTIFileUpload_FunctionAppConnector) must be deployed to this resource group first, since files larger than 32MB are uploaded to GTI by that Function rather than by this Logic App.",
+      "The GTIFileUpload Function's managed identity must have 'Storage Blob Data Reader' role on the Storage Account."
+    ],
+    "prerequisitesDeployTemplateFile": "../CustomConnector/GTIFileUpload_FunctionAppConnector/azuredeploy.json",
+    "entities": [],
+    "tags": ["FileScan", "BlobStorage", "GoogleThreatIntelligence", "Enrichment"],
+    "support": { "tier": "Partner" },
+    "author": { "name": "Crest Data" },
+    "postDeployment": [
+      "Grant the Logic App managed identity 'Storage Blob Data Reader' role on the Storage Account so the azureblob (Managed Identity) connection can read blob content and receive the trigger.",
+      "Grant the Logic App managed identity 'Key Vault Secrets User' role on the Key Vault.",
+      "The 'Monitoring Metrics Publisher' role on the DCR is automatically assigned by this template."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial version",
+        "notes": ["Initial release. Catch_Scope terminates the run as Failed to ensure failed runs are visible in run history."]
+      }
+    ],
+    "lastUpdateTime": "2026-06-30T00:00:00.000Z",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "GTIFileScanBlobEnrichment",
+      "type": "String"
+    },
+    "KeyVaultName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Azure Key Vault containing the GTI API key."
+      }
+    },
+    "KeyVaultSecretName": {
+      "defaultValue": "GTIApiKey",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Key Vault secret that holds the GTI API key."
+      }
+    },
+    "StorageAccountName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Azure Storage Account to monitor for new blobs."
+      }
+    },
+    "ContainerName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the blob container to monitor."
+      }
+    },
+    "TriggerFrequencyMinutes": {
+      "defaultValue": 5,
+      "type": "Int",
+      "minValue": 1,
+      "metadata": {
+        "description": "How often (in minutes) the playbook polls the container for new or modified blobs. Defaults to 5 minutes if not specified."
+      }
+    },
+    "WorkspaceName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace where GTI_FileScan_CL data will be ingested."
+      }
+    },
+    "FunctionAppName": {
+      "defaultValue": "gtifileupload",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the shared GTIFileUpload Azure Function App (deployed via GTIFileUpload_FunctionAppConnector/azuredeploy.json in this resource group) used to upload files larger than 32MB to GTI."
+      }
+    },
+    "DisableSandbox": {
+      "defaultValue": "false",
+      "type": "String",
+      "allowedValues": ["false", "true"],
+      "metadata": {
+        "description": "If true, files will not be detonated in sandbox environments. Applied to every blob scanned by this playbook."
+      }
+    },
+    "StorageRegion": {
+      "defaultValue": "default",
+      "type": "String",
+      "allowedValues": ["default", "US", "CA", "EU", "GB"],
+      "metadata": {
+        "description": "GTI storage region for uploaded files. Keep 'default' to use the group's private_scanning.storage_region preference. Allowed Values : default, US, CA, EU, GB"
+      }
+    }
+  },
+  "variables": {
+    "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "AzureBlobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]",
+    "FunctionAppResourceName": "[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
+    "DCEName": "[concat('GTI-DCE-', uniqueString(parameters('PlaybookName')))]",
+    "DCRName": "[concat('GTI-DCR-', uniqueString(parameters('PlaybookName')))]",
+    "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+    "RoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', concat('GTI-DCR-FileB-', uniqueString(parameters('PlaybookName')))), resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '3913510d-42f4-4e42-8a64-420c390055eb')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('DCEName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('WorkspaceName'), '/GTI_FileScan_CL')]",
+      "properties": {
+        "schema": {
+          "name": "GTI_FileScan_CL",
+          "columns": [
+            {"name": "id", "type": "string"},
+            {"name": "FileType", "type": "string"},
+            {"name": "links", "type": "dynamic"},
+            {"name": "links_self", "type": "string"},
+            {"name": "attributes", "type": "dynamic"},
+            {"name": "attributes_md5", "type": "string"},
+            {"name": "attributes_last_analysis_date", "type": "real"},
+            {"name": "attributes_expiration", "type": "real"},
+            {"name": "attributes_magic", "type": "string"},
+            {"name": "attributes_sha256", "type": "string"},
+            {"name": "attributes_type_description", "type": "string"},
+            {"name": "attributes_size", "type": "real"},
+            {"name": "attributes_threat_severity", "type": "dynamic"},
+            {"name": "attributes_threat_severity_version", "type": "real"},
+            {"name": "attributes_threat_severity_threat_severity_level", "type": "string"},
+            {"name": "attributes_threat_severity_threat_severity_data", "type": "dynamic"},
+            {"name": "attributes_threat_severity_last_analysis_date", "type": "string"},
+            {"name": "attributes_threat_severity_level_description", "type": "string"},
+            {"name": "attributes_sha1", "type": "string"},
+            {"name": "attributes_private", "type": "boolean"},
+            {"name": "attributes_ssdeep", "type": "string"},
+            {"name": "attributes_names", "type": "dynamic"},
+            {"name": "attributes_tags", "type": "dynamic"},
+            {"name": "attributes_available_tools", "type": "dynamic"},
+            {"name": "attributes_threat_verdict", "type": "string"},
+            {"name": "attributes_type_tags", "type": "dynamic"},
+            {"name": "attributes_gti_assessment", "type": "dynamic"},
+            {"name": "attributes_gti_assessment_threat_score", "type": "dynamic"},
+            {"name": "attributes_gti_assessment_threat_score_value", "type": "real"},
+            {"name": "attributes_gti_assessment_contributing_factors", "type": "dynamic"},
+            {"name": "attributes_gti_cf_legitimate_software", "type": "boolean"},
+            {"name": "attributes_gti_cf_mandiant_analyst_benign", "type": "boolean"},
+            {"name": "attributes_gti_cf_pervasive_indicator", "type": "boolean"},
+            {"name": "attributes_gti_cf_normalised_categories", "type": "dynamic"},
+            {"name": "attributes_gti_cf_malicious_sandbox_verdict", "type": "boolean"},
+            {"name": "attributes_gti_cf_gti_confidence_score", "type": "real"},
+            {"name": "attributes_gti_cf_mandiant_confidence_score", "type": "real"},
+            {"name": "attributes_gti_cf_mandiant_analyst_malicious", "type": "boolean"},
+            {"name": "attributes_gti_assessment_verdict", "type": "dynamic"},
+            {"name": "attributes_gti_assessment_verdict_value", "type": "string"},
+            {"name": "attributes_gti_assessment_severity", "type": "dynamic"},
+            {"name": "attributes_gti_assessment_severity_value", "type": "string"},
+            {"name": "attributes_gti_assessment_description", "type": "string"},
+            {"name": "context_attributes", "type": "dynamic"},
+            {"name": "context_attributes_shared_with_me", "type": "boolean"},
+            {"name": "context_attributes_role", "type": "string"},
+            {"name": "TimeGenerated", "type": "datetime"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('DCRName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'GTI_FileScan_CL')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "streamDeclarations": {
+          "Custom-GTI_FileScan_CL": {
+            "columns": [
+              { "name": "id", "type": "string" },
+              { "name": "type", "type": "string" },
+              { "name": "links", "type": "dynamic" },
+              { "name": "attributes", "type": "dynamic" },
+              { "name": "context_attributes", "type": "dynamic" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+              "name": "GTIWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": ["Custom-GTI_FileScan_CL"],
+            "destinations": ["GTIWorkspace"],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(now()), FileType = tostring(type), json_links = parse_json(links), json_attributes = parse_json(attributes), json_context_attributes = parse_json(context_attributes)\n| extend json_attributes_threat_severity = parse_json(json_attributes.threat_severity), json_attributes_gti_assessment = parse_json(json_attributes.gti_assessment)\n| extend json_attributes_gti_assessment_threat_score = parse_json(json_attributes_gti_assessment.threat_score), json_attributes_gti_assessment_contributing_factors = parse_json(json_attributes_gti_assessment.contributing_factors), json_attributes_gti_assessment_verdict = parse_json(json_attributes_gti_assessment.verdict), json_attributes_gti_assessment_severity = parse_json(json_attributes_gti_assessment.severity)\n| extend links_self = tostring(json_links.self), attributes_md5 = tostring(json_attributes.md5), attributes_last_analysis_date = toreal(json_attributes.last_analysis_date), attributes_expiration = toreal(json_attributes.expiration), attributes_magic = tostring(json_attributes.magic), attributes_sha256 = tostring(json_attributes.sha256), attributes_type_description = tostring(json_attributes.type_description), attributes_size = toreal(json_attributes.size), attributes_threat_severity_version = toreal(json_attributes_threat_severity.version), attributes_threat_severity_threat_severity_level = tostring(json_attributes_threat_severity.threat_severity_level), attributes_threat_severity_last_analysis_date = tostring(json_attributes_threat_severity.last_analysis_date), attributes_threat_severity_level_description = tostring(json_attributes_threat_severity.level_description), attributes_sha1 = tostring(json_attributes.sha1), attributes_private = tobool(json_attributes.private), attributes_ssdeep = tostring(json_attributes.ssdeep), attributes_names = todynamic(json_attributes.names), attributes_tags = todynamic(json_attributes.tags), attributes_available_tools = todynamic(json_attributes.available_tools), attributes_threat_verdict = tostring(json_attributes.threat_verdict), attributes_type_tags = todynamic(json_attributes.type_tags), attributes_gti_assessment_threat_score_value = toreal(json_attributes_gti_assessment_threat_score.value), attributes_gti_cf_legitimate_software = tobool(json_attributes_gti_assessment_contributing_factors.legitimate_software), attributes_gti_cf_mandiant_analyst_benign = tobool(json_attributes_gti_assessment_contributing_factors.mandiant_analyst_benign), attributes_gti_cf_pervasive_indicator = tobool(json_attributes_gti_assessment_contributing_factors.pervasive_indicator), attributes_gti_cf_normalised_categories = todynamic(json_attributes_gti_assessment_contributing_factors.normalised_categories), attributes_gti_cf_malicious_sandbox_verdict = tobool(json_attributes_gti_assessment_contributing_factors.malicious_sandbox_verdict), attributes_gti_cf_gti_confidence_score = toreal(json_attributes_gti_assessment_contributing_factors.gti_confidence_score), attributes_gti_cf_mandiant_confidence_score = toreal(json_attributes_gti_assessment_contributing_factors.mandiant_confidence_score), attributes_gti_cf_mandiant_analyst_malicious = tobool(json_attributes_gti_assessment_contributing_factors.mandiant_analyst_malicious), attributes_gti_assessment_verdict_value = tostring(json_attributes_gti_assessment_verdict.value), attributes_gti_assessment_severity_value = tostring(json_attributes_gti_assessment_severity.value), attributes_gti_assessment_description = tostring(json_attributes_gti_assessment.description), context_attributes_shared_with_me = tobool(json_context_attributes.shared_with_me), context_attributes_role = tostring(json_context_attributes.role)\n| project-away json_links, links, json_attributes, attributes, json_attributes_threat_severity, json_attributes_gti_assessment, json_attributes_gti_assessment_threat_score, json_attributes_gti_assessment_contributing_factors, json_attributes_gti_assessment_verdict, json_attributes_gti_assessment_severity, json_context_attributes, context_attributes, type",
+            "outputStream": "Custom-GTI_FileScan_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyVaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyVaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureBlobConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureBlobConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueSet": {
+          "name": "managedIdentityAuth",
+          "values": {}
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "GTIFileScanBlobEnrichment",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'GTI_FileScan_CL')]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "KeyVaultSecretName": {
+              "defaultValue": "[parameters('KeyVaultSecretName')]",
+              "type": "String"
+            },
+            "ContainerName": {
+              "defaultValue": "[parameters('ContainerName')]",
+              "type": "String"
+            },
+            "StorageAccountName": {
+              "defaultValue": "[parameters('StorageAccountName')]",
+              "type": "String"
+            },
+            "TriggerFrequencyMinutes": {
+              "defaultValue": "[parameters('TriggerFrequencyMinutes')]",
+              "type": "Int"
+            },
+            "DisableSandbox": {
+              "defaultValue": "[parameters('DisableSandbox')]",
+              "type": "String"
+            },
+            "StorageRegion": {
+              "defaultValue": "[parameters('StorageRegion')]",
+              "type": "String"
+            },
+            "DCEIngestionEndpoint": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "When_a_blob_is_added_or_modified": {
+              "type": "ApiConnection",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": "@parameters('TriggerFrequencyMinutes')"
+              },
+              "evaluatedRecurrence": {
+                "frequency": "Minute",
+                "interval": "@parameters('TriggerFrequencyMinutes')"
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/triggers/batch/onupdatedfile",
+                "queries": {
+                  "folderId": "@parameters('ContainerName')",
+                  "maxFileCount": 10,
+                  "checkBothCreatedAndModifiedDateTime": false
+                }
+              },
+              "splitOn": "@triggerBody()"
+            }
+          },
+          "actions": {
+            "Get_Secret": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent(parameters('KeyVaultSecretName'))}/value"
+              },
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": ["inputs", "outputs"]
+                }
+              }
+            },
+            "Terminate_Secret_Failed": {
+              "type": "Terminate",
+              "runAfter": {
+                "Get_Secret": ["Failed", "TimedOut", "Skipped"]
+              },
+              "inputs": {
+                "runStatus": "Cancelled"
+              }
+            },
+            "Initialize_GTIBaseUrl": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Get_Secret": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "GTIBaseUrl",
+                    "type": "String",
+                    "value": "https://www.virustotal.com"
+                  }
+                ]
+              }
+            },
+            "Initialize_AnalysisId": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_GTIBaseUrl": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AnalysisId",
+                    "type": "String",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Initialize_SHA256": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_AnalysisId": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SHA256",
+                    "type": "String",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Initialize_API_Status_Code": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_SHA256": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "APIStatusCode",
+                    "type": "Integer",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            "Initialize_Poll_Delay_Seconds": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_API_Status_Code": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "PollDelaySeconds",
+                    "type": "Integer",
+                    "value": 30
+                  }
+                ]
+              }
+            },
+            "Initialize_Submit_Error": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_Poll_Delay_Seconds": ["Succeeded"]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SubmitError",
+                    "type": "String",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Try_Scope": {
+              "type": "Scope",
+              "runAfter": {
+                "Initialize_Submit_Error": ["Succeeded"]
+              },
+              "actions": {
+                "Check_Blob_Size": {
+                  "type": "If",
+                  "runAfter": {},
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@triggerBody()?['Size']",
+                          33554432
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Upload_Large_File_Via_Function": {
+                      "type": "Function",
+                      "runAfter": {},
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": ["inputs", "outputs"]
+                        }
+                      },
+                      "inputs": {
+                        "function": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('FunctionAppResourceName'), '/functions/GTIUploadLargeFile')]"
+                        },
+                        "body": {
+                          "storageAccountName": "@parameters('StorageAccountName')",
+                          "containerName": "@parameters('ContainerName')",
+                          "blobPath": "@substring(triggerBody()?['Path'], add(length(parameters('ContainerName')), 2))",
+                          "apiKey": "@body('Get_Secret')?['value']",
+                          "disable_sandbox": "@string(parameters('DisableSandbox'))",
+                          "storage_region": "@if(equals(parameters('StorageRegion'), 'default'), '', parameters('StorageRegion'))"
+                        }
+                      }
+                    },
+                    "Set_API_Status_Submit": {
+                      "type": "SetVariable",
+                      "runAfter": { "Upload_Large_File_Via_Function": ["Succeeded", "Failed"] },
+                      "inputs": { "name": "APIStatusCode", "value": "@coalesce(body('Upload_Large_File_Via_Function')?['statusCode'], 0)" }
+                    },
+                    "Set_Submit_Error": {
+                      "type": "SetVariable",
+                      "runAfter": { "Set_API_Status_Submit": ["Succeeded"] },
+                      "inputs": { "name": "SubmitError", "value": "@coalesce(body('Upload_Large_File_Via_Function')?['error'], '')" }
+                    },
+                    "Set_AnalysisId_Large": {
+                      "type": "SetVariable",
+                      "runAfter": {
+                        "Set_Submit_Error": ["Succeeded"]
+                      },
+                      "inputs": {
+                        "name": "AnalysisId",
+                        "value": "@body('Upload_Large_File_Via_Function')?['analysisId']"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Get_Blob_Content": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azureblob']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}/content",
+                          "queries": {
+                            "inferContentType": true
+                          }
+                        }
+                      },
+                      "Terminate_Blob_Content_Failed": {
+                        "type": "Terminate",
+                        "runAfter": {
+                          "Get_Blob_Content": ["Failed", "TimedOut", "Skipped"]
+                        },
+                        "inputs": {
+                          "runStatus": "Failed",
+                          "runError": {
+                            "code": "404",
+                            "message": "@{concat('Unable to read blob content. StorageAccount: ', parameters('StorageAccountName'), ', BlobPath: ', triggerBody()?['Path'])}"
+                          }
+                        }
+                      },
+                      "Build_Multipart_Parts": {
+                        "type": "Compose",
+                        "runAfter": { "Get_Blob_Content": ["Succeeded"] },
+                        "inputs": "@union(createArray(addProperty(addProperty(json('{}'), 'headers', addProperty(json('{}'), 'Content-Disposition', concat('form-data; name=\"file\"; filename=\"', triggerBody()?['Name'], '\"'))), 'body', body('Get_Blob_Content'))), createArray(addProperty(addProperty(json('{}'), 'headers', addProperty(json('{}'), 'Content-Disposition', 'form-data; name=\"disable_sandbox\"')), 'body', string(parameters('DisableSandbox')))), if(or(equals(parameters('StorageRegion'), 'default'), equals(parameters('StorageRegion'), null), equals(parameters('StorageRegion'), '')), json('[]'), createArray(addProperty(addProperty(json('{}'), 'headers', addProperty(json('{}'), 'Content-Disposition', 'form-data; name=\"storage_region\"')), 'body', parameters('StorageRegion')))))"
+                      },
+                      "Submit_File": {
+                        "type": "Http",
+                        "runAfter": { "Build_Multipart_Parts": ["Succeeded"] },
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@{variables('GTIBaseUrl')}/api/v3/private/files",
+                          "headers": {
+                            "x-apikey": "@body('Get_Secret')?['value']",
+                            "User-Agent": "azure-sentinel-gti-playbook/1.0",
+                            "Content-Type": "multipart/form-data"
+                          },
+                          "body": {
+                            "$content-type": "multipart/form-data",
+                            "$multipart": "@outputs('Build_Multipart_Parts')"
+                          },
+                          "retryPolicy": {
+                            "type": "exponential",
+                            "count": 3,
+                            "interval": "PT10S",
+                            "minimumInterval": "PT10S",
+                            "maximumInterval": "PT1H"
+                          }
+                        }
+                      },
+                      "Set_API_Status_Submit_Regular": {
+                        "type": "SetVariable",
+                        "runAfter": { "Submit_File": ["Succeeded", "Failed"] },
+                        "inputs": { "name": "APIStatusCode", "value": "@coalesce(outputs('Submit_File')?['statusCode'], 0)" }
+                      },
+                      "Set_Submit_Error_Regular": {
+                        "type": "SetVariable",
+                        "runAfter": { "Set_API_Status_Submit_Regular": ["Succeeded"] },
+                        "inputs": {
+                          "name": "SubmitError",
+                          "value": "@{if(equals(body('Submit_File')?['error'], null), '', concat(coalesce(body('Submit_File')?['error']?['code'], ''), ': ', coalesce(body('Submit_File')?['error']?['message'], '')))}"
+                        }
+                      },
+                      "Set_AnalysisId_Regular": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Set_Submit_Error_Regular": ["Succeeded"]
+                        },
+                        "inputs": {
+                          "name": "AnalysisId",
+                          "value": "@body('Submit_File')?['data']?['id']"
+                        }
+                      }
+                    }
+                  }
+                },
+                "Check_Submit_Status": {
+                  "type": "If",
+                  "runAfter": { "Check_Blob_Size": ["Succeeded"] },
+                  "expression": {
+                    "and": [{ "equals": ["@variables('APIStatusCode')", 200] }]
+                  },
+                  "actions": {
+                    "Check_AnalysisId_Valid": {
+                      "type": "If",
+                      "runAfter": {},
+                      "expression": { "and": [{ "equals": ["@variables('AnalysisId')", ""] }] },
+                      "actions": {
+                        "Terminate_Null_AnalysisId": {
+                          "type": "Terminate",
+                          "runAfter": {},
+                          "inputs": {
+                            "runStatus": "Failed",
+                            "runError": {
+                              "code": "400",
+                              "message": "@{concat('GTI API returned a null Analysis ID for blob: ', triggerBody()?['Path'], '. The file may be invalid or unsupported.')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Poll_Until_Finished": {
+                      "type": "Until",
+                      "runAfter": { "Check_AnalysisId_Valid": ["Succeeded"] },
+                      "expression": "@or(equals(body('Get_Analysis_Status')?['data']?['attributes']?['status'], 'completed'), equals(variables('APIStatusCode'), 400), equals(variables('APIStatusCode'), 404))",
+                      "limit": {
+                        "count": 60,
+                        "timeout": "PT1H"
+                      },
+                      "actions": {
+                        "Get_Analysis_Status": {
+                          "type": "Http",
+                          "runAfter": {},
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{concat(variables('GTIBaseUrl'), '/api/v3/private/analyses/', variables('AnalysisId'))}",
+                            "headers": {
+                              "x-apikey": "@body('Get_Secret')?['value']",
+                              "User-Agent": "azure-sentinel-gti-playbook/1.0"
+                            },
+                            "retryPolicy": {
+                              "type": "exponential",
+                              "count": 3,
+                              "interval": "PT10S",
+                              "minimumInterval": "PT10S",
+                              "maximumInterval": "PT1H"
+                            }
+                          }
+                        },
+                        "Set_API_Status_Analysis": {
+                          "type": "SetVariable",
+                          "runAfter": { "Get_Analysis_Status": ["Succeeded", "Failed"] },
+                          "inputs": { "name": "APIStatusCode", "value": "@coalesce(outputs('Get_Analysis_Status')?['statusCode'], 0)" }
+                        },
+                        "Check_Analysis_Completed": {
+                          "type": "If",
+                          "runAfter": { "Set_API_Status_Analysis": ["Succeeded"] },
+                          "expression": {
+                            "and": [
+                              { "equals": ["@body('Get_Analysis_Status')?['data']?['attributes']?['status']", "completed"] }
+                            ]
+                          },
+                          "actions": {},
+                          "else": {
+                            "actions": {
+                              "Delay": {
+                                "type": "Wait",
+                                "runAfter": {},
+                                "inputs": {
+                                  "interval": {
+                                    "count": "@variables('PollDelaySeconds')",
+                                    "unit": "Second"
+                                  }
+                                }
+                              },
+                              "Compose_New_Poll_Delay": {
+                                "type": "Compose",
+                                "runAfter": { "Delay": ["Succeeded"] },
+                                "inputs": "@if(less(variables('PollDelaySeconds'), 120), min(mul(variables('PollDelaySeconds'), 2), 120), min(add(variables('PollDelaySeconds'), 30), 180))"
+                              },
+                              "Update_Poll_Delay": {
+                                "type": "SetVariable",
+                                "runAfter": { "Compose_New_Poll_Delay": ["Succeeded"] },
+                                "inputs": {
+                                  "name": "PollDelaySeconds",
+                                  "value": "@outputs('Compose_New_Poll_Delay')"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Check_Analysis_Exit_Status": {
+                      "type": "If",
+                      "runAfter": { "Poll_Until_Finished": ["Succeeded"] },
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('APIStatusCode')", 200] },
+                          { "equals": ["@body('Get_Analysis_Status')?['data']?['attributes']?['status']", "completed"] }
+                        ]
+                      },
+                      "actions": {
+                        "Set_SHA256": {
+                          "type": "SetVariable",
+                          "runAfter": {},
+                          "inputs": {
+                            "name": "SHA256",
+                            "value": "@body('Get_Analysis_Status')?['meta']?['file_info']?['sha256']"
+                          }
+                        },
+                        "Get_File_Report": {
+                          "type": "Http",
+                          "runAfter": { "Set_SHA256": ["Succeeded"] },
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{concat(variables('GTIBaseUrl'), '/api/v3/private/files/', variables('SHA256'))}",
+                            "headers": {
+                              "x-apikey": "@body('Get_Secret')?['value']",
+                              "x-tool": "azure-sentinel-gti-playbook",
+                              "User-Agent": "azure-sentinel-gti-playbook/1.0"
+                            },
+                            "retryPolicy": {
+                              "type": "exponential",
+                              "count": 3,
+                              "interval": "PT10S",
+                              "minimumInterval": "PT10S",
+                              "maximumInterval": "PT1H"
+                            }
+                          }
+                        },
+                        "Set_API_Status_Report": {
+                          "type": "SetVariable",
+                          "runAfter": { "Get_File_Report": ["Succeeded", "Failed"] },
+                          "inputs": { "name": "APIStatusCode", "value": "@coalesce(outputs('Get_File_Report')?['statusCode'], 0)" }
+                        },
+                        "Check_Report_Status": {
+                          "type": "If",
+                          "runAfter": { "Set_API_Status_Report": ["Succeeded"] },
+                          "expression": {
+                            "and": [{ "equals": ["@variables('APIStatusCode')", 200] }]
+                          },
+                          "actions": {
+                            "Ingest_To_LogAnalytics": {
+                              "type": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@parameters('DCEIngestionEndpoint')",
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "User-Agent": "azure-sentinel-gti-playbook/1.0"
+                                },
+                                "body": "@createArray(body('Get_File_Report')?['data'])",
+                                "authentication": {
+                                  "type": "ManagedServiceIdentity",
+                                  "audience": "https://monitor.azure.com/"
+                                },
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 3,
+                                  "interval": "PT10S",
+                                  "minimumInterval": "PT10S",
+                                  "maximumInterval": "PT1H"
+                                }
+                              }
+                            },
+                            "Terminate_Ingest_Failed": {
+                              "type": "Terminate",
+                              "runAfter": { "Ingest_To_LogAnalytics": ["Failed"] },
+                              "inputs": {
+                                "runStatus": "Failed",
+                                "runError": {
+                                  "code": "@{coalesce(outputs('Ingest_To_LogAnalytics')?['statusCode'], 500)}",
+                                  "message": "@{concat('DCE ingestion failed for blob: ', triggerBody()?['Path'], '. Status: ', coalesce(outputs('Ingest_To_LogAnalytics')?['statusCode'], 0))}"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Terminate_Report_Failed": {
+                                "type": "Terminate",
+                                "runAfter": {},
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "runError": {
+                                    "code": "@{variables('APIStatusCode')}",
+                                    "message": "@{concat('GTI API error on GET /files/:sha256. Status: ', variables('APIStatusCode'), '. AnalysisId: ', variables('AnalysisId'), '. BlobPath: ', triggerBody()?['Path'])}"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Analysis_Failed": {
+                            "type": "Terminate",
+                            "runAfter": {},
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "runError": {
+                                "code": "@{variables('APIStatusCode')}",
+                                "message": "@{concat('GTI analysis did not complete successfully. Status code: ', variables('APIStatusCode'), '. Last analysis status: ', body('Get_Analysis_Status')?['data']?['attributes']?['status'], '. AnalysisId: ', variables('AnalysisId'), '. BlobPath: ', triggerBody()?['Path'], '. This may be a timeout (1 hour limit reached) or an API error (400/404).')}"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Terminate_Submit_Failed": {
+                        "type": "Terminate",
+                        "runAfter": {},
+                        "inputs": {
+                          "runStatus": "Failed",
+                          "runError": {
+                            "code": "@{variables('APIStatusCode')}",
+                            "message": "@{concat('GTI API error submitting file for scanning. Status: ', variables('APIStatusCode'), '. BlobPath: ', triggerBody()?['Path'], if(equals(variables('SubmitError'), ''), '', concat('. Error: ', variables('SubmitError'))))}"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Catch_Scope": {
+              "type": "Scope",
+              "runAfter": {
+                "Try_Scope": ["Failed", "TimedOut", "Skipped"]
+              },
+              "actions": {
+                "Compose_Error": {
+                  "type": "Compose",
+                  "runAfter": {},
+                  "inputs": {
+                    "error": "GTI-FileScan-BlobTriggered playbook encountered an error.",
+                    "blobPath": "@triggerBody()?['Path']",
+                    "blobName": "@triggerBody()?['Name']",
+                    "analysisId": "@variables('AnalysisId')",
+                    "scopeResult": "@result('Try_Scope')"
+                  }
+                },
+                "Terminate_Unexpected_Error": {
+                  "type": "Terminate",
+                  "runAfter": {
+                    "Compose_Error": ["Succeeded", "Failed"]
+                  },
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "500",
+                      "message": "@{concat('GTIFileScanBlobEnrichment failed for blob: ', triggerBody()?['Path'], '. AnalysisId: ', variables('AnalysisId'), '. Details: ', string(result('Try_Scope')))}"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "keyvault": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "connectionName": "[variables('KeyVaultConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "azureblob": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "connectionName": "[variables('AzureBlobConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "DCEIngestionEndpoint": {
+            "value": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/Custom-GTI_FileScan_CL?api-version=2023-01-01')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('RoleAssignmentName')]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('MonitoringMetricsPublisherRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {}
+}

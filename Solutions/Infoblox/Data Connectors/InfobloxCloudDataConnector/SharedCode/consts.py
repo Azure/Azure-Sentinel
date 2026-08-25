@@ -79,6 +79,9 @@ BASE_URL = os.environ.get("BaseUrl", "") + "{}"
 ENDPOINTS = {
     "active_threats_by_type": "/tide/api/data/threats/state/{}",
 }
+INFOBLOX_CLIENT = "Microsoft_Sentinel-Infoblox"
+ACCOUNT_ENDPOINT = "/api/atcfw/v1/account"
+CUSTOMER_ID_CHECKPOINT_KEY = "infoblox-customer-id"
 MAX_FILE_SIZE = 20 * 1024 * 1024
 MAX_CHUNK_SIZE = 1024 * 1024
 
@@ -107,6 +110,7 @@ CONN_STRING = os.environ.get("Connection_String", "")
 FILE_SHARE_NAME = os.environ.get("File_Share_Name")
 FILE_NAME = os.environ.get("Checkpoint_File_Name", "")
 FILE_SHARE_NAME_DATA = os.environ.get("File_Share_Name_For_Data", "")
+CHECKPOINT_TABLE_NAME = os.environ.get("Checkpoint_Table_Name", "InfobloxCheckpoints")
 CHUNK_SIZE_INDICATOR = 100
 MAX_RETRIES = 3
 SIZE_OF_CHUNK_TO_INGEST = 20 * 1024 * 1024

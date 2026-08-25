@@ -29,5 +29,5 @@ Replace <email-id@domain.com> with your own choice of email address where you wa
 <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-UnhealthyAzureArcResourceAlert%2Fazuredeploy.json" target="_blank">
-<img src="https://aka.ms/deploytoazuregovbutton"/>
+<img src="https://aka.ms/deploytoazuregovernbutton"/>
 </a>

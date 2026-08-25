@@ -16,15 +16,15 @@ this skill.
 
 ## Scripts Overview
 
-| Script | Purpose | Invocation |
-|--------|---------|------------|
-| `map_solutions_connectors_tables.py` | Mapper: generates all CSV data | Run directly |
-| `generate_connector_docs.py` | Doc generator: markdown + HTML pages, static + interactive indexes | Run directly |
-| `generate_asim_browser.py` | ASIM browser: interactive HTML schema browser | Run directly |
-| `upload_to_kusto.py` | Upload CSVs to Azure Data Explorer (Kusto) cluster | Run directly |
-| `collect_table_info.py` | Fetch table reference data from Microsoft docs | Auto-invoked by mapper (`--force-refresh=tables`) |
-| `collect_asim_fields.py` | Fetch ASIM field/schema definitions from Microsoft docs | Auto-invoked by mapper (`--force-refresh=asim`) |
-| `generate_interactive_docs.py` | Generate `index.html` and HTML entity pages | Auto-invoked by `generate_connector_docs.py` |
+| Script                               | Purpose                                                            | Invocation                                        |
+| ------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------- |
+| `map_solutions_connectors_tables.py` | Mapper: generates all CSV data                                     | Run directly                                      |
+| `generate_connector_docs.py`         | Doc generator: markdown + HTML pages, static + interactive indexes | Run directly                                      |
+| `generate_asim_browser.py`           | ASIM browser: interactive HTML schema browser                      | Run directly                                      |
+| `upload_to_kusto.py`                 | Upload CSVs to Azure Data Explorer (Kusto) cluster                 | Run directly                                      |
+| `collect_table_info.py`              | Fetch table reference data from Microsoft docs                     | Auto-invoked by mapper (`--force-refresh=tables`) |
+| `collect_asim_fields.py`             | Fetch ASIM field/schema definitions from Microsoft docs            | Auto-invoked by mapper (`--force-refresh=asim`)   |
+| `generate_interactive_docs.py`       | Generate `index.html` and HTML entity pages                        | Auto-invoked by `generate_connector_docs.py`      |
 
 All scripts run from `Tools/Solutions Analyzer`.
 
@@ -75,14 +75,14 @@ the next run. **Source-content changes do NOT require `--force-refresh`.**
    schema fields from external sources. This is the **network** case and is
    reserved for explicit full refresh.
 
-| Type | Triggers network fetch? | When to refresh |
-|------|--------------------------|-----------------|
-| `parsers` | No | Mapper parser-analysis logic changed |
-| `solutions` | No | Mapper solution-analysis logic changed |
-| `standalone` | No | Mapper standalone-content logic changed |
-| `asim` | **Yes** — re-runs `collect_asim_fields.py` against MS docs | ASIM analyzer logic changed AND network refresh wanted |
-| `marketplace` | Yes — Azure Marketplace API | Marketplace data is stale |
-| `tables` | **Yes** — re-runs `collect_table_info.py` against MS docs | Table reference info is stale |
+| Type          | Triggers network fetch?                                    | When to refresh                                        |
+| ------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| `parsers`     | No                                                         | Mapper parser-analysis logic changed                   |
+| `solutions`   | No                                                         | Mapper solution-analysis logic changed                 |
+| `standalone`  | No                                                         | Mapper standalone-content logic changed                |
+| `asim`        | **Yes** — re-runs `collect_asim_fields.py` against MS docs | ASIM analyzer logic changed AND network refresh wanted |
+| `marketplace` | Yes — Azure Marketplace API                                | Marketplace data is stale                              |
+| `tables`      | **Yes** — re-runs `collect_table_info.py` against MS docs  | Table reference info is stale                          |
 
 Note: `asim` is hybrid — it invalidates the local ASIM-parser analysis cache
 **and** re-runs `collect_asim_fields.py`. There is currently no flag to do

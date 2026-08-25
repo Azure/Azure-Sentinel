@@ -19,7 +19,7 @@ This is F5 BIG-IP base playbook which is used to generate access token which is 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
 
 2. Fill in the required parameters:
 

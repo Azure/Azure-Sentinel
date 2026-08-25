@@ -1,0 +1,78 @@
+id: b2e7d3c5-9c46-4f2a-8d1b-3e5f7a9c2d41
+name: Netskope - Suspicious Application Activity (Low Confidence / Risky App)
+description: |
+  Detects activity involving risky or low Cloud Confidence Level (CCL) applications,
+  blocked application actions, or sensitive activities (upload, share, download) on
+  unsanctioned apps. Helps surface Shadow IT and potential data leakage via risky
+  cloud applications.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeAlertEventsConnector
+    dataTypes:
+      - NetskopeAlertEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1567
+  - T1102
+query: |
+  let riskyCcl = dynamic(["low", "poor"]);
+  let sensitiveActivities = dynamic(["Upload", "Share", "Download", "Post", "Send"]);
+  NetskopeAlertEvents_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(App)
+  | where tolower(Ccl) in (riskyCcl)
+       or Action =~ "block"
+       or (Activity in~ (sensitiveActivities) and tolower(Ccl) != "excellent")
+  | summarize
+      EventCount = count(),
+      Activities = make_set(Activity, 20),
+      Actions = make_set(Action, 10),
+      CCLs = make_set(Ccl, 10),
+      Categories = make_set(Appcategory, 20),
+      DistinctApps = dcount(App),
+      Apps = make_set(App, 20),
+      LastSeen = max(TimeGenerated)
+      by User, Userip, Hostname, DeviceClassification
+  | where EventCount > 5 or DistinctApps > 3
+  | extend RiskIndicators = strcat_array(array_concat(
+      iff(set_has_element(CCLs, "low") or set_has_element(CCLs, "poor"), dynamic(["Low Confidence App"]), dynamic([])),
+      iff(set_has_element(Actions, "block"), dynamic(["Blocked Activity"]), dynamic([])),
+      iff(DistinctApps > 3, dynamic(["Multiple Risky Apps"]), dynamic([]))
+  ), ", ")
+  | order by EventCount desc
+  | project
+      LastSeen,
+      User,
+      Userip,
+      Hostname,
+      DeviceClassification,
+      EventCount,
+      DistinctApps,
+      Apps,
+      Categories,
+      Activities,
+      Actions,
+      CCLs,
+      RiskIndicators
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Userip
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+version: 1.0.0
+kind: Scheduled
