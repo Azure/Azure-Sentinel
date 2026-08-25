@@ -220,7 +220,7 @@ def rebase_time_generated(data_result, now=None):
     rows_without_timestamps = []
     for row in data_result:
         if 'TimeGenerated' not in row:
-            raise KeyError("TimeGenerated is declared as a datetime column but is missing from a sample row")
+            raise KeyError("TimeGenerated column is missing from a sample row")
         if not str(row['TimeGenerated']).strip():
             rows_without_timestamps.append(row)
             continue
@@ -239,14 +239,19 @@ def rebase_time_generated(data_result, now=None):
     earliest_sample_time = min(timestamp for _, timestamp in rows_with_timestamps)
     latest_sample_time = max(timestamp for _, timestamp in rows_with_timestamps)
     sample_span = latest_sample_time - earliest_sample_time
-    scale = 1.0
-    if sample_span > MAX_TIME_GENERATED_SPAN:
-        scale = MAX_TIME_GENERATED_SPAN / sample_span
+    compress_sample_span = sample_span > MAX_TIME_GENERATED_SPAN
+    sample_span_microseconds = sample_span // timedelta(microseconds=1)
+    max_span_microseconds = MAX_TIME_GENERATED_SPAN // timedelta(microseconds=1)
 
     latest_rebased_time = current_time - TIME_GENERATED_SAFETY_DELAY
     for row, timestamp in rows_with_timestamps:
         distance_from_latest = latest_sample_time - timestamp
-        rebased_timestamp = latest_rebased_time - (distance_from_latest * scale)
+        distance_microseconds = distance_from_latest // timedelta(microseconds=1)
+        if compress_sample_span:
+            distance_microseconds = (
+                distance_microseconds * max_span_microseconds // sample_span_microseconds
+            )
+        rebased_timestamp = latest_rebased_time - timedelta(microseconds=distance_microseconds)
         row['TimeGenerated'] = rebased_timestamp.isoformat().replace('+00:00', 'Z')
     for row in rows_without_timestamps:
         row['TimeGenerated'] = latest_rebased_time.isoformat().replace('+00:00', 'Z')

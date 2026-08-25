@@ -446,7 +446,7 @@ class FilteringTest(unittest.TestCase):
             "query() "
             "| summarize max_TimeGenerated = max(TimeGenerated), "
             "min_TimeGenerated = min(TimeGenerated), "
-            "distinct_TimeGenerated = dcount(TimeGenerated) \n"
+            "distinct_TimeGenerated = count_distinct(TimeGenerated) \n"
             "| extend timeSpanMicroseconds = datetime_diff('microsecond', max_TimeGenerated, min_TimeGenerated) \n"
             "| project mid_point = min_TimeGenerated + ((max_TimeGenerated - min_TimeGenerated) / 2), "
             "distinct_TimeGenerated, timeSpanMicroseconds"
