@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
 |-------------|--------------------------------|-------------------------------------------------------------|
+| 3.3.0       | 14-08-2026                     | Updated **CCF Data Connector** for Cisco Cloud Security log schema version 16: enabled Gzip decompression for all log streams, added **DestinationSgtOriginId** and **FwBlockReason** columns to CiscoUmbrellaCloudFirewall, added **IsolationProfileId** column to CiscoUmbrellaWebTraffic, and added connector instruction notes for optional headers and Cisco-managed/customer-managed Amazon S3 buckets. |
 | 3.2.2       | 04-08-2026                     | Fixed broken **Deploy to Azure Gov** button link in **Data Connectors** and **Playbooks**. |
 | 3.2.1       | 27-07-2026                     | Updated Parser to set EventType for dnslogs, proxylogs, cloudfirewalllogs. |
 | 3.2.0       | 01-07-2026                     | Updated Cisco Umbrella CCF data connector as generally available (isPreview false). |

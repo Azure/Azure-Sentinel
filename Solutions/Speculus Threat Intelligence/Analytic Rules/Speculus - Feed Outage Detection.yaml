@@ -1,0 +1,43 @@
+id: c4f2a8d1-6e39-4c07-b5a2-1d8e3f7c9a25
+name: Speculus - Threat intelligence feed outage
+description: |
+  'Detects when no Speculus threat intelligence indicators have been received for more than 24 hours.
+  The Speculus indexer refreshes continuously, so a silent day usually means an expired API key,
+  a connector misconfiguration, or a feed-side outage rather than an empty feed.'
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: SpeculusThreatIntel
+    dataTypes:
+      - Speculus_Indicators_CL
+queryFrequency: 6h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1565
+query: |
+  Speculus_Indicators_CL
+  | summarize LastReceived = max(TimeGenerated)
+  | where isnull(LastReceived) or LastReceived < ago(1d)
+  | extend
+      HoursSinceLastIndicator = iff(isnull(LastReceived), long(null), datetime_diff('hour', now(), LastReceived)),
+      Status = iff(isnull(LastReceived), 'No data ever received in query period', 'Feed silent for more than 24 hours')
+suppressionDuration: 1d
+suppressionEnabled: true
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  HoursSinceLast: HoursSinceLastIndicator
+  Status: Status
+version: 1.0.0
+kind: Scheduled
