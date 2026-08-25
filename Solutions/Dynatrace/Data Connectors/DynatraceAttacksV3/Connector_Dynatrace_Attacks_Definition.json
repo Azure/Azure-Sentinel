@@ -1,17 +1,17 @@
 {
-    "name": "DynatraceAttacksCCPDefinition",
+    "name": "DTAttacksV3CCPDefinition",
     "apiVersion": "2022-09-01-preview",
     "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
     "location": "{{location}}",
     "kind": "Customizable",
     "properties": {
         "connectorUiConfig": {
-            "id": "DynatraceAttacksCCPDefinition",
-            "title": "Dynatrace Attacks V2",
+            "id": "DTAttacksV3CCPDefinition",
+            "title": "Dynatrace Attacks V3",
             "publisher": "Dynatrace",
-            "descriptionMarkdown": "This connector uses the Dynatrace Attacks REST API to ingest detected attacks into Microsoft Sentinel Log Analytics",
+            "descriptionMarkdown": "This connector uses the [Dynatrace DQL Storage Query API](https://docs.dynatrace.com/docs/platform/grail/dynatrace-query-language) to ingest detected application security attacks into Microsoft Sentinel Log Analytics.",
             "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected which is deployed with the Microsoft Sentinel Solution.",
-            "graphQueriesTableName": "DynatraceAttacksV2_CL",
+            "graphQueriesTableName": "DynatraceAttacksV3_CL",
             "graphQueries": [
                 {
                     "metricName": "Total data received",
@@ -22,21 +22,29 @@
             "sampleQueries": [
                 {
                     "description": "All Attack Events",
-                    "query": "DynatraceAttacks\n| summarize  arg_max(TimeStamp, *) by AttackId\n|  take 10"
+                    "query": "DynatraceAttacks\n| summarize arg_max(TimeGenerated, *) by AttackId\n| take 10"
                 },
                 {
-                    "description": "All Exploited Attack Events",
-                    "query": "DynatraceAttacks\n| where State == \"EXPLOITED\"\n| summarize  arg_max(TimeStamp, *) by AttackId\n|  take 10"
+                    "description": "Critical Attack Events",
+                    "query": "DynatraceAttacks\n| where Severity == \"High\"\n| summarize arg_max(TimeGenerated, *) by AttackId\n| take 10"
                 },
                 {
-                    "description": "Count Attacks by Type",
-                    "query": "DynatraceAttacks\n| summarize  arg_max(TimeStamp, *) by AttackId\n| summarize count() by AttackType\n| take 10"
+                    "description": "SQL Injection Attacks",
+                    "query": "DynatraceAttacks\n| where AttackType == \"SQL_INJECTION\"\n| summarize arg_max(TimeGenerated, *) by AttackId\n| take 10"
+                },
+                {
+                    "description": "Attacks by Source IP",
+                    "query": "DynatraceAttacks\n| summarize arg_max(TimeGenerated, *) by AttackId\n| summarize count() by sourceIp\n| sort by count_ desc\n| take 10"
+                },
+                {
+                    "description": "Attacks by Country",
+                    "query": "DynatraceAttacksV3_CL\n| summarize arg_max(TimeGenerated, *) by event_id\n| summarize count() by actor_geo_country_name\n| sort by count_ desc\n| take 10"
                 }
             ],
             "dataTypes": [
                 {
                     "name": "{{graphQueriesTableName}}",
-                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                 }
             ],
             "connectivityCriteria": [
@@ -47,7 +55,7 @@
             ],
             "availability": {
                 "status": 1,
-                "isPreview": false
+                "isPreview": true
             },
             "permissions": {
                 "resourceProvider": [
@@ -65,25 +73,25 @@
                 ],
                 "customs": [
                     {
-                        "name": "Dynatrace tenant (ex. xyz.dynatrace.com)",
-                        "description": "You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, learn more about the [Dynatrace platform](https://www.dynatrace.com/)."
+                        "name": "Dynatrace SaaS environment (ex. xyz.apps.dynatrace.com)",
+                        "description": "You need a Dynatrace SaaS environment (xxx.apps.dynatrace.com) with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled. Classic Dynatrace environments (xxx.live.dynatrace.com) are not supported."
                     },
                     {
-                        "name": "Dynatrace Access Token",
-                        "description": "You need a Dynatrace Access Token, the token should have ***Read attacks*** (attacks.read) scope."
+                        "name": "Dynatrace Platform Token",
+                        "description": "You need a Dynatrace platform token with the ***storage:buckets:read*** and ***storage:security.events:read*** scopes. See [Dynatrace platform tokens](https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/platform-tokens) for instructions."
                     }
                 ]
             },
             "instructionSteps": [
                 {
                     "title": "Dynatrace Attack Events to Microsoft Sentinel",
-                    "description": "Configure and Enable Dynatrace [Application Security](https://www.dynatrace.com/platform/application-security/). \n Follow [these instructions](https://docs.dynatrace.com/docs/shortlink/token#create-api-token) to generate an access token.",
+                    "description": "Configure and Enable Dynatrace [Application Security](https://www.dynatrace.com/platform/application-security/). \n 1. Create a platform token with the ***storage:buckets:read*** and ***storage:security.events:read*** scopes following [these instructions](https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/platform-tokens). \n 2. Use your Dynatrace SaaS environment URL in the format ***xyz.apps.dynatrace.com***.",
                     "instructions": [
                         {
                             "parameters": {
                                 "enable": "true",
                                 "type": "text",
-                                "label": "Dynatrace tenant (ex. xyz.dynatrace.com)",
+                                "label": "Dynatrace environment (ex. xyz.apps.dynatrace.com)",
                                 "placeholder": "{{dynatraceEnvironmentUrl}}",
                                 "name": "dynatraceEnvironmentUrl"
                             },
@@ -93,9 +101,9 @@
                             "parameters": {
                                 "enable": "true",
                                 "type": "password",
-                                "label": "Dynatrace Access Token",
-                                "placeholder": "{{dynatraceAccessToken}}",
-                                "name": "dynatraceAccessToken"
+                                "label": "Dynatrace Platform Token",
+                                "placeholder": "{{dynatracePlatformToken}}",
+                                "name": "dynatracePlatformToken"
                             },
                             "type": "Textbox"
                         },
@@ -110,7 +118,7 @@
                 }
             ],
             "metadata": {
-                "version": "1.0.2",
+                "version": "1.0.0",
                 "kind": "dataConnector"
             }
         }
