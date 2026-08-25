@@ -1,5 +1,7 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
-|-------------|--------------------------------|--------------------------------------------------------------|
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
+|-------------|--------------------------------|--------------------|
+| 3.1.0       | 24-08-2026                     | Added deduplicated parser views for Check Point Email Security exception tables and updated connector display queries to use them. |
+| 3.0.5       | 24-08-2026                     | Updated **Data Connector** exception snapshot polling for anti-phishing and spam exceptions to daily cadence to reduce repeated full-list re-ingestion. |
 | 3.0.2       | 11-08-2026                     | Fixed duplicate event ingestion in the `CheckPointEmailSecurityEvents` data stream. The pagination `scrollId` was incorrectly placed in the URL query string for a POST endpoint; Check Point's API expects it inside the request body under `requestData`. This caused the poller to re-fetch page 1 on every paginated call, producing thousands of duplicate records per event. Changed `pagingInfoPlacement` from `QueryString` to `Body` and updated `NextPageParaName` to `requestData.scrollId`. |
 | 3.0.1       | 21-07-2026                     | Promote CCF Data Connector to GA. |
 | 3.0.0       | 08-07-2026                     | Initial release. Added **Data Connector** for Check Point Email Security (via Codeless Connector Framework) ingesting Security Events, Anti-Phishing Exceptions, Spam Exceptions, and Audit Logs data streams. |
