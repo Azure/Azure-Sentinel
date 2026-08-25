@@ -4716,22 +4716,16 @@
           "parameters": {
             "PlaybookName": {
               "defaultValue": "SilentPush-IPExportEnrichment",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the playbook"
+                "description": "Silent Push IPs export with enrichment"
               }
             },
             "CustomConnectorName": {
               "defaultValue": "SilentPush-API",
-              "type": "String",
-              "metadata": {
-                "description": "Name of the SilentPush custom connector already deployed in this workspace"
-              }
-            },
-            "workspace": {
               "type": "string",
               "metadata": {
-                "description": "Log Analytics workspace name where Microsoft Sentinel is enabled"
+                "description": "The SilentPush custom API connector"
               }
             }
           },
@@ -4786,8 +4780,8 @@
                     "Recurrence": {
                       "type": "Recurrence",
                       "recurrence": {
-                        "interval": 3,
-                        "frequency": "Minute"
+                        "interval": 24,
+                        "frequency": "Hour"
                       }
                     }
                   },
@@ -4812,52 +4806,99 @@
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_IOFA')['headers']?['Location']"
+                      "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
                     },
-                    "Follow_Redirect": {
-                      "type": "Http",
+                    "Check_Location_Valid": {
+                      "type": "If",
                       "runAfter": {
                         "Extract_Location": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": {
-                        "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
-                      },
-                      "runtimeConfiguration": {
-                        "contentTransfer": {
-                          "transferMode": "Chunked"
-                        }
-                      }
-                    },
-                    "Extract_Body_Response": {
-                      "type": "Compose",
-                      "runAfter": {
-                        "Follow_Redirect": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": "@take(split(trim(body('Follow_Redirect')), '\n'), 100)"
-                    },
-                    "Bulk_Enrich_IPv4s": {
-                      "type": "ApiConnection",
-                      "runAfter": {
-                        "Extract_Body_Response": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                      "expression": "@startsWith(coalesce(outputs('Extract_Location'), ''), 'https://')",
+                      "actions": {
+                        "Validate_Redirect_Host": {
+                          "type": "If",
+                          "expression": "@and(equals(uriScheme(outputs('Extract_Location')), 'https'), equals(uriHost(outputs('Extract_Location')), 'silentpush-feeds.s3.amazonaws.com'))",
+                          "actions": {
+                            "Follow_Redirect": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "@outputs('Extract_Location')",
+                                "method": "GET"
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
+                              }
+                            },
+                            "Extract_Body_Response": {
+                              "type": "Compose",
+                              "runAfter": {
+                                "Follow_Redirect": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": "@take(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
+                            },
+                            "Bulk_Enrich_IPv4s": {
+                              "type": "ApiConnection",
+                              "runAfter": {
+                                "Extract_Body_Response": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "body": {
+                                  "ipv4s": "@outputs('Extract_Body_Response')"
+                                },
+                                "path": "/api/v1/enrich/ipv4/bulk/",
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 10,
+                                  "interval": "PT20S",
+                                  "minimumInterval": "PT10S",
+                                  "maximumInterval": "PT1H"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Terminate_Untrusted_Redirect": {
+                                "type": "Terminate",
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "error": {
+                                    "code": "UntrustedRedirect",
+                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                  }
+                                }
+                              }
+                            }
                           }
-                        },
-                        "method": "post",
-                        "body": {
-                          "ipv4s": "@outputs('Extract_Body_Response')"
-                        },
-                        "path": "/api/v1/enrich/ipv4/bulk/"
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Export_Failed": {
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "error": {
+                                "code": "ExportFailed",
+                                "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a'))))))"
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -4904,7 +4945,27 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "SilentPush-IPExportEnrichment",
+            "description": "Silent Push IPs export with enrichment",
+            "postDeployment": [
+              "**Authorize the SilentPush connector connection**",
+              "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
+              "1. Go to your Logic App -> API connections -> select the SilentPush-<PlaybookName> connection resource",
+              "2. Go to General -> Edit API connection",
+              "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
+              "4. Click Save"
+            ],
+            "lastUpdateTime": "2026-08-25T08:05:40.681Z",
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -4935,16 +4996,16 @@
           "parameters": {
             "PlaybookName": {
               "defaultValue": "SilentPush-IPExportEnrichment-Full",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the playbook"
+                "description": "Silent Push IPs export with enrichment and TI upload"
               }
             },
             "CustomConnectorName": {
               "defaultValue": "SilentPush-API",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the SilentPush custom connector already deployed in this workspace"
+                "description": "The SilentPush API custom connector"
               }
             },
             "workspace": {
@@ -5051,130 +5112,225 @@
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_IOFA')['headers']?['Location']"
+                      "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
                     },
-                    "Follow_Redirect": {
-                      "type": "Http",
+                    "Check_Location_Valid": {
+                      "type": "If",
                       "runAfter": {
                         "Extract_Location": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": {
-                        "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
-                      },
-                      "runtimeConfiguration": {
-                        "contentTransfer": {
-                          "transferMode": "Chunked"
-                        }
-                      }
-                    },
-                    "Split_Into_Batches": {
-                      "type": "Compose",
-                      "runAfter": {
-                        "Follow_Redirect": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": "@chunk(split(trim(body('Follow_Redirect')), '\n'), 100)"
-                    },
-                    "For_Each_Batch": {
-                      "type": "Foreach",
-                      "foreach": "@outputs('Split_Into_Batches')",
-                      "runAfter": {
-                        "Split_Into_Batches": [
-                          "Succeeded"
-                        ]
-                      },
+                      "expression": "@startsWith(coalesce(outputs('Extract_Location'), ''), 'https://')",
                       "actions": {
-                        "Bulk_Enrich_IPv4s": {
-                          "type": "ApiConnection",
-                          "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                        "Validate_Redirect_Host": {
+                          "type": "If",
+                          "expression": "@and(equals(uriScheme(outputs('Extract_Location')), 'https'), equals(uriHost(outputs('Extract_Location')), 'silentpush-feeds.s3.amazonaws.com'))",
+                          "actions": {
+                            "Follow_Redirect": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "@outputs('Extract_Location')",
+                                "method": "GET"
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
                               }
                             },
-                            "method": "post",
-                            "body": {
-                              "ipv4s": "@items('For_Each_Batch')"
+                            "Split_Into_Batches": {
+                              "type": "Compose",
+                              "runAfter": {
+                                "Follow_Redirect": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": "@chunk(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
                             },
-                            "path": "/api/v1/enrich/ipv4/bulk/"
-                          }
-                        },
-                        "Filter_Enriched_Only": {
-                          "type": "Query",
-                          "runAfter": {
-                            "Bulk_Enrich_IPv4s": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "from": "@body('Bulk_Enrich_IPv4s')?['response']?['ip2asn']",
-                            "where": "@equals(item()?['error'], null)"
-                          }
-                        },
-                        "Build_TI_Indicators": {
-                          "type": "Select",
-                          "runAfter": {
-                            "Filter_Enriched_Only": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "from": "@body('Filter_Enriched_Only')",
-                            "select": {
-                              "created": "@{if(equals(item()?['date'], null), utcNow(), concat(substring(string(item()?['date']), 0, 4), '-', substring(string(item()?['date']), 4, 2), '-', substring(string(item()?['date']), 6, 2), 'T00:00:00Z'))}",
-                              "modified": "@{if(equals(item()?['date'], null), utcNow(), concat(substring(string(item()?['date']), 0, 4), '-', substring(string(item()?['date']), 4, 2), '-', substring(string(item()?['date']), 6, 2), 'T00:00:00Z'))}",
-                              "type": "indicator",
-                              "spec_version": "2.1",
-                              "id": "@{concat('indicator--', guid())}",
-                              "value": "@{item()?['ip']}",
-                              "name": "@{concat('Malicious IP: ', item()?['ip'])}",
-                              "description": "Enriched via Silent Push IOFA export",
-                              "pattern": "@{concat('[ipv4-addr:value = ''', item()?['ip'], ''']')}",
-                              "pattern_type": "stix",
-                              "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
-                              "valid_from": "@{utcNow()}",
-                              "valid_until": "@{addDays(utcNow(), 30)}",
-                              "extensions": {
-                                "sentinel-ext": {
-                                  "severity": "@add(div(int(coalesce(item()?['sp_risk_score'], 0)), 20), 0)",
-                                  "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))"
+                            "For_Each_Batch": {
+                              "type": "Foreach",
+                              "foreach": "@outputs('Split_Into_Batches')",
+                              "runAfter": {
+                                "Split_Into_Batches": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 1
+                                }
+                              },
+                              "actions": {
+                                "Bulk_Enrich_IPv4s": {
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "body": {
+                                      "ipv4s": "@items('For_Each_Batch')"
+                                    },
+                                    "path": "/api/v1/enrich/ipv4/bulk/",
+                                    "retryPolicy": {
+                                      "type": "exponential",
+                                      "count": 10,
+                                      "interval": "PT20S",
+                                      "minimumInterval": "PT10S",
+                                      "maximumInterval": "PT1H"
+                                    }
+                                  }
                                 },
-                                "x-silentpush-ext": {
-                                  "extension_type": "property-extension",
-                                  "vendor": "Silent Push",
-                                  "datasource": "SilentPush IOFA Export",
-                                  "asname": "@item()?['asname']",
-                                  "ip_reputation": "@item()?['ip_reputation']",
-                                  "ip_ptr": "@item()?['ip_ptr']",
-                                  "known_benign": "@item()?['benign_info']?['known_benign']"
+                                "Filter_Enriched_Only": {
+                                  "type": "Query",
+                                  "runAfter": {
+                                    "Bulk_Enrich_IPv4s": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "from": "@body('Bulk_Enrich_IPv4s')?['response']?['ip2asn']",
+                                    "where": "@equals(item()?['error'], null)"
+                                  }
+                                },
+                                "Build_TI_Indicators": {
+                                  "type": "Select",
+                                  "runAfter": {
+                                    "Filter_Enriched_Only": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "from": "@body('Filter_Enriched_Only')",
+                                    "select": {
+                                      "created": "@{if(equals(item()?['date'], null), utcNow(), concat(substring(string(item()?['date']), 0, 4), '-', substring(string(item()?['date']), 4, 2), '-', substring(string(item()?['date']), 6, 2), 'T00:00:00Z'))}",
+                                      "modified": "@{if(equals(item()?['date'], null), utcNow(), concat(substring(string(item()?['date']), 0, 4), '-', substring(string(item()?['date']), 4, 2), '-', substring(string(item()?['date']), 6, 2), 'T00:00:00Z'))}",
+                                      "type": "indicator",
+                                      "spec_version": "2.1",
+                                      "id": "@{concat('indicator--', guid())}",
+                                      "value": "@{item()?['ip']}",
+                                      "name": "@{concat('Malicious IP: ', item()?['ip'])}",
+                                      "description": "Enriched via Silent Push IOFA export",
+                                      "pattern": "@{concat('[ipv4-addr:value = ''', item()?['ip'], ''']')}",
+                                      "pattern_type": "stix",
+                                      "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
+                                      "valid_from": "@{utcNow()}",
+                                      "valid_until": "@{addDays(utcNow(), 30)}",
+                                      "extensions": {
+                                        "sentinel-ext": {
+                                          "severity": "@max(0, min(5, div(int(coalesce(item()?['sp_risk_score'], 0)), 20)))",
+                                          "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))"
+                                        },
+                                        "x-silentpush-ext": {
+                                          "extension_type": "property-extension",
+                                          "vendor": "Silent Push",
+                                          "datasource": "SilentPush IOFA Export",
+                                          "asname": "@item()?['asname']",
+                                          "asn": "@item()?['asn']",
+                                          "asn_allocation_age": "@item()?['asn_allocation_age']",
+                                          "asn_allocation_date": "@item()?['asn_allocation_date']",
+                                          "asn_rank": "@item()?['asn_rank']",
+                                          "asn_rank_score": "@item()?['asn_rank_score']",
+                                          "asn_reputation": "@item()?['asn_reputation']",
+                                          "asn_reputation_score": "@item()?['asn_reputation_score']",
+                                          "asn_reputation_explain": "@item()?['asn_reputation_explain']",
+                                          "asn_takedown_reputation": "@item()?['asn_takedown_reputation']",
+                                          "asn_takedown_reputation_score": "@item()?['asn_takedown_reputation_score']",
+                                          "asn_takedown_reputation_explain": "@item()?['asn_takedown_reputation_explain']",
+                                          "date": "@item()?['date']",
+                                          "density": "@item()?['density']",
+                                          "ip_reputation": "@item()?['ip_reputation']",
+                                          "ip_reputation_score": "@item()?['ip_reputation_score']",
+                                          "ip_reputation_explain": "@item()?['ip_reputation_explain']",
+                                          "ip_ptr": "@item()?['ip_ptr']",
+                                          "ip_flags": "@item()?['ip_flags']",
+                                          "ip_location": "@item()?['ip_location']",
+                                          "ip_has_expired_certificate": "@item()?['ip_has_expired_certificate']",
+                                          "ip_has_open_directory": "@item()?['ip_has_open_directory']",
+                                          "ip_is_dsl_dynamic": "@item()?['ip_is_dsl_dynamic']",
+                                          "ip_is_dsl_dynamic_score": "@item()?['ip_is_dsl_dynamic_score']",
+                                          "ip_is_ipfs_node": "@item()?['ip_is_ipfs_node']",
+                                          "ip_is_tor_exit_node": "@item()?['ip_is_tor_exit_node']",
+                                          "known_benign": "@item()?['benign_info']?['known_benign']",
+                                          "benign_info": "@item()?['benign_info']",
+                                          "listing_score": "@item()?['listing_score']",
+                                          "listing_score_explain": "@item()?['listing_score_explain']",
+                                          "listing_score_feeds_explain": "@item()?['listing_score_feeds_explain']",
+                                          "malscore": "@item()?['malscore']",
+                                          "sinkhole_info": "@item()?['sinkhole_info']",
+                                          "sp_risk_score": "@item()?['sp_risk_score']",
+                                          "sp_risk_score_explain": "@item()?['sp_risk_score_explain']",
+                                          "subnet": "@item()?['subnet']",
+                                          "subnet_allocation_age": "@item()?['subnet_allocation_age']",
+                                          "subnet_allocation_date": "@item()?['subnet_allocation_date']",
+                                          "subnet_reputation": "@item()?['subnet_reputation']",
+                                          "subnet_reputation_score": "@item()?['subnet_reputation_score']"
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "Upload_TI_Batch": {
+                                  "type": "ApiConnection",
+                                  "runAfter": {
+                                    "Build_TI_Indicators": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "body": {
+                                      "sourcesystem": "Silent Push - IOFA Export",
+                                      "indicators": "@body('Build_TI_Indicators')"
+                                    },
+                                    "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]",
+                                    "retryPolicy": {
+                                      "type": "exponential",
+                                      "count": 10,
+                                      "interval": "PT20S",
+                                      "minimumInterval": "PT10S",
+                                      "maximumInterval": "PT1H"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Terminate_Untrusted_Redirect": {
+                                "type": "Terminate",
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "error": {
+                                    "code": "UntrustedRedirect",
+                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                  }
                                 }
                               }
                             }
                           }
-                        },
-                        "Upload_TI_Batch": {
-                          "type": "ApiConnection",
-                          "runAfter": {
-                            "Build_TI_Indicators": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Export_Failed": {
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "error": {
+                                "code": "ExportFailed",
+                                "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a'))))))"
                               }
-                            },
-                            "method": "post",
-                            "body": {
-                              "sourcesystem": "Silent Push - IOFA Export",
-                              "indicators": "@body('Build_TI_Indicators')"
-                            },
-                            "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]"
+                            }
                           }
                         }
                       }
@@ -5217,7 +5373,7 @@
               ],
               "properties": {
                 "roleDefinitionId": "[[variables('SentinelContributorRoleId')]",
-                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]",
+                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
               }
             },
@@ -5247,7 +5403,27 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "SilentPush-IPExportEnrichment-Full",
+            "description": "Silent Push IPs export with enrichment and TI upload",
+            "postDeployment": [
+              "**Authorize the SilentPush connector connection**",
+              "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
+              "1. Go to your Logic App -> API connections -> select the SilentPush-<PlaybookName> connection resource",
+              "2. Go to General -> Edit API connection",
+              "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
+              "4. Click Save"
+            ],
+            "lastUpdateTime": "2026-08-25T08:05:42.152Z",
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -5278,22 +5454,16 @@
           "parameters": {
             "PlaybookName": {
               "defaultValue": "SilentPush-DomainExportEnrichment",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the playbook"
+                "description": "Silent Push domains export with enrichment"
               }
             },
             "CustomConnectorName": {
               "defaultValue": "SilentPush-API",
-              "type": "String",
-              "metadata": {
-                "description": "Name of the SilentPush custom connector already deployed in this workspace"
-              }
-            },
-            "workspace": {
               "type": "string",
               "metadata": {
-                "description": "Log Analytics workspace name where Microsoft Sentinel is enabled"
+                "description": "The Silent Push custom API connector"
               }
             }
           },
@@ -5348,8 +5518,8 @@
                     "Recurrence": {
                       "type": "Recurrence",
                       "recurrence": {
-                        "interval": 3,
-                        "frequency": "Minute"
+                        "interval": 24,
+                        "frequency": "Hour"
                       }
                     }
                   },
@@ -5374,52 +5544,99 @@
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_Domains')['headers']?['Location']"
+                      "inputs": "@outputs('Export_Domains')?['headers']?['Location']"
                     },
-                    "Follow_Redirect": {
-                      "type": "Http",
+                    "Check_Location_Valid": {
+                      "type": "If",
                       "runAfter": {
                         "Extract_Location": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": {
-                        "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
-                      },
-                      "runtimeConfiguration": {
-                        "contentTransfer": {
-                          "transferMode": "Chunked"
-                        }
-                      }
-                    },
-                    "Extract_Body_Response": {
-                      "type": "Compose",
-                      "runAfter": {
-                        "Follow_Redirect": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": "@take(split(trim(body('Follow_Redirect')), '\n'), 100)"
-                    },
-                    "Bulk_Enrich_Domains": {
-                      "type": "ApiConnection",
-                      "runAfter": {
-                        "Extract_Body_Response": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                      "expression": "@startsWith(coalesce(outputs('Extract_Location'), ''), 'https://')",
+                      "actions": {
+                        "Validate_Redirect_Host": {
+                          "type": "If",
+                          "expression": "@and(equals(uriScheme(outputs('Extract_Location')), 'https'), equals(uriHost(outputs('Extract_Location')), 'silentpush-feeds.s3.amazonaws.com'))",
+                          "actions": {
+                            "Follow_Redirect": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "@outputs('Extract_Location')",
+                                "method": "GET"
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
+                              }
+                            },
+                            "Extract_Body_Response": {
+                              "type": "Compose",
+                              "runAfter": {
+                                "Follow_Redirect": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": "@take(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
+                            },
+                            "Bulk_Enrich_Domains": {
+                              "type": "ApiConnection",
+                              "runAfter": {
+                                "Extract_Body_Response": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "body": {
+                                  "domains": "@outputs('Extract_Body_Response')"
+                                },
+                                "path": "/api/v1/enrich/domain/bulk/",
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 10,
+                                  "interval": "PT20S",
+                                  "minimumInterval": "PT10S",
+                                  "maximumInterval": "PT1H"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Terminate_Untrusted_Redirect": {
+                                "type": "Terminate",
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "error": {
+                                    "code": "UntrustedRedirect",
+                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                  }
+                                }
+                              }
+                            }
                           }
-                        },
-                        "method": "post",
-                        "body": {
-                          "domains": "@outputs('Extract_Body_Response')"
-                        },
-                        "path": "/api/v1/enrich/domain/bulk/"
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Export_Failed": {
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "error": {
+                                "code": "ExportFailed",
+                                "message": "@concat('Silent Push IOFA domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_Domains')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_Domains')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_Domains')?['body'], 'n/a'))))))"
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -5466,7 +5683,27 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "SilentPush-DomainExportEnrichment",
+            "description": "Silent Push domains export with enrichment",
+            "postDeployment": [
+              "**Authorize the SilentPush connector connection**",
+              "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
+              "1. Go to your Logic App -> API connections -> select the SilentPush-<PlaybookName> connection resource",
+              "2. Go to General -> Edit API connection",
+              "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
+              "4. Click Save"
+            ],
+            "lastUpdateTime": "2026-08-25T08:05:42.596Z",
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -5497,16 +5734,16 @@
           "parameters": {
             "PlaybookName": {
               "defaultValue": "SilentPush-DomainExportEnrichment-Full",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the playbook"
+                "description": "Silent Push domains export with enrichment and TI upload"
               }
             },
             "CustomConnectorName": {
               "defaultValue": "SilentPush-API",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Name of the SilentPush custom connector already deployed in this workspace"
+                "description": "The SilentPush API custom connector"
               }
             },
             "workspace": {
@@ -5613,130 +5850,208 @@
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_Domains')['headers']?['Location']"
+                      "inputs": "@outputs('Export_Domains')?['headers']?['Location']"
                     },
-                    "Follow_Redirect": {
-                      "type": "Http",
+                    "Check_Location_Valid": {
+                      "type": "If",
                       "runAfter": {
                         "Extract_Location": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": {
-                        "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
-                      },
-                      "runtimeConfiguration": {
-                        "contentTransfer": {
-                          "transferMode": "Chunked"
-                        }
-                      }
-                    },
-                    "Split_Into_Batches": {
-                      "type": "Compose",
-                      "runAfter": {
-                        "Follow_Redirect": [
-                          "Succeeded"
-                        ]
-                      },
-                      "inputs": "@chunk(split(trim(body('Follow_Redirect')), '\n'), 100)"
-                    },
-                    "For_Each_Batch": {
-                      "type": "Foreach",
-                      "foreach": "@outputs('Split_Into_Batches')",
-                      "runAfter": {
-                        "Split_Into_Batches": [
-                          "Succeeded"
-                        ]
-                      },
+                      "expression": "@startsWith(coalesce(outputs('Extract_Location'), ''), 'https://')",
                       "actions": {
-                        "Bulk_Enrich_Domains": {
-                          "type": "ApiConnection",
-                          "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                        "Validate_Redirect_Host": {
+                          "type": "If",
+                          "expression": "@and(equals(uriScheme(outputs('Extract_Location')), 'https'), equals(uriHost(outputs('Extract_Location')), 'silentpush-feeds.s3.amazonaws.com'))",
+                          "actions": {
+                            "Follow_Redirect": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "@outputs('Extract_Location')",
+                                "method": "GET"
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
                               }
                             },
-                            "method": "post",
-                            "body": {
-                              "domains": "@items('For_Each_Batch')"
+                            "Split_Into_Batches": {
+                              "type": "Compose",
+                              "runAfter": {
+                                "Follow_Redirect": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": "@chunk(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
                             },
-                            "path": "/api/v1/enrich/domain/bulk/"
-                          }
-                        },
-                        "Filter_Enriched_Only": {
-                          "type": "Query",
-                          "runAfter": {
-                            "Bulk_Enrich_Domains": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "from": "@body('Bulk_Enrich_Domains')?['response']",
-                            "where": "@equals(item()?['domaininfo']?['error'], null)"
-                          }
-                        },
-                        "Build_TI_Indicators": {
-                          "type": "Select",
-                          "runAfter": {
-                            "Filter_Enriched_Only": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "from": "@body('Filter_Enriched_Only')",
-                            "select": {
-                              "created": "@{if(equals(item()?['domaininfo']?['last_seen'], null), utcNow(), concat(substring(string(item()?['domaininfo']?['last_seen']), 0, 4), '-', substring(string(item()?['domaininfo']?['last_seen']), 4, 2), '-', substring(string(item()?['domaininfo']?['last_seen']), 6, 2), 'T00:00:00Z'))}",
-                              "modified": "@{if(equals(item()?['domaininfo']?['last_seen'], null), utcNow(), concat(substring(string(item()?['domaininfo']?['last_seen']), 0, 4), '-', substring(string(item()?['domaininfo']?['last_seen']), 4, 2), '-', substring(string(item()?['domaininfo']?['last_seen']), 6, 2), 'T00:00:00Z'))}",
-                              "type": "indicator",
-                              "spec_version": "2.1",
-                              "id": "@{concat('indicator--', guid())}",
-                              "value": "@{item()?['domaininfo']?['query']}",
-                              "name": "@{concat('Malicious Domain: ', item()?['domaininfo']?['query'])}",
-                              "description": "Enriched via Silent Push IOFA export",
-                              "pattern": "@{concat('[domain-name:value = ''', item()?['domaininfo']?['query'], ''']')}",
-                              "pattern_type": "stix",
-                              "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
-                              "valid_from": "@{utcNow()}",
-                              "valid_until": "@{addDays(utcNow(), 30)}",
-                              "extensions": {
-                                "sentinel-ext": {
-                                  "severity": "@add(div(int(coalesce(item()?['sp_risk_score'], 0)), 20), 0)",
-                                  "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))"
+                            "For_Each_Batch": {
+                              "type": "Foreach",
+                              "foreach": "@outputs('Split_Into_Batches')",
+                              "runAfter": {
+                                "Split_Into_Batches": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 1
+                                }
+                              },
+                              "actions": {
+                                "Bulk_Enrich_Domains": {
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['SilentPushCustomConnector']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "body": {
+                                      "domains": "@items('For_Each_Batch')"
+                                    },
+                                    "path": "/api/v1/enrich/domain/bulk/",
+                                    "retryPolicy": {
+                                      "type": "exponential",
+                                      "count": 10,
+                                      "interval": "PT20S",
+                                      "minimumInterval": "PT10S",
+                                      "maximumInterval": "PT1H"
+                                    }
+                                  }
                                 },
-                                "x-silentpush-ext": {
-                                  "extension_type": "property-extension",
-                                  "vendor": "Silent Push",
-                                  "datasource": "SilentPush IOFA Export",
-                                  "registrar": "@item()?['domaininfo']?['registrar']",
-                                  "whois_age": "@item()?['domaininfo']?['whois_age']",
-                                  "ns_reputation_score": "@item()?['ns_reputation']?['ns_reputation_score']",
-                                  "listing_score": "@item()?['listing_score']"
+                                "Filter_Enriched_Only": {
+                                  "type": "Query",
+                                  "runAfter": {
+                                    "Bulk_Enrich_Domains": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "from": "@body('Bulk_Enrich_Domains')?['response']",
+                                    "where": "@equals(item()?['domaininfo']?['error'], null)"
+                                  }
+                                },
+                                "Build_TI_Indicators": {
+                                  "type": "Select",
+                                  "runAfter": {
+                                    "Filter_Enriched_Only": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "from": "@body('Filter_Enriched_Only')",
+                                    "select": {
+                                      "created": "@{if(equals(item()?['domaininfo']?['last_seen'], null), utcNow(), concat(substring(string(item()?['domaininfo']?['last_seen']), 0, 4), '-', substring(string(item()?['domaininfo']?['last_seen']), 4, 2), '-', substring(string(item()?['domaininfo']?['last_seen']), 6, 2), 'T00:00:00Z'))}",
+                                      "modified": "@{if(equals(item()?['domaininfo']?['last_seen'], null), utcNow(), concat(substring(string(item()?['domaininfo']?['last_seen']), 0, 4), '-', substring(string(item()?['domaininfo']?['last_seen']), 4, 2), '-', substring(string(item()?['domaininfo']?['last_seen']), 6, 2), 'T00:00:00Z'))}",
+                                      "type": "indicator",
+                                      "spec_version": "2.1",
+                                      "id": "@{concat('indicator--', guid())}",
+                                      "value": "@{item()?['domaininfo']?['query']}",
+                                      "name": "@{concat('Malicious Domain: ', item()?['domaininfo']?['query'])}",
+                                      "description": "Enriched via Silent Push IOFA export",
+                                      "pattern": "@{concat('[domain-name:value = ''', item()?['domaininfo']?['query'], ''']')}",
+                                      "pattern_type": "stix",
+                                      "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
+                                      "valid_from": "@{utcNow()}",
+                                      "valid_until": "@{addDays(utcNow(), 30)}",
+                                      "extensions": {
+                                        "sentinel-ext": {
+                                          "severity": "@max(0, min(5, div(int(coalesce(item()?['sp_risk_score'], 0)), 20)))",
+                                          "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))"
+                                        },
+                                        "x-silentpush-ext": {
+                                          "extension_type": "property-extension",
+                                          "vendor": "Silent Push",
+                                          "datasource": "SilentPush IOFA Export",
+                                          "registrar": "@item()?['domaininfo']?['registrar']",
+                                          "whois_age": "@item()?['domaininfo']?['whois_age']",
+                                          "whois_created_date": "@item()?['domaininfo']?['whois_created_date']",
+                                          "zone": "@item()?['domaininfo']?['zone']",
+                                          "age_score": "@item()?['domaininfo']?['age_score']",
+                                          "info": "@item()?['domaininfo']?['info']",
+                                          "is_new": "@item()?['domaininfo']?['is_new']",
+                                          "is_new_score": "@item()?['domaininfo']?['is_new_score']",
+                                          "last_seen": "@item()?['domaininfo']?['last_seen']",
+                                          "is_private_suffix": "@item()?['is_private_suffix']",
+                                          "private_suffix_info": "@item()?['private_suffix_info']",
+                                          "domain_string_frequency_probability": "@item()?['domain_string_frequency_probability']",
+                                          "domain_urls": "@item()?['domain_urls']",
+                                          "host_flags": "@item()?['host_flags']",
+                                          "ip_diversity": "@item()?['ip_diversity']",
+                                          "ns_reputation_score": "@item()?['ns_reputation']?['ns_reputation_score']",
+                                          "ns_reputation": "@item()?['ns_reputation']",
+                                          "nschanges": "@item()?['nschanges']",
+                                          "listing_score": "@item()?['listing_score']",
+                                          "listing_score_explain": "@item()?['listing_score_explain']",
+                                          "listing_score_feeds_explain": "@item()?['listing_score_feeds_explain']",
+                                          "sp_risk_score": "@item()?['sp_risk_score']",
+                                          "sp_risk_score_explain": "@item()?['sp_risk_score_explain']"
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "Upload_TI_Batch": {
+                                  "type": "ApiConnection",
+                                  "runAfter": {
+                                    "Build_TI_Indicators": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "body": {
+                                      "sourcesystem": "Silent Push - IOFA Export",
+                                      "indicators": "@body('Build_TI_Indicators')"
+                                    },
+                                    "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]",
+                                    "retryPolicy": {
+                                      "type": "exponential",
+                                      "count": 10,
+                                      "interval": "PT20S",
+                                      "minimumInterval": "PT10S",
+                                      "maximumInterval": "PT1H"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Terminate_Untrusted_Redirect": {
+                                "type": "Terminate",
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "error": {
+                                    "code": "UntrustedRedirect",
+                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                  }
                                 }
                               }
                             }
                           }
-                        },
-                        "Upload_TI_Batch": {
-                          "type": "ApiConnection",
-                          "runAfter": {
-                            "Build_TI_Indicators": [
-                              "Succeeded"
-                            ]
-                          },
-                          "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Export_Failed": {
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "error": {
+                                "code": "ExportFailed",
+                                "message": "@concat('Silent Push IOFA domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_Domains')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_Domains')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_Domains')?['body'], 'n/a'))))))"
                               }
-                            },
-                            "method": "post",
-                            "body": {
-                              "sourcesystem": "Silent Push - IOFA Export",
-                              "indicators": "@body('Build_TI_Indicators')"
-                            },
-                            "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2021-06-01').customerId, '/UploadIndicators/')]"
+                            }
                           }
                         }
                       }
@@ -5779,7 +6094,7 @@
               ],
               "properties": {
                 "roleDefinitionId": "[[variables('SentinelContributorRoleId')]",
-                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]",
+                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
               }
             },
@@ -5809,7 +6124,27 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "SilentPush-DomainExportEnrichment-Full",
+            "description": "Silent Push domains export with enrichment and TI upload",
+            "postDeployment": [
+              "**Authorize the SilentPush connector connection**",
+              "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
+              "1. Go to your Logic App -> API connections -> select the SilentPush-<PlaybookName> connection resource",
+              "2. Go to General -> Edit API connection",
+              "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
+              "4. Click Save"
+            ],
+            "lastUpdateTime": "2026-08-25T08:05:43.787Z",
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -5838,7 +6173,7 @@
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
-        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/SilentPush.svg\" width=\"75px\" height=\"75px\">",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/main/Logos/SilentPush.svg\" width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
