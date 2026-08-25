@@ -47,14 +47,14 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Oracle Cloud Infrastructure",
-    "_solutionVersion": "3.0.2",
+    "_solutionVersion": "3.1.1",
     "solutionId": "azuresentinel.azure-sentinel-solution-ocilogs",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "1.0.0",
-    "_dataConnectorContentIdConnectorDefinition1": "OCI-Connector-CCP-Definition",
+    "dataConnectorCCPVersion": "3.1.1",
+    "_dataConnectorContentIdConnectorDefinition1": "OracleCloudInfraConnector",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
-    "_dataConnectorContentIdConnections1": "OCI-Connector-CCP-DefinitionConnections",
+    "_dataConnectorContentIdConnections1": "OracleCloudInfraConnectorConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
@@ -71,7 +71,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
-        "displayName": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+        "displayName": "Oracle Cloud Infrastructure (via Codeless Connector Framework)",
         "contentKind": "DataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -87,8 +87,8 @@
               "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "OCI-Connector-CCP-Definition",
-                  "title": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+                  "id": "OracleCloudInfraConnector",
+                  "title": "Oracle Cloud Infrastructure (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
                   "descriptionMarkdown": "The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).",
                   "graphQueriesTableName": "OCI_LogsV2_CL",
@@ -102,17 +102,17 @@
                   "sampleQueries": [
                     {
                       "description": "All OCI Events",
-                      "query": "{{graphQueriesTableName}} \n| sort by TimeGenerated desc"
+                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
                     },
                     {
                       "description": "Get Sample of OCI Events",
-                      "query": "{{graphQueriesTableName}} \n | take 10"
+                      "query": "{{graphQueriesTableName}}\n| take 10"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "{{graphQueriesTableName}}",
-                      "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "name": "OCI_LogsV2_CL",
+                      "lastDataReceivedQuery": "OCI_LogsV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -120,6 +120,10 @@
                       "type": "HasDataConnectors"
                     }
                   ],
+                  "availability": {
+                    "isPreview": false,
+                    "status": 1
+                  },
                   "permissions": {
                     "resourceProvider": [
                       {
@@ -130,7 +134,8 @@
                         "requiredPermissions": {
                           "write": true,
                           "read": true,
-                          "delete": true
+                          "delete": true,
+                          "action": false
                         }
                       }
                     ],
@@ -138,116 +143,207 @@
                       {
                         "name": "OCI Streaming API access",
                         "description": "Access to the OCI Streaming API through a API Signing Keys is required."
+                      },
+                      {
+                        "name": "OCI IAM Policy",
+                        "description": "The OCI user associated with the API signing key must have sufficient IAM permissions to consume data from the OCI Stream. The API key provides authentication only; an IAM policy is required for authorization. At minimum, configure: Allow group <group-name> to use stream-pull in compartment <compartment-name>."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
                       "title": "Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel",
-                      "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" \u2192 \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" \u2192 \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n",
+                      "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" -> \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" -> \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm). Save the Pem File, pass phrase (Optional, it is not set when using the OCI console to generate the API signing key pair) and fingerprint in a secured place for use when connect.\n\r",
                       "instructions": [
                         {
-                          "type": "Textbox",
+                          "type": "DataConnectorsGrid",
                           "parameters": {
-                            "label": "Stream OCID",
-                            "required": true,
-                            "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
-                            "type": "text",
-                            "name": "streamId"
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Service Endpoint Base URL",
-                            "required": true,
-                            "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
-                            "type": "text",
-                            "name": "serviceEndpointBaseUrl"
-                          }
-                        },
-                        {
-                          "type": "Dropdown",
-                          "parameters": {
-                            "label": "Cursor Type",
-                            "name": "cursorType",
-                            "required": true,
-                            "type": "text",
-                            "placeholder": "Select Cursor Type",
-                            "options": [
+                            "mapping": [
                               {
-                                "key": "IndividualCursor",
-                                "text": "Individual Cursor"
+                                "columnName": "Tenant Id",
+                                "columnValue": "properties.auth.tenantId"
+                              },
+                              {
+                                "columnName": "Stream",
+                                "columnValue": "properties.request.streamId"
+                              },
+                              {
+                                "columnName": "Cursor Type",
+                                "columnValue": "properties.request.cursorType"
+                              },
+                              {
+                                "columnName": "Partition / GroupName",
+                                "columnValue": "properties.request.partitions"
                               }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
                             ]
                           }
                         },
                         {
-                          "type": "Textbox",
+                          "type": "ContextPane",
                           "parameters": {
-                            "label": "Partition Id",
-                            "required": true,
-                            "placeholder": "Provide the Partition Id. (E.g. 0 or 1 or 2)",
-                            "type": "text",
-                            "name": "partitions",
-                            "description": "The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2."
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Tenant ID",
-                            "required": true,
-                            "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
-                            "type": "text",
-                            "name": "tenantId"
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "User ID",
-                            "required": true,
-                            "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
-                            "type": "text",
-                            "name": "userId"
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Pem File Content",
-                            "required": true,
-                            "placeholder": "Provide the Pem File content.",
-                            "type": "password",
-                            "name": "pemFile"
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Pass Phrase",
-                            "required": false,
-                            "placeholder": "Provide the pass phrase for the Pem File Content. (Optional)",
-                            "type": "password",
-                            "name": "passPhrase"
-                          }
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Fingerprint",
-                            "required": true,
-                            "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
-                            "type": "password",
-                            "name": "publicFingerprint"
-                          }
-                        },
-                        {
-                          "type": "ConnectionToggleButton",
-                          "parameters": {
-                            "connectLabel": "Connect",
-                            "name": "Connect"
+                            "label": "Add stream",
+                            "title": "Add Oracle Cloud Infrastructure Data Stream",
+                            "subtitle": "Connect to Oracle Cloud Infrastructure Data",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Open Analytics & AI -> Streaming -> choose your stream -> copy the OCID from the Stream Details page."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Stream OCID",
+                                      "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
+                                      "type": "text",
+                                      "name": "streamId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Open Analytics & AI -> Streaming -> choose your stream -> copy the Message Endpoint from the Stream Details page."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Public Message Endpoint of the stream (Service Endpoint Base URL)",
+                                      "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
+                                      "type": "text",
+                                      "name": "serviceEndpointBaseUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Dropdown",
+                                    "parameters": {
+                                      "label": "Cursor Type",
+                                      "name": "cursorType",
+                                      "options": [
+                                        {
+                                          "key": "IndividualCursor",
+                                          "text": "Individual Cursor"
+                                        },
+                                        {
+                                          "key": "GroupCursor",
+                                          "text": "Group Cursor (preview)"
+                                        }
+                                      ],
+                                      "required": true
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Partition Id / Group name : The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2.\nGroup cursors allow you to read from all partitions simultaneously. When using a group cursor (preview), provide the group name (can be any string) instead of individual partition IDs. (the group will be created automatically by the platform when you start reading)."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Partition Id / Group name",
+                                      "placeholder": "Individual Cursor - Partition Id (E.g. 0 or 1 or 2), Group Cursor - Group name",
+                                      "type": "text",
+                                      "name": "partitions",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Open Governance & Administration -> Account Management -> Tenancy Details -> copy the Tenancy OCID from the Tenancy details page."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Tenant ID",
+                                      "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
+                                      "type": "text",
+                                      "name": "tenantId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Open Identity & Security -> Identity -> Domains -> My profile -> copy the User OCID from the Details panel of My Profile page."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "User ID",
+                                      "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
+                                      "type": "text",
+                                      "name": "userId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Pem File Content",
+                                      "placeholder": "Provide the Pem File content.",
+                                      "type": "password",
+                                      "name": "pemFile",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Fingerprint",
+                                      "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
+                                      "type": "password",
+                                      "name": "publicFingerprint",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "If your PEM file is not encrypted, leave Pass Phrase as blank."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Pem File Pass Phrase (Optional)",
+                                      "placeholder": "Just Leave blank If not encrypted)",
+                                      "type": "password",
+                                      "name": "passPhrase",
+                                      "validations": {
+                                        "required": false
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
                           }
                         }
                       ]
@@ -298,16 +394,13 @@
               "location": "[parameters('workspace-location')]",
               "kind": "[variables('blanks')]",
               "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
                 "streamDeclarations": {
                   "Custom-OCI_LogsV2_CL": {
                     "columns": [
                       {
                         "name": "data",
                         "type": "dynamic"
-                      },
-                      {
-                        "name": "dataschema",
-                        "type": "string"
                       },
                       {
                         "name": "id",
@@ -318,6 +411,14 @@
                         "type": "dynamic"
                       },
                       {
+                        "name": "time",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "dataschema",
+                        "type": "string"
+                      },
+                      {
                         "name": "source",
                         "type": "string"
                       },
@@ -326,11 +427,19 @@
                         "type": "string"
                       },
                       {
-                        "name": "time",
-                        "type": "datetime"
+                        "name": "type",
+                        "type": "string"
                       },
                       {
-                        "name": "type",
+                        "name": "EventVendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "stream",
                         "type": "string"
                       }
                     ]
@@ -352,11 +461,10 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend d=data,o=oracle,dq=data.request,dqp=data.request.parameters,dqh=data.request.headers,ds=data.response | project TimeGenerated=['time'],id=tostring(id),EventType=tostring(type),source_s=tostring(source),EventVendor=tostring(EventVendor),EventProduct=tostring(EventProduct),StreamName=tostring(stream),oracle_compartmentid_s=tostring(o.compartmentid),oracle_tenantid_s=tostring(o.tenantid),oracle_loggroupid_s=tostring(o.loggroupid),oracle_logid_s=tostring(o.logid),oracle_vniccompartmentocid_s=tostring(o.vniccompartmentocid),oracle_vnicocid_s=tostring(o.vnicocid),oracle_vnicsubnetocid_s=tostring(o.vnicsubnetocid),data_eventName_s=tostring(d.eventName),data_eventGroupingId_s=tostring(d.eventGroupingId),data_compartmentId_s=tostring(d.compartmentId),data_compartmentName_s=tostring(d.compartmentName),data_availabilityDomain_s=tostring(d.availabilityDomain),data_resourceId_s=tostring(d.resourceId),data_request_id_s=tostring(dq.id),data_request_path_s=tostring(dq.path),EventMessage=tostring(d.message),HttpRequestMethod=tostring(dq.action),HttpStatusCode=tostring(ds.status),data_response_payload_id_s=tostring(ds.payload.id),data_response_payload_resourceName_s=tostring(ds.payload.resourceName),data_identity_principalId_s=tostring(d.identity.principalId),data_identity_principalName_s=tostring(d.identity.principalName),data_identity_callerId_s=tostring(d.identity.callerId),data_identity_callerName_s=tostring(d.identity.callerName),data_identity_tenantId_s=tostring(d.identity.tenantId),data_identity_authType_s=tostring(d.identity.authType),data_identity_consoleSessionId_s=tostring(d.identity.consoleSessionId),data_identity_credentials_s=tostring(d.identity.credentials),HttpUserAgentOriginal=tostring(d.identity.userAgent),data_request_parameters_compartmentId_s=tostring(dqp.compartmentId),data_request_parameters_userId_s=tostring(dqp.userId),data_request_parameters_instanceId_s=tostring(dqp.instanceId),data_request_parameters_vcnId_s=tostring(dqp.vcnId),data_request_parameters_subnetId_s=tostring(dqp.subnetId),data_request_parameters_imageId_s=tostring(dqp.imageId),data_request_parameters_serviceName_s=tostring(dqp.serviceName),data_request_parameters_id_s=tostring(dqp.id),data_request_parameters_name_s=tostring(dqp.name),data_request_parameters_lifecycleState_s=tostring(dqp.lifecycleState),data_request_headers_X_Forwarded_For_s=tostring(dqh['X-Forwarded-For']),data_request_headers_X_Real_IP_s=tostring(dqh['X-Real-IP']),data_request_headers_oci_original_url_s=tostring(dqh['oci-original-url']),data_additionalDetails_imageId_s=tostring(d.additionalDetails.imageId),data_additionalDetails_shape_s=tostring(d.additionalDetails.shape),data_additionalDetails_volumeId_s=tostring(d.additionalDetails.volumeId),data_additionalDetails_userId_s=tostring(d.additionalDetails.userId),data_stateChange_current_id_s=tostring(d.stateChange.current.id),data_stateChange_current_displayName_s=tostring(d.stateChange.current.displayName),data_stateChange_current_compartmentId_s=tostring(d.stateChange.current.compartmentId),data_stateChange_current_instanceId_s=tostring(d.stateChange.current.instanceId),data_stateChange_current_lifecycleState_s=tostring(d.stateChange.current.lifecycleState),data_stateChange_current_userId_s=tostring(d.stateChange.current.userId),data_stateChange_current_userName_s=tostring(d.stateChange.current.userName),data_stateChange_current_userDisplayName_s=tostring(d.stateChange.current.userDisplayName),data_stateChange_current_timeCreated_t=todatetime(d.stateChange.current.timeCreated),data_stateChange_current_timeUpdated_t=todatetime(d.stateChange.current.timeUpdated),data_stateChange_current_Instance_displayName_s=tostring(d.stateChange.current.Instance.displayName),data_stateChange_current_Instance_compartmentId_s=tostring(d.stateChange.current.Instance.compartmentId),data_stateChange_current_Instance_availabilityDomain_s=tostring(d.stateChange.current.Instance.availabilityDomain),data_stateChange_current_isEnabled_b=tobool(d.stateChange.current.isEnabled),data_stateChange_current_logGroupId_s=tostring(d.stateChange.current.logGroupId),data_stateChange_current_logType_s=tostring(d.stateChange.current.logType),data_stateChange_current_retentionDuration_d=todouble(d.stateChange.current.retentionDuration),data_stateChange_current_fingerprint_s=tostring(d.stateChange.current.fingerprint),data_stateChange_current_keyId_s=tostring(d.stateChange.current.keyId),data_definedTags_Oracle_Tags_CreatedBy_s=tostring(d.definedTags['Oracle-Tags'].CreatedBy),data_definedTags_Oracle_Tags_CreatedOn_t=todatetime(d.definedTags['Oracle-Tags'].CreatedOn),SrcIpAddr=tostring(iff(isnull(d.sourceAddress), d.identity.ipAddress, d.sourceAddress)),SrcPortNumber=toint(d.sourcePort),DstIpAddr=tostring(d.destinationAddress),DstPortNumber=toint(d.destinationPort),DstBytes=toint(d.bytesOut),NetworkProtocol=tostring(d.protocolName),data_startTime_d=toint(d.startTime),data_endTime_d=toint(d.endTime),data_action_s=tostring(d.action),data_status_s=tostring(d.status),data_packets_d=toint(d.packets),data_flowid_s=tostring(d.flowid)",
-                    "outputStream": "Custom-OCI_LogsV2_CL"
+                    "outputStream": "Custom-OCI_LogsV2_CL",
+                    "transformKql": "source | extend d=data,o=oracle,dq=data.request,dqp=data.request.parameters,dqh=data.request.headers,ds=data.response | project TimeGenerated=['time'],id=tostring(id),EventType=tostring(type),source_s=tostring(source),EventVendor=tostring(EventVendor),EventProduct=tostring(EventProduct),StreamName=tostring(stream),oracle_compartmentid_s=tostring(o.compartmentid),oracle_tenantid_s=tostring(o.tenantid),oracle_loggroupid_s=tostring(o.loggroupid),oracle_logid_s=tostring(o.logid),oracle_vniccompartmentocid_s=tostring(o.vniccompartmentocid),oracle_vnicocid_s=tostring(o.vnicocid),oracle_vnicsubnetocid_s=tostring(o.vnicsubnetocid),data_eventName_s=tostring(d.eventName),data_eventGroupingId_s=tostring(d.eventGroupingId),data_compartmentId_s=tostring(d.compartmentId),data_compartmentName_s=tostring(d.compartmentName),data_availabilityDomain_s=tostring(d.availabilityDomain),data_resourceId_s=tostring(d.resourceId),data_request_id_s=tostring(dq.id),data_request_path_s=tostring(dq.path),EventMessage=tostring(d.message),HttpRequestMethod=tostring(dq.action),HttpStatusCode=tostring(ds.status),data_response_payload_id_s=tostring(ds.payload.id),data_response_payload_resourceName_s=tostring(ds.payload.resourceName),data_identity_principalId_s=tostring(d.identity.principalId),data_identity_principalName_s=tostring(d.identity.principalName),data_identity_callerId_s=tostring(d.identity.callerId),data_identity_callerName_s=tostring(d.identity.callerName),data_identity_tenantId_s=tostring(d.identity.tenantId),data_identity_authType_s=tostring(d.identity.authType),data_identity_consoleSessionId_s=tostring(d.identity.consoleSessionId),data_identity_credentials_s=tostring(d.identity.credentials),HttpUserAgentOriginal=tostring(d.identity.userAgent),data_request_parameters_compartmentId_s=tostring(dqp.compartmentId),data_request_parameters_userId_s=tostring(dqp.userId),data_request_parameters_instanceId_s=tostring(dqp.instanceId),data_request_parameters_vcnId_s=tostring(dqp.vcnId),data_request_parameters_subnetId_s=tostring(dqp.subnetId),data_request_parameters_imageId_s=tostring(dqp.imageId),data_request_parameters_serviceName_s=tostring(dqp.serviceName),data_request_parameters_id_s=tostring(dqp.id),data_request_parameters_name_s=tostring(dqp.name),data_request_parameters_lifecycleState_s=tostring(dqp.lifecycleState),data_request_headers_X_Forwarded_For_s=tostring(dqh['X-Forwarded-For']),data_request_headers_X_Real_IP_s=tostring(dqh['X-Real-IP']),data_request_headers_oci_original_url_s=tostring(dqh['oci-original-url']),data_additionalDetails_imageId_s=tostring(d.additionalDetails.imageId),data_additionalDetails_shape_s=tostring(d.additionalDetails.shape),data_additionalDetails_volumeId_s=tostring(d.additionalDetails.volumeId),data_additionalDetails_userId_s=tostring(d.additionalDetails.userId),data_additionalDetails_description_s=tostring(d.additionalDetails.description),data_additionalDetails_sightingType_s=tostring(d.additionalDetails.sightingType),data_additionalDetails_riskLevel_s=tostring(d.additionalDetails.riskLevel),data_additionalDetails_riskScore_d=todouble(d.additionalDetails.riskScore),data_additionalDetails_tacticName_s=tostring(d.additionalDetails.tacticName),data_additionalDetails_techniqueName_s=tostring(d.additionalDetails.techniqueName),data_additionalDetails_principalResourceName_s=tostring(d.additionalDetails.principalResourceName),data_additionalDetails_detectorRuleType_s=tostring(d.additionalDetails.detectorRuleType),data_additionalDetails_principalResourceId_s=tostring(d.additionalDetails.principalResourceId),data_additionalDetails_principalResourceType_s=tostring(d.additionalDetails.principalResourceType),data_additionalDetails_targetId_s=tostring(d.additionalDetails.targetId),data_additionalDetails_region_s=tostring(d.additionalDetails.region[0]),data_additionalDetails_reason_s=tostring(d.additionalDetails.reason),data_additionalDetails_severity_s=tostring(d.additionalDetails.severity),data_additionalDetails_sightingScore_d=todouble(d.additionalDetails.sightingScore),data_additionalDetails_confidence_d=todouble(d.additionalDetails.confidence),data_additionalDetails_firstDetected_t=todatetime(d.additionalDetails.firstDetected),data_additionalDetails_lastDetected_t=todatetime(d.additionalDetails.lastDetected),data_additionalDetails_labels=d.additionalDetails.labels,data_stateChange_current_statements=d.stateChange.current.statements,data_stateChange_previous_statements=d.stateChange.previous.statements,data_stateChange_current_ingressSecurityRules=d.stateChange.current.ingressSecurityRules,data_stateChange_current_egressSecurityRules=d.stateChange.current.egressSecurityRules,data_stateChange_current_routeRules=d.stateChange.current.routeRules,data_stateChange_previous=d.stateChange.previous,data_stateChange_current_definedTags=d.stateChange.current.definedTags,data_additionalDetails_actorId_s=tostring(d.additionalDetails.actorId),data_additionalDetails_actorName_s=tostring(d.additionalDetails.actorName),data_additionalDetails_actorDisplayName_s=tostring(d.additionalDetails.actorDisplayName),data_additionalDetails_adminRefResourceName_s=tostring(d.additionalDetails.adminRefResourceName),data_additionalDetails_adminRefResourceId_s=tostring(d.additionalDetails.adminRefResourceId),data_additionalDetails_id_s=tostring(d.additionalDetails.id),data_additionalDetails_adminValuesAdded=d.additionalDetails.adminValuesAdded,data_additionalDetails_adminValuesRemoved=d.additionalDetails.adminValuesRemoved,data_request_parameters_bastionId_s=tostring(dqp.bastionId),data_stateChange_current_id_s=tostring(d.stateChange.current.id),data_stateChange_current_displayName_s=tostring(d.stateChange.current.displayName),data_stateChange_current_compartmentId_s=tostring(d.stateChange.current.compartmentId),data_stateChange_current_instanceId_s=tostring(d.stateChange.current.instanceId),data_stateChange_current_lifecycleState_s=tostring(d.stateChange.current.lifecycleState),data_stateChange_current_userId_s=tostring(d.stateChange.current.userId),data_stateChange_current_userName_s=tostring(d.stateChange.current.userName),data_stateChange_current_userDisplayName_s=tostring(d.stateChange.current.userDisplayName),data_stateChange_current_timeCreated_t=todatetime(d.stateChange.current.timeCreated),data_stateChange_current_timeUpdated_t=todatetime(d.stateChange.current.timeUpdated),data_stateChange_current_Instance_displayName_s=tostring(d.stateChange.current.Instance.displayName),data_stateChange_current_Instance_compartmentId_s=tostring(d.stateChange.current.Instance.compartmentId),data_stateChange_current_Instance_availabilityDomain_s=tostring(d.stateChange.current.Instance.availabilityDomain),data_stateChange_current_isEnabled_b=tobool(d.stateChange.current.isEnabled),data_stateChange_current_logGroupId_s=tostring(d.stateChange.current.logGroupId),data_stateChange_current_logType_s=tostring(d.stateChange.current.logType),data_stateChange_current_retentionDuration_d=todouble(d.stateChange.current.retentionDuration),data_stateChange_current_fingerprint_s=tostring(d.stateChange.current.fingerprint),data_stateChange_current_keyId_s=tostring(d.stateChange.current.keyId),data_definedTags_Oracle_Tags_CreatedBy_s=tostring(d.definedTags['Oracle-Tags'].CreatedBy),data_definedTags_Oracle_Tags_CreatedOn_t=todatetime(d.definedTags['Oracle-Tags'].CreatedOn),SrcIpAddr=tostring(iff(isnull(d.sourceAddress), d.identity.ipAddress, d.sourceAddress)),SrcPortNumber=toint(d.sourcePort),DstIpAddr=tostring(d.destinationAddress),DstPortNumber=toint(d.destinationPort),DstBytes=toint(d.bytesOut),NetworkProtocol=tostring(d.protocolName),data_startTime_d=toint(d.startTime),data_endTime_d=toint(d.endTime),data_action_s=tostring(d.action),data_status_s=tostring(d.status),data_packets_d=toint(d.packets),data_flowid_s=tostring(d.flowid)"
                   }
-                ],
-                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]"
+                ]
               }
             },
             {
@@ -366,8 +474,10 @@
               "location": "[parameters('workspace-location')]",
               "kind": null,
               "properties": {
+                "retentionInDays": 180,
                 "schema": {
                   "name": "OCI_LogsV2_CL",
+                  "description": "Oracle Cloud Infrastructure logs data",
                   "columns": [
                     {
                       "name": "TimeGenerated",
@@ -636,6 +746,181 @@
                       "description": "Data additionaldetails userid s"
                     },
                     {
+                      "name": "data_additionalDetails_description_s",
+                      "type": "string",
+                      "description": "Data additionaldetails description s"
+                    },
+                    {
+                      "name": "data_additionalDetails_sightingType_s",
+                      "type": "string",
+                      "description": "Data additionaldetails sightingtype s"
+                    },
+                    {
+                      "name": "data_additionalDetails_riskLevel_s",
+                      "type": "string",
+                      "description": "Data additionaldetails risklevel s"
+                    },
+                    {
+                      "name": "data_additionalDetails_riskScore_d",
+                      "type": "real",
+                      "description": "Data additionaldetails riskscore d"
+                    },
+                    {
+                      "name": "data_additionalDetails_tacticName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails tacticname s"
+                    },
+                    {
+                      "name": "data_additionalDetails_techniqueName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails techniquename s"
+                    },
+                    {
+                      "name": "data_additionalDetails_principalResourceName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails principalresourcename s"
+                    },
+                    {
+                      "name": "data_additionalDetails_detectorRuleType_s",
+                      "type": "string",
+                      "description": "Data additionaldetails detectorruletype s"
+                    },
+                    {
+                      "name": "data_additionalDetails_principalResourceId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails principalresourceid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_principalResourceType_s",
+                      "type": "string",
+                      "description": "Data additionaldetails principalresourcetype s"
+                    },
+                    {
+                      "name": "data_additionalDetails_targetId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails targetid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_region_s",
+                      "type": "string",
+                      "description": "Data additionaldetails region s"
+                    },
+                    {
+                      "name": "data_additionalDetails_reason_s",
+                      "type": "string",
+                      "description": "Data additionaldetails reason s"
+                    },
+                    {
+                      "name": "data_additionalDetails_severity_s",
+                      "type": "string",
+                      "description": "Data additionaldetails severity s"
+                    },
+                    {
+                      "name": "data_additionalDetails_sightingScore_d",
+                      "type": "real",
+                      "description": "Data additionaldetails sightingscore d"
+                    },
+                    {
+                      "name": "data_additionalDetails_confidence_d",
+                      "type": "real",
+                      "description": "Data additionaldetails confidence d"
+                    },
+                    {
+                      "name": "data_additionalDetails_firstDetected_t",
+                      "type": "datetime",
+                      "description": "Data additionaldetails firstdetected t"
+                    },
+                    {
+                      "name": "data_additionalDetails_lastDetected_t",
+                      "type": "datetime",
+                      "description": "Data additionaldetails lastdetected t"
+                    },
+                    {
+                      "name": "data_additionalDetails_labels",
+                      "type": "dynamic",
+                      "description": "Data additionaldetails labels"
+                    },
+                    {
+                      "name": "data_stateChange_current_statements",
+                      "type": "dynamic",
+                      "description": "Data statechange current statements"
+                    },
+                    {
+                      "name": "data_stateChange_previous_statements",
+                      "type": "dynamic",
+                      "description": "Data statechange previous statements"
+                    },
+                    {
+                      "name": "data_stateChange_current_ingressSecurityRules",
+                      "type": "dynamic",
+                      "description": "Data statechange current ingresssecurityrules"
+                    },
+                    {
+                      "name": "data_stateChange_current_egressSecurityRules",
+                      "type": "dynamic",
+                      "description": "Data statechange current egresssecurityrules"
+                    },
+                    {
+                      "name": "data_stateChange_current_routeRules",
+                      "type": "dynamic",
+                      "description": "Data statechange current routerules"
+                    },
+                    {
+                      "name": "data_stateChange_previous",
+                      "type": "dynamic",
+                      "description": "Data statechange previous"
+                    },
+                    {
+                      "name": "data_stateChange_current_definedTags",
+                      "type": "dynamic",
+                      "description": "Data statechange current definedtags"
+                    },
+                    {
+                      "name": "data_additionalDetails_actorId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails actorid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_actorName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails actorname s"
+                    },
+                    {
+                      "name": "data_additionalDetails_actorDisplayName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails actordisplayname s"
+                    },
+                    {
+                      "name": "data_additionalDetails_adminRefResourceName_s",
+                      "type": "string",
+                      "description": "Data additionaldetails adminrefresourcename s"
+                    },
+                    {
+                      "name": "data_additionalDetails_adminRefResourceId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails adminrefresourceid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_id_s",
+                      "type": "string",
+                      "description": "Data additionaldetails id s"
+                    },
+                    {
+                      "name": "data_additionalDetails_adminValuesAdded",
+                      "type": "dynamic",
+                      "description": "Data additionaldetails adminvaluesadded"
+                    },
+                    {
+                      "name": "data_additionalDetails_adminValuesRemoved",
+                      "type": "dynamic",
+                      "description": "Data additionaldetails adminvaluesremoved"
+                    },
+                    {
+                      "name": "data_request_parameters_bastionId_s",
+                      "type": "string",
+                      "description": "Data request parameters bastionid s"
+                    },
+                    {
                       "name": "data_stateChange_current_id_s",
                       "type": "string",
                       "description": "Data statechange current id s"
@@ -823,8 +1108,8 @@
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "id": "OCI-Connector-CCP-Definition",
-          "title": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+          "id": "OracleCloudInfraConnector",
+          "title": "Oracle Cloud Infrastructure (via Codeless Connector Framework)",
           "publisher": "Microsoft",
           "descriptionMarkdown": "The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).",
           "graphQueriesTableName": "OCI_LogsV2_CL",
@@ -838,17 +1123,17 @@
           "sampleQueries": [
             {
               "description": "All OCI Events",
-              "query": "{{graphQueriesTableName}} \n| sort by TimeGenerated desc"
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
             },
             {
               "description": "Get Sample of OCI Events",
-              "query": "{{graphQueriesTableName}} \n | take 10"
+              "query": "{{graphQueriesTableName}}\n| take 10"
             }
           ],
           "dataTypes": [
             {
-              "name": "{{graphQueriesTableName}}",
-              "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "name": "OCI_LogsV2_CL",
+              "lastDataReceivedQuery": "OCI_LogsV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -856,6 +1141,10 @@
               "type": "HasDataConnectors"
             }
           ],
+          "availability": {
+            "isPreview": false,
+            "status": 1
+          },
           "permissions": {
             "resourceProvider": [
               {
@@ -866,7 +1155,8 @@
                 "requiredPermissions": {
                   "write": true,
                   "read": true,
-                  "delete": true
+                  "delete": true,
+                  "action": false
                 }
               }
             ],
@@ -874,115 +1164,207 @@
               {
                 "name": "OCI Streaming API access",
                 "description": "Access to the OCI Streaming API through a API Signing Keys is required."
+              },
+              {
+                "name": "OCI IAM Policy",
+                "description": "The OCI user associated with the API signing key must have sufficient IAM permissions to consume data from the OCI Stream. The API key provides authentication only; an IAM policy is required for authorization. At minimum, configure: Allow group <group-name> to use stream-pull in compartment <compartment-name>."
               }
             ]
           },
           "instructionSteps": [
             {
               "title": "Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel",
-              "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" \u2192 \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" \u2192 \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n",
+              "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" -> \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" -> \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm). Save the Pem File, pass phrase (Optional, it is not set when using the OCI console to generate the API signing key pair) and fingerprint in a secured place for use when connect.\n\r",
               "instructions": [
                 {
-                  "type": "Textbox",
+                  "type": "DataConnectorsGrid",
                   "parameters": {
-                    "label": "Stream OCID",
-                    "required": true,
-                    "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
-                    "type": "text",
-                    "name": "streamId"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Service Endpoint Base URL",
-                    "required": true,
-                    "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
-                    "type": "text",
-                    "name": "serviceEndpointBaseUrl"
-                  }
-                },
-                {
-                  "type": "Dropdown",
-                  "parameters": {
-                    "label": "Cursor Type",
-                    "name": "cursorType",
-                    "required": true,
-                    "type": "text",
-                    "placeholder": "Select Cursor Type",
-                    "options": [
+                    "mapping": [
                       {
-                        "key": "IndividualCursor",
-                        "text": "Individual Cursor"
+                        "columnName": "Tenant Id",
+                        "columnValue": "properties.auth.tenantId"
+                      },
+                      {
+                        "columnName": "Stream",
+                        "columnValue": "properties.request.streamId"
+                      },
+                      {
+                        "columnName": "Cursor Type",
+                        "columnValue": "properties.request.cursorType"
+                      },
+                      {
+                        "columnName": "Partition / GroupName",
+                        "columnValue": "properties.request.partitions"
                       }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
                     ]
                   }
                 },
                 {
-                  "type": "Textbox",
+                  "type": "ContextPane",
                   "parameters": {
-                    "label": "Partition Id",
-                    "required": true,
-                    "placeholder": "Provide the Partition Id.",
-                    "type": "text",
-                    "name": "partitions"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Tenant ID",
-                    "required": true,
-                    "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
-                    "type": "text",
-                    "name": "tenantId"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "User ID",
-                    "required": true,
-                    "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
-                    "type": "text",
-                    "name": "userId"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Pem File Content",
-                    "required": true,
-                    "placeholder": "Provide the Pem File content.",
-                    "type": "password",
-                    "name": "pemFile"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Pass Phrase",
-                    "required": false,
-                    "placeholder": "Provide the pass phrase for the Pem File Content. (Optional)",
-                    "type": "password",
-                    "name": "passPhrase"
-                  }
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Fingerprint",
-                    "required": true,
-                    "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
-                    "type": "password",
-                    "name": "publicFingerprint"
-                  }
-                },
-                {
-                  "type": "ConnectionToggleButton",
-                  "parameters": {
-                    "connectLabel": "Connect",
-                    "name": "Connect"
+                    "label": "Add stream",
+                    "title": "Add Oracle Cloud Infrastructure Data Stream",
+                    "subtitle": "Connect to Oracle Cloud Infrastructure Data",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Open Analytics & AI -> Streaming -> choose your stream -> copy the OCID from the Stream Details page."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Stream OCID",
+                              "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
+                              "type": "text",
+                              "name": "streamId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Open Analytics & AI -> Streaming -> choose your stream -> copy the Message Endpoint from the Stream Details page."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Public Message Endpoint of the stream (Service Endpoint Base URL)",
+                              "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
+                              "type": "text",
+                              "name": "serviceEndpointBaseUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Dropdown",
+                            "parameters": {
+                              "label": "Cursor Type",
+                              "name": "cursorType",
+                              "options": [
+                                {
+                                  "key": "IndividualCursor",
+                                  "text": "Individual Cursor"
+                                },
+                                {
+                                  "key": "GroupCursor",
+                                  "text": "Group Cursor (preview)"
+                                }
+                              ],
+                              "required": true
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Partition Id / Group name : The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2.\nGroup cursors allow you to read from all partitions simultaneously. When using a group cursor (preview), provide the group name (can be any string) instead of individual partition IDs. (the group will be created automatically by the platform when you start reading)."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Partition Id / Group name",
+                              "placeholder": "Individual Cursor - Partition Id (E.g. 0 or 1 or 2), Group Cursor - Group name",
+                              "type": "text",
+                              "name": "partitions",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Open Governance & Administration -> Account Management -> Tenancy Details -> copy the Tenancy OCID from the Tenancy details page."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Tenant ID",
+                              "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
+                              "type": "text",
+                              "name": "tenantId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Open Identity & Security -> Identity -> Domains -> My profile -> copy the User OCID from the Details panel of My Profile page."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "User ID",
+                              "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
+                              "type": "text",
+                              "name": "userId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Pem File Content",
+                              "placeholder": "Provide the Pem File content.",
+                              "type": "password",
+                              "name": "pemFile",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Fingerprint",
+                              "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
+                              "type": "password",
+                              "name": "publicFingerprint",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "If your PEM file is not encrypted, leave Pass Phrase as blank."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Pem File Pass Phrase (Optional)",
+                              "placeholder": "Just Leave blank If not encrypted)",
+                              "type": "password",
+                              "name": "passPhrase",
+                              "validations": {
+                                "required": false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               ]
@@ -1036,7 +1418,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnections1')]",
-        "displayName": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+        "displayName": "Oracle Cloud Infrastructure (via Codeless Connector Framework)",
         "contentKind": "ResourcesDataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -1051,7 +1433,7 @@
               "type": "securestring"
             },
             "connectorDefinitionName": {
-              "defaultValue": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+              "defaultValue": "Oracle Cloud Infrastructure (via Codeless Connector Framework)",
               "type": "securestring",
               "minLength": 1
             },
@@ -1100,15 +1482,14 @@
               "type": "securestring",
               "minLength": 1
             },
-            "passPhrase": {
-              "defaultValue": "passPhrase",
-              "type": "securestring",
-              "minLength": 1
-            },
             "publicFingerprint": {
               "defaultValue": "publicFingerprint",
               "type": "securestring",
               "minLength": 1
+            },
+            "passPhrase": {
+              "defaultValue": "",
+              "type": "securestring"
             }
           },
           "variables": {
@@ -1142,19 +1523,12 @@
               }
             },
             {
-              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'oracle-cloud-infra-connector', parameters('guidValue'))]",
+              "name": "[[concat('parameters('workspace')','/Microsoft.SecurityInsights/', base64(concat( parameters('tenantId'), parameters('streamId'),'#' , parameters('partitions'))) )]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "OCI",
               "properties": {
-                "connectorDefinitionName": "OCI-Connector-CCP-Definition",
-                "dataType": "OCI_LogsV2_CL",
-                "dcrConfig": {
-                  "streamName": "Custom-OCI_LogsV2_CL",
-                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
-                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
-                },
                 "auth": {
                   "type": "Oracle",
                   "pemFile": "[[parameters('pemFile')]",
@@ -1180,6 +1554,18 @@
                 },
                 "Paging": {
                   "pageSize": 100
+                },
+                "connectorDefinitionName": "OracleCloudInfraConnector",
+                "dataType": "OCI_LogsV2",
+                "dcrConfig": {
+                  "streamName": "Custom-OCI_LogsV2_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "stream": "[[parameters('streamId')]",
+                  "EventVendor": "Oracle",
+                  "EventProduct": "Oracle Cloud Infrastructure"
                 }
               }
             }
@@ -1199,12 +1585,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.2",
+        "version": "3.1.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Oracle Cloud Infrastructure",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>\u2022 Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Oracle%20Cloud%20Infrastructure/ReleaseNotes.md\">Release Notes</a></p>\n<p>\u2022 There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Oracle Cloud Infrastructure (OCI) solution provides the capability to ingest OCI Logs from <a href=\"https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm\">OCI Stream</a> into Microsoft Sentinel using the <a href=\"https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418\">OCI Streaming REST API</a>.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p></li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API (Data Collection Rules)</a></p></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Oracle%20Cloud%20Infrastructure/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Oracle Cloud Infrastructure (OCI) solution provides the capability to ingest OCI Logs from <a href=\"https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm\">OCI Stream</a> into Microsoft Sentinel using the <a href=\"https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418\">OCI Streaming REST API</a>.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p></li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API (Data Collection Rules)</a></p></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
