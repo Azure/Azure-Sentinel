@@ -1,14 +1,14 @@
 Parser:
-  Title: Web Session ASIM filtering parser for ClouflareV2
+  Title: Web Session ASIM parser for CloudflareV2
   Version: '0.1.0'
-  LastUpdated: Aug 18, 2026
+  LastUpdated: Aug 26, 2026
 Product:
-  Name: CLoudflare
+  Name: Cloudflare
 Normalization:
   Schema: 'WebSession'
   Version: '0.2.7'
 References:
-- Title: ASIM Authentication Schema
+- Title: ASIM Web Session Schema
   Link: https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-web
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
@@ -28,53 +28,47 @@ ParserParams:
 ParserQuery: |
     let parser = (
         disabled:bool = false
-        , pack:bool = true
+        , pack:bool = false
     )
     {
         let CloudflareBase = (
             CloudflareV2_CL
             | where not(disabled)
             | extend
-                tmpDataset = case(
+                EventOriginalType = case(
                     // sinkhole_http_logs
-                    isnotempty(tostring(SinkholeID))
-                        and (isnotempty(URL)or isnotempty(URI))
+                    isnotempty(SinkholeID)
+                        and (
+                            isnotempty(URL)
+                            or isnotempty(URI)
+                        )
                         , "sinkhole_http_logs"
                     // gateway_http
-                    , isnotempty(tostring(RegistrationID)) and isnotempty(tostring(URL))
+                    , (
+                        isnotempty(RequestID)
+                        or isnotempty(RegistrationID)
+                    )
+                        and isnotempty(URL)
                         , "gateway_http"
                     // firewall_events
-                    , isnotempty(ClientRequestPath) and Kind == "firewall"
+                    , isnotempty(ClientRequestPath)
+                        and Kind =~ "firewall"
                         , "firewall_events"
                     // http_requests
-                    , isnotempty(isnotempty(ClientRequestURI) or isnotempty(ClientRequestPath))
-                        and isnotnull(
-                            coalesce(
-                                WAFAttackScore
-                                , WAFRCEAttackScore
-                                , WAFSQLiAttackScore
-                                , WAFXSSAttackScore
-                            )
-                        )
+                    , isnotempty(ClientRequestURI)
                         , "http_requests"
-                    // zaraz_events
-                    , isnotempty(RequestHeaders)
-                        and isnotempty(URL)
-                        and isempty(RayID)
-                        , "zaraz_events"
                     , ""
                 )
-            | where tmpDataset in (
+            | where EventOriginalType in (
                 "gateway_http"
                 , "http_requests"
                 , "firewall_events"
                 , "sinkhole_http_logs"
-                , "zaraz_events"
             )
         );
         let GatewayHttp = (
             CloudflareBase
-            | where tmpDataset == "gateway_http"
+            | where EventOriginalType == "gateway_http"
             | extend
                 EventStartTime = coalesce(todatetime(Datetime), TimeGenerated)
                 , SrcIpAddr = SourceIP
@@ -91,7 +85,6 @@ ParserQuery: |
                 , DvcOriginalAction = Action
                 , EventOriginalUid = coalesce(RequestID, SessionID)
                 , EventType = "HTTPsession"
-                , EventProduct = "Cloudflare Gateway"
                 , SrcUsername = Email
                 , RuleName = PolicyName
                 , UrlCategory = iff(
@@ -103,8 +96,7 @@ ParserQuery: |
                 EventEndTime = EventStartTime
                 , AdditionalFields = iff(pack
                     , bag_pack(
-                        "CloudflareDataset", tmpDataset
-                        , "ApplicationNames", ApplicationNames
+                         "ApplicationNames", ApplicationNames
                         , "SourceIPCountryCode", SourceIPCountryCode
                         , "DestinationIPCountryCode", DestinationIPCountryCode
                         , "DeviceID", DeviceID
@@ -135,7 +127,7 @@ ParserQuery: |
         );
         let HttpRequests = (
             CloudflareBase
-            | where tmpDataset == "http_requests"
+            | where EventOriginalType == "http_requests"
             | extend
                 EventStartTime = coalesce(
                     todatetime(EdgeStartTimestamp)
@@ -146,11 +138,7 @@ ParserQuery: |
                 , SrcPortNumber = ClientSrcPort
                 , DstIpAddr = OriginIP
                 , DstPortNumber = OriginPort
-                , Url = case(
-                    isnotempty(ClientRequestURI), ClientRequestURI
-                    , isnotempty(ClientRequestPath), strcat(ClientRequestPath, ClientRequestQuery)
-                    , ""
-                )
+                , Url = ClientRequestURI
                 , HttpHost = ClientRequestHost
                 , HttpRequestMethod = ClientRequestMethod
                 , tmpHttpVersion = ClientRequestProtocol
@@ -164,7 +152,6 @@ ParserQuery: |
                 , DvcOriginalAction = SecurityAction
                 , EventOriginalUid = RayID
                 , EventType = "WebServerSession"
-                , EventProduct = "Cloudflare HTTP Requests"
                 , SrcUsername = ""
                 , RuleName = SecurityRuleDescription
                 , UrlCategory = ""
@@ -173,8 +160,7 @@ ParserQuery: |
                 , AdditionalFields = iff(
                     pack
                     , bag_pack(
-                        "CloudflareDataset", tmpDataset
-                        , "SecurityActions", SecurityActions
+                         "SecurityActions", SecurityActions
                         , "SecurityRuleIDs", SecurityRuleIDs
                         , "SecuritySources", SecuritySources
                         , "WAFAttackScore", WAFAttackScore
@@ -186,6 +172,9 @@ ParserQuery: |
                         , "BotTags", BotTags
                         , "Cookies", Cookies
                         , "BotDetectionTags", BotDetectionTags
+                        , "BotDetectionIDs", BotDetectionIDs
+                        , "JA3Hash", JA3Hash
+                        , "JA4", JA4
                         , "LeakedCredentialCheckResult", LeakedCredentialCheckResult
                         , "ContentScanObjResults", ContentScanObjResults
                         , "ContentScanObjTypes", ContentScanObjTypes
@@ -196,6 +185,11 @@ ParserQuery: |
                         , "ClientRegionCode", ClientRegionCode
                         , "ClientIPClass", ClientIPClass
                         , "ClientSSLProtocol", ClientSSLProtocol
+                        , "ClientXRequestedWith", ClientXRequestedWith
+                        , "ClientMTLSAuthStatus", ClientMTLSAuthStatus
+                        , "ClientMTLSAuthCertFingerprint", ClientMTLSAuthCertFingerprint
+                        , "EdgeRequestHost", EdgeRequestHost
+                        , "EdgeResponseContentType", EdgeResponseContentType
                         , "EdgeColoCode", EdgeColoCode
                         , "EdgePathingOp", EdgePathingOp
                         , "EdgePathingSrc", EdgePathingSrc
@@ -211,7 +205,7 @@ ParserQuery: |
         );
         let FirewallEvents = (
             CloudflareBase
-            | where tmpDataset == "firewall_events"
+            | where EventOriginalType == "firewall_events"
             | extend
                 EventStartTime = coalesce(todatetime(Datetime), TimeGenerated)
                 , SrcIpAddr = ClientIP
@@ -240,7 +234,6 @@ ParserQuery: |
                 , DvcOriginalAction = Action
                 , EventOriginalUid = RayID
                 , EventType = "WebServerSession"
-                , EventProduct = "Cloudflare Firewall"
                 , SrcUsername = ""
                 , RuleName = Description
                 , UrlCategory = ""
@@ -249,9 +242,7 @@ ParserQuery: |
                 , AdditionalFields = iff(
                     pack
                     , bag_pack(
-                        "CloudflareDataset", tmpDataset
-                        , "Description", Description
-                        , "Ref", Ref
+                          "Ref", Ref
                         , "RuleID", RuleID
                         , "Source", Source
                         , "MatchIndex", MatchIndex
@@ -264,7 +255,6 @@ ParserQuery: |
                         , "OriginResponseStatus", OriginResponseStatus
                         , "RayID", RayID
                         , "OriginatorRayID", OriginatorRayID
-                        , "OriginResponseStatus", OriginResponseStatus
                         , "ZoneName", ZoneName
                     )
                     , dynamic({})
@@ -272,15 +262,16 @@ ParserQuery: |
         );
         let SinkholeHttp = (
             CloudflareBase
-            | where tmpDataset == "sinkhole_http_logs"
+            | where EventOriginalType == "sinkhole_http_logs"
             | extend
                 EventStartTime = coalesce(todatetime(Timestamp), TimeGenerated)
                 , SrcIpAddr = SrcAddr
                 , SrcPortNumber = int(null)
                 , DstIpAddr = DestAddr
                 , DstPortNumber = int(null)
-                , Url = case(isnotempty(URL), URL
-                    , URI
+                , Url = case(
+                    isnotempty(URI), URI
+                    , URL
                 )
                 , HttpHost = Host
                 , HttpRequestMethod = Method
@@ -291,7 +282,6 @@ ParserQuery: |
                 , DvcOriginalAction = ""
                 , EventOriginalUid = SinkholeID
                 , EventType = "WebServerSession"
-                , EventProduct = "Cloudflare Sinkhole"
                 , SrcUsername = Username
                 , RuleName = ""
                 , UrlCategory = ""
@@ -300,8 +290,7 @@ ParserQuery: |
                 , AdditionalFields = iff(
                     pack
                     , bag_pack(
-                        "CloudflareDataset", tmpDataset
-                        , "AccountID", AccountID
+                         "AccountID", AccountID
                         , "Body", Body
                         , "BodyLength", BodyLength
                         , "Headers", Headers
@@ -310,52 +299,15 @@ ParserQuery: |
                     , dynamic({})
                 )
         );
-        let ZarazEvents = (
-            CloudflareBase
-            | where tmpDataset == "zaraz_events"
-            | extend
-                tmpZarazEventType = EventType
-            | extend
-                EventStartTime = TimeGenerated
-                , EventEndTime = TimeGenerated
-                , SrcIpAddr = IP
-                , SrcPortNumber = int(null)
-                , DstIpAddr = ""
-                , DstPortNumber = int(null)
-                , Url = URL
-                , HttpHost = extract(@"(?i)^https?://([^/:?#]+)", 1, URL)
-                , HttpRequestMethod = ""
-                , tmpHttpVersion = ""
-                , HttpUserAgent = ""
-                , HttpReferrer = ""
-                , tmpHttpCode = int(null)
-                , DvcOriginalAction = ""
-                , EventOriginalUid = ""
-                , EventType = "WebServerSession"
-                , EventProduct = "Cloudflare Zaraz"
-                , SrcUsername = ""
-                , RuleName = ""
-                , UrlCategory = ""
-            | extend
-                AdditionalFields = iff(
-                    pack
-                    , bag_pack(
-                        "CloudflareDataset", tmpDataset
-                        , "EventDetails", EventDetails
-                        , "RequestHeaders", RequestHeaders
-                        , "Body", Body
-                    )
-                    , dynamic({})
-                )
-        );
         union
-            GatewayHttp, HttpRequests, FirewallEvents, SinkholeHttp, ZarazEvents
+            GatewayHttp, HttpRequests, FirewallEvents, SinkholeHttp
         | extend
-            HttpVersion = case(
+              EventProduct = "Cloudflare"
+            , HttpVersion = case(
                 isempty(tmpHttpVersion), ""
                 , tmpHttpVersion in~ ("HTTP/2", "HTTP/2.0", "2", "2.0"), "2.0"
                 , tmpHttpVersion in~ ("HTTP/3", "HTTP/3.0", "3", "3.0"), "3.0"
-                , tmpHttpVersion startswith "HTTP/", substring( tmpHttpVersion, 5)
+                , tmpHttpVersion startswith "HTTP/", substring(tmpHttpVersion, 5)
                 , tmpHttpVersion
             )
             , DvcAction = case(
@@ -410,7 +362,7 @@ ParserQuery: |
                 , "Informational"
             )
             , EventResult = case(
-            // Success: <400 , Failure: =>400
+            // Success: <400, Failure: >=400
                 DvcAction in ("Deny", "Drop")
                     , "Failure"
                 , isnotnull(tmpHttpCode) and tmpHttpCode >= 100 and tmpHttpCode < 400
@@ -428,7 +380,6 @@ ParserQuery: |
                 , ""
             )
             , EventUid = _ItemId
-            , EventOriginalType = tmpDataset
             , EventCount = int(1)
             , EventVendor = "Cloudflare"
             , EventSchema = "WebSession"
