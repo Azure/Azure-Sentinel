@@ -39,26 +39,9 @@ ParserParams:
     Default: false
 FunctionQuery: |
   CommonSecurityLog
-  | where not(disabled)
   | where DeviceVendor =~ "BUI"
   | where DeviceProduct =~ "HoneyForge"
-  // Time filter
-  | where (isnull(starttime) or TimeGenerated >= starttime)
-  | where (isnull(endtime) or TimeGenerated <= endtime)
-  // IP prefix filters
-  | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
-  | where (array_length(dstipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DestinationIP, dstipaddr_has_any_prefix))
-  | where (array_length(ipaddr_has_any_prefix) == 0
-      or has_any_ipv4_prefix(SourceIP, ipaddr_has_any_prefix)
-      or has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix))
-  // Port filter
-  | where (isnull(dstportnumber) or toint(DestinationPort) == dstportnumber)
-  // Sensor name filter
-  | extend _SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))
-  | where (array_length(hostname_has_any) == 0 or _SensorName has_any (hostname_has_any))
-  // ASIM field mappings
   | extend
-      // Event metadata
       EventVendor           = "BUI",
       EventProduct          = "HoneyForge",
       EventProductVersion   = tostring(DeviceVersion),
@@ -66,64 +49,28 @@ FunctionQuery: |
       EventSchemaVersion    = "0.2.6",
       EventType             = "NetworkSession",
       EventResult           = "NA",
+      EventCount            = int(1),
       EventStartTime        = TimeGenerated,
       EventEndTime          = TimeGenerated,
-      EventCount            = toint(1),
-      EventOriginalUid      = tostring(ExtID),
-      EventOriginalType     = tostring(DeviceEventClassID),
       EventSeverity         = case(
-                                  toint(LogSeverity) >= 9, "Critical",
-                                  toint(LogSeverity) >= 7, "High",
-                                  toint(LogSeverity) >= 4, "Medium",
-                                  "Low"),
-      EventOriginalSeverity = tostring(LogSeverity),
-      EventMessage          = tostring(Activity),
-      // Source
+                                LogSeverity == "10", "High",
+                                LogSeverity == "7",  "Medium",
+                                LogSeverity == "4",  "Low",
+                                "Informational"),
+      NetworkProtocol       = case(
+                                Protocol == "6",  "TCP",
+                                Protocol == "17", "UDP",
+                                Protocol == "1",  "ICMP",
+                                tostring(Protocol)),
       SrcIpAddr             = tostring(SourceIP),
       SrcPortNumber         = toint(SourcePort),
-      // Destination (the sensor)
       DstIpAddr             = tostring(DestinationIP),
       DstPortNumber         = toint(DestinationPort),
-      DstHostname           = _SensorName,
-      // Network
-      NetworkProtocol       = tostring(Protocol),
-      NetworkDirection      = "Inbound",
-      // Device (sensor)
+      DstHostname           = tostring(DestinationHostName),
       DvcHostname           = tostring(Computer),
-      DvcId                 = tostring(DeviceCustomString1),
-      DvcIdType             = "Other",
-      // HoneyForge-specific custom fields (retained for hunting)
-      HoneyForgeSensorID    = tostring(DeviceCustomString1),
-      HoneyForgeCustomerID  = tostring(DeviceCustomString2),
-      HoneyForgeSensorName  = _SensorName
-  | project-away _SensorName
-  | project
-      TimeGenerated,
-      EventVendor,
-      EventProduct,
-      EventProductVersion,
-      EventSchema,
-      EventSchemaVersion,
-      EventType,
-      EventResult,
-      EventSeverity,
-      EventOriginalSeverity,
-      EventOriginalUid,
-      EventOriginalType,
-      EventMessage,
-      EventStartTime,
-      EventEndTime,
-      EventCount,
-      SrcIpAddr,
-      SrcPortNumber,
-      DstIpAddr,
-      DstPortNumber,
-      DstHostname,
-      NetworkProtocol,
-      NetworkDirection,
-      DvcHostname,
-      DvcId,
-      DvcIdType,
-      HoneyForgeSensorID,
-      HoneyForgeCustomerID,
-      HoneyForgeSensorName
+      DvcAction             = "Detect",
+      AdditionalFields      = bag_pack(
+                                "SensorName",    iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),
+                                "CustomerID",    tostring(DeviceCustomString2),
+                                "ThreatName",    tostring(Activity),
+                                "RuleID",        tostring(DeviceEventClassID))
