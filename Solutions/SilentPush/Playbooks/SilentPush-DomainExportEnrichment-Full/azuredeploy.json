@@ -149,7 +149,10 @@
                       "runAfter": {},
                       "inputs": {
                         "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
+                        "method": "GET",
+                        "headers": {
+                          "Range": "bytes=0-6300000"
+                        }
                       },
                       "runtimeConfiguration": {
                         "contentTransfer": {
@@ -157,29 +160,34 @@
                         }
                       }
                     },
-                    "Split_Into_Batches": {
-                      "type": "Compose",
+                    "Check_Export_Size": {
+                      "type": "If",
                       "runAfter": {
                         "Follow_Redirect": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": "@chunk(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
-                    },
-                    "For_Each_Batch": {
-                      "type": "Foreach",
-                      "foreach": "@outputs('Split_Into_Batches')",
-                      "runAfter": {
-                        "Split_Into_Batches": [
-                          "Succeeded"
-                        ]
-                      },
-                      "runtimeConfiguration": {
-                        "concurrency": {
-                          "repetitions": 1
-                        }
-                      },
+                      "expression": "@less(length(body('Follow_Redirect')), 6300001)",
                       "actions": {
+                        "Split_Into_Batches": {
+                          "type": "Compose",
+                          "runAfter": {},
+                          "inputs": "@chunk(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), 100)"
+                        },
+                        "For_Each_Batch": {
+                          "type": "Foreach",
+                          "foreach": "@outputs('Split_Into_Batches')",
+                          "runAfter": {
+                            "Split_Into_Batches": [
+                              "Succeeded"
+                            ]
+                          },
+                          "runtimeConfiguration": {
+                            "concurrency": {
+                              "repetitions": 1
+                            }
+                          },
+                          "actions": {
                         "Bulk_Enrich_Domains": {
                           "type": "ApiConnection",
                           "inputs": {
@@ -299,6 +307,22 @@
                               "interval": "PT20S",
                               "minimumInterval": "PT10S",
                               "maximumInterval": "PT1H"
+                            }
+                          }
+                        }
+                      }
+                    }
+                      },
+                      "else": {
+                        "actions": {
+                          "Terminate_Export_Too_Large": {
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed",
+                              "error": {
+                                "code": "ExportTooLarge",
+                                "message": "Silent Push IOFA domain export exceeded the maximum supported download size (6,300,000 bytes, approximately 100,000 entries) - the export was not processed to avoid excessive run duration/cost. Consider running this playbook more frequently to keep exports smaller, or contact Silent Push support if this volume is expected."
+                              }
                             }
                           }
                         }
