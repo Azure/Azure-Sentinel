@@ -27,10 +27,14 @@ import re
 import subprocess
 import csv
 import json
+from datetime import datetime, timedelta, timezone
 from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
+
+TIME_GENERATED_SAFETY_DELAY = timedelta(minutes=5)
+MAX_TIME_GENERATED_SPAN = timedelta(hours=36)
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -170,6 +174,90 @@ def convert_data_csv_to_json(csv_file):
         raise ValueError(f"Could not determine table name from CSV file '{csv_file}'")
 
     return data, table_name, list(datetime_keys)
+
+def parse_sample_datetime(value):
+    if isinstance(value, datetime):
+        parsed_value = value
+    else:
+        normalized_value = str(value).strip()
+        if not normalized_value:
+            raise ValueError("TimeGenerated cannot be empty")
+        normalized_value = re.sub(r'^0(?=\d{2}/\d{2}/\d{4})', '', normalized_value)
+
+        try:
+            parsed_value = datetime.fromisoformat(normalized_value.replace('Z', '+00:00'))
+        except ValueError:
+            supported_formats = (
+                "%m/%d/%Y, %I:%M:%S.%f %p",
+                "%m/%d/%Y, %I:%M:%S %p",
+                "%m/%d/%Y %I:%M:%S.%f %p",
+                "%m/%d/%Y %I:%M:%S %p",
+                "%d/%m/%Y, %H:%M:%S.%f",
+                "%d/%m/%Y, %H:%M:%S",
+                "%d/%m/%Y",
+                "%d-%m-%Y %H:%M",
+                "%d-%m-%y %H:%M",
+            )
+            for timestamp_format in supported_formats:
+                try:
+                    parsed_value = datetime.strptime(normalized_value, timestamp_format)
+                    break
+                except ValueError:
+                    continue
+            else:
+                raise ValueError(f"Unsupported TimeGenerated value: {value}")
+
+    if parsed_value.tzinfo is None:
+        return parsed_value.replace(tzinfo=timezone.utc)
+    return parsed_value.astimezone(timezone.utc)
+
+def rebase_time_generated(data_result, now=None):
+    """Moves sample timestamps into Azure Monitor's ingestion window while preserving their order."""
+    if not data_result or not any('TimeGenerated' in row for row in data_result):
+        return data_result
+
+    rows_with_timestamps = []
+    rows_without_timestamps = []
+    for row in data_result:
+        if 'TimeGenerated' not in row:
+            raise KeyError("TimeGenerated column is missing from a sample row")
+        if not str(row['TimeGenerated']).strip():
+            rows_without_timestamps.append(row)
+            continue
+        parsed_timestamp = parse_sample_datetime(row['TimeGenerated'])
+        rows_with_timestamps.append((row, parsed_timestamp))
+
+    if not rows_with_timestamps:
+        return data_result
+
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    else:
+        current_time = current_time.astimezone(timezone.utc)
+
+    earliest_sample_time = min(timestamp for _, timestamp in rows_with_timestamps)
+    latest_sample_time = max(timestamp for _, timestamp in rows_with_timestamps)
+    sample_span = latest_sample_time - earliest_sample_time
+    compress_sample_span = sample_span > MAX_TIME_GENERATED_SPAN
+    sample_span_microseconds = sample_span // timedelta(microseconds=1)
+    max_span_microseconds = MAX_TIME_GENERATED_SPAN // timedelta(microseconds=1)
+
+    latest_rebased_time = current_time - TIME_GENERATED_SAFETY_DELAY
+    for row, timestamp in rows_with_timestamps:
+        distance_from_latest = latest_sample_time - timestamp
+        distance_microseconds = distance_from_latest // timedelta(microseconds=1)
+        if compress_sample_span:
+            distance_microseconds = (
+                distance_microseconds * max_span_microseconds // sample_span_microseconds
+            )
+        rebased_timestamp = latest_rebased_time - timedelta(microseconds=distance_microseconds)
+        row['TimeGenerated'] = rebased_timestamp.isoformat().replace('+00:00', 'Z')
+    for row in rows_without_timestamps:
+        row['TimeGenerated'] = latest_rebased_time.isoformat().replace('+00:00', 'Z')
+
+    print(f"Rebased {len(data_result)} TimeGenerated values to preserve sample time distribution")
+    return data_result
 
 def check_for_custom_table(table_name):
     if table_name in lia_supported_builtin_table:
@@ -400,7 +488,8 @@ for file in parser_yaml_files:
     else:
         SchemaName = None
     # Check if changed file is a union or empty parser. If Yes, skip the file
-    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+    is_empty_parser = os.path.basename(file).startswith('vim') and file.endswith('Empty.yaml')
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
@@ -430,6 +519,7 @@ for file in parser_yaml_files:
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
     data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
+    data_result = rebase_time_generated(data_result)
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
     print(f"Log ingestion supported: {log_ingestion_supported}\n Table type: {table_type}")

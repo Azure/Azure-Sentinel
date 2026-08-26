@@ -1,0 +1,70 @@
+id: 0a70fd03-6f58-4df3-ab39-f9d123d538cd
+name: Dormant privileged identities with no recent sign-ins
+description: |
+  Finds enabled identities with assigned directory or Entra PIM roles that
+  have no successful sign-in in the last 90 days. These dormant privileged
+  accounts retain access and can become takeover targets if credentials are
+  obtained or reused.
+description-detailed: |
+  Leverages the Microsoft 365 Defender IdentityInfo table, which exposes
+  assigned and PIM-eligible roles, BlastRadius and account enablement
+  state, correlated against SigninLogs to surface identities with zero
+  successful logons within the lookback. Review whether each account is
+  still required, rotate credentials for any that remain, and consider
+  removing unneeded role assignments or triggering just-in-time access.
+  References:
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/groups-concept
+  - https://attack.mitre.org/techniques/T1078/004/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - IdentityInfo
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+query: |
+  let lookback = 90d;
+  IdentityInfo
+  | summarize arg_max(Timestamp, *) by AccountObjectId
+  | where IsAccountEnabled == true
+  | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
+  | join kind=leftanti (
+      SigninLogs
+      | where TimeGenerated > ago(lookback)
+      | where ResultType == "0"
+      | project AccountObjectId = UserId
+  ) on AccountObjectId
+  | extend
+      AccountName = tostring(split(AccountUpn, "@")[0]),
+      AccountUPNSuffix = tostring(split(AccountUpn, "@")[1])
+  | project
+      AccountObjectId, AccountUpn, AccountName, AccountUPNSuffix, AccountDisplayName,
+      BlastRadius, AssignedRoles, PrivilegedEntraPimRoles,
+      Department, JobTitle
+  | sort by BlastRadius desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: AccountObjectId
+version: 1.0.3
+metadata:
+  source:
+    kind: Community
+  author:
+    name: d4rk-pri0r
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection", "Identity" ]

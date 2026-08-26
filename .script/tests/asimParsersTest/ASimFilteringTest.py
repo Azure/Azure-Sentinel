@@ -39,6 +39,10 @@ INT_DUMMY_VALUE = -967799
 # The index of the column with the value from a query response.
 COLUMN_INDEX_IN_ROW = 0
 
+LEGACY_EVENTTYPE_COMPATIBILITY = {
+    'vimDnsFortinetFortiGate': ('Query', 'lookup')
+}
+
 ws_id = WORKSPACE_ID
 days_delta = TIME_SPAN_IN_DAYS
 
@@ -296,7 +300,8 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        is_empty_parser = os.path.basename(PARSER_FILE_NAME).startswith('vim') and PARSER_FILE_NAME.endswith('Empty.yaml')
+        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
@@ -373,6 +378,7 @@ class FilteringTest(unittest.TestCase):
                         self.fail(f"parameter: {param_name} - No such parameter in {schema_of_parser} schema")
                     column_name_in_table = param_to_column_mapping[param_name]
                     self.send_param_to_test(param, query_definition, columns_in_answer, column_name_in_table)
+            self.legacy_eventtype_compatibility_test(parser_file, query_definition)
 
     def run_tests_on_files(self, file_path):
         with self.subTest(file=file_path):
@@ -436,9 +442,27 @@ class FilteringTest(unittest.TestCase):
         no_filter_response = self.send_query(no_filter_query)
         num_of_rows_when_no_filters_in_query = len(no_filter_response.tables[0].rows)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
-        datetime_mid_point_query = query_definition + f"query() | summarize max_TimeGenerated = max(TimeGenerated), min_TimeGenerated = min(TimeGenerated) \n | extend timeSpan = datetime_diff('second', max_TimeGenerated, min_TimeGenerated) \n | project mid_point = datetime_add('second', timeSpan / 2, min_TimeGenerated)"
+        datetime_mid_point_query = query_definition + (
+            "query() "
+            "| summarize max_TimeGenerated = max(TimeGenerated), "
+            "min_TimeGenerated = min(TimeGenerated), "
+            "distinct_TimeGenerated = count_distinct(TimeGenerated) \n"
+            "| extend timeSpanMicroseconds = datetime_diff('microsecond', max_TimeGenerated, min_TimeGenerated) \n"
+            "| project mid_point = min_TimeGenerated + ((max_TimeGenerated - min_TimeGenerated) / 2), "
+            "distinct_TimeGenerated, timeSpanMicroseconds"
+        )
         datetime_mid_point_response = self.send_query(datetime_mid_point_query)
-        mid_point_datetime_value = datetime_mid_point_response.tables[0].rows[0][0]
+        midpoint_row = datetime_mid_point_response.tables[0].rows[0]
+        distinct_time_generated = midpoint_row[1]
+        time_span_microseconds = midpoint_row[2]
+        if distinct_time_generated < 2 or time_span_microseconds < 2:
+            print_and_flush(
+                f"Parameter: {param_name} - TimeGenerated values do not span a testable range; "
+                "datetime filtering validation is partial."
+            )
+            return
+
+        mid_point_datetime_value = midpoint_row[0]
         datetime_mid_point_value = f"datetime({mid_point_datetime_value})"
         # Get count of rows after applying filtering
         query_with_filter = query_definition + f"query({param_name}={datetime_mid_point_value})\n"
@@ -446,6 +470,30 @@ class FilteringTest(unittest.TestCase):
         self.assertNotEqual(len(filtered_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         num_of_rows_with_filter_in_query = len(filtered_response.tables[0].rows)
         self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {param_name} - Expected to have less results after filtering. Filtered by value: {datetime_mid_point_value}")
+
+    def legacy_eventtype_compatibility_test(self, parser_file, query_definition):
+        parser_name = parser_file.get('ParserName')
+        compatible_values = LEGACY_EVENTTYPE_COMPATIBILITY.get(parser_name)
+        if compatible_values is None:
+            return
+
+        counts = {}
+        for eventtype in compatible_values:
+            response = self.send_query(query_definition + f"query(eventtype='{eventtype}') | count\n")
+            counts[eventtype] = response.tables[0].rows[0][0]
+
+        canonical_eventtype, legacy_eventtype = compatible_values
+        self.assertGreater(
+            counts[legacy_eventtype],
+            0,
+            f"Legacy eventtype '{legacy_eventtype}' returned no results for parser {parser_name}"
+        )
+        self.assertEqual(
+            counts[canonical_eventtype],
+            counts[legacy_eventtype],
+            f"Legacy eventtype '{legacy_eventtype}' did not return the same results as "
+            f"'{canonical_eventtype}' for parser {parser_name}"
+        )
 
     def scalar_test(self, param, query_definition, column_name_in_table):
         """
