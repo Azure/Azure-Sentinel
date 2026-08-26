@@ -472,6 +472,14 @@ dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdspSignature', 'AZFWThreatIntel']
 reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
+ADDITIONAL_UNION_PARSERS = {
+    "ProcessEvent": (
+        "ASimProcessEventCreate.yaml",
+        "ASimProcessEventTerminate.yaml",
+        "imProcessCreate.yaml",
+        "imProcessTerminate.yaml",
+    )
+}
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -488,8 +496,12 @@ for file in parser_yaml_files:
     else:
         SchemaName = None
     # Check if changed file is a union or empty parser. If Yes, skip the file
+    is_union_parser = (
+        file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml'))
+        or os.path.basename(file) in ADDITIONAL_UNION_PARSERS.get(SchemaName, ())
+    )
     is_empty_parser = os.path.basename(file).startswith('vim') and file.endswith('Empty.yaml')
-    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
+    if is_union_parser or is_empty_parser:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")

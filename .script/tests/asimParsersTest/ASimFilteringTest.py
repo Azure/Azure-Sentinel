@@ -61,6 +61,14 @@ failure_messages = {
     'Authentication': "This single failure is because only two values exist in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be partial as only 'Logon' or 'Logoff' events may exists. Ignoring this error.",
     'Dns': "This single failure is because only one value exist in 'EventType' field in 'Dns' schema. 'Dns' is a special case where 'EventType' validations could be 'Query' only. Ignoring this error."
 }
+ADDITIONAL_UNION_PARSERS = {
+    "ProcessEvent": (
+        "ASimProcessEventCreate.yaml",
+        "ASimProcessEventTerminate.yaml",
+        "imProcessCreate.yaml",
+        "imProcessTerminate.yaml",
+    )
+}
 
 def attempt_to_connect():
     try:
@@ -300,8 +308,12 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union parser. If Yes, skip the file
+        is_union_parser = (
+            PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml'))
+            or os.path.basename(PARSER_FILE_NAME) in ADDITIONAL_UNION_PARSERS.get(SchemaName, ())
+        )
         is_empty_parser = os.path.basename(PARSER_FILE_NAME).startswith('vim') and PARSER_FILE_NAME.endswith('Empty.yaml')
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
+        if is_union_parser or is_empty_parser:
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
