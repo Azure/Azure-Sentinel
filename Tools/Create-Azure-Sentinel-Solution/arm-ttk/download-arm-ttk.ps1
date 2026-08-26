@@ -1,19 +1,48 @@
-# Download and un-pack latest arm-ttk
-# This is the same way the certification team automation works, from the aka.ms URL
+# ARM-TTK release 20260213 (module 0.27), commit 0ec9a41a4503e970a0ec8efb0cd08415cc172175.
+$armTtkUri = "https://github.com/Azure/arm-ttk/releases/download/20260213/arm-ttk.zip"
+$expectedSha256 = "2A2D21F17CC31299BA2C78CAF97DEF3C1F9F37EB3A7BAB7900CDA18C95D4C657"
 
-$root="$PSScriptRoot/.."
-$tmp="$root/tmp"
-New-Item -Path $tmp -ItemType Directory -Force
+$root = Split-Path -Parent $PSScriptRoot
+$tmp = Join-Path $root "tmp"
+$ttkZip = Join-Path $tmp "AzTemplateToolKit.zip"
+$extractPath = Join-Path $tmp "arm-ttk-extract"
+$modulePath = Join-Path $tmp "arm-ttk"
+$moduleManifest = Join-Path $modulePath "arm-ttk.psd1"
 
-# Download arm-ttk and unpack it
-$ttkZip="$tmp/AzTemplateToolKit.zip"
+New-Item -Path $tmp -ItemType Directory -Force | Out-Null
 
-# we download the latest arm-ttk, DARSy uses the same steps
-# the arm-ttk is hosted on the public github here: https://github.com/Azure/arm-ttk
-Invoke-WebRequest -Uri "https://aka.ms/arm-ttk-latest" -OutFile $ttkZip -Verbose
-Expand-Archive -Path $ttkZip -DestinationPath $tmp -Force
+try {
+    $webRequestParameters = @{
+        Uri = $armTtkUri
+        OutFile = $ttkZip
+    }
+    if ($PSVersionTable.PSEdition -eq "Desktop") {
+        $webRequestParameters.UseBasicParsing = $true
+    }
+    Invoke-WebRequest @webRequestParameters
 
-# try and import the module to see it works
-if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
-    Import-Module "$tmp/arm-ttk/arm-ttk.psd1"
+    $actualSha256 = (Get-FileHash -Path $ttkZip -Algorithm SHA256).Hash
+    if ($actualSha256 -ne $expectedSha256) {
+        throw "ARM-TTK archive checksum mismatch. Expected $expectedSha256 but received $actualSha256."
+    }
+
+    Remove-Item -Path $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -Path $ttkZip -DestinationPath $extractPath -Force
+
+    $extractedModulePath = Join-Path (Join-Path $extractPath "arm-ttk") "arm-ttk"
+    $extractedModuleManifest = Join-Path $extractedModulePath "arm-ttk.psd1"
+    if (-not (Test-Path -Path $extractedModuleManifest -PathType Leaf)) {
+        throw "ARM-TTK archive does not contain the expected module manifest."
+    }
+
+    Remove-Item -Path $modulePath -Recurse -Force -ErrorAction SilentlyContinue
+    Move-Item -Path $extractedModulePath -Destination $modulePath
+}
+finally {
+    Remove-Item -Path $ttkZip -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+if (-not (Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
+    Import-Module $moduleManifest
 }
