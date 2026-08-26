@@ -1,5 +1,5 @@
 Parser:
-  Title: Web Session ASIM parser for CloudflareV2
+  Title: Web Session ASIM parser for Cloudflare One
   Version: '0.1.0'
   LastUpdated: Aug 26, 2026
 Product:
@@ -15,9 +15,9 @@ References:
 - Title: Cloudflare Documentation
   Link: https://developers.cloudflare.com/logs/logpush/logpush-job/datasets
 Description: |
-  This ASIM parser supports normalizing the Cloudflare Web Session activities ingested in 'CloudflareV2_CL' table to the ASIM Web Session normalized schema.
-ParserName: ASimWebSessionCloudflareV2
-EquivalentBuiltInParser: _ASim_WebSession_CloudflareV2
+  This ASIM parser supports normalizing the Cloudflare One Web Session activities ingested in 'CloudflareV2_CL' table to the ASIM Web Session normalized schema. We only support the schema of the table updated on Apr 22, 2026.
+ParserName: ASimWebSessionCloudflareOne
+EquivalentBuiltInParser: _ASim_WebSession_CloudflareOne
 ParserParams:
   - Name: disabled
     Type: bool
@@ -36,25 +36,25 @@ ParserQuery: |
             | where not(disabled)
             | extend
                 EventOriginalType = case(
-                    // sinkhole_http_logs
+                    // sinkhole_http_logs. SinkholeID is a unique field for sinkhole events
                     isnotempty(SinkholeID)
                         and (
                             isnotempty(URL)
                             or isnotempty(URI)
                         )
                         , "sinkhole_http_logs"
-                    // gateway_http
+                    // gateway_http. Unique combination of available fields indicating gateway_http
                     , (
                         isnotempty(RequestID)
                         or isnotempty(RegistrationID)
                     )
                         and isnotempty(URL)
                         , "gateway_http"
-                    // firewall_events
+                    // firewall_events. Kind is a unique field for firewall events
                     , isnotempty(ClientRequestPath)
                         and Kind =~ "firewall"
                         , "firewall_events"
-                    // http_requests
+                    // http_requests. ClientRequestURI is a unique field for http_requests, also needed for Web Session
                     , isnotempty(ClientRequestURI)
                         , "http_requests"
                     , ""
@@ -355,14 +355,14 @@ ParserQuery: |
                 , ""
             )
         | extend
-            // Deny, Drop = Low, Else Informational
+            // Deny, Drop = Low; otherwise Informational.
             EventSeverity = iff(
-                DvcAction in ("Deny" , "Drop")
+                DvcAction in ("Deny", "Drop")
                 , "Low"
                 , "Informational"
             )
             , EventResult = case(
-            // Success: <400, Failure: >=400
+                // Success: <400, Failure: >=400
                 DvcAction in ("Deny", "Drop")
                     , "Failure"
                 , isnotnull(tmpHttpCode) and tmpHttpCode >= 100 and tmpHttpCode < 400
