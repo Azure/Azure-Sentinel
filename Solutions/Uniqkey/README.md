@@ -1,4 +1,4 @@
-﻿# Uniqkey Solution for Microsoft Sentinel
+# Uniqkey Solution for Microsoft Sentinel
 
 This solution ingests security and audit events from the Uniqkey business password management platform into Microsoft Sentinel using the Codeless Connector Framework (CCF).
 
