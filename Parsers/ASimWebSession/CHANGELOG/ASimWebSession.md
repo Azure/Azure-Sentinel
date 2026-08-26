@@ -2,7 +2,7 @@
 
 ## Version 0.5.8
 
-- (2026-08-26) Add parser for Cloudflare One logs - [PR #xxxxx](https://github.com/Azure/Azure-Sentinel/pull/xxxxx)
+- (2026-08-26) Add parser for Cloudflare One logs - [PR #14982](https://github.com/Azure/Azure-Sentinel/pull/14982)
 
 ## Version 0.5.7
 
