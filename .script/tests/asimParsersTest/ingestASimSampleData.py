@@ -11,6 +11,7 @@
 #
 # Usage: python ingestASimSampleData.py <pr_number>
 
+import importlib.util
 import sys
 import os
 
@@ -20,6 +21,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Remove the script's directory from sys.path to avoid importing local malicious modules
 if script_dir in sys.path:
     sys.path.remove(script_dir)
+
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
 
 import requests
 import yaml
@@ -472,14 +482,6 @@ dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdspSignature', 'AZFWThreatIntel']
 reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
-ADDITIONAL_UNION_PARSERS = {
-    "ProcessEvent": (
-        "ASimProcessEventCreate.yaml",
-        "ASimProcessEventTerminate.yaml",
-        "imProcessCreate.yaml",
-        "imProcessTerminate.yaml",
-    )
-}
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -490,18 +492,10 @@ parser_yaml_files = filter_yaml_files(modified_files)
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
-    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
-    if SchemaNameMatch:
-        SchemaName = SchemaNameMatch.group(1)
-    else:
-        SchemaName = None
+    SchemaName = extract_schema_name(file)
+    parser_filename = os.path.basename(file)
     # Check if changed file is a union or empty parser. If Yes, skip the file
-    is_union_parser = (
-        file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml'))
-        or os.path.basename(file) in ADDITIONAL_UNION_PARSERS.get(SchemaName, ())
-    )
-    is_empty_parser = os.path.basename(file).startswith('vim') and file.endswith('Empty.yaml')
-    if is_union_parser or is_empty_parser:
+    if is_union_parser(parser_filename, SchemaName) or is_empty_parser(parser_filename):
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
