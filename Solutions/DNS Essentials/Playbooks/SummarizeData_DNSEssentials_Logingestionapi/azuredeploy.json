@@ -1,8 +1,8 @@
-{
+﻿{
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Summarize Data for DNS Essentials Solution",
+        "title": "Summarize Data for DNS Essentials Solution using Log Ingestion API",
         "description": "This playbook summarizes data for DNS Essentials Solution and ingests into custom tables.",
         "prerequisites": [],
         "postDeployment": [
@@ -28,7 +28,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "SummarizeDNSData_DNSEssentials",
+            "defaultValue": "SummarizeDNSData_DNS_logingestion",
             "type": "string"
         },
         "logAnalyticsName": {
@@ -59,8 +59,8 @@
         "DCRName": "[concat('dns-summarization-dcr-', variables('suffix'))]",
         "workspaceResourceId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]",
         "destinationName": "[concat('dnsSummarizationDestination', variables('suffix'))]",
-        "ipTableName": "DNS_Summarized_Logs_ip_CL",
-        "sourceInfoTableName": "DNS_Summarized_Logs_sourceInfo_CL",
+        "ipTableName": "DNS_Summarized_Logs_ipV1_CL",
+        "sourceInfoTableName": "DNS_Summarized_Logs_sourceInfoV1_CL",
         "ipStreamName": "Custom-DNS_Summarized_Logs_ip",
         "sourceInfoStreamName": "Custom-DNS_Summarized_Logs_sourceInfo",
         "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
@@ -94,7 +94,7 @@
                         { "name": "EventResultDetails_s", "type": "string" },
                         { "name": "DnsResponseName_s", "type": "string" },
                         { "name": "TimeGenerated", "type": "datetime" },
-                        { "name": "count_", "type": "long" },
+                        { "name": "count__d", "type": "real" },
                         { "name": "EventTime_t", "type": "datetime" }
                     ]
                 }
@@ -170,7 +170,7 @@
                     {
                         "streams": [ "[variables('ipStreamName')]" ],
                         "destinations": [ "[variables('destinationName')]" ],
-                        "transformKql": "source | project SrcIpAddr_s = tostring(SrcIpAddr), DnsQuery_s = tostring(DnsQuery), EventResultDetails_s = tostring(EventResultDetails), DnsResponseName_s = tostring(DnsResponseName), TimeGenerated = todatetime(TimeGenerated), count_ = tolong(count_), EventTime_t = todatetime(EventTime)",
+                        "transformKql": "source | project SrcIpAddr_s = tostring(SrcIpAddr), DnsQuery_s = tostring(DnsQuery), EventResultDetails_s = tostring(EventResultDetails), DnsResponseName_s = tostring(DnsResponseName), TimeGenerated = todatetime(TimeGenerated), count__d = todouble(count_), EventTime_t = todatetime(EventTime)",
                         "outputStream": "[concat('Custom-', variables('ipTableName'))]"
                     },
                     {
@@ -301,7 +301,7 @@
                                     },
                                     "type": "ApiConnection",
                                     "inputs": {
-                                        "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           DNS_Summarized_Logs_ip_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_Dns(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize count() by SrcIpAddr, DnsQuery, EventResultDetails, DnsResponseName, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                        "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           DNS_Summarized_Logs_ipV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_Dns(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize count() by SrcIpAddr, DnsQuery, EventResultDetails, DnsResponseName, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
                                         "host": {
                                             "connection": {
                                                 "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -547,7 +547,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           DNS_Summarized_Logs_sourceInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_Dns(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated \u003c bin(nowTime,10m)\n| extend EventProduct = strcat(EventVendor,\"-\",EventProduct)\n| summarize count() by EventProduct, DvcHostname,EventType,EventSubType, DnsQueryTypeName, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
+                                "body": "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           DNS_Summarized_Logs_sourceInfoV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('minute',10,bin(max_EventTime_t,10m))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,10m)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_Dns(starttime=lastRecievedTime,endtime=bin(nowTime,10m))\n| where TimeGenerated \u003c bin(nowTime,10m)\n| extend EventProduct = strcat(EventVendor,\"-\",EventProduct)\n| summarize count() by EventProduct, DvcHostname,EventType,EventSubType, DnsQueryTypeName, bin(TimeGenerated,10m)\n| extend EventTime = TimeGenerated",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
