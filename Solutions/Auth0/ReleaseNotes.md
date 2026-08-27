@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
+| 3.2.1       | 26-08-2026                     | Fixed duplicate ingestion in CCF |
 | 3.2.0       | 20-07-2026                     | Auth0 Logs (via Codeless Connector Framework) **Data Connector** now supports collecting from multiple Auth0 hosts (multi-domain) and tags each record with the **Auth0Domain** column |
 | 3.1.5       | 13-04-2026                     | Deprecate Auth0 Logs (using Azure Function) |
 | 3.1.4       | 30-03-2026                     | Fix space in name, Rename to Auth0 Logs (via Codeless Connector Framework)|
