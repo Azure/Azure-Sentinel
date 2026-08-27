@@ -1406,7 +1406,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $armTtkFolder = "$PSScriptRoot/arm-ttk"
     if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
-        Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
+        & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
+    & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
 }
