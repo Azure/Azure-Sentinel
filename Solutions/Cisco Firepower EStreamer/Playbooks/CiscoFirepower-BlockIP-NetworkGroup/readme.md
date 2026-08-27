@@ -6,6 +6,7 @@ This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions.
 0. **Gate/Prove:** if the incident title/description indicates **ML-only** (SnortML / GID 411 / `is_ml_only`) without signature or dual-signal corroboration, the playbook comments on the incident and **cancels** - it does **not** call FMC BlockIP. Machine-learning confidence is not treated as a classic signature true positive.
+   The comment includes a structured `[FirepowerOutcome:v1]` policy-denial record for repeatable evaluation.
 1. For the IPs we check if they are already selected for the Network Group object
 2. For the IPs not already selected for the Network Group object, add it so it gets blocked
 3. Comment is added to Microsoft Sentinel incident<br>

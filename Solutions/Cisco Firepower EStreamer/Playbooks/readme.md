@@ -85,6 +85,8 @@ This integration offers 3 playbook templates that blocks IP in 3 different metho
 * [Cisco Firepower - Add IP Addresses to a Network Group object](./CiscoFirepower-BlockIP-NetworkGroup#deployment-instructions) - auto-contain. **Gate/Prove:** auto-contain is denied when the incident is ML-only (SnortML / GID 411). Attach only to signature-high or corroborated analytics.
 * [Cisco Firepower - Add IP Addresses to a Network Group object with Teams](./CiscoFirepower-BlockIP-Teams#deployment-instructions) - HITL. Warns on ML-only; analyst confirmation is still required before BlockIP.
 
+Both BlockIP playbooks add a bounded `[FirepowerOutcome:v1]` record to their Microsoft Sentinel incident comments. The record distinguishes signal, analyst or policy decision, containment outcome, stable reason code, and policy version so decisions can be evaluated without a separate data store. See the [response outcome contract](../Evaluation/FirepowerOutcome-v1.md) for its safety invariants and deterministic evaluation cases.
+
 
 <a name="references"></a>
 

@@ -4,7 +4,7 @@
 
 This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.
 
-When a new Sentinel incident is created, this playbook gets triggered and performs below actions.
+When a new Sentinel incident is created, this playbook gets triggered and performs below actions. It writes a bounded `[FirepowerOutcome:v1]` record for the HITL request and final approval or rejection, making the analyst decision available for repeatable evaluation.
 1. **Gate/Prove:** if the incident title/description indicates **ML-only** (SnortML / GID 411 / `is_ml_only`) without corroboration, an incident comment warns the operator. The playbook does **not** auto-block; Teams confirmation is still required. Do not treat ML confidence as a signature true positive.
 2. For the IPs we check if they are already selected for the Network Group object
 3. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depending on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object

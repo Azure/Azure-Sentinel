@@ -1,0 +1,85 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Cisco Firepower detection and response quality\nThis workbook distinguishes ML-only, classic signature, and corroborated evidence. Trends are evaluation signals—not authorization for automatic containment."
+      },
+      "name": "overview"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "4a060f53-dba7-42f6-b59d-49289bedecfe",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 604800000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let F = CommonSecurityLog\n| where DeviceVendor =~ 'Cisco' and DeviceProduct has_any ('Firepower','Secure Firewall','FTD','NGFW')\n| extend C=strcat(tostring(Message),' ',tostring(AdditionalExtensions),' ',tostring(Activity),' ',tostring(DeviceEventClassID),' ',tostring(column_ifexists('FlexString1','')),' ',tostring(column_ifexists('FlexString2','')),' ',tostring(column_ifexists('DeviceCustomString1','')),' ',tostring(column_ifexists('DeviceCustomString2','')),' ',tostring(column_ifexists('DeviceCustomString3','')))\n| extend Gid=toint(extract(@'(?i)(?:gid|generator[\\s_-]?id)[\\s:=]*(\\d+)',1,C))\n| extend Signal=case(C has 'is_corroborated','Corroborated',Gid == 411 or C has 'is_ml_only','ML-only',isnotnull(Gid),'Signature','Unknown');\nF | summarize Events=count(), Sources=dcount(SourceIP), Destinations=dcount(DestinationIP) by Signal | order by Events desc",
+        "size": 1,
+        "title": "Signal composition",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles"
+      },
+      "name": "signal-composition"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Cisco' and DeviceProduct has_any ('Firepower','Secure Firewall','FTD','NGFW')\n| extend C=strcat(tostring(Message),' ',tostring(AdditionalExtensions),' ',tostring(Activity),' ',tostring(DeviceEventClassID))\n| extend Gid=toint(extract(@'(?i)(?:gid|generator[\\s_-]?id)[\\s:=]*(\\d+)',1,C))\n| extend Signal=case(C has 'is_corroborated','Corroborated',Gid == 411 or C has 'is_ml_only','ML-only',isnotnull(Gid),'Signature','Unknown')\n| summarize Events=count() by bin(TimeGenerated,1h), Signal\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Signal mix over time",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "signal-trend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Cisco' and DeviceProduct has_any ('Firepower','Secure Firewall','FTD','NGFW')\n| extend C=strcat(tostring(Message),' ',tostring(AdditionalExtensions),' ',tostring(Activity),' ',tostring(DeviceEventClassID))\n| extend Gid=toint(extract(@'(?i)(?:gid|generator[\\s_-]?id)[\\s:=]*(\\d+)',1,C))\n| summarize Total=count(), MlOnly=countif(Gid == 411 or C has 'is_ml_only'), Signatures=countif(isnotnull(Gid) and Gid != 411) by DeviceName\n| extend MlRatio=round(100.0 * todouble(MlOnly) / iff(Total == 0,1,Total),2)\n| order by MlRatio desc",
+        "size": 0,
+        "title": "Sensor and collector quality",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "sensor-quality"
+    }
+  ],
+  "fallbackResourceIds": ["Azure Monitor"],
+  "fromTemplateId": "sentinel-CiscoFirepowerDetectionResponseQuality",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
