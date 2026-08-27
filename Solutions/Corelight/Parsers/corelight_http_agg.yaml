@@ -1,8 +1,8 @@
 id: 204fc13c-53f1-42f8-a101-d68e653f216f
 Function:
   Title: Corelight HTTP Aggregated Events
-  Version: '1.1.1'
-  LastUpdated: '2026-03-19'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_http_agg
 FunctionAlias: corelight_http_agg
@@ -31,50 +31,32 @@ FunctionQuery: |
         "503","failure",
         "504","failure"
     ];
-    let dummy_table = datatable(TimeGenerated: datetime, uids_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uids: dynamic) [];
     let corelight_http_agg = view () {
         union isfuzzy=true
-            Corelight_v2_http_agg_CL,
+            Corelight_v3_http_agg_CL,
             dummy_table
-        | summarize arg_max(TimeGenerated, *) by uids_s
+        | summarize arg_max(TimeGenerated, *) by uids_key = tostring(uids)
         | join kind=leftouter 
             (corelight_conn
             | project uid, local_orig, local_resp    
             )
-            on $left.uids_s == $right.uid
-        | project-away uid
+            on $left.uids_key == $right.uid
+        | project-away uids_key, uid
         | extend
-            path=column_ifexists("_path_s", ""),
-            system_name=column_ifexists("_system_name_s", ""),
-            id_orig_h=column_ifexists("id_orig_h_s", ""),
-            id_orig_p=column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h=column_ifexists("id_resp_h_s", ""),
-            id_resp_p=column_ifexists("id_resp_p_d", real(null)),
-            method = column_ifexists("method_s", ""),
-            host = column_ifexists("host_s", ""),
-            uid = column_ifexists("uids_s", ""),
-            uri = column_ifexists("uri_s", ""),
-            referrer = column_ifexists("referrer_s", ""),
-            status_code = column_ifexists("status_code_d", real(null)),
-            status_msg = column_ifexists("status_msg_s", ""),
-            request_body_len = column_ifexists("request_body_len_d", real(null)),
-            response_body_len = column_ifexists("response_body_len_d", real(null)),
-            tags = column_ifexists("tags_s", ""),
-            orig_mime_types = column_ifexists("orig_mime_types_s", ""),
-            resp_mime_types = column_ifexists("resp_mime_types_s", ""),
-            post_body = column_ifexists("post_body_s", ""),
-            orig_fuids = column_ifexists("orig_fuids_s", ""),
-            orig_filenames = column_ifexists("orig_filenames_s", ""),
-            resp_fuids = column_ifexists("resp_fuids_s", ""),
-            resp_filenames = column_ifexists("resp_filenames_s", ""),
-            version = column_ifexists("versions_s", ""),
-            user_agent = todynamic(column_ifexists("user_agents_s", "")),
-            username = column_ifexists("usernames_s", ""),
-            pwd = column_ifexists("password_s", ""),
-            proxied = column_ifexists("proxied_s", ""),
-            origin = column_ifexists("origin_s", ""),
-            info_code = column_ifexists("info_code_d", real(null)),
-            info_msg = column_ifexists("info_msg_s", "")
+            uid = tostring(uids),
+            orig_mime_types = tostring(orig_mime_types),
+            proxied = tostring(proxied),
+            resp_mime_types = tostring(resp_mime_types),
+            tags = tostring(tags),
+            orig_filenames = tostring(orig_filenames),
+            orig_fuids = tostring(orig_fuids),
+            resp_filenames = tostring(resp_filenames),
+            resp_fuids = tostring(resp_fuids),
+            version = tostring(versions),
+            user_agent = todynamic(user_agents),
+            username = tostring(usernames),
+            pwd = password
         | extend status_code = tostring(toint(status_code))
         | lookup StatusLookup on $left.status_code == $right.status
         | extend
@@ -111,7 +93,7 @@ FunctionQuery: |
             host_header=dest_host,
             referrer_domain_domain=parse_url(referrer).Host,
             referrer_domain_ip=strcat(parse_url(referrer).Host, ":", parse_url(referrer).Port),
-            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+            direction=case(local_orig==true and local_resp==true, "internal", local_orig==true and local_resp==false, "outbound", local_orig==false and local_resp==false, "external", local_orig==false and local_resp==true, "inbound", "unknown")
         | extend 
             url = strcat("http://",host_header,uri),
             url_domain = host_header
