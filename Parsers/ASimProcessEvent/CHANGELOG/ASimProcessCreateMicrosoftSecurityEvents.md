@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-08-27) Added acting and target process filename extraction
+- (2026-08-27) Added acting and target process filename extraction - [PR #14999](https://github.com/Azure/Azure-Sentinel/pull/14999)
 
 ## Version 0.1.1
 
