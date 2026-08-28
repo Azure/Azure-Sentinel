@@ -20,6 +20,7 @@
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
+import importlib.util
 import sys
 import os
 
@@ -29,6 +30,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Remove the script's directory from sys.path to avoid importing local malicious modules
 if script_dir in sys.path:
     sys.path.remove(script_dir)
+
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
 
 import yaml
 import re
@@ -60,7 +70,6 @@ SCHEMA_INFO = [
     {"SchemaName": "WebSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
     # Add more schemas as needed
 ]
-
 # Global array to store results
 results = []
 # Global variable to store if test failed
@@ -87,8 +96,8 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        is_empty_parser = os.path.basename(parser).startswith('vim') and parser.endswith('Empty.yaml')
-        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml')) or is_empty_parser:
+        parser_filename = os.path.basename(parser)
+        if is_union_parser(parser_filename, schema_name) or is_empty_parser(parser_filename):
             print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
@@ -346,10 +355,6 @@ def get_current_commit_number():
     except subprocess.CalledProcessError as e:
         print(f"::error::Error occurred while executing the command: {e}")
         return None
-
-def extract_schema_name(parser):
-    match = re.search(r'ASim(\w+)/', parser)
-    return match.group(1) if match else None
 
 def read_local_yaml(filepath):
     try:

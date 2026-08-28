@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 import os
 
@@ -7,6 +8,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Remove the script's directory from sys.path to avoid importing local malicious modules. 
 if script_dir in sys.path:
     sys.path.remove(script_dir)
+
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -61,7 +71,6 @@ failure_messages = {
     'Authentication': "This single failure is because only two values exist in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be partial as only 'Logon' or 'Logoff' events may exists. Ignoring this error.",
     'Dns': "This single failure is because only one value exist in 'EventType' field in 'Dns' schema. 'Dns' is a special case where 'EventType' validations could be 'Query' only. Ignoring this error."
 }
-
 def attempt_to_connect():
     try:
             credential = DefaultAzureCredential()
@@ -293,15 +302,10 @@ def main():
         sys.stdout.flush()  # Explicitly flush stdout
 
     for PARSER_FILE_NAME in modified_yaml_files:
-        # Use regular expression to extract SchemaName from the parser filename
-        SchemaNameMatch = re.search(r'ASim(\w+)/', PARSER_FILE_NAME)
-        if SchemaNameMatch:
-            SchemaName = SchemaNameMatch.group(1)
-        else:
-            SchemaName = None
+        SchemaName = extract_schema_name(PARSER_FILE_NAME)
+        parser_filename = os.path.basename(PARSER_FILE_NAME)
         # Check if changed file is a union parser. If Yes, skip the file
-        is_empty_parser = os.path.basename(PARSER_FILE_NAME).startswith('vim') and PARSER_FILE_NAME.endswith('Empty.yaml')
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
+        if is_union_parser(parser_filename, SchemaName) or is_empty_parser(parser_filename):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
