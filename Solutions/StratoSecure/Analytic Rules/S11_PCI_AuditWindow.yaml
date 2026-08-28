@@ -1,0 +1,55 @@
+id: 0457b577-3864-42c9-9779-1c9441d86429
+name: PCI App with Open Findings Before Audit Window
+description: |
+  Detects PCI-scoped applications with open Critical/High findings when an
+  upcoming PCI-DSS audit is within 30 days. Correlates PCIApplications and
+  AuditCalendar watchlists to surface compliance risk before audit deadlines.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: StratoSecurePush
+    dataTypes:
+      - StratoSecure_Findings_CL
+queryFrequency: 1d
+queryPeriod: 1455m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let auditWindowDays = 30;
+  let PCIApps = _GetWatchlist("PCIApplications")
+      | project WL_ApplicationId = column_ifexists("ApplicationId", ""),
+          WL_AppName = column_ifexists("AppName", ""),
+          WL_AuditDate = column_ifexists("AuditDate", ""),
+          WL_Owner = column_ifexists("Owner", "");
+  let AuditCalendar = _GetWatchlist("AuditCalendar")
+      | where column_ifexists("Framework", "") =~ "PCI-DSS"
+      | extend UpcomingAudit = todatetime(column_ifexists("AuditDate", ""))
+      | where UpcomingAudit between (now() .. now() + auditWindowDays * 1d)
+      | project WL_Cal_ApplicationId = column_ifexists("ApplicationId", ""),
+          Framework = column_ifexists("Framework", ""), UpcomingAudit;
+  StratoSecure_Findings_CL
+      | where FixStatus =~ "open"
+      | where Severity in ("Critical", "High")
+      | join kind=inner PCIApps on $left.ApplicationId == $right.WL_ApplicationId
+      | join kind=inner AuditCalendar on $left.ApplicationId == $right.WL_Cal_ApplicationId
+      | summarize TotalOpenFindings = count(), MaxSeverityInt = max(SeverityInt),
+          RuleIds = make_set(RuleId, 20), EndTime = max(TimeGenerated)
+          by ApplicationId, WL_AppName, WL_Owner, Framework, UpcomingAudit, StraTenantId
+      | extend MaxSeverity = case(
+          MaxSeverityInt >= 9, "Critical",
+          MaxSeverityInt >= 7, "High",
+          MaxSeverityInt >= 4, "Medium",
+          "Low")
+      | project TimeGenerated = EndTime, ApplicationId, AppName = WL_AppName, Owner = WL_Owner,
+          StraTenantId, Framework, UpcomingAudit, TotalOpenFindings, MaxSeverity, RuleIds
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+version: 1.0.0
+kind: Scheduled
