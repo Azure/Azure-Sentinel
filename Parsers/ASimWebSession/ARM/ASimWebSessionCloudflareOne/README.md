@@ -1,6 +1,6 @@
-# Cloudflare ASIM WebSession Normalization Parser
+# Cloudflare One ASIM WebSession Normalization Parser
 
-ARM template for ASIM WebSession schema parser for Cloudflare.
+ARM template for ASIM WebSession schema parser for Cloudflare One.
 
 This ASIM parser supports normalizing the Cloudflare One Web Session activities ingested in 'CloudflareV2_CL' table to the ASIM Web Session normalized schema. We only support the schema of the table updated on Apr 22, 2026.
 
