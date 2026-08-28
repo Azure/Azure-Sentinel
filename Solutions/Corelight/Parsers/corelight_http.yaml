@@ -1,8 +1,8 @@
 id: c59e2153-f622-4655-9b3e-3630520a127b
 Function:
   Title: Corelight HTTP Events
-  Version: '1.1.3'
-  LastUpdated: '2026-03-19'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_http
 FunctionAlias: corelight_http
@@ -31,54 +31,24 @@ FunctionQuery: |
         "503","failure",
         "504","failure"
     ];
-    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
     let corelight_http = view () {
-        union isfuzzy=true Corelight_v2_http_CL, Corelight_v2_http_red_CL, Corelight_v2_http2_CL, dummy_table
-        | summarize arg_max(TimeGenerated, *) by uid_s
+        union isfuzzy=true
+            (Corelight_v3_http_CL
+                | extend orig_filenames=tostring(orig_filenames), orig_mime_types=tostring(orig_mime_types), proxied=tostring(proxied), push=tostring(push), resp_filenames=tostring(resp_filenames), resp_mime_types=tostring(resp_mime_types), stream_id=toreal(stream_id), tags=tostring(tags), trans_depth=toreal(trans_depth)),
+            (Corelight_v3_http_red_CL
+                | extend orig_filenames=tostring(orig_filenames), orig_mime_types=tostring(orig_mime_types), proxied=tostring(proxied), push=tostring(push), resp_filenames=tostring(resp_filenames), resp_mime_types=tostring(resp_mime_types), stream_id=toreal(stream_id), tags=tostring(tags), trans_depth=toreal(trans_depth)),
+            (Corelight_v3_http2_CL
+                | extend orig_filenames=tostring(orig_filenames), orig_mime_types=tostring(orig_mime_types), proxied=tostring(proxied), push=tostring(push), resp_filenames=tostring(resp_filenames), resp_mime_types=tostring(resp_mime_types), stream_id=toreal(stream_id), tags=tostring(tags), trans_depth=toreal(trans_depth)),
+            dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
         | join kind=leftouter 
         ( corelight_conn
         | project uid, local_orig, local_resp
-        ) on $left.uid_s == $right.uid
-        | project-away uid
+        ) on $left.uid == $right.uid
+        | project-away uid1
         | extend
-            path = column_ifexists("_path_s", ""),
-            system_name = column_ifexists("_system_name_s", ""),
-            write_ts = column_ifexists("_write_ts_t", ""),
-            host = column_ifexists("host_s", ""),
-            id_orig_h = column_ifexists("id_orig_h_s", ""),
-            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h = column_ifexists("id_resp_h_s", ""),
-            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
-            id_vlan = column_ifexists("id_vlan_d", real(null)),
-            method = column_ifexists("method_s", ""),
-            orig_fuids = column_ifexists("orig_fuids_s", ""),
-            post_body = column_ifexists("post_body_s", ""),
-            request_body_len = column_ifexists("request_body_len_d", real(null)),
-            resp_fuids = column_ifexists("resp_fuids_s", ""),
-            response_body_len = column_ifexists("response_body_len_d", real(null)),
-            status_code = column_ifexists("status_code_d", real(null)),
-            status_msg = column_ifexists("status_msg_s", ""),
-            tags = column_ifexists("tags_s", ""),
-            trans_depth = column_ifexists("trans_depth_d", real(null)),
-            uid = column_ifexists("uid_s", ""),
-            uri = column_ifexists("uri_s", ""),
-            version = column_ifexists("version_s", ""),
-            resp_filenames = column_ifexists("resp_filenames_s", ""),
-            user_agent = iff(isempty(column_ifexists("user_agent_s", "")), dynamic([]), pack_array(column_ifexists("user_agent_s", ""))),
-            referrer = column_ifexists("referrer_s", ""),
-            origin = column_ifexists("origin_s", ""),
-            info_code = column_ifexists("info_code_d", real(null)),
-            info_msg = column_ifexists("info_msg_s", ""),
-            username = column_ifexists("username_s", ""),
-            proxied = column_ifexists("proxied_s", ""),
-            orig_filenames = column_ifexists("orig_filenames_s", ""),
-            orig_mime_types = column_ifexists("orig_mime_types_s", ""),
-            resp_mime_types = column_ifexists("resp_mime_types_s", ""),
-            push = column_ifexists("push_b", ""),
-            encoding = column_ifexists("encoding_s", ""),
-            stream_id = column_ifexists("stream_id_d", real(null)),
-            server_headers = column_ifexists("server_headers_s", ""),
-            client_headers = column_ifexists("client_headers_s", "")
+            user_agent = iff(isempty(user_agent), dynamic([]), pack_array(user_agent))
         | extend status_code = tostring(toint(status_code))
         | lookup StatusLookup on $left.status_code == $right.status
         | extend
@@ -116,7 +86,7 @@ FunctionQuery: |
             host_header=dest_host,
             referrer_domain_domain=parse_url(referrer).Host,
             referrer_domain_ip=strcat(parse_url(referrer).Host, ":", parse_url(referrer).Port),
-            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+            direction=case(local_orig==true and local_resp==true, "internal", local_orig==true and local_resp==false, "outbound", local_orig==false and local_resp==false, "external", local_orig==false and local_resp==true, "inbound", "unknown")
         | extend 
             url = strcat("http://",host_header,uri),
             url_domain = host_header
