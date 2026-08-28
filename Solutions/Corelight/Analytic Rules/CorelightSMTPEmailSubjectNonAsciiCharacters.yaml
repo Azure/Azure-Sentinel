@@ -7,7 +7,6 @@ status: Available
 requiredDataConnectors:
   - connectorId: Corelight
     dataTypes:
-      - Corelight_v2_smtp
       - corelight_smtp
 queryFrequency: 1h
 queryPeriod: 1h
@@ -19,18 +18,20 @@ relevantTechniques:
   - T1566 
 query: |
   corelight_smtp
-  | where subject hasprefix  @'\=?utf-16'
-  | summarize recipients = dcount(_to)
+  | where subject hasprefix @'\=?utf-16'
+  | mv-expand to_recipient = todynamic(to_) to typeof(string)
+  | summarize recipients = dcount(to_recipient)
   | extend k = 1
   | join (corelight_smtp
-          | where subject hasprefix  @'\=?utf-16'
-          | summarize by _to
+          | where subject hasprefix @'\=?utf-16'
+          | mv-expand to_recipient = todynamic(to_) to typeof(string)
+          | summarize by to_recipient
           | extend k = 1) on k
   | where recipients > 1
 entityMappings:
   - entityType: MailMessage
     fieldMappings:
       - identifier: Recipient
-        columnName: _to
-version: 2.1.0
+        columnName: to_recipient
+version: 2.2.0
 kind: Scheduled

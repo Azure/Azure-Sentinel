@@ -1,56 +1,28 @@
-id: 974718ae-c0a5-4d4a-bb42-63a0f394d66f
+id: d342ae37-8b5f-4c49-bd3d-6914e1a7818a
 Function:
   Title: Corelight Files Events
-  Version: '1.1.1'
-  LastUpdated: '2026-03-19'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_files
 FunctionAlias: corelight_files
 FunctionQuery: |
-    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
     let corelight_files = view () {
-        union isfuzzy=true Corelight_v2_files_CL, Corelight_v2_files_red_CL, dummy_table
-        | summarize arg_max(TimeGenerated, *) by uid_s
+        union isfuzzy=true
+            (Corelight_v3_files_CL
+                | extend extracted=tostring(extracted), num=toreal(num), ts=todatetime(ts)),
+            (Corelight_v3_files_red_CL
+                | extend extracted=tostring(extracted), num=toreal(num), ts=todatetime(ts)),
+            dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
         | join kind=leftouter 
         ( corelight_conn
         | project uid, local_resp
-        ) on $left.uid_s == $right.uid
-        | project-away uid
+        ) on $left.uid == $right.uid
+        | project-away uid1
         | extend
-            path = column_ifexists("_path_s", ""),
-            system_name = column_ifexists("_system_name_s", ""),
-            write_ts = column_ifexists("_write_ts_t", ""),
-            analyzers = column_ifexists("analyzers_s", ""),
-            conn_uids = column_ifexists("conn_uids_s", ""),
-            depth = column_ifexists("depth_d", real(null)),
-            duration = column_ifexists("duration_d", real(null)),
-            fuid = column_ifexists("fuid_s", ""),
-            is_orig = column_ifexists("is_orig_b", ""),
-            local_orig = column_ifexists("local_orig_b", ""),
-            md5 = column_ifexists("md5_s", ""),
-            mime_type = iff(isempty(column_ifexists("mime_type_s", "")), dynamic([]), pack_array(column_ifexists("mime_type_s", ""))),
-            missing_bytes = column_ifexists("missing_bytes_d", real(null)),
-            overflow_bytes = column_ifexists("overflow_bytes_d", real(null)),
-            rx_hosts = column_ifexists("rx_hosts_s", ""),
-            seen_bytes = column_ifexists("seen_bytes_d", real(null)),
-            sha1 = column_ifexists("sha1_s", ""),
-            sha256 = column_ifexists("sha256_s", ""),
-            source = column_ifexists("source_s", ""),
-            timedout = column_ifexists("timedout_b", ""),
-            total_bytes = column_ifexists("total_bytes_d", real(null)),
-            tx_hosts = column_ifexists("tx_hosts_s", ""),
-            vlan = column_ifexists("vlan_d", real(null)),
-            filename = column_ifexists("filename_s", ""),
-            parent_fuid = column_ifexists("parent_fuid_s", ""),
-            extracted = column_ifexists("extracted_s", ""),
-            extracted_cutoff = column_ifexists("extracted_cutoff_b", ""),
-            extracted_size = column_ifexists("extracted_size_d", real(null)),
-            id_orig_h = column_ifexists("id_orig_h_s", ""),
-            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h = column_ifexists("id_resp_h_s", ""),
-            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
-            num = column_ifexists("num_d", real(null)),
-            uid = column_ifexists("uid_s", "")
+            mime_type = iff(isempty(mime_type), dynamic([]), pack_array(mime_type))
         | extend
             EventVendor = "Corelight",
             EventProduct = "CorelightSensor",
