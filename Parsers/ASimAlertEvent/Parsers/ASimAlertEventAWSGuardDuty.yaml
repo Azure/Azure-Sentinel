@@ -1,0 +1,237 @@
+Parser:
+  Title: Alert Event ASIM parser for AWS GuardDuty
+  Version: '0.1.0'
+  LastUpdated: Aug 28, 2026
+Product:
+  Name: AWS GuardDuty
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon GuardDuty finding format
+  Link: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-format.html
+Description: |
+  This ASIM parser supports normalizing AWS GuardDuty findings, stored in the AWSGuardDuty table, to the ASIM AlertEvent normalized schema.
+ParserName: ASimAlertEventAWSGuardDuty
+EquivalentBuiltInParser: _ASim_AlertEvent_AWSGuardDuty
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool=false,
+      pack: bool=false
+  ) {
+      AWSGuardDuty
+      | where not(disabled)
+      | extend
+          ActivityTokens = split(ActivityType, ":"),
+          AccessKeyDetails = ResourceDetails.accessKeyDetails,
+          RdsDbUserDetails = ResourceDetails.rdsDbUserDetails,
+          KubernetesDetails = ResourceDetails.kubernetesDetails,
+          SeverityScore = todouble(Severity)
+      | extend
+          ThreatPurpose = tostring(ActivityTokens[0]),
+          ActivityRemainder = tostring(ActivityTokens[1])
+      | extend
+          ResourceTokens = split(ActivityRemainder, "/")
+      | extend
+          ResourceTypeAffected = tostring(ResourceTokens[0]),
+          ThreatFamilyRemainder = tostring(ResourceTokens[1])
+      | extend
+          ThreatTokens = split(ThreatFamilyRemainder, ".")
+      | extend
+          ThreatFamilyName = tostring(ThreatTokens[0]),
+          DetectionRemainder = tostring(ThreatTokens[1])
+      | extend
+          DetectionTokens = split(DetectionRemainder, "!")
+      | extend
+          DetectionMechanism = tostring(DetectionTokens[0]),
+          Artifact = tostring(DetectionTokens[1])
+      | extend
+          ServiceAction = case(
+              isnotempty(ServiceDetails.action.awsApiCallAction), ServiceDetails.action.awsApiCallAction,
+              isnotempty(ServiceDetails.action.kubernetesApiCallAction), ServiceDetails.action.kubernetesApiCallAction,
+              isnotempty(ServiceDetails.action.networkConnectionAction), ServiceDetails.action.networkConnectionAction,
+              isnotempty(ServiceDetails.action.rdsLoginAttemptAction), ServiceDetails.action.rdsLoginAttemptAction,
+              dynamic(null)
+          )
+      | extend
+          RemoteIpAddress = tostring(coalesce(
+              ServiceAction.remoteIpDetails.ipAddressV4,
+              ServiceAction.remoteIpDetails.ipAddressV6,
+              todynamic(ServiceAction.sourceIPs)[0]
+          )),
+          LocalIpAddress = tostring(coalesce(
+              ServiceAction.localIpDetails.ipAddressV4,
+              ServiceAction.localIpDetails.ipAddressV6
+          )),
+          RemoteAWSAccountId = tostring(ServiceAction.remoteAccountDetails.accountId),
+          AccountUpn = tostring(case(
+              tostring(AccessKeyDetails.userType) == "IAMUser", AccessKeyDetails.userName,
+              tostring(AccessKeyDetails.userType) == "AssumedRole", split(tostring(AccessKeyDetails.principalId), ":", 1)[0],
+              isnotempty(RdsDbUserDetails.user), RdsDbUserDetails.user,
+              isnotempty(KubernetesDetails.kubernetesUserDetails.username), KubernetesDetails.kubernetesUserDetails.username,
+              ""
+          ))
+      | extend
+          FindingLink = iff(
+              isnotempty(Region) and isnotempty(Id),
+              strcat("https://", Region, ".console.aws.amazon.com/guardduty/home?region=", Region, "#/findings?fId=", Id),
+              ""
+          )
+      | extend
+          EventType = "Alert",
+          EventCount = int(1),
+          EventStartTime = TimeCreated,
+          EventEndTime = TimeCreated,
+          EventUid = Id,
+          EventOriginalUid = Id,
+          EventProduct = "GuardDuty",
+          EventVendor = "AWS",
+          EventProductVersion = SchemaVersion,
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "0.1",
+          EventMessage = Description,
+          EventOriginalSeverity = tostring(Severity),
+          EventSeverity = case(
+              SeverityScore >= 7.0, "High",
+              SeverityScore >= 4.0 and SeverityScore <= 6.9, "Medium",
+              SeverityScore >= 1.0 and SeverityScore <= 3.9, "Low",
+              "Informational"
+          ),
+          EventSubType = "Threat",
+          EventOriginalType = ActivityType,
+          EventOriginalSubType = DetectionMechanism,
+          EventReportUrl = FindingLink,
+          AlertName = Title,
+          AlertId = Id,
+          AlertDescription = Description,
+          AlertOriginalStatus = "",
+          AlertStatus = "Active",
+          AlertVerdict = "Unknown",
+          RuleName = ActivityType,
+          RuleDescription = Title,
+          DetectionMethod = case(
+              DetectionMechanism has "ThreatList", "Threat Intelligence",
+              DetectionMechanism has "Reputation", "Threat Intelligence",
+              DetectionMechanism has "Anomaly", "Behavioral Analytics",
+              "Behavioral Analytics"
+          ),
+          ThreatName = ThreatFamilyName,
+          ThreatOriginalCategory = ThreatPurpose,
+          ThreatCategory = "Unknown",
+          ThreatRiskLevel = toint(Severity),
+          ThreatOriginalRiskLevel = tostring(Severity),
+          IndicatorType = iff(isnotempty(RemoteIpAddress), "Ip", ""),
+          DvcIpAddr = LocalIpAddress,
+          DvcId = tostring(coalesce(
+              ResourceDetails.instanceDetails.instanceId,
+              ResourceDetails.eksClusterDetails.name,
+              ResourceDetails.ecsClusterDetails.name,
+              ResourceDetails.rdsDbInstanceDetails.dbInstanceIdentifier,
+              Arn
+          )),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          Dvc = DvcId,
+          Username = AccountUpn,
+          UsernameType = case(
+              AccountUpn contains "@", "UPN",
+              isnotempty(AccountUpn), "Simple",
+              ""
+          ),
+          UserId = tostring(coalesce(
+              AccessKeyDetails.accessKeyId,
+              AccessKeyDetails.principalId,
+              RemoteAWSAccountId
+          )),
+          UserIdType = iff(isnotempty(UserId), "Other", ""),
+          UserScope = "AWSAccount",
+          UserScopeId = AccountId,
+          IpAddr = RemoteIpAddress,
+          User = AccountUpn,
+          Rule = ActivityType,
+          Url = FindingLink,
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "Arn", Arn,
+                  "Partition", Partition,
+                  "Region", Region,
+                  "SchemaVersion", SchemaVersion,
+                  "ThreatPurpose", ThreatPurpose,
+                  "ResourceTypeAffected", ResourceTypeAffected,
+                  "DetectionMechanism", DetectionMechanism,
+                  "Artifact", Artifact,
+                  "RemoteIpAddress", RemoteIpAddress,
+                  "LocalIpAddress", LocalIpAddress,
+                  "RemoteAWSAccountId", RemoteAWSAccountId,
+                  "ServiceDetails", ServiceDetails,
+                  "ResourceDetails", ResourceDetails
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated,
+          Type,
+          AdditionalFields,
+          AlertDescription,
+          AlertId,
+          AlertName,
+          AlertOriginalStatus,
+          AlertStatus,
+          AlertVerdict,
+          DetectionMethod,
+          Dvc,
+          DvcId,
+          DvcIdType,
+          DvcIpAddr,
+          EventCount,
+          EventEndTime,
+          EventMessage,
+          EventOriginalSeverity,
+          EventOriginalSubType,
+          EventOriginalType,
+          EventOriginalUid,
+          EventProduct,
+          EventProductVersion,
+          EventReportUrl,
+          EventSchema,
+          EventSchemaVersion,
+          EventSeverity,
+          EventStartTime,
+          EventSubType,
+          EventType,
+          EventUid,
+          EventVendor,
+          IndicatorType,
+          IpAddr,
+          Rule,
+          RuleDescription,
+          RuleName,
+          ThreatCategory,
+          ThreatName,
+          ThreatOriginalCategory,
+          ThreatOriginalRiskLevel,
+          ThreatRiskLevel,
+          Url,
+          User,
+          UserId,
+          UserIdType,
+          Username,
+          UsernameType,
+          UserScope,
+          UserScopeId
+  };
+  parser(
+      disabled=disabled,
+      pack=pack
+  )
