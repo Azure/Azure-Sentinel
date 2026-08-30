@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.5.2       | 30-08-2026                     | GitHubAuditData parser: keep ingestion TimeGenerated when created_at_d/CreatedAt is missing so rows are not dropped. |
 | 3.5.1       | 13-08-2026                     | Added source storage subscription and resource group details to the Azure Storage data connector request for authorization validation. |
 | 3.5.0       | 30-07-2026                     | Promoted the GitHub Azure Storage Audit Logs data connector to GA, add multi-stream support, and updated its generated configuration with advanced Event Grid filters. |
 | 3.4.0       | 25-06-2026                     | Added all api.request fields and created V3 table for AzStorage connector         |
