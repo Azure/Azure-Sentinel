@@ -1,5 +1,10 @@
 # Changelog for vimAuthenticationOktaV2.yaml
 
+## Version 0.4.1
+
+- (2026-08-20) Fixed `TargetUsername` and `TargetUserIdType`, which read the raw `OktaV2_CL` columns instead of the values assigned by sibling clauses of the same `extend`. This also corrects `TargetUsernameType` and the `User` alias - [PR #14957](https://github.com/Azure/Azure-Sentinel/pull/14957)
+- (2026-08-20) Fixed `SrcDeviceType`, whose `lookup` was shadowed by the existing `OktaV2_CL` column of the same name, leaving the mapping unapplied. The mapping is now performed inline - [PR #14957](https://github.com/Azure/Azure-Sentinel/pull/14957)
+
 ## Version 0.4.0
 
 - (2026-01-12) [ASIM] Make changes to Authentication ASIM OktaSSO and OktaV2 parser - [PR #13401](https://github.com/Azure/Azure-Sentinel/pull/13401)
