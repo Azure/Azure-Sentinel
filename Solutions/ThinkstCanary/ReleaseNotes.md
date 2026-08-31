@@ -1,3 +1,3 @@
-| Version | Date | Notes |
-|---------|------|-------|
-| 1.0.0 | 2026-08-18 | Initial CCF connector, parsers, ASIM mappings, analytics rules, hunting queries, workbook, and response playbooks. |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                          |
+|-------------|--------------------------------|-------------------------------------------------------------------------------------------------------------|
+| 3.0.0       | 18-08-2026                     | Initial CCF connector and analytic rule for ingesting and detecting Thinkst Canary and Canarytoken incidents. |
