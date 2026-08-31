@@ -1,0 +1,362 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Datazag - support@datazag.com",
+    "comments": "Solution template for Datazag"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@datazag.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Datazag",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "datazag.azure-sentinel-solution-datazag",
+    "_solutionId": "[variables('solutionId')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41','-', '1.0.0')))]"
+    },
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "2d7b90c5-41ae-4f83-a6d2-9b1c5e3407fa",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('2d7b90c5-41ae-4f83-a6d2-9b1c5e3407fa')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "DatazagDomainIndicatorMatch_DNS_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Matches active Datazag impersonation indicators against DNS activity normalized by the ASIM\nDns schema, so the rule works across any normalized DNS source without modification. A match\nmeans a host inside the estate resolved a domain Datazag scored as brand impersonation,\nplatform impersonation or attacker infrastructure. Requires the ASIM DNS parsers.",
+                "displayName": "Datazag - impersonation domain resolved in DNS",
+                "enabled": false,
+                "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet ioc_lookback = 14d;\nlet dns_lookback = 1h;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookback)\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where isempty(ValidUntil) or ValidUntil > now()\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        IndicatorStixId     = tostring(Data.id),\n        IndicatorRecordId   = Id,\n        DatazagAlertRef     = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence   = tostring(Data.labels),\n        IndicatorValidUntil = ValidUntil;\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        DnsQuery,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\"),\n        EventVendor     = column_ifexists(\"EventVendor\", \"\"),\n        EventProduct    = column_ifexists(\"EventProduct\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstSeen   = min(DnsTime),\n    LastSeen    = max(DnsTime),\n    QueryCount  = count(),\n    SourceIps   = make_set(SrcIpAddr, 50),\n    SourceHosts = make_set(SrcHostname, 50),\n    Upns        = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 50),\n    SeenBy      = make_set(strcat(EventVendor, \" \", EventProduct), 10)\n    by\n    IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,\n    Confidence, IndicatorEvidence, IndicatorValidUntil\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    AccountUpn = tostring(Upns[0])\n| order by LastSeen desc\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "ThreatIntelligenceTaxii",
+                    "dataTypes": [
+                      "ThreatIntelIndicators"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "InitialAccess",
+                  "CommandAndControl"
+                ],
+                "techniques": [
+                  "T1566",
+                  "T1071"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "IndicatorDomain",
+                        "identifier": "DomainName"
+                      }
+                    ],
+                    "entityType": "DNS"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "SourceIp",
+                        "identifier": "Address"
+                      }
+                    ],
+                    "entityType": "IP"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "SourceHost",
+                        "identifier": "HostName"
+                      }
+                    ],
+                    "entityType": "Host"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "AccountUpn",
+                        "identifier": "FullName"
+                      }
+                    ],
+                    "entityType": "Account"
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                  "DatazagIndicatorRef": "IndicatorStixId",
+                  "DatazagConfidence": "Confidence",
+                  "IndicatorExpiry": "IndicatorValidUntil",
+                  "ObservedBy": "SeenBy",
+                  "DatazagEvidence": "IndicatorEvidence",
+                  "DatazagAlertRef": "DatazagAlertRef",
+                  "ResolutionCount": "QueryCount"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Datazag: {{IndicatorDomain}} resolved from inside the estate",
+                  "alertDescriptionFormat": "{{IndicatorDomain}} was resolved from inside the estate. Datazag scored this indicator\nat confidence {{Confidence}}. Supporting evidence: {{IndicatorEvidence}}\n"
+                },
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "1d",
+                    "enabled": true,
+                    "groupByEntities": [
+                      "DNS"
+                    ],
+                    "matchingMethod": "Selected"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Datazag Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Datazag",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Datazag",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Datazag",
+                  "email": "support@datazag.com",
+                  "tier": "Partner",
+                  "link": "https://datazag.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Datazag - impersonation domain resolved in DNS",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "DatazagRetroHunt_DNS_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "Datazag_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Datazag - retro-hunt historical DNS against impersonation indicators",
+                "category": "Hunting Queries",
+                "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet dns_lookback = 90d;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        DatazagAlertRef = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence = tostring(Data.labels),\n        IndicatorFirstPublished = todatetime(Data.created);\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstResolved = min(DnsTime),\n    LastResolved  = max(DnsTime),\n    QueryCount    = count(),\n    SourceIps     = make_set(SrcIpAddr, 100),\n    SourceHosts   = make_set(SrcHostname, 100),\n    Upns          = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 100)\n    by IndicatorDomain, DatazagAlertRef, Confidence, IndicatorEvidence, IndicatorFirstPublished\n| extend\n    SourceIp      = tostring(SourceIps[0]),\n    SourceHost    = tostring(SourceHosts[0]),\n    AccountUpn    = tostring(Upns[0]),\n    HostsAffected = array_length(SourceHosts),\n    DaysBeforeIndicator = datetime_diff('day', IndicatorFirstPublished, FirstResolved)\n| order by FirstResolved asc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Matches Datazag impersonation indicators against historical ASIM-normalized DNS to surface domains resolved inside the estate before the feed was connected. Adjust dns_lookback to your DNS retention. Requires ASIM DNS parsers."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "InitialAccess,CommandAndControl"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1566,T1071"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "Datazag Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Datazag",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Datazag",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Datazag",
+                  "email": "support@datazag.com",
+                  "tier": "Partner",
+                  "link": "https://datazag.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Datazag - retro-hunt historical DNS against impersonation indicators",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Datazag",
+        "publisherDisplayName": "Datazag",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Datazag/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://datazag.com/\">Datazag</a> solution for Microsoft Sentinel delivers brand impersonation, platform impersonation and attacker-infrastructure indicators derived from Certificate Transparency, published as STIX 2.1 objects over a TAXII 2.1 server.\\n\\nIndicators are ingested using Microsoft Sentinel's built-in <strong>Threat Intelligence - TAXII</strong> data connector and land in the native <strong>ThreatIntelIndicators</strong> table. No custom table, data collection rule or workspace function is required, and indicators are available to analytic rules and hunting queries immediately. Because indicators are retained in the workspace, existing logs can also be retro-hunted against them. Datazag never queries your workspace: delivery is pull-only, on a schedule you control.\\n\\n<strong>Before you install</strong>\\n\\nYou need an active Datazag subscription. Contact support@datazag.com to obtain the username and password for your organisation, quoting the collections your subscription includes.\\n\\n<strong>Connecting the feed</strong>\\n\\nIn the Microsoft Defender portal, go to Microsoft Sentinel &gt; Configuration &gt; Data connectors, open <strong>Threat Intelligence - TAXII</strong>, select <strong>Open connector page</strong>, then <strong>Add</strong>. Enter a friendly name of your choosing, the API root URL and collection ID below, and the credentials issued by Datazag. A polling frequency of once an hour is recommended. Repeat for each collection your subscription includes; each is a separate TAXII server entry.\\n\\nAPI root URL: <code>https://taxii.datazag.com/api/</code>\\n\\n| Collection | ID |\\n|---|---|\\n| Platform impersonation | <code>c7ad8fef-c704-4b36-9526-5d7c3bd018c4</code> |\\n| Attacker infrastructure | <code>eedf8709-5e4f-4ed4-b840-5eaafa236b70</code> |\\n\\nBrand impersonation collections are issued per organisation; Datazag will supply your collection ID with your credentials.\\n\\n<strong>Prerequisites</strong>\\n\\na. An active Datazag subscription and TAXII credentials, as above.\\n\\nb. The analytic rule and hunting query in this solution match indicators against DNS activity through the <a href=\"https://learn.microsoft.com/azure/sentinel/normalization\">Advanced Security Information Model (ASIM)</a>. The ASIM DNS parsers must be deployed and the workspace must be receiving DNS telemetry for this content to return results.\\n\\nContent in this solution identifies Datazag indicators by their STIX <code>created_by_ref</code> rather than by <code>SourceSystem</code>, because <code>SourceSystem</code> reflects the friendly name you choose when adding the TAXII server.</p>\n<p><strong>Analytic Rules:</strong> 1, <strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Datazag.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Datazag",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Datazag",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Datazag",
+          "email": "support@datazag.com",
+          "tier": "Partner",
+          "link": "https://datazag.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-06",
+        "lastPublishDate": "2026-08-06",
+        "providers": [
+          "Datazag"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
