@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.17
+
+- (2026-08-31) Add the Wiz Cloud Authentication filtering parser. [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+
 ## Version 0.3.16
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication filtering parser.

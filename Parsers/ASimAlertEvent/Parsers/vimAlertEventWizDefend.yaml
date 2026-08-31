@@ -1,0 +1,354 @@
+Parser:
+  Title: Alert Event ASIM filtering parser for Wiz Defend (WizDetectionsV3_CL)
+  Version: '0.1.0'
+  LastUpdated: Aug 31, 2026
+Product:
+  Name: Wiz Defend
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Wiz Docs
+  Link: https://docs.wiz.io/docs/microsoft-sentinel-integration
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports filtering and normalizing Wiz Defend threat detection events, stored in the WizDetectionsV3_CL table, to the ASIM Alert Event normalized schema. Wiz Defend is Wiz's cloud threat detection and response (TDR) capability. Detections originating from WIZ and WIZ_SENSOR (third party sources like AWS GuardDuty are filtered out) sources are all normalized under this parser. AlertVerdict filtering is not supported by this source.
+ParserName: vimAlertEventWizDefend
+EquivalentBuiltInParser: _Im_AlertEvent_WizDefend
+Exceptions:
+- Field: AttackRemediationSteps
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: EventResultDetails
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // -------------------------------------------------------------------------
+  // Wiz Defend is Wiz's cloud threat detection and response (TDR) capability.
+  // Each record in WizDetectionsV3_CL represents a single detection raised
+  // against one or more triggering events (cloud audit logs, workload traffic,
+  // identity activity, etc.) correlated by Wiz.
+  //
+  // tdrSource can be WIZ, WIZ_SENSOR, GUARD_DUTY or others. This parser is filtering out
+  // third-party alert products ingested by Wiz (such as AWS GuardDuty), as those should be
+  // handled by their respective data connectors and parsers.
+  // -------------------------------------------------------------------------
+  // ASIM's Hostname logical type is a single DNS label, Regex matches ASIMs data tester
+  // Wiz primaryResource.name for some VM/container entities holds
+  // an ARM resource ID, a multi-label FQDN (e.g. AWS EC2 internal DNS names), a VMSS
+  // instance ID with underscores (e.g. "aks-apps2-16464496-vmss_6"), or other
+  let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      ipaddr_has_any_prefix: dynamic = dynamic([]),
+      hostname_has_any: dynamic = dynamic([]),
+      username_has_any: dynamic = dynamic([]),
+      attacktactics_has_any: dynamic = dynamic([]),
+      attacktechniques_has_any: dynamic = dynamic([]),
+      threatcategory_has_any: dynamic = dynamic([]),
+      alertverdict_has_any: dynamic = dynamic([]),
+      eventseverity_has_any: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      WizDetectionsV3_CL
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+      | where tdrSource contains "WIZ" // Filtering out 3rd party sources such as AWS GuardDuty
+      // Filters below use only native columns (severity, mitreTactics, mitreTechniques) and are
+      // applied before the extends further down.
+      | where array_length(eventseverity_has_any) == 0 or (
+          ("High" in (eventseverity_has_any) and severity in ("HIGH", "CRITICAL"))
+          or ("Medium" in (eventseverity_has_any) and severity == "MEDIUM")
+          or ("Low" in (eventseverity_has_any) and severity == "LOW")
+          or ("Informational" in (eventseverity_has_any) and severity == "INFORMATIONAL")
+      )
+      | where array_length(alertverdict_has_any) == 0 // Data source does not support AlertVerdict
+      | where array_length(attacktactics_has_any) == 0 or array_length(set_intersect(mitreTactics, attacktactics_has_any)) > 0
+      | where array_length(attacktechniques_has_any) == 0 or array_length(set_intersect(mitreTechniques, attacktechniques_has_any)) > 0
+      | extend
+          _origin = tostring(triggeringEvents[0].origin),
+          _status = tostring(triggeringEvents[0].status),
+          _actorType = tostring(primaryActor.type),
+          _actorName = tostring(primaryActor.name),
+          _actorExternalId = tostring(primaryActor.externalId),
+          _actorProviderUniqueId = tostring(primaryActor.providerUniqueId),
+          _actorNativeType = tostring(primaryActor.nativeType),
+          _resType = tostring(primaryResource.type),
+          _resName = tostring(primaryResource.name),
+          _resId = tostring(primaryResource.id),
+          _resExtId = tostring(primaryResource.externalId),
+          _resCloudPlatform = tostring(primaryResource.cloudAccount.cloudPlatform),
+          _procId = tostring(triggeringEvents[0].runtimeDetails.processTree[0].id),
+          _procPath = tostring(triggeringEvents[0].runtimeDetails.processTree[0].path),
+          _procCommand = tostring(triggeringEvents[0].runtimeDetails.processTree[0].command),
+          _procHash = tostring(triggeringEvents[0].runtimeDetails.processTree[0].hash),
+          _procSize = triggeringEvents[0].runtimeDetails.processTree[0].size
+      | extend
+          _isAzureArmId = _resCloudPlatform == "Azure" and _resExtId matches regex @'(?i)^/subscriptions/'
+      | where array_length(username_has_any) == 0 or _actorName has_any (username_has_any)
+      | where array_length(hostname_has_any) == 0 or (
+          _resType in ("VIRTUAL_MACHINE", "CONTAINER")
+          and _resName has_any (hostname_has_any)
+      )
+      | where array_length(ipaddr_has_any_prefix) == 0 or (
+          _actorType == "NETWORK_ADDRESS"
+          and _actorName has_any (ipaddr_has_any_prefix)
+      )
+      | project-rename
+          ThreatId = threatId,
+          EventReportUrl = threatUrl
+      | extend
+          EventStartTime = coalesce(todatetime(tostring(timeFrame.startedAt)), createdAt),
+          EventEndTime = coalesce(todatetime(tostring(timeFrame.endedAt)), createdAt),
+          EventCount = toint(coalesce(triggeringEventsCount, 1)),
+          EventType = "Alert",
+          EventSubType = "Threat",
+          EventProduct = "Defend",
+          EventVendor = "Wiz",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "0.1",
+          EventUid = detectionId,
+          EventOriginalUid = detectionId,
+          EventMessage = iff(isnotempty(description), description, detectionTitle),
+          EventOriginalSeverity = severity,
+          EventSeverity = case(
+              severity == "CRITICAL", "High",
+              severity == "HIGH", "High",
+              severity == "MEDIUM", "Medium",
+              severity == "LOW", "Low",
+              severity == "INFORMATIONAL", "Informational",
+              "Informational"
+          ),
+          EventResult = case(
+              _status == "Success", "Success",
+              _status == "Failure", "Failure",
+              "NA"
+          ),
+          AlertName = detectionTitle,
+          ThreatCategory = case(
+              detectionTitle has "malware" or tdrId has "malware", "Malware",
+              detectionTitle has "ransomware" or tdrId has "ransomware", "Ransomware",
+              detectionTitle has "phishing" or tdrId has "phishing", "Phishing",
+              detectionTitle has "spyware" or tdrId has "spyware", "Spyware",
+              detectionTitle has "rootkit" or tdrId has "rootkit", "Rootkit",
+              detectionTitle has "adware" or tdrId has "adware", "Adware",
+              detectionTitle has "trojan" or tdrId has "trojan", "Trojan",
+              detectionTitle has "worm" or tdrId has "worm", "Worm",
+              detectionTitle has "cryptocurrency" or detectionTitle has "cryptomin" or tdrId has "cryptomin", "Cryptominor",
+              "Unknown"
+          )
+      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
+      | extend
+          RuleName = tdrId,
+          DetectionMethod = case(
+              _origin == "WIZ_SENSOR", "EDR",
+              _origin == "WIZ_AGENTLESS_MALWARE_SCANNING", "Antivirus",
+              _origin in (
+                  "GITHUB_AUDIT_LOGS", "AWS_CLOUDTRAIL", "AZURE_ACTIVITY_LOGS", "AZURE_ACTIVE_DIRECTORY",
+                  "GCP_AUDIT_LOGS", "GCP_GKE_AUDIT_LOGS", "GCP_STORAGE_DATA_ACCESS_LOGS",
+                  "GOOGLE_WORKSPACE_AUDIT_LOGS", "OKTA_SYSTEM_LOGS", "WIZ_AUDIT_LOGS",
+                  "WIZ_KUBERNETES_AUDIT_LOGS_COLLECTOR", "WIZ_WORKLOAD_HTTP_LOGS", "WIZ_WORKLOAD_DATABASE_LOGS",
+                  "WIZ_WORKLOAD_SSH_LOGS", "WIZ_WORKLOAD_VIRTUAL_APPLIANCE_LOGS"
+              ), "Cloud Security Posture Management",
+              "Other"
+          ),
+          AttackTactics = iff(array_length(mitreTactics) > 0, strcat_array(mitreTactics, ", "), ""),
+          AttackTechniques = iff(array_length(mitreTechniques) > 0, strcat_array(mitreTechniques, ", "), ""),
+          Username = _actorName,
+          UserId = case(
+              isnotempty(_actorProviderUniqueId), _actorProviderUniqueId,
+              isnotempty(_actorExternalId), _actorExternalId,
+              tostring(primaryActor.id)
+          )
+      | extend
+          UserIdType = case(
+              isempty(UserId), "",
+              UserId startswith "arn:", "AWSId",
+              "Other"
+          ),
+          UserType = case(
+              _actorType == "SERVICE_ACCOUNT", "Service Principal",
+              _actorType in ("USER_ACCOUNT", "IDENTITY"), "Regular",
+              "Other"
+          ),
+          OriginalUserType = _actorNativeType,
+          // resId is Wiz's internal hash, not a native identifier, prefer resExtId.
+          DvcId = iff(isnotempty(_resExtId), _resExtId, _resId),
+          DvcIdType = iff(_isAzureArmId, "AzureResourceId", "Other"),
+          DvcScopeId = tostring(primaryResource.cloudAccount.externalId),
+          DvcHostname = iff(_resType in ("VIRTUAL_MACHINE", "CONTAINER") and _resName matches regex HostnameFormatRegex, _resName, ""),
+          // triggeringEvents[].actorIP is the actor's login/source IP, not the device's
+          DvcIpAddr = iff(
+              _actorType == "NETWORK_ADDRESS"
+              and (
+                  ipv4_is_match(_actorName, "0.0.0.0", 0)
+                  or ipv6_is_match(_actorName, "::1", 0)
+                  or ipv6_is_match(_actorName, "0.0.0.0", 0)
+              ),
+              _actorName,
+              ""
+          ),
+          DvcAction = tostring(triggeringEvents[0].name),
+          IndicatorType = case(
+              _resType == "VIRTUAL_MACHINE", "Host",
+              isnotempty(_resId), "Cloud Resource",
+              ""
+          ),
+          // Only WIZ_SENSOR (EDR/runtime) detections carry a process tree
+          ProcessId = _procId,
+          ProcessCommandLine = _procCommand,
+          ProcessName = _procPath,
+          FileName = extract(@"[^\\/]+$", 0, _procPath),
+          FilePath = _procPath,
+          FileSHA1 = iff(strlen(_procHash) == 40, _procHash, ""),
+          FileSize = tolong(_procSize)
+      | extend
+          UsernameType = case(
+              isempty(Username), "",
+              Username has "@", "UPN",
+              "Simple"
+          ),
+          AlertId = EventUid,
+          AlertDescription = EventMessage,
+          Rule = RuleName,
+          Hostname = DvcHostname,
+          IpAddr = DvcIpAddr,
+          User = Username,
+          Dvc = case(
+              isnotempty(DvcId), DvcId,
+              isnotempty(DvcHostname), DvcHostname,
+              isnotempty(DvcIpAddr), DvcIpAddr,
+              EventProduct
+          )
+      | extend
+          AdditionalFields = iff(
+              pack,
+              pack(
+                  "TdrId", tdrId,
+                  "TdrSource", tdrSource,
+                  "PrimaryActor", primaryActor,
+                  "PrimaryResource", primaryResource,
+                  "CloudAccounts", cloudAccounts,
+                  "CloudOrganizations", cloudOrganizations,
+                  // projects is not present in every tenant's WizDetectionsV3_CL schema
+                  "Projects", column_ifexists("projects", dynamic(null)),
+                  "Resources", resources,
+                  "Actors", actors,
+                  "TriggeringEvents", triggeringEvents
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated,
+          EventStartTime,
+          EventEndTime,
+          EventCount,
+          EventType,
+          EventSubType,
+          EventResult,
+          EventSeverity,
+          EventOriginalSeverity,
+          EventProduct,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventUid,
+          EventOriginalUid,
+          EventMessage,
+          EventReportUrl,
+          AlertName,
+          ThreatId,
+          ThreatCategory,
+          RuleName,
+          Rule,
+          DetectionMethod,
+          AttackTactics,
+          AttackTechniques,
+          Username,
+          UsernameType,
+          UserId,
+          UserIdType,
+          UserType,
+          OriginalUserType,
+          User,
+          DvcId,
+          DvcHostname,
+          DvcIdType,
+          DvcScopeId,
+          DvcIpAddr,
+          DvcAction,
+          Dvc,
+          Hostname,
+          IpAddr,
+          AlertId,
+          AlertDescription,
+          IndicatorType,
+          ProcessId,
+          ProcessCommandLine,
+          ProcessName,
+          FileName,
+          FilePath,
+          FileSHA1,
+          FileSize,
+          AdditionalFields,
+          Type
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      hostname_has_any=hostname_has_any,
+      username_has_any=username_has_any,
+      attacktactics_has_any=attacktactics_has_any,
+      attacktechniques_has_any=attacktechniques_has_any,
+      threatcategory_has_any=threatcategory_has_any,
+      alertverdict_has_any=alertverdict_has_any,
+      eventseverity_has_any=eventseverity_has_any,
+      disabled=disabled,
+      pack=pack
+  )

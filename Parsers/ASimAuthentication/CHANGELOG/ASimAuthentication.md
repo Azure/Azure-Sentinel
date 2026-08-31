@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.20
+
+- (2026-08-31) Add the Wiz Cloud Authentication parser. [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+
 ## Version 0.2.19
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication parser.

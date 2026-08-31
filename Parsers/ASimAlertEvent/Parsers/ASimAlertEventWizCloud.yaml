@@ -1,0 +1,248 @@
+Parser:
+  Title: Alert Event ASIM parser for Wiz Cloud (WizIssuesV3_CL)
+  Version: '0.1.0'
+  LastUpdated: Aug 31, 2026
+Product:
+  Name: Wiz Cloud
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Wiz Docs
+  Link: https://docs.wiz.io/docs/microsoft-sentinel-integration
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing Wiz Cloud issues, stored in the WizIssuesV3_CL table, to the ASIM Alert Event normalized schema. WizIssuesV3_CL represents Wiz's unified Issues engine, covering cloud configuration findings, control failures, toxic combinations of risk factors, and correlated threat detections. EventSubType is derived per-row: THREAT_DETECTION issues, and TOXIC_COMBINATION issues whose rule name matches a confirmed-exploit keyword list, are normalized as "Threat". All other issues (cloud configuration/posture findings, control failures, and predictive/reachability-only toxic combinations) are normalized as "Compliance Violation".
+ParserName: ASimAlertEventWizCloud
+EquivalentBuiltInParser: _ASim_AlertEvent_WizCloud
+Exceptions:
+- Field: AttackTactics
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: AttackTechniques
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: EventResultDetails
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // -------------------------------------------------------------------------
+  // EventSubType is derived from issueType: THREAT_DETECTION issues are always
+  // "Threat". TOXIC_COMBINATION issues are only "Threat" when the rule NAME
+  // contains a confirmed-exploit/compromise keyword (malware, exfiltration,
+  // C2, brute force, validated unauthorized access, etc.) as most TOXIC_COMBINATIONS
+  // are not direct threat signals, but occassional a malware detection is
+  // classified as TOXIC_COMBINATION vs. a THREAT_DETECTION
+  // -------------------------------------------------------------------------
+  let ThreatKeywordRegex = @'(?i)(malware|ransomware|phishing|spyware|rootkit|adware|trojan|worm|infected|exploit|unauthorized access|backdoor|\bc2\b|command and control|crypto.?min|cryptojack|exfiltrat|compromis|botnet|keylog|brute force|reverse shell|web ?shell)';
+  // ASIM's Hostname logical type is a single DNS label, Regex matches ASIMs data tester
+  // Wiz primaryResource.name for some VM/container entities holds
+  // an ARM resource ID, a multi-label FQDN (e.g. AWS EC2 internal DNS names), a VMSS
+  // instance ID with underscores (e.g. "aks-apps2-16464496-vmss_6"), or other
+  let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
+  let parser = (disabled: bool = false, pack: bool = false) {
+      WizIssuesV3_CL
+      | where not(disabled)
+      | extend
+          _RuleId = tostring(sourceRule.id),
+          _RuleName = tostring(sourceRule.name),
+          _RuleDescription = tostring(sourceRule.description),
+          _RuleResolution = tostring(sourceRule.resolutionRecommendation),
+          _RuleSourceType = tostring(sourceRule.sourceType),
+          _EntityId = tostring(entitySnapshot.id),
+          _EntityName = tostring(entitySnapshot.name),
+          _EntityType = tostring(entitySnapshot.type),
+          _EntityNativeType = tostring(entitySnapshot.nativeType),
+          _EntityExternalId = tostring(entitySnapshot.externalId),
+          _EntityProviderId = tostring(entitySnapshot.providerId),
+          _EntityCloudPlatform = tostring(entitySnapshot.cloudPlatform),
+          _EntitySubscriptionExtId = tostring(entitySnapshot.subscriptionExternalId),
+          _EntitySubscriptionName = tostring(entitySnapshot.subscriptionName)
+      | extend
+          _IsAzureArmId = _EntityCloudPlatform == "Azure" and _EntityExternalId matches regex @'(?i)^/subscriptions/',
+          _IsIdentityEntity = _EntityType in ("USER_ACCOUNT", "SERVICE_ACCOUNT"),
+          _IsHostEntity = _EntityType in ("VIRTUAL_MACHINE", "CONTAINER", "DB_SERVER"),
+          _IsThreatKeywordMatch = _RuleName matches regex ThreatKeywordRegex
+      | extend
+          EventStartTime = coalesce(createdAt, TimeGenerated),
+          EventEndTime = coalesce(resolvedAt, updatedAt, TimeGenerated),
+          EventCount = toint(1),
+          EventType = "Alert",
+          EventSubType = case(
+              issueType == "THREAT_DETECTION", "Threat",
+              issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat",
+              "Compliance Violation"
+          ),
+          EventProduct = "Cloud",
+          EventVendor = "Wiz",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "0.1",
+          EventUid = issueId,
+          EventOriginalUid = issueId,
+          EventOriginalType = issueType,
+          EventOriginalSubType = _RuleSourceType,
+          EventOriginalSeverity = severity,
+          EventSeverity = case(
+              severity == "CRITICAL", "High",
+              severity == "HIGH", "High",
+              severity == "MEDIUM", "Medium",
+              severity == "LOW", "Low",
+              severity == "INFORMATIONAL", "Informational",
+              "Informational"
+          ),
+          // WizIssuesV3_CL has no success/failure outcome concept
+          EventResult = "NA",
+          EventMessage = iff(isnotempty(_RuleDescription), _RuleDescription, _RuleName),
+          EventReportUrl = sourceURL,
+          Url = sourceURL,
+          AlertName = _RuleName,
+          AlertOriginalStatus = status,
+          AlertStatus = case(
+              status in ("OPEN", "IN_PROGRESS"), "Active",
+              status in ("REJECTED", "RESOLVED"), "Closed",
+              ""
+          )
+      | extend
+          ThreatCategory = case(
+              _RuleName has "malware", "Malware",
+              _RuleName has "ransomware", "Ransomware",
+              _RuleName has "phishing", "Phishing",
+              _RuleName has "spyware", "Spyware",
+              _RuleName has "rootkit", "Rootkit",
+              _RuleName has "adware", "Adware",
+              _RuleName has "trojan", "Trojan",
+              _RuleName has "worm", "Worm",
+              _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominor",
+              EventSubType == "Compliance Violation", "Security Policy Violation",
+              "Unknown"
+          ),
+          RuleName = _RuleId,
+          RuleDescription = _RuleDescription,
+          AttackRemediationSteps = _RuleResolution,
+          DetectionMethod = "Cloud Security Posture Management",
+          DvcId = iff(_IsIdentityEntity, "", coalesce(_EntityExternalId, _EntityProviderId, _EntityId)),
+          DvcIdType = iff(_IsIdentityEntity, "", iff(_IsAzureArmId, "AzureResourceId", "Other")),
+          DvcScopeId = iff(_IsIdentityEntity, "", _EntitySubscriptionExtId),
+          DvcScope = iff(_IsIdentityEntity, "", _EntitySubscriptionName),
+          DvcHostname = iff(_IsHostEntity and _EntityName matches regex HostnameFormatRegex, _EntityName, ""),
+          Username = iff(_IsIdentityEntity, _EntityName, ""),
+          UserId = iff(_IsIdentityEntity, coalesce(_EntityExternalId, _EntityProviderId, _EntityId), "")
+      | extend
+          UserIdType = case(
+              isempty(UserId), "",
+              UserId startswith "arn:", "AWSId",
+              "Other"
+          ),
+          UserType = case(
+              _EntityType == "SERVICE_ACCOUNT", "Service Principal",
+              _EntityType == "USER_ACCOUNT", "Regular",
+              ""
+          ),
+          OriginalUserType = iff(_IsIdentityEntity, _EntityNativeType, ""),
+          IndicatorType = case(
+              _IsIdentityEntity, "User",
+              _IsHostEntity, "Host",
+              isnotempty(_EntityId) or isnotempty(_EntityExternalId), "Cloud Resource",
+              ""
+          )
+      | extend
+          UsernameType = case(
+              isempty(Username), "",
+              Username has "@", "UPN",
+              "Simple"
+          ),
+          ThreatFirstReportedTime = EventStartTime,
+          ThreatLastReportedTime = EventEndTime,
+          AlertId = EventUid,
+          AlertDescription = EventMessage,
+          Rule = RuleName,
+          Hostname = DvcHostname,
+          User = Username,
+          Dvc = case(
+              isnotempty(DvcId), DvcId,
+              isnotempty(DvcHostname), DvcHostname,
+              EventProduct
+          )
+      | extend
+          AdditionalFields = iff(
+              pack,
+              pack(
+                  "SourceRule", sourceRule,
+                  "EntitySnapshot", entitySnapshot,
+                  "Evidence", evidence,
+                  "DueAt", dueAt,
+                  "StatusChangedAt", statusChangedAt,
+                  "ServiceTickets", serviceTickets,
+                  "Projects", projects,
+                  "Notes", notes
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated,
+          EventStartTime,
+          EventEndTime,
+          EventCount,
+          EventType,
+          EventSubType,
+          EventResult,
+          EventSeverity,
+          EventOriginalSeverity,
+          EventProduct,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventUid,
+          EventOriginalUid,
+          EventOriginalType,
+          EventOriginalSubType,
+          EventMessage,
+          EventReportUrl,
+          Url,
+          AlertName,
+          AlertId,
+          AlertDescription,
+          AlertOriginalStatus,
+          AlertStatus,
+          ThreatCategory,
+          ThreatFirstReportedTime,
+          ThreatLastReportedTime,
+          RuleName,
+          RuleDescription,
+          Rule,
+          AttackRemediationSteps,
+          DetectionMethod,
+          Username,
+          UsernameType,
+          UserId,
+          UserIdType,
+          UserType,
+          OriginalUserType,
+          User,
+          DvcId,
+          DvcHostname,
+          DvcIdType,
+          DvcScopeId,
+          DvcScope,
+          Dvc,
+          Hostname,
+          IndicatorType,
+          AdditionalFields,
+          Type
+  };
+  parser(disabled=disabled, pack=pack)
