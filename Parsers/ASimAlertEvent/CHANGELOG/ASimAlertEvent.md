@@ -2,7 +2,7 @@
 
 ## Version 0.1.8
 
-- (2026-08-31) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+- (2026-08-31) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
 
 ## Version 0.1.7
 

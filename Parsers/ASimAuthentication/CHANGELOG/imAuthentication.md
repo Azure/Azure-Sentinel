@@ -2,7 +2,7 @@
 
 ## Version 0.3.17
 
-- (2026-08-31) Add the Wiz Cloud Authentication filtering parser. [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+- (2026-08-31) Add the Wiz Cloud Authentication filtering parser. [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
 
 ## Version 0.3.16
 
