@@ -1,5 +1,9 @@
 # Changelog for vimAlertEventMicrosoftDefenderXDR.yaml
 
+## Version 0.2.2
+
+- (2026-31-08) Corrected misspelling in ThreatCategory mapping from "Cryptominor" to "Cryptominer" - [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+
 ## Version 0.2.1
 
 - (2026-04-01) Fix bug in parser where extension AlertOriginalStatus was missing - [PR #13970](https://github.com/Azure/Azure-Sentinel/pull/13970)
@@ -14,4 +18,3 @@
 ## Version 0.1.0
 
 - (2024-11-07) Alert Schema Parsers - [PR #11387](https://github.com/Azure/Azure-Sentinel/pull/11387)
-

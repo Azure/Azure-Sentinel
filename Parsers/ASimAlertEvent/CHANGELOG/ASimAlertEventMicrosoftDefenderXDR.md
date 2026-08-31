@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEventMicrosoftDefenderXDR.yaml
 
+## Version 0.2.1
+
+- (2026-31-08) Corrected misspelling in ThreatCategory mapping from "Cryptominor" to "Cryptominer" - [PR #placeholder](https://github.com/Azure/Azure-Sentinel/pull/placeholder)
+
 ## Version 0.2.0
 
 - (2026-01-09) [ASIM] AlertEvent - Microsoft Defender XDR Parser updates - [PR #13418](https://github.com/Azure/Azure-Sentinel/pull/13418)
@@ -9,4 +13,3 @@
 ## Version 0.1.0
 
 - (2024-11-07) Alert Schema Parsers - [PR #11387](https://github.com/Azure/Azure-Sentinel/pull/11387)
-
