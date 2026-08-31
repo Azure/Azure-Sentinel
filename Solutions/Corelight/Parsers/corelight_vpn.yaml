@@ -1,8 +1,8 @@
-id: 974718ae-c0a5-4d4a-bb42-63a0f394d66f
+id: 7b836daa-c724-4c9f-b491-1e72ac8aecf7
 Function:
   Title: Corelight VPN Events
-  Version: '1.1.0'
-  LastUpdated: '2024-08-09'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_vpn
 FunctionAlias: corelight_vpn
@@ -59,43 +59,15 @@ FunctionQuery: |
         "TLS","N/A","TLS Auth",
         "FW","N/A","Indicates that the VPN might be trying to subvert network security by using a port that is usually allowed."
     ];
-    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
     let corelight_vpn = view () {
-        union isfuzzy=true Corelight_v2_vpn_CL, dummy_table
-        | summarize arg_max(TimeGenerated, *) by uid_s
+        union isfuzzy=true Corelight_v3_vpn_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
         | join kind=leftouter 
         ( corelight_conn
         | project uid, local_orig, local_resp
-        ) on $left.uid_s == $right.uid
-        | project-away uid
-        | extend
-            path = column_ifexists("_path_s", ""),
-            system_name = column_ifexists("_system_name_s", ""),
-            write_ts = column_ifexists("_write_ts_t", ""),
-            client_info = column_ifexists("client_info_s", ""),
-            duration = column_ifexists("duration_d", real(null)),
-            id_orig_h = column_ifexists("id_orig_h_s", ""),
-            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h = column_ifexists("id_resp_h_s", ""),
-            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
-            inferences = column_ifexists("inferences_s", ""),
-            issuer = column_ifexists("issuer_s", ""),
-            ja3 = column_ifexists("ja3_s", ""),
-            ja3s = column_ifexists("ja3s_s", ""),
-            orig_bytes = column_ifexists("orig_bytes_d", real(null)),
-            orig_cc = column_ifexists("orig_cc_s", ""),
-            orig_city = column_ifexists("orig_city_s", ""),
-            orig_region = column_ifexists("orig_region_s", ""),
-            proto = column_ifexists("proto_s", ""),
-            resp_bytes = column_ifexists("resp_bytes_d", real(null)),
-            resp_cc = column_ifexists("resp_cc_s", ""),
-            resp_city = column_ifexists("resp_city_s", ""),
-            resp_region = column_ifexists("resp_region_s", ""),
-            server_name = column_ifexists("server_name_s", ""),
-            service = column_ifexists("service_s", ""),
-            subject = column_ifexists("subject_s", ""),
-            uid = column_ifexists("uid_s", ""),
-            vpn_type = column_ifexists("vpn_type_s", "")
+        ) on $left.uid == $right.uid
+        | project-away uid1
         | mv-expand todynamic(inferences)
         | extend code_string = tostring(inferences)
         | lookup kind=leftouter VpnInferencesLookup on $left.code_string == $right.Code

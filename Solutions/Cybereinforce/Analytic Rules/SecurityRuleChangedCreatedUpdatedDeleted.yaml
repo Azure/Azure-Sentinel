@@ -1,0 +1,42 @@
+id: cf7ad1f5-7325-4bda-83d4-957ec943c457
+name: CTE - Security Rule Changed (Created/Updated/Deleted)
+description: |
+  A URL blocking/enforcement rule was created, updated, or deleted (potential policy tampering). Deduplicated per rule/day to avoid re-alerting on replayed audit events for the same change.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  CybereinforceCTE_CL
+  | where EventType in ("rule.created", "rule.updated", "rule.deleted")
+  | extend d = parse_json(Details)
+  | extend
+      AccountName = tostring(split(Actor, "@")[0]),
+      UPNSuffix = tostring(split(Actor, "@")[1]),
+      AppName = "Cybereinforce",
+      RuleId = tostring(d.ruleId),
+      Pattern = tostring(d.pattern)
+  | summarize EventCount=count(), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by bin(TimeGenerated, 1d), EventType, RuleId, Actor, AccountName, UPNSuffix, AppName, Pattern, TenantId
+  | project TimeGenerated=LastSeen, TenantId, Actor, AccountName, UPNSuffix, AppName, EventType, RuleId, Pattern, EventCount, FirstSeen, LastSeen
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppName
+version: 1.0.0
+kind: Scheduled

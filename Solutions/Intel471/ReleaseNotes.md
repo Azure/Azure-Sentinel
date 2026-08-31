@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.0       | 02-12-2025                     |  Added **Playbook** 'Intel 471 Malware Intelligence to Graph Security' using new upload indicators API to Intel 471 Solution. <br/> Added the Verity471 backend in the Intel471 solution for ingesting malware indicators.|
+| 3.0.1       | 28-08-2026                     |  Added 25 **Hunting Queries**. <br/> Updated **Playbook** 'Intel 471 Malware Intelligence to Sentinel' to **v3.0**: Key Vault secret names can now be supplied at deployment, and Blob storage now authenticates with the logic app's managed identity - grant it the `Storage Blob Data Contributor` role or every run fails.|
+| 3.0.0       | 02-12-2025                     |  Added the Verity 471 backend alongside Titan, and switched indicator ingestion to the Threat Intelligence Upload Indicators API.|

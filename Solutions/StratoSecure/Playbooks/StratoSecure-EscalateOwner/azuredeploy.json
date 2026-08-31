@@ -1,0 +1,304 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "StratoSecure - Escalate to Owner via Email",
+    "description": "When a Microsoft Sentinel incident from a StratoSecure finding remains unacknowledged, this playbook sends an escalation email via Azure Communication Services and writes an audit record to StratoSecure_PlaybookRuns_CL. Human approval is always required before the action executes.",
+    "prerequisites": "StratoSecure Platform API key. Microsoft Sentinel workspace with Contributor access.",
+    "postDeployment": [
+      "Grant the Logic App system-assigned managed identity the 'Microsoft Sentinel Responder' role on the Sentinel workspace."
+    ],
+    "lastUpdateTime": "2026-06-01T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "StratoSecure",
+      "ASPM",
+      "Security"
+    ],
+    "support": {
+      "tier": "partner",
+      "name": "Soluciones Etech Corp",
+      "email": "support@stratocode.io",
+      "link": "https://stratocode.io/support"
+    },
+    "author": {
+      "name": "Soluciones Etech Corp"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "StratoSecure-EscalateOwner",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel Log Analytics workspace."
+      }
+    },
+    "AcsEndpointHostname": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Communication Services resource hostname (e.g. your-acs-resource.communication.azure.com). Do not include https:// prefix."
+      }
+    },
+    "AcsManagedIdentityEnabled": {
+      "type": "string",
+      "defaultValue": "true",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "Set to true to authenticate with ACS via Logic App managed identity. Set to false to use ACS access key."
+      }
+    },
+    "AcsAccessKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure Communication Services access key. Required only when AcsManagedIdentityEnabled is false. Store in Key Vault."
+      }
+    },
+    "SenderEmail": {
+      "type": "string",
+      "defaultValue": "alerts@stratocode.io",
+      "metadata": {
+        "description": "Verified sender email address in the ACS Email Communication Service."
+      }
+    },
+    "EscalationEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Recipient email address for escalation notifications (e.g. soc-lead@your-org.com)."
+      }
+    },
+    "LogAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace ID for audit log ingestion."
+      }
+    },
+    "LogAnalyticsWorkspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Log Analytics workspace primary or secondary key for the azureloganalyticsdatacollector connector."
+      }
+    },
+    "RequireApproval": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "When true, main actions execute after the approval condition evaluates. Set to false for fully automated execution without gating. Audit log is always written regardless of this setting."
+      }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+    "AzureLogAnalyticsConnectionName": "[concat('AzureLogAnalytics-', parameters('PlaybookName'))]",
+    "HttpEndpoint": "[concat('https://', parameters('AcsEndpointHostname'), '/emails:send?api-version=2023-03-31')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureLogAnalyticsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('AzureLogAnalyticsConnectionName')]",
+        "parameterValues": {
+          "username": "[parameters('LogAnalyticsWorkspaceId')]",
+          "password": "[parameters('LogAnalyticsWorkspaceKey')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azureloganalyticsdatacollector')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "WorkspaceName": {
+              "type": "string",
+              "defaultValue": "[parameters('WorkspaceName')]"
+            },
+            "RequireApproval": {
+              "defaultValue": true,
+              "type": "Bool"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Condition_RequireHumanApproval": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@parameters('RequireApproval')",
+                      "@true"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Action_SendEscalationEmail": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[variables('HttpEndpoint')]",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://communication.azure.com"
+                    },
+                    "body": {
+                      "senderAddress": "[parameters('SenderEmail')]",
+                      "recipients": {
+                        "to": [
+                          {
+                            "address": "[parameters('EscalationEmail')]",
+                            "displayName": "SOC Escalation Contact"
+                          }
+                        ]
+                      },
+                      "content": {
+                        "subject": "[ESCALATION] StratoSecure Alert: @{triggerBody()?['object']?['properties']?['title']}",
+                        "plainText": "A StratoSecure security finding requires immediate attention.\n\nIncident: @{triggerBody()?['object']?['properties']?['title']}\nSeverity: @{triggerBody()?['object']?['properties']?['severity']}\nDescription: @{triggerBody()?['object']?['properties']?['description']}\n\nPlease review and take action in Microsoft Sentinel.",
+                        "html": "<html><body><h2>StratoSecure Security Escalation</h2><p>A security finding requires immediate attention.</p><table><tr><th>Field</th><th>Value</th></tr><tr><td>Incident</td><td>@{triggerBody()?['object']?['properties']?['title']}</td></tr><tr><td>Severity</td><td>@{triggerBody()?['object']?['properties']?['severity']}</td></tr><tr><td>Description</td><td>@{triggerBody()?['object']?['properties']?['description']}</td></tr></table><p><a href='@{triggerBody()?['object']?['properties']?['incidentUrl']}'>View in Microsoft Sentinel</a></p></body></html>"
+                      }
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Action_AuditLog": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/api/logs",
+                    "headers": {
+                      "Log-Type": "StratoSecure_PlaybookRuns_CL"
+                    },
+                    "body": {
+                      "PlaybookName": "[parameters('PlaybookName')]",
+                      "IncidentId": "@{triggerBody()?['object']?['name']}",
+                      "IncidentTitle": "@{triggerBody()?['object']?['properties']?['title']}",
+                      "Action": "EscalateOwner",
+                      "Status": "@{outputs('Action_SendEscalationEmail')['statusCode']}",
+                      "EscalationEmailSentTo": "[parameters('EscalationEmail')]",
+                      "WorkspaceName": "[parameters('WorkspaceName')]",
+                      "TimeGenerated": "@{utcNow()}"
+                    }
+                  },
+                  "runAfter": {
+                    "Action_SendEscalationEmail": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              },
+              "azureloganalyticsdatacollector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]",
+                "connectionName": "[variables('AzureLogAnalyticsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azureloganalyticsdatacollector')]"
+              }
+            }
+          },
+          "RequireApproval": {
+            "value": "[parameters('RequireApproval')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
+    }
+  }
+}
