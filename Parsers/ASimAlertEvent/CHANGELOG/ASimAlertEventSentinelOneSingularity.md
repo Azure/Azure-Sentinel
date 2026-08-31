@@ -2,7 +2,7 @@
 
 ## Version 0.1.1
 
-- (2026-31-08) Corrected misspelling in ThreatCategory mapping from "Cryptominor" to "Cryptominer" - [PR #15018](https://github.com/Azure/Azure-Sentinel/pull/15018)
+- (2026-08-31) Corrected misspelling in ThreatCategory mapping from "Cryptominor" to "Cryptominer" - [PR #15018](https://github.com/Azure/Azure-Sentinel/pull/15018)
 
 ## Version 0.1.0
 
