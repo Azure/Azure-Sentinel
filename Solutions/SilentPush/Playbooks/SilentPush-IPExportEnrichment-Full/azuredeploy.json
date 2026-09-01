@@ -146,27 +146,25 @@
                   "runAfter": {},
                   "expression": "@and(equals(uriScheme(outputs('Extract_Location')), 'https'), equals(uriHost(outputs('Extract_Location')), 'silentpush-feeds.s3.amazonaws.com'))",
                   "actions": {
-                    "Follow_Redirect": {
+                    "Get_Export_Preflight_Size": {
                       "type": "Http",
                       "runAfter": {},
                       "inputs": {
                         "uri": "@outputs('Extract_Location')",
-                        "method": "GET"
-                      },
-                      "runtimeConfiguration": {
-                        "contentTransfer": {
-                          "transferMode": "Chunked"
+                        "method": "GET",
+                        "headers": {
+                          "Range": "bytes=0-0"
                         }
                       }
                     },
                     "Get_Export_Total_Size": {
                       "type": "Compose",
                       "runAfter": {
-                        "Follow_Redirect": [
+                        "Get_Export_Preflight_Size": [
                           "Succeeded"
                         ]
                       },
-                      "inputs": "@if(equals(outputs('Follow_Redirect')?['headers']?['Content-Range'], null), length(body('Follow_Redirect')), int(substring(outputs('Follow_Redirect')?['headers']?['Content-Range'], add(lastIndexOf(outputs('Follow_Redirect')?['headers']?['Content-Range'], '/'), 1), sub(length(outputs('Follow_Redirect')?['headers']?['Content-Range']), add(lastIndexOf(outputs('Follow_Redirect')?['headers']?['Content-Range'], '/'), 1)))))"
+                      "inputs": "@if(equals(outputs('Get_Export_Preflight_Size')?['headers']?['Content-Range'], null), length(body('Get_Export_Preflight_Size')), int(substring(outputs('Get_Export_Preflight_Size')?['headers']?['Content-Range'], add(lastIndexOf(outputs('Get_Export_Preflight_Size')?['headers']?['Content-Range'], '/'), 1), sub(length(outputs('Get_Export_Preflight_Size')?['headers']?['Content-Range']), add(lastIndexOf(outputs('Get_Export_Preflight_Size')?['headers']?['Content-Range'], '/'), 1)))))"
                     },
                     "Check_Export_Size": {
                       "type": "If",
@@ -177,9 +175,26 @@
                       },
                       "expression": "[concat('@less(outputs(''Get_Export_Total_Size''), ', string(add(int(variables('maxExportSizeBytes')), 1)), ')')]",
                       "actions": {
+                        "Follow_Redirect": {
+                          "type": "Http",
+                          "runAfter": {},
+                          "inputs": {
+                            "uri": "@outputs('Extract_Location')",
+                            "method": "GET"
+                          },
+                          "runtimeConfiguration": {
+                            "contentTransfer": {
+                              "transferMode": "Chunked"
+                            }
+                          }
+                        },
                         "Get_Lines": {
                           "type": "Compose",
-                          "runAfter": {},
+                          "runAfter": {
+                            "Follow_Redirect": [
+                              "Succeeded"
+                            ]
+                          },
                           "inputs": "@if(endsWith(replace(body('Follow_Redirect'), '\r', ''), '\n'), split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), take(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n'), sub(length(split(trim(replace(body('Follow_Redirect'), '\r', '')), '\n')), 1)))"
                         },
                         "Split_Into_Batches": {
@@ -387,7 +402,7 @@
                       "runStatus": "Failed",
                       "error": {
                         "code": "ExportFailed",
-                        "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a'))))))"
+                        "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')))"
                       }
                     }
                   }
