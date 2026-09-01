@@ -1,0 +1,222 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Google Threat Intelligence - Large File Upload Function",
+        "description": "Shared Azure Function used by the GTIFileScanEnrichment and GTIFileScanBlobEnrichment playbooks to upload files larger than 32MB to Google Threat Intelligence (VirusTotal) via the large-file upload URL flow. The function downloads the blob itself (via its own managed identity) so the file content never has to pass through the calling Logic App.",
+        "prerequisites": [
+            "A Log Analytics Workspace resource ID for Application Insights."
+        ],
+        "postDeployment": [
+            "Grant the Function App's managed identity the 'Storage Blob Data Reader' role on every Storage Account whose blobs will be uploaded via this function."
+        ]
+    },
+    "parameters": {
+        "FunctionAppName": {
+            "defaultValue": "gtifileupload",
+            "type": "string"
+        },
+        "GTIBaseUrl": {
+            "type": "string",
+            "defaultValue": "https://www.virustotal.com",
+            "minLength": 1
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the fully qualified resource ID of the Log Analytics workspace for Application Insights. Format: /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}"
+            }
+        },
+        "LogLevel": {
+            "type": "string",
+            "defaultValue": "Info",
+            "allowedValues": [
+                "Debug",
+                "Info",
+                "Warning",
+                "Error"
+            ],
+            "metadata": {
+                "description": "Set the log level for the Function App. Default is Info."
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2025-01-01",
+            "name": "[toLower(variables('FunctionName'))]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2025-01-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2025-01-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName')))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "minTlsVersion": "1.2",
+                    "linuxFxVersion": "python|3.12"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2025-01-01').keys[0].value, ';EndpointSuffix=', toLower(variables('StorageSuffix')))]",
+                        "GTIBaseUrl": "[parameters('GTIBaseUrl')]",
+                        "LogLevel": "[trim(parameters('LogLevel'))]",
+                        "SCOPE": "[variables('scope')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-GTIFileUpload-functionapp"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2025-01-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2025-01-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2025-01-01",
+            "name": "[concat(variables('FunctionName'), '/default/', toLower(variables('FunctionName')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ],
+    "outputs": {
+        "FunctionAppResourceName": {
+            "type": "string",
+            "value": "[variables('FunctionName')]"
+        }
+    }
+}
