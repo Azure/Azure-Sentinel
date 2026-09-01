@@ -1,22 +1,27 @@
-// Cyble Threat Intelligence parser for External_SourceRatings
+/// Cyble Threat Intelligence parser for External_SourceRatings
+// Source table: ThreatIntelIndicators
+//
+// Cyble's TAXII feed packs per-source ratings into a single string at
+// Data.external_references[].description, formatted as:
+//     risk_score=<int>; confidence_rating=<string>
 //
 // Replace SourceSystem value with SourceSystem of your TAXII connector
 let SourceSystemName = "";
-let Base =
+let Base = materialize(
     ThreatIntelIndicators
     | where isempty(SourceSystemName) or SourceSystem =~ SourceSystemName
     | extend DataJson = todynamic(tostring(Data))
-    | extend RefCount = coalesce(array_length(DataJson.external_references), 0);
+    | extend RefCount = coalesce(array_length(DataJson.external_references), 0));
 let WithRefs =
     Base
     | where RefCount > 0
     | mv-apply ExtRef = DataJson.external_references on (
-          extend SourceName = tostring(ExtRef.source_name),
+          extend SourceName = tolower(tostring(ExtRef.source_name)),
                  RefDescription = tostring(ExtRef.description)
         | summarize ParsedFields = make_bag(bag_pack(
-                        strcat(tolower(SourceName), ".risk_score"),
+                        strcat(SourceName, ".risk_score"),
                             toint(trim(@"\s*", extract(@"risk_score\s*=\s*([^;]*)", 1, RefDescription))),
-                        strcat(tolower(SourceName), ".confidence_rating"),
+                        strcat(SourceName, ".confidence_rating"),
                             trim(@"\s*", extract(@"confidence_rating\s*=\s*([^;]*)", 1, RefDescription)))),
                     SourceNames = make_set(SourceName)
       )
