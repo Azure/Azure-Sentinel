@@ -1,5 +1,9 @@
 # Changelog for imDns.yaml
 
+## Version 0.5.3
+
+- (2026-06-09) Added vimDnsHalcyon to the source-agnostic filtering parser - [PR #14606](https://github.com/Azure/Azure-Sentinel/pull/14606)
+
 ## Version 0.5.2
 
 - (2024-06-07) ASimDnsMicrosoftSysmon.yaml-22 - [PR #10611](https://github.com/Azure/Azure-Sentinel/pull/10611)
