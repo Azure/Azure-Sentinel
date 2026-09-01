@@ -87,7 +87,19 @@ ParserQuery: |
               isnotempty(Region) and isnotempty(Id),
               strcat("https://", Region, ".console.aws.amazon.com/guardduty/home?region=", Region, "#/findings?fId=", Id),
               ""
-          )
+          ),
+          DvcId = tostring(coalesce(
+              ResourceDetails.instanceDetails.instanceId,
+              ResourceDetails.eksClusterDetails.name,
+              ResourceDetails.ecsClusterDetails.name,
+              ResourceDetails.rdsDbInstanceDetails.dbInstanceIdentifier,
+              todynamic(Arn)
+          )),
+          UserId = tostring(coalesce(
+              AccessKeyDetails.accessKeyId,
+              AccessKeyDetails.principalId,
+              todynamic(RemoteAWSAccountId)
+          ))
       | extend
           EventType = "Alert",
           EventCount = int(1),
@@ -133,13 +145,6 @@ ParserQuery: |
           ThreatOriginalRiskLevel = tostring(Severity),
           IndicatorType = iff(isnotempty(RemoteIpAddress), "Ip", ""),
           DvcIpAddr = LocalIpAddress,
-          DvcId = tostring(coalesce(
-              ResourceDetails.instanceDetails.instanceId,
-              ResourceDetails.eksClusterDetails.name,
-              ResourceDetails.ecsClusterDetails.name,
-              ResourceDetails.rdsDbInstanceDetails.dbInstanceIdentifier,
-              Arn
-          )),
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           Dvc = DvcId,
           Username = AccountUpn,
@@ -148,11 +153,6 @@ ParserQuery: |
               isnotempty(AccountUpn), "Simple",
               ""
           ),
-          UserId = tostring(coalesce(
-              AccessKeyDetails.accessKeyId,
-              AccessKeyDetails.principalId,
-              RemoteAWSAccountId
-          )),
           UserIdType = iff(isnotempty(UserId), "Other", ""),
           UserScope = "AWSAccount",
           UserScopeId = AccountId,
