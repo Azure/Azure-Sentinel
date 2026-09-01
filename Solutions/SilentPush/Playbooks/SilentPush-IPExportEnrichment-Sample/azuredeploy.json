@@ -2,12 +2,12 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "title": "SilentPush-DomainExportEnrichment",
-    "description": "Silent Push domains export with enrichment",
+    "title": "SilentPush-IPExportEnrichment-Sample",
+    "description": "Silent Push IPs export with enrichment",
     "postDeployment": [
       "**Authorize the SilentPush connector connection**",
       "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
-      "1. Go to your Logic App -> API connections -> select the SilentPush-<PlaybookName> connection resource",
+      "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
       "2. Go to General -> Edit API connection",
       "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
       "4. Click Save"
@@ -15,17 +15,17 @@
   },
   "parameters": {
     "PlaybookName": {
-      "defaultValue": "SilentPush-DomainExportEnrichment",
+      "defaultValue": "SilentPush-IPExportEnrichment-Sample",
       "type": "string",
       "metadata": {
-        "description": "Silent Push domains export with enrichment"
+        "description": "Silent Push IPs export with enrichment"
       }
     },
     "CustomConnectorName": {
       "defaultValue": "SilentPush-API",
       "type": "string",
       "metadata": {
-        "description": "The Silent Push custom API connector"
+        "description": "The SilentPush custom API connector"
       }
     }
   },
@@ -82,7 +82,7 @@
             }
           },
           "actions": {
-            "Export_Domains": {
+            "Export_IOFA": {
               "type": "ApiConnection",
               "runAfter": {},
               "inputs": {
@@ -92,18 +92,18 @@
                   }
                 },
                 "method": "get",
-                "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_domains.txt')}/"
+                "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_ips.txt')}/"
               }
             },
             "Extract_Location": {
               "type": "Compose",
               "runAfter": {
-                "Export_Domains": [
+                "Export_IOFA": [
                   "Succeeded",
                   "Failed"
                 ]
               },
-              "inputs": "@outputs('Export_Domains')?['headers']?['Location']"
+              "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
             },
             "Check_Location_Valid": {
               "type": "If",
@@ -150,7 +150,7 @@
                       },
                       "inputs": "@take(outputs('Get_Lines'), 100)"
                     },
-                    "Bulk_Enrich_Domains": {
+                    "Bulk_Enrich_IPv4s": {
                       "type": "ApiConnection",
                       "runAfter": {
                         "Extract_Body_Response": [
@@ -165,9 +165,9 @@
                         },
                         "method": "post",
                         "body": {
-                          "domains": "@outputs('Extract_Body_Response')"
+                          "ipv4s": "@outputs('Extract_Body_Response')"
                         },
-                        "path": "/api/v1/enrich/domain/bulk/"
+                        "path": "/api/v1/enrich/ipv4/bulk/"
                       },
                       "retryPolicy": {
                         "type": "exponential",
@@ -186,7 +186,7 @@
                           "runStatus": "Failed",
                           "error": {
                             "code": "UntrustedRedirect",
-                            "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                            "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
                           }
                         }
                       }
@@ -202,7 +202,7 @@
                       "runStatus": "Failed",
                       "error": {
                         "code": "ExportFailed",
-                        "message": "@concat('Silent Push IOFA domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_Domains')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_Domains')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_Domains')?['body'], 'n/a'))))))"
+                        "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a'))))))"
                       }
                     }
                   }
