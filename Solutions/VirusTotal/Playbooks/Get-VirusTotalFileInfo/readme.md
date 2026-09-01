@@ -13,6 +13,20 @@ This playbook processes each File Hash entity to query VirusTotal for detailed f
 
 These playbooks write VirusTotal file information to the `VirusTotalFileInfo_CL` table through the Logs Ingestion API. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
 
+#### Data stored in `VirusTotalFileInfo_CL`
+
+The Logs Ingestion API playbooks create a limited set of dedicated, queryable columns. The complete VirusTotal response is retained in `RawData`, so fields that are not listed below are still available for investigation.
+
+| Column | Description |
+| --- | --- |
+| `TimeGenerated` | Time when the record is ingested into Log Analytics. |
+| `FileHash` | File hash entity processed by the playbook. |
+| `FileHashAlgorithm` | Algorithm associated with the processed file hash, such as SHA256, SHA1, or MD5. |
+| `VirusTotalId` | VirusTotal identifier for the file report. |
+| `Reputation` | VirusTotal reputation score. |
+| `LastAnalysisStats` | VirusTotal last-analysis statistics, stored as a string. |
+| `RawData` | Complete VirusTotal response, serialized as JSON; any fields not represented by the dedicated columns are retained here. |
+
 **FileHash Enrichment - Virus Total Report - Incident Triggered using Log Ingestion API** (Recommended)
 
 Deploy this playbook and attach it to an **automation rule** to ensure it runs automatically whenever an incident is created.

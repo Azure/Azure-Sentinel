@@ -13,6 +13,23 @@ This playbook processes each URL entity to query VirusTotal for detailed URL inf
 
 These playbooks write VirusTotal URL results to the `VirusTotalURLReport_CL` table through the Logs Ingestion API. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
 
+#### Data stored in `VirusTotalURLReport_CL`
+
+The Logs Ingestion API playbooks create a limited set of dedicated, queryable columns. The complete VirusTotal response is retained in `RawData`, so fields that are not listed below are still available for investigation.
+
+| Column | Description |
+| --- | --- |
+| `TimeGenerated` | Time when the record is ingested into Log Analytics. |
+| `Url` | URL entity processed by the playbook. |
+| `VirusTotalId` | VirusTotal identifier for the URL report. |
+| `Suspicious` | Number of URL analyses classified as suspicious. |
+| `Malicious` | Number of URL analyses classified as malicious. |
+| `Harmless` | Number of URL analyses classified as harmless. |
+| `Undetected` | Number of URL analyses with no detection. |
+| `Timeout` | Number of URL analyses that timed out. |
+| `Stats` | VirusTotal analysis statistics, stored as a string. |
+| `RawData` | Complete VirusTotal response, serialized as JSON; any fields not represented by the dedicated columns are retained here. |
+
 **URL Enrichment - Virus Total Report - Incident Triggered using Log Ingestion API** (Recommended)
 
 Deploy this playbook and attach it to an **automation rule** to ensure it runs automatically whenever an incident is created.

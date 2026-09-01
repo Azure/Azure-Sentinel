@@ -13,6 +13,20 @@ This playbook processes each URL entity to query VirusTotal for detailed domain 
 
 These playbooks write VirusTotal results to the `VirusTotalDomainReport_CL` table through the Logs Ingestion API. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
 
+#### Data stored in `VirusTotalDomainReport_CL`
+
+The Logs Ingestion API playbooks create a limited set of dedicated, queryable columns. The complete VirusTotal response is retained in `RawData`, so fields that are not listed below are still available for investigation.
+
+| Column | Description |
+| --- | --- |
+| `TimeGenerated` | Time when the record is ingested into Log Analytics. |
+| `Domain` | Domain extracted from the URL entity. |
+| `Url` | URL entity processed by the playbook. |
+| `VirusTotalId` | VirusTotal identifier for the domain report. |
+| `Reputation` | VirusTotal reputation score. |
+| `LastAnalysisStats` | VirusTotal last-analysis statistics, stored as a string. |
+| `RawData` | Complete VirusTotal response, serialized as JSON; any fields not represented by the dedicated columns are retained here. |
+
 **URL Enrichment - Virus Total Domain Report - Incident Triggered using Log Ingestion API** (Recommended)
 
 Deploy this playbook and attach it to an **automation rule** to ensure it runs automatically whenever an incident is created.
