@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.0       | 28-08-2026                     | Promoted the updated Cisco Meraki CCF REST API data connector introduced in version 3.1.0 to General Availability (GA). |
 | 3.1.1       | 24-08-2026                     | Standardized all CCF Connector data types to use checkpointed `t0`/`t1` time windowing (UnixTimestamp), aligning the newer Organizations, Organization Networks, Network Clients, and Air Marshal Events data types with the existing ASIM log endpoints to prevent duplicate ingestion. <br/> Updated the polling interval and `t0`/`t1` time window configuration of the **CCF Connector** data types to fix duplicate ingestion.|
 | 3.1.0       | 06-07-2026                     | Added four new data types to the **CCP Connector**: Organizations, Organization Networks, Network Clients, and Wireless Air Marshal Events. |
 | 3.0.2       | 10-01-2025                     | Transitioned the **CCP Connector** to General Availability (GA).    |

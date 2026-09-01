@@ -1,0 +1,47 @@
+id: 4b1fefb3-419a-4bbe-8a74-ef8288a8d8d0
+name: Uniqkey - Self-granted privilege or access change
+version: 1.0.0
+kind: Scheduled
+description: |-
+  Identifies privilege, sharing or group-membership changes in Uniqkey where the actor and the target of the change are the same person. In a healthy administrative process, access changes are made by a different administrator, so a self-referential grant is a strong indicator of insider privilege escalation or a compromised administrator account expanding its own reach.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: UniqkeyEventsConnector
+    dataTypes:
+      - UniqkeyEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+- Persistence
+relevantTechniques:
+- T1078
+- T1098
+query: |-
+  UniqkeyEvents_CL
+  | where Category in ("privilege_management", "sharing", "group_management")
+  | where TargetType == "employee"
+  | where (isnotempty(TargetId) and TargetId == ActorId) or (isnotempty(TargetName) and TargetName =~ ActorEmail)
+  | project TimeGenerated, ActorEmail, ActorType, Category, Action, ActionId, TargetType, TargetName, ClientSystem, SrcIpAddr
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: ActorEmail
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
