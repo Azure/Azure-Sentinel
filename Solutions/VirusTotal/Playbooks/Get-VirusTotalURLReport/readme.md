@@ -5,7 +5,7 @@ This playbook processes each URL entity to query VirusTotal for detailed URL inf
 
 ## Prerequisites
 - Obtain a VirusTotal API key by registering with the VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)
-- For the Logs Ingestion API playbooks, use an existing Log Analytics workspace in the deployment resource group.
+- For the Logs Ingestion API playbooks to deploy successfully, the log analytics workspace and the resource group need to be in the same region.
 - The identity deploying a Logs Ingestion API playbook must be able to create Log Analytics tables, Data Collection Endpoints, Data Collection Rules, and role assignments.
 
 ## Quick Deployment
