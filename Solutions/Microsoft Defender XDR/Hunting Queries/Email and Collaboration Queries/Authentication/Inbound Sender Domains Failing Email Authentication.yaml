@@ -1,0 +1,30 @@
+id: 80067390-3954-4276-bbca-8d4be1df0591
+name: Inbound Sender Domains Failing Email Authentication
+description: |
+  This query lists inbound sender domains with the most email authentication failures (DMARC, DKIM, SPF, and Composite Authentication), using the EmailEvents table.
+description-detailed: |
+  Email authentication failures (DMARC, DKIM, SPF, and Composite Authentication) are a leading indicator of spoofing and Business Email Compromise (BEC). This query counts inbound messages that failed each authentication check, grouped by sender domain, with the total inbound volume for context. Persistent authentication failures from a domain that should be sending legitimate mail warrant investigation, and confirmed external spoofers are candidates for blocking.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // Inbound sender domains with the most email authentication failures (DMARC, DKIM, SPF, Composite Authentication).
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy !in ("Phishing simulation", "SecOps Mailbox")
+  | where EmailDirection == "Inbound"
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend Auth = parse_json(AuthenticationDetails)
+  | summarize TotalInbound = count(), DMARCFail = countif(tostring(Auth.DMARC) == "fail"), DKIMFail = countif(tostring(Auth.DKIM) == "fail"), SPFFail = countif(tostring(Auth.SPF) == "fail"), CompAuthFail = countif(tostring(Auth.CompAuth) == "fail") by SenderDomain = SenderFromDomain
+  | extend AnyAuthFail = DMARCFail + DKIMFail + SPFFail + CompAuthFail
+  | where AnyAuthFail > 0
+  | top 20 by AnyAuthFail
+  | project SenderDomain, DMARCFail, DKIMFail, SPFFail, CompAuthFail, TotalInbound
+version: 1.0.0

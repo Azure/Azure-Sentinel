@@ -15,14 +15,18 @@ relevantTechniques:
   - T1566
 query: |
   EmailEvents
+  | where Timestamp > ago(30d)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
   | where EmailDirection == "Outbound"
   | project RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
   | summarize count() by RecipientDomain
   | project OutboundCount=count_, RecipientDomain, SenderFromDomain=RecipientDomain
-  | join (EmailEvents | where EmailDirection == "Inbound" and isempty(ThreatTypes)==false) on SenderFromDomain
-  | summarize max(OutboundCount),count() by SenderFromDomain
+  | join (EmailEvents | where Timestamp > ago(30d) | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress) | summarize arg_max(Timestamp, *) by Key | where EmailDirection == "Inbound" and isnotempty(ThreatTypes)) on SenderFromDomain
+  | summarize max(OutboundCount), count() by SenderFromDomain
   | project SenderFromDomain, OutboundEmails=max_OutboundCount, IncomingEmailsWithThreats=count_
-  | sort by OutboundEmails
-version: 1.0.0
+  | extend BadTrafficPercent = round(100.0 * IncomingEmailsWithThreats / OutboundEmails, 2)
+  | top 15 by OutboundEmails
+version: 1.1.0
 
 
