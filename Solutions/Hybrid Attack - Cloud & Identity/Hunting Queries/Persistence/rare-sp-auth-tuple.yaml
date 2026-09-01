@@ -1,0 +1,59 @@
+id: b1ce8746-fa4a-485f-a978-9a72d9bd0ba4
+name: Rare service principal authentication tuple
+description: |
+  Detects successful service principal authentications from first-seen IP and user-agent tuples compared to baseline.
+description-detailed: |
+  This ASIM authentication hunt builds a 14-day baseline and flags new service principal sign-in tuples in the hunt window. It is useful for identifying workload identity abuse after unmanaged-device pivoting.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1078.004
+  - T1550.001
+  - T1528
+tags:
+  - Service principal
+  - Identity abuse
+  - ASIM
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = StartTime;
+  let Baseline =
+  _Im_Authentication(starttime=BaselineStart, endtime=BaselineEnd)
+  | where EventResult == "Success"
+  | where ActorUserType has "Service Principal"
+  | extend PrincipalId = tolower(tostring(ActorUserId)),
+           AppId = tolower(tostring(ActingAppId)),
+           SrcIp = tostring(SrcIpAddr),
+           UserAgent = tostring(HttpUserAgent)
+  | where isnotempty(PrincipalId)
+  | summarize by PrincipalId, AppId;
+  _Im_Authentication(starttime=StartTime, endtime=EndTime)
+  | where EventResult == "Success"
+  | where ActorUserType has "Service Principal"
+  | extend PrincipalId = tolower(tostring(ActorUserId)),
+           PrincipalName = tostring(ActorUsername),
+           AppId = tolower(tostring(ActingAppId)),
+           SrcIp = tostring(SrcIpAddr),
+           UserAgent = tostring(HttpUserAgent),
+           CorrelationId = tostring(column_ifexists("CorrelationId", ""))
+  | where isnotempty(PrincipalId)
+  | join kind=leftanti Baseline on PrincipalId, AppId
+  | project TimeGenerated, PrincipalId, PrincipalName, AppId, SrcIp, UserAgent, CorrelationId
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: PrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+version: 1.0.0

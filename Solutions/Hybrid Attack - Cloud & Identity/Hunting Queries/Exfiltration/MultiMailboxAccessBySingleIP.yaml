@@ -1,0 +1,66 @@
+id: c53bf4ae-bd8b-4c72-b9c3-10baa8c13885
+name: Multi-Mailbox Access by Single IP via Cloud App Permissions
+description: Identifies a single IP address accessing an abnormally large number of distinct mailboxes via MailItemsAccessed events, indicating a service principal or OAuth app silently reading mail across the organization using granted permissions. Empty UserAgent combined with high mailbox count indicates programmatic API access consistent with app-based exfiltration.
+requiredDataConnectors:
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1020
+  - T1537
+  - T1567
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let distinctMailboxThreshold = 10;
+  let minMailAccessCount = 100;
+  CloudAppEvents
+  | where TimeGenerated between (starttime .. endtime)
+  | where ActionType == "MailItemsAccessed"
+  | extend AccessedMailbox = tostring(RawEventData.UserId)
+  | extend ClientIP        = tostring(RawEventData.ClientIP)
+  | extend UserAgent       = tostring(RawEventData.UserAgent)
+  | where isnotempty(AccessedMailbox) and isnotempty(ClientIP)
+  | summarize
+      FirstAccess       = min(TimeGenerated),
+      LastAccess        = max(TimeGenerated),
+      TotalMailAccess   = count(),
+      DistinctMailboxes = dcount(AccessedMailbox),
+      MailboxList       = make_set(AccessedMailbox, 20),
+      UserAgents        = make_set(UserAgent, 5)
+    by ClientIP, bin(TimeGenerated, 1d)
+  | where DistinctMailboxes >= distinctMailboxThreshold
+        and TotalMailAccess >= minMailAccessCount
+  | extend AccessesPerMailbox = round(toreal(TotalMailAccess) / DistinctMailboxes, 1)
+  | extend IsApiAccess = array_length(UserAgents) == 0
+      or (array_length(UserAgents) == 1 and UserAgents[0] == "")
+  | join kind=leftouter (
+      ThreatIntelIndicators
+      | where IsActive == true and IsDeleted == false
+      | where ObservableKey == "ipv4-addr:value"
+      | where isnotempty(ObservableValue)
+      | summarize
+          ThreatTags=make_set(Tags),
+          TIConfidence=max(Confidence)
+        by ObservableValue
+  ) on $left.ClientIP == $right.ObservableValue
+  | extend IsThreatIP   = isnotnull(TIConfidence)
+  | extend ThreatTags   = iff(IsThreatIP, ThreatTags, dynamic([]))
+  | extend TIConfidence = iff(IsThreatIP, TIConfidence, 0)
+  | project FirstAccess, LastAccess, ClientIP,
+            DistinctMailboxes, TotalMailAccess, AccessesPerMailbox,
+            IsApiAccess, IsThreatIP, ThreatTags, TIConfidence,
+            MailboxList, UserAgents
+  | order by IsThreatIP desc, IsApiAccess desc, DistinctMailboxes desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0

@@ -16,13 +16,16 @@ The TacitRed Defender Threat Intelligence solution integrates TacitRed's threat 
 - TacitRed API credentials
 - Microsoft Defender Threat Intelligence license
 - Appropriate RBAC permissions to deploy Logic Apps
+- An administrator who can grant `Storage Blob Data Owner` to the Function App managed identity on the deployed storage account after installation
 
 ## Deployment
 
 1. Navigate to Microsoft Sentinel Content Hub
 2. Search for "TacitRed Defender Threat Intelligence"
 3. Click Install and follow the deployment wizard
-4. Configure the playbook with your TacitRed API credentials
+4. Assign `Storage Blob Data Owner` to the Function App managed identity on the storage account created for the Function App
+5. Assign `Reader` and `Microsoft Sentinel Contributor` to the Function App managed identity on the target Log Analytics workspace
+6. Configure the playbook with your TacitRed API credentials
 
 ## How It Works
 

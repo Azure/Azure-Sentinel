@@ -1,0 +1,34 @@
+id: 9b1a3b3e-7e16-4a3b-8a8f-7f1f2b1c0a03
+name: Utimaco ESKM - Burst of KMIP DESTROY operations by a single user
+description: |
+  Identifies a single KMIP user issuing 20 or more DESTROY operations within 10 minutes on Utimaco ESKM. May indicate mass key/object deletion, insider sabotage, or ransomware-style cryptographic-material destruction.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UtimacoESKMConnector
+    dataTypes:
+      - UtimacoESKMKmipServerLogs_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  UtimacoESKMKmipServerLogs_CL
+  | where TimeGenerated > ago(10m)
+  | where Operation == "DESTROY"
+  | where Result == "SUCCESS"
+  | where isnotempty(User)
+  | summarize DestroyCount = count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ObjectTypes = make_set(ObjectType, 25), UUIDs = make_set(UUID, 100), SourceIPs = make_set(IP, 25) by User
+  | where DestroyCount >= 20
+  | extend AccountCustomEntity = User
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

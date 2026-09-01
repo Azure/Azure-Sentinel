@@ -1,0 +1,52 @@
+id: 47ea3b0e-bedd-4fde-bda9-86aa76684a9b
+name: AI Agents - Orphaned Agents with Disabled Owners
+description: |
+  This query identifies AI agents whose owners are all either disabled or removed from the organization.
+  Orphaned agents without an active owner pose governance and security risks because no one is accountable for their configuration, updates, or potential misuse.
+  If these agents remain active, they could retain sensitive connections or perform actions without proper oversight, increasing the risk of unauthorized access or persistence in the environment.
+  Recommended Action: Assign a new active owner to each orphaned agent or retire the agent if it's no longer needed. Regularly review ownership to maintain compliance and security governance.
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1562
+query: |
+  let EnabledAccountIds = materialize (
+      IdentityInfo
+      | where IsAccountEnabled == 1
+      | distinct AccountObjectId = tostring(AccountObjectId));
+  let IdentityIdtoUPN = materialize (
+      IdentityInfo
+      | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
+      | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn);
+  AgentsInfo
+  | summarize arg_max(Timestamp, *) by AgentId
+  | where LifecycleStatus != "Deleted"
+  | where array_length(Owners) > 0
+  | mv-expand Owner = Owners to typeof(string)
+  | extend OwnerId = tostring(Owner)
+  | where isnotempty(OwnerId)
+  | summarize OwnerIds = make_set(OwnerId) by AgentId, Name, Platform, CreatedDateTime
+  | mv-apply OwnerId = OwnerIds to typeof(string) on (
+      where OwnerId !in (EnabledAccountIds)
+      | summarize DisabledOrMissingOwners = make_list(OwnerId))
+  | where array_length(DisabledOrMissingOwners) == array_length(OwnerIds)
+  | mv-expand DisabledOwnerId = DisabledOrMissingOwners to typeof(string)
+  | join kind=leftouter IdentityIdtoUPN on $left.DisabledOwnerId == $right.AccountObjectId
+  | extend ResolvedOwner = coalesce(AccountUpn, DisabledOwnerId)
+  | summarize DisabledOwnerUpns = make_set(ResolvedOwner), DisabledOrMissingOwners = take_any(DisabledOrMissingOwners) by AgentId, Name, Platform, CreatedDateTime
+  | extend DisabledOwnerUpn = tostring(DisabledOwnerUpns[0])
+  | project-reorder CreatedDateTime, AgentId, Name, Platform, DisabledOrMissingOwners, DisabledOwnerUpns, DisabledOwnerUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: DisabledOwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0

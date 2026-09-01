@@ -1,0 +1,60 @@
+id: b03e4fca-d3ba-4b87-ae4f-99111fe43e3a
+name: Kubernetes first-seen control-plane writer
+description: |
+  Hunts for first-seen principals writing to Kubernetes control-plane resources in kube-audit telemetry.
+description-detailed: |
+  This query builds a baseline of principals observed in kube-audit write activity and then detects recent write operations from principals not seen in the baseline window. Use this hunt to identify potential management-plane abuse from newly observed identities.
+requiredDataConnectors:
+  - connectorId: AzureMonitor
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1190
+  - T1609
+  - T1078
+tags:
+  - Kubernetes
+  - Management interface
+  - First seen principal
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = StartTime;
+  let SensitiveWriteOps = dynamic([
+    "clusterrolebindings/create", "clusterrolebindings/patch", "clusterrolebindings/update",
+    "rolebindings/create", "rolebindings/patch", "rolebindings/update",
+    "daemonsets/create", "cronjobs/create",
+    "deployments/create", "deployments/patch", "deployments/update",
+    "statefulsets/create", "statefulsets/patch", "statefulsets/update"
+  ]);
+  let BaselineCallers =
+    AzureDiagnostics
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | where Category =~ "kube-audit"
+    | where OperationName has_any (SensitiveWriteOps)
+    | where isnotempty(Caller_s)
+    | summarize by CallerNorm = tolower(Caller_s);
+  AzureDiagnostics
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where Category =~ "kube-audit"
+  | where OperationName has_any (SensitiveWriteOps)
+  | where isnotempty(Caller_s)
+  | extend CallerNorm = tolower(Caller_s)
+  | join kind=leftanti BaselineCallers on CallerNorm
+  | project TimeGenerated, Caller = CallerNorm, OperationName, Resource, ResourceId, ResourceGroup, Category
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Caller
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.0

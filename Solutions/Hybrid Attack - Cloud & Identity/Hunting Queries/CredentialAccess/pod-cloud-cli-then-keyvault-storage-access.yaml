@@ -1,0 +1,112 @@
+id: 6bc3f56b-2e7f-4820-8aac-f6b40917f931
+name: Pod cloud CLI then KeyVault or storage access
+description: |
+  Detects cloud CLI or token-exchange tooling in Kubernetes pods followed by cloud data-access operations from the same source IP.
+description-detailed: |
+  This query correlates suspicious process activity in pods with Kubernetes audit context and then cloud data operations against Key Vault and Storage.
+  It is designed to capture early data-collection phases after service-account federated identity pivot.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudProcessEvents
+      - CloudAuditEvents
+tactics:
+  - CredentialAccess
+  - Discovery
+  - Collection
+relevantTechniques:
+  - T1528
+  - T1552
+  - T1530
+  - T1526
+tags:
+  - Kubernetes
+  - Cloud CLI
+  - Key Vault
+  - Storage
+  - Pivot
+query: |
+  // Time and tuning parameters.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let ProcToK8sWindow = 15m;
+  let PivotWindow = 90m;
+  let MinCloudOps = 3;
+  // Stage A: pod processes with cloud CLI/token usage indicators.
+  let PodCloudCliSignals =
+    CloudProcessEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | where Timestamp between (StartTime .. EndTime)
+    | where isnotempty(KubernetesNamespace) and isnotempty(KubernetesPodName)
+    | extend NamespaceNorm = tolower(tostring(KubernetesNamespace)),
+             PodNorm = tolower(tostring(KubernetesPodName)),
+             Proc = tolower(tostring(ProcessName)),
+             Cmd = tolower(tostring(ProcessCommandLine))
+    | where (Proc has_any ('az', 'aws', 'gcloud', 'kubectl', 'curl', 'wget', 'pwsh', 'python')
+             and Cmd has_any ('token', 'federated', 'oauth2', 'identity', 'keyvault', 'storage', 'sts.windows.net', 'login.microsoft.com'))
+       or Cmd has_any (
+            'az account',
+            'az keyvault',
+            'az storage',
+            'oauth2/v2.0/token',
+            'sts.windows.net',
+            'azure_federated_token_file'
+          )
+    | project ProcTime=Timestamp, NamespaceNorm, PodNorm, ContainerName, ContainerImageName, ProcessName, ParentProcessName, ProcessCommandLine;
+  // Stage B: bridge to source IP via Kubernetes audit for same namespace/pod.
+  let K8sAuditBridge =
+    CloudAuditEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Kubernetes'
+    | extend AF = todynamic(AdditionalFields)
+    | extend NamespaceNorm = tolower(coalesce(tostring(AF.KubernetesNamespace), tostring(extractjson('$.objectRef.namespace', tostring(RawEventData))))),
+             PodNorm = tolower(coalesce(tostring(AF.KubernetesPodName), tostring(extractjson('$.objectRef.name', tostring(RawEventData))))),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent),
+             OpNorm = tolower(tostring(OperationName))
+    | where isnotempty(NamespaceNorm) and isnotempty(PodNorm) and isnotempty(IpNorm)
+    | where OpNorm has_any ('pods/exec', 'pods/attach', 'serviceaccounts/token', 'secrets/get')
+    | project K8sTime=Timestamp, NamespaceNorm, PodNorm, IpNorm, UaNorm, K8sOperation=OperationName;
+  // Stage C: cloud Key Vault and Storage operations from same source IP.
+  let CloudDataOps =
+    CloudAuditEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AzureResourceId = coalesce(column_ifexists('AzureResourceId', ''), column_ifexists('CloudResourceId', ''))
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Azure'
+    | extend OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent)
+    | where isnotempty(IpNorm)
+    | where OpNorm contains 'microsoft.keyvault/vaults/'
+       or OpNorm contains 'microsoft.storage/storageaccounts/'
+       or OpNorm contains 'microsoft.storage/storageaccounts/listkeys/action'
+    | where ActionType in~ ('Read', 'Update', 'Create', 'Other')
+    | project CloudTime=Timestamp, IpNorm, UaNorm, CloudOperation=OperationName, AzureResourceId, ActionType, CountryCode, IsAnonymousProxy;
+  // Correlate process -> k8s audit -> cloud data operations.
+  PodCloudCliSignals
+  | join kind=inner K8sAuditBridge on NamespaceNorm, PodNorm
+  | where K8sTime between (ProcTime .. (ProcTime + ProcToK8sWindow))
+  | join kind=inner CloudDataOps on IpNorm
+  | where CloudTime between (K8sTime .. (K8sTime + PivotWindow))
+  | summarize FirstProcess=min(ProcTime),
+              FirstK8s=min(K8sTime),
+              FirstCloud=min(CloudTime),
+              LastCloud=max(CloudTime),
+              CloudEventCount=count(),
+              K8sOps=make_set(K8sOperation, 10),
+              CloudOps=make_set(CloudOperation, 20),
+              CloudResources=make_set(AzureResourceId, 25),
+              Countries=make_set(CountryCode, 5),
+              AnyAnonymousProxy=max(toint(IsAnonymousProxy))
+    by NamespaceNorm, PodNorm, IpNorm, ContainerName, ContainerImageName, ProcessName, ParentProcessName, ProcessCommandLine
+  | where CloudEventCount >= MinCloudOps
+  | extend TimeGenerated = FirstProcess
+  | order by CloudEventCount desc, FirstCloud desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpNorm
+version: 1.0.0

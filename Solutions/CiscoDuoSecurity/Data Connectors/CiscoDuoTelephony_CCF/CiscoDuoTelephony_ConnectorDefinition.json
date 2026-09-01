@@ -1,0 +1,123 @@
+{
+    "name": "CiscoDuoTelephonyConnectorDefinition",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "availability": {
+        "isPreview": true,
+        "status": 1
+    },
+    "properties": {
+        "connectorUiConfig": {
+            "id": "CiscoDuoTelephonyConnectorDefinition",
+            "title": "Cisco Duo Telephony Logs",
+            "publisher": "Cisco Systems, Inc.",
+            "descriptionMarkdown": "The Cisco Duo Telephony Logs connector ingests SMS and phone-call authentication event data from the Cisco Duo Admin API into Microsoft Sentinel.\n\nTelephony logs record every instance where Duo sends an SMS passcode or places a phone callback during an authentication, enrollment, or administrator bypass workflow. Each event includes the phone number, channel used (sms or phone), context, and number of telephony credits consumed.\n\nSupports HMAC-based API Key authentication (Integration Key and Secret Key).\n\nFor more information, visit [Cisco Duo Admin API Docs](https://duo.com/docs/adminapi#telephony-log).",
+            "graphQueriesTableName": "DuoTelephony_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Total events received",
+                    "legend": "{{graphQueriesTableName}}",
+                    "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(14d) | summarize count() by bin(TimeGenerated, 1d)"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "All telephony events from the last 24 hours",
+                    "query": "DuoTelephony_CL | where TimeGenerated > ago(24h) | project TimeGenerated, TelephonyType, Context, Phone, Credits | order by TimeGenerated desc | take 100"
+                },
+                {
+                    "description": "SMS events only",
+                    "query": "DuoTelephony_CL | where TelephonyType == 'sms' | project TimeGenerated, Phone, Context, Credits | order by TimeGenerated desc"
+                },
+                {
+                    "description": "Phone callback events only",
+                    "query": "DuoTelephony_CL | where TelephonyType == 'phone' | project TimeGenerated, Phone, Context, Credits | order by TimeGenerated desc"
+                },
+                {
+                    "description": "Total telephony credits consumed per day",
+                    "query": "DuoTelephony_CL | where TimeGenerated > ago(30d) | summarize TotalCredits = sum(Credits) by bin(TimeGenerated, 1d) | order by TimeGenerated desc"
+                },
+                {
+                    "description": "Most active phone numbers",
+                    "query": "DuoTelephony_CL | where TimeGenerated > ago(7d) | summarize EventCount = count(), CreditsUsed = sum(Credits) by Phone | order by EventCount desc | take 20"
+                }
+            ],
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": false
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Cisco Duo API Key",
+                        "description": "A Cisco Duo Integration Key and Secret Key are required. These are obtained by creating an Admin API application in the Duo Admin Panel with 'Grant read log' permission. [See documentation](https://duo.com/docs/adminapi#telephony-log)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "Connect Cisco Duo Telephony Logs to Microsoft Sentinel",
+                    "description": "To enable the Cisco Duo Telephony Logs connector, provide your Duo Admin API credentials below.\n\n1. Log in to the [Duo Admin Panel](https://admin.duosecurity.com).\n2. Navigate to **Applications > Protect an Application**.\n3. Find **Admin API** and click **Protect**.\n4. Ensure the application has **Grant read log** permission enabled.\n5. Copy the **Integration Key**, **Secret Key**, and **API Hostname** and enter them below.",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Integration Key (ikey)",
+                                "placeholder": "DIXXXXXXXXXXXXXXXXXX",
+                                "type": "text",
+                                "name": "ikey"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Secret Key (skey)",
+                                "placeholder": "your_secret_key",
+                                "type": "password",
+                                "name": "skey"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "API Base URL",
+                                "placeholder": "https://api-XXXXXXXX.duosecurity.com",
+                                "type": "text",
+                                "name": "BaseUrl"
+                            }
+                        },
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "connectLabel": "Connect",
+                                "name": "connect"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

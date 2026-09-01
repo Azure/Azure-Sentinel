@@ -1,0 +1,28 @@
+id: bc0fd59c-4217-46a7-a167-764727118567
+name: WMIC Windows Internal Discovery and Enumeration
+description: |
+  This will identify the potentially malicious use of WMI (Windows Management Interface) utilized for local enumeration and discovery of a host.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Discovery
+  - Execution
+relevantTechniques:
+  - T1016
+  - T1047
+query: |
+  SecurityEvent
+  | project TimeGenerated, Computer, Activity, EventID, CommandLine, NewProcessName, processId = tolong(NewProcessId), ParentProcessName, parentProcessId = tolong(ProcessId)
+  | where TimeGenerated >= ago(7d)
+  | where CommandLine has_all("wmic","path") or 
+          CommandLine has_all("wmic","get") or
+          CommandLine has_all("wmic","list")
+  | summarize  CommandLineCnt=dcount(CommandLine), ProcessCommandLine=make_set(CommandLine), FileName=make_set(NewProcessName), ProcessId=make_set(processId), InitiatingProcessFileName=make_set(ParentProcessName), InitiatingProcessId=make_set(parentProcessId)
+   by Computer, bin(TimeGenerated,2m)
+  | where CommandLineCnt>2
+version: 1.0.0

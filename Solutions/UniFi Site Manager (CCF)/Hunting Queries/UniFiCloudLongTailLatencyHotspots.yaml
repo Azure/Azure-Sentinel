@@ -1,0 +1,32 @@
+id: 3f49ba8c-8995-9d38-579d-24afa09f5a2a
+name: "UniFi Site Manager: Long-tail ISP latency hotspots (P95)"
+description: |
+  Sites where the P95 ISP latency is significantly above the median over the last 7 days. Helps identify sites suffering occasional but severe latency spikes that average-based monitoring misses.
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_ISPMetrics_CL
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+query: |
+  Unifi_SiteManager_ISPMetrics_CL
+  | where TimeGenerated > ago(7d)
+  | mv-expand period = Periods
+  | extend AvgMs = todouble(period.data.wan.avgLatency),
+           MaxMs = todouble(period.data.wan.maxLatency)
+  | summarize ['Median ms'] = percentile(AvgMs, 50),
+              ['P95 ms']    = percentile(AvgMs, 95),
+              ['P99 ms']    = percentile(MaxMs, 99),
+              Samples=count() by SiteId = tostring(SiteId)
+  | extend ['P95/median ratio'] = round(['P95 ms'] / ['Median ms'], 2)
+  | where ['P95/median ratio'] > 5
+  | order by ['P95/median ratio'] desc
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: siteId
+version: 1.0.0
+kind: HuntingQuery

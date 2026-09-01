@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                          |
 |-------------|--------------------------------|-----------------------------------------------------------------------------|
+| 3.0.11       | 21-08-2026                     | Prevent identity credential ingestion. |
 | 3.0.10      | 26-05-2026                     | Updated OCI connector UI to include IAM permissions guidance and removed the "Important -" label. |
 | 3.0.9       | 10-02-2026                     | Add support for group Cursor                                                |
 | 3.0.8       | 05-02-2026                     | fix name in package 3.0.7                                                   |
@@ -10,4 +11,4 @@
 | 3.0.3       | 25-08-2025                     | Moving OCI **CCF Data Connector** to GA		 							 |
 | 3.0.2       | 14-07-2025                     | Introduced new **CCF Connector** to the Solution - "OCI-Connector-CCP-Definition".|
 | 3.0.1       | 05-10-2023                     | Manual deployment instructions updated for **Data Connector**.               |
-| 3.0.0       | 21-08-2023                     | Modified the **Parser** by adding Columnifexists condition to avoid errors. |  
+| 3.0.0       | 21-08-2023                     | Modified the **Parser** by adding Columnifexists condition to avoid errors. |

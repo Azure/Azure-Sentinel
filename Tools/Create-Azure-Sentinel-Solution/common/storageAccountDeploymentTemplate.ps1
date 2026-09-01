@@ -36,6 +36,14 @@ function Set-ArmVariable {
 function CreateStorageAccountBlobContainerResourceProperties($armResource, $templateContentConnections, $fileType) {
     try {
         $kindType = 'StorageAccountBlobContainer'
+        $eventGridAdvancedFilters = $null
+        $hasEventGridAdvancedFilters = [bool]($armResource.PSObject.Properties.Name -contains "eventGridAdvancedFilters")
+        if ($hasEventGridAdvancedFilters) {
+            $eventGridAdvancedFilters = $armResource.eventGridAdvancedFilters
+            # This is generator metadata, not a valid data connector ARM property.
+            $armResource.PSObject.Properties.Remove("eventGridAdvancedFilters")
+        }
+
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
@@ -58,7 +66,7 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
         }
 
         Set-ResourceVariables 
-        $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate
+        $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate -eventGridAdvancedFilters $eventGridAdvancedFilters
     }
     catch {
         Write-Host "Error in CreateStorageAccountBlobContainerResourceProperties function. Error Details $_"
@@ -66,7 +74,11 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
 }
 
 function Get-StorageAccountDeploymentTemplate {
-        return [ordered]@{
+    param (
+        [object]$eventGridAdvancedFilters = $null
+    )
+
+        $storageDeploymentTemplate = [ordered]@{
             type           = "Microsoft.Resources/deployments"
             apiVersion     = "2021-04-01"
             name           = "[[variables('nestedDeploymentName')]"
@@ -161,6 +173,28 @@ function Get-StorageAccountDeploymentTemplate {
             subscriptionId = "[[parameters('StorageAccountSubscription')]"
             resourceGroup  = "[[parameters('StorageAccountResourceGroupName')]"
         }
+
+        $hasAdvancedFilters = $false
+        if ($null -ne $eventGridAdvancedFilters) {
+            if ($eventGridAdvancedFilters -is [System.Array]) {
+                $hasAdvancedFilters = $eventGridAdvancedFilters.Count -gt 0
+            }
+            else {
+                $hasAdvancedFilters = $true
+            }
+        }
+
+        if ($hasAdvancedFilters) {
+            $eventSubscriptionResource = $storageDeploymentTemplate.properties.template.resources |
+                Where-Object { $_.type -eq "Microsoft.EventGrid/systemTopics/eventSubscriptions" } |
+                Select-Object -First 1
+
+            if ($null -ne $eventSubscriptionResource) {
+                $eventSubscriptionResource.properties.filter["advancedFilters"] = $eventGridAdvancedFilters
+            }
+        }
+
+        return $storageDeploymentTemplate
 }
 
 function Set-ResourceVariables {
@@ -177,6 +211,7 @@ function Set-ResourceVariables {
         $variables["queueName"] = "[[concat(variables('connectorName'), '-notification')]"
         $variables["dlqName"] = "[[concat(variables('connectorName'), '-dlq')]"
         $variables["storageAccountId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        $variables["blobContainerResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('blobContainerName'))]"
         $variables["notificationQueueResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]"
         $variables["dlqResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]"
         $variables["EGSystemTopicDefaultName"] = "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('innerWorkspace'))]"
@@ -186,9 +221,9 @@ function Set-ResourceVariables {
         $variables["EgSubscriptionResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]"
         $variables["storageBlobContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
         $variables["storageQueueContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
-        $variables["blobRaGuid"] = "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
-        $variables["notificationQueueRaGuid"] = "[[guid(variables('storageAccountName'), variables('queueName'))]"
-        $variables["dlqRaGuid"] = "[[guid(variables('storageAccountName'), variables('dlqName'))]"
+        $variables["blobRaGuid"] = "[[guid(toLower(variables('blobContainerResourceId')), toLower(parameters('principalId')), toLower(variables('storageBlobContributorRoleId')))]"
+        $variables["notificationQueueRaGuid"] = "[[guid(toLower(variables('notificationQueueResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
+        $variables["dlqRaGuid"] = "[[guid(toLower(variables('dlqResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
         $variables["blobRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), 'Microsoft.Authorization', variables('blobRaGuid'))]"
         $variables["notificationQueueRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), 'Microsoft.Authorization', variables('notificationQueueRaGuid'))]"
         $variables["dlqRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('dlqName'), 'Microsoft.Authorization', variables('dlqRaGuid'))]"

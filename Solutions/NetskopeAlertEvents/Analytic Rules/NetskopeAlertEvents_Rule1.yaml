@@ -1,0 +1,68 @@
+id: a1f6c2d4-8b35-4e19-9c7a-2d4e6f8a1b30
+name: Netskope - High Severity Alert
+description: |
+  Detects Netskope alerts raised with a high or critical severity. High severity alerts
+  typically indicate DLP violations, malware detections, compromised credentials, or
+  significant policy breaches that warrant immediate investigation.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeAlertEventsConnector
+    dataTypes:
+      - NetskopeAlertEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1078
+  - T1567
+query: |
+  NetskopeAlertEvents_CL
+  | where TimeGenerated > ago(1h)
+  | where Alert =~ "yes"
+  | where Severity in~ ("high", "critical")
+  | extend NormalizedSeverity = tolower(Severity)
+  | summarize
+      AlertCount = count(),
+      Activities = make_set(Activity, 20),
+      Applications = make_set(App, 20),
+      Policies = make_set(Policy, 20),
+      Actions = make_set(Action, 10),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by AlertName, AlertType, NormalizedSeverity, User, Userip, Hostname, SrcCountry
+  | order by AlertCount desc
+  | project
+      LastSeen,
+      AlertName,
+      AlertType,
+      Severity = NormalizedSeverity,
+      User,
+      Userip,
+      Hostname,
+      SrcCountry,
+      AlertCount,
+      Applications,
+      Activities,
+      Policies,
+      Actions,
+      FirstSeen
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Userip
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+version: 1.0.0
+kind: Scheduled

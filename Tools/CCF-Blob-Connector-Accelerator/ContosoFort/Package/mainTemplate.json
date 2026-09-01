@@ -1,0 +1,927 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "ContosoFort - support@contosofort.io",
+    "comments": "Solution template for ContosoFort"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@contosofort.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "ContosoFort",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "contosofort.contosofort_sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "ContosoFortDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "ContosoFortDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "ContosoFort (Using Blob Container) (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "ContosoFortDefinition",
+                  "title": "ContosoFort (Using Blob Container) (via Codeless Connector Framework)",
+                  "publisher": "ContosoFort",
+                  "descriptionMarkdown": "The ContosoFort data connector provides the capability to ingest ContosoFort security event logs into Microsoft Sentinel using ContosoFort Log Export and Azure Blob Storage. Refer to [ContosoFort documentation](https://docs.contosofort.io/log-export) for more information.",
+                  "graphQueriesTableName": "ContosoFortV1_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "ContosoFort security logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "ContosoFort Security Logs - All Events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    },
+                    {
+                      "description": "ContosoFort Security Logs - Blocked Events",
+                      "query": "{{graphQueriesTableName}}\n | where Action == \"Block\"\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Create a storage account and a container",
+                        "description": "Before configuring ContosoFort log export, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to learn about Container and Blob storage. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+                      },
+                      {
+                        "name": "Configure ContosoFort Log Export",
+                        "description": "Follow the steps in the [ContosoFort documentation](https://docs.contosofort.io/log-export/azure) to configure log export from ContosoFort to your Azure Blob container."
+                      },
+                      {
+                        "name": "Subscription permissions",
+                        "description": "You need permissions to create the data flow resources: storage queues (notification queue and dead-letter queue), event grid topic and subscription (to send 'blob created event' notifications to the notification queue), and role assignments (to grant access for the Sentinel app to the blob container and the storage queues)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect ContosoFort Logs to Microsoft Sentinel",
+                      "description": "To enable ContosoFort logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "tenantId": "[subscription().tenantId]",
+                            "name": "principalId",
+                            "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                          },
+                          "type": "ServicePrincipalIDTextBox_test"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's URL you want to collect data from",
+                            "type": "text",
+                            "name": "blobContainerUri",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account resource group name",
+                            "type": "text",
+                            "name": "StorageAccountResourceGroupName",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account location",
+                            "type": "text",
+                            "name": "StorageAccountLocation",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account subscription id",
+                            "type": "text",
+                            "name": "StorageAccountSubscription",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The event grid topic name of the blob container's storage account if it exists, else leave empty.",
+                            "description": "The data flow uses event grid to send 'blob-created event' notifications. There can only be one event grid topic per storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, provide its name. Otherwise, leave the text box empty.",
+                            "type": "text",
+                            "name": "EGSystemTopicName",
+                            "validations": {
+                              "required": false
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "ContosoFort",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "ContosoFort",
+                  "email": "support@contosofort.io",
+                  "tier": "Partner",
+                  "link": "https://support.contosofort.io"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "ContosoFortDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-ContosoFort": {
+                    "columns": [
+                      {
+                        "name": "EventTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "EventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleID",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-ContosoFort"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, EventTime, EventType, Severity, Action, SourceIP, DestinationIP, ThreatName, RuleID",
+                    "outputStream": "Custom-ContosoFortV1_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ContosoFortV1_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "ContosoFortV1_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time at which the event was ingested."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "datetime",
+                      "description": "The timestamp (UTC) reflecting the time at which the event was generated by ContosoFort."
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Type of the event, e.g., NetworkAlert, ThreatDetected, PolicyViolation, Audit."
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string",
+                      "description": "Severity of the event: Critical, High, Medium, Low, or Informational."
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string",
+                      "description": "Action taken by ContosoFort: Allow, Block, Monitor, or Quarantine."
+                    },
+                    {
+                      "name": "SourceIP",
+                      "type": "string",
+                      "description": "Source IP address of the network event."
+                    },
+                    {
+                      "name": "DestinationIP",
+                      "type": "string",
+                      "description": "Destination IP address of the network event."
+                    },
+                    {
+                      "name": "ThreatName",
+                      "type": "string",
+                      "description": "Specific threat name or signature identified."
+                    },
+                    {
+                      "name": "RuleID",
+                      "type": "string",
+                      "description": "Identifier of the ContosoFort rule that triggered the event."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "ContosoFortDefinition",
+          "title": "ContosoFort (Using Blob Container) (via Codeless Connector Framework)",
+          "publisher": "ContosoFort",
+          "descriptionMarkdown": "The ContosoFort data connector provides the capability to ingest ContosoFort security event logs into Microsoft Sentinel using ContosoFort Log Export and Azure Blob Storage. Refer to [ContosoFort documentation](https://docs.contosofort.io/log-export) for more information.",
+          "graphQueriesTableName": "ContosoFortV1_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "ContosoFort security logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "ContosoFort Security Logs - All Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            },
+            {
+              "description": "ContosoFort Security Logs - Blocked Events",
+              "query": "{{graphQueriesTableName}}\n | where Action == \"Block\"\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Create a storage account and a container",
+                "description": "Before configuring ContosoFort log export, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to learn about Container and Blob storage. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+              },
+              {
+                "name": "Configure ContosoFort Log Export",
+                "description": "Follow the steps in the [ContosoFort documentation](https://docs.contosofort.io/log-export/azure) to configure log export from ContosoFort to your Azure Blob container."
+              },
+              {
+                "name": "Subscription permissions",
+                "description": "You need permissions to create the data flow resources: storage queues (notification queue and dead-letter queue), event grid topic and subscription (to send 'blob created event' notifications to the notification queue), and role assignments (to grant access for the Sentinel app to the blob container and the storage queues)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect ContosoFort Logs to Microsoft Sentinel",
+              "description": "To enable ContosoFort logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+              "instructions": [
+                {
+                  "parameters": {
+                    "tenantId": "[subscription().tenantId]",
+                    "name": "principalId",
+                    "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                  },
+                  "type": "ServicePrincipalIDTextBox_test"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's URL you want to collect data from",
+                    "type": "text",
+                    "name": "blobContainerUri",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account resource group name",
+                    "type": "text",
+                    "name": "StorageAccountResourceGroupName",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account location",
+                    "type": "text",
+                    "name": "StorageAccountLocation",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account subscription id",
+                    "type": "text",
+                    "name": "StorageAccountSubscription",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The event grid topic name of the blob container's storage account if it exists, else leave empty.",
+                    "description": "The data flow uses event grid to send 'blob-created event' notifications. There can only be one event grid topic per storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, provide its name. Otherwise, leave the text box empty.",
+                    "type": "text",
+                    "name": "EGSystemTopicName",
+                    "validations": {
+                      "required": false
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "ContosoFort",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "ContosoFort",
+          "email": "support@contosofort.io",
+          "tier": "Partner",
+          "link": "https://support.contosofort.io"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "ContosoFort (Using Blob Container) (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "ContosoFort (Using Blob Container) (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "principalId": {
+              "defaultValue": "principalId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "blobContainerUri": {
+              "defaultValue": "blobContainerUri",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountResourceGroupName": {
+              "defaultValue": "StorageAccountResourceGroupName",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountLocation": {
+              "defaultValue": "StorageAccountLocation",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountSubscription": {
+              "defaultValue": "StorageAccountSubscription",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "EGSystemTopicName": {
+              "defaultValue": "",
+              "type": "securestring"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]",
+            "connectorName": "sentinel-connector",
+            "blobContainerUriPart": "[concat('.blob.core', '.windows.net')]",
+            "storageAccountName": "[[split(split(parameters('blobContainerUri'), 'https://')[1], variables('blobContainerUriPart'))[0]]",
+            "blobContainerName": "[[split(split(parameters('blobContainerUri'), concat(variables('blobContainerUriPart'), '/'))[1], '/')[0]]",
+            "queueName": "[[concat(variables('connectorName'), '-notification')]",
+            "dlqName": "[[concat(variables('connectorName'), '-dlq')]",
+            "storageAccountId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "notificationQueueResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]",
+            "dlqResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]",
+            "EGSystemTopicDefaultName": "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('innerWorkspace'))]",
+            "EGSystemTopicName": "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]",
+            "EGTopicResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics', variables('EGSystemTopicName'))]",
+            "EgSubscriptionName": "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]",
+            "EgSubscriptionResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+            "storageBlobContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+            "storageQueueContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+            "blobRaGuid": "[[guid(variables('storageAccountName'), variables('blobContainerName'))]",
+            "notificationQueueRaGuid": "[[guid(variables('storageAccountName'), variables('queueName'))]",
+            "dlqRaGuid": "[[guid(variables('storageAccountName'), variables('dlqName'))]",
+            "blobRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), 'Microsoft.Authorization', variables('blobRaGuid'))]",
+            "notificationQueueRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), 'Microsoft.Authorization', variables('notificationQueueRaGuid'))]",
+            "dlqRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('dlqName'), 'Microsoft.Authorization', variables('dlqRaGuid'))]",
+            "nestedDeploymentName": "CreateDataFlowResources",
+            "nestedDeploymentId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Resources/deployments', variables('nestedDeploymentName'))]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "ContosoFort",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "ContosoFort",
+                  "email": "support@contosofort.io",
+                  "tier": "Partner",
+                  "link": "https://support.contosofort.io"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2021-04-01",
+              "name": "[[variables('nestedDeploymentName')]",
+              "properties": {
+                "mode": "Incremental",
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "resources": [
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                      "apiVersion": "2021-04-01",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'))]",
+                      "dependsOn": [],
+                      "properties": {}
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                      "apiVersion": "2021-04-01",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'))]",
+                      "dependsOn": [],
+                      "properties": {}
+                    },
+                    {
+                      "type": "Microsoft.EventGrid/systemTopics",
+                      "apiVersion": "2022-06-15",
+                      "name": "[[variables('EGSystemTopicName')]",
+                      "location": "[[parameters('StorageAccountLocation')]",
+                      "properties": {
+                        "source": "[[variables('storageAccountId')]",
+                        "topicType": "microsoft.storage.storageaccounts"
+                      },
+                      "condition": "[[empty(parameters('EGSystemTopicName'))]"
+                    },
+                    {
+                      "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+                      "apiVersion": "2023-12-15-preview",
+                      "name": "[[format('{0}/{1}', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+                      "dependsOn": [
+                        "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('EGSystemTopicName'))]"
+                      ],
+                      "properties": {
+                        "destination": {
+                          "endpointType": "StorageQueue",
+                          "properties": {
+                            "queueName": "[[variables('queueName')]",
+                            "resourceId": "[[variables('storageAccountId')]"
+                          }
+                        },
+                        "filter": {
+                          "includedEventTypes": [
+                            "Microsoft.Storage.BlobCreated"
+                          ],
+                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
+                        }
+                      }                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]",
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageBlobContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'), '/Microsoft.Authorization/',  variables('notificationQueueRaGuid'))]",
+                      "dependsOn": [
+                        "[[variables('notificationQueueResourceId')]"
+                      ],
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'), '/Microsoft.Authorization/', variables('dlqRaGuid'))]",
+                      "dependsOn": [
+                        "[[variables('dlqResourceId')]"
+                      ],
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }                    }
+                  ]
+                }
+              },
+              "subscriptionId": "[[parameters('StorageAccountSubscription')]",
+              "resourceGroup": "[[parameters('StorageAccountResourceGroupName')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'ContosoFortUsingBlob', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "StorageAccountBlobContainer",
+              "properties": {
+                "connectorDefinitionName": "ContosoFortDefinition",
+                "dataType": "ContosoFortV1_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-ContosoFort"
+                },
+                "auth": {
+                  "type": "ServicePrincipal"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json",
+                  "isGzipCompressed": false
+                },
+                "request": {
+                  "QueueUri": "[[uri(concat('https://', variables('storageAccountName'), '.queue.core', '.windows.net', '/'), variables('queueName'))]",
+                  "DlqUri": "[[uri(concat('https://', variables('storageAccountName'), '.queue.core', '.windows.net', '/'), variables('dlqName'))]"
+                }
+              },
+              "dependsOn": [
+                "[[variables('nestedDeploymentId')]"
+              ]
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "ContosoFort",
+        "publisherDisplayName": "ContosoFort",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ContosoFort/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The ContosoFort solution provides the capability to ingest ContosoFort security event logs into Microsoft Sentinel using ContosoFort Log Export and Azure Blob Storage via the Codeless Connector Framework (CCF).</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/storage/blobs/\">Azure Blob Storage</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/event-grid/\">Azure Event Grid</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ContosoFort",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "ContosoFort",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "ContosoFort",
+          "email": "support@contosofort.io",
+          "tier": "Partner",
+          "link": "https://support.contosofort.io"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-05-14",
+        "providers": [
+          "ContosoFort"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -10,6 +10,7 @@ from ..SharedCode.logger import applogger
 from ..SharedCode.infoblox_exception import InfobloxException, InfobloxTimeoutException
 from ..SharedCode import consts
 from ..SharedCode.state_manager import StateManager
+from ..SharedCode.table_checkpoint_manager import TableCheckpointManager
 from ..SharedCode.utils import Utils
 
 
@@ -89,15 +90,31 @@ class ParseJsonFiles:
             raise InfobloxException()
 
     def get_checkpoint_data(self, file_name):
-        """Retrieve the checkpoint data from the state manager object.
+        """Retrieve the checkpoint data from the table-based checkpoint manager.
 
         Returns:
-            Tuple: A tuple containing the file prefix and the index to start.
+            int: The byte index to resume from, or None if no checkpoint exists.
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            state_manager_obj = StateManager(consts.CONN_STRING, file_name, consts.FILE_SHARE_NAME_DATA)
-            raw_data = state_manager_obj.get()
+            table_manager = TableCheckpointManager(consts.CONN_STRING, file_name, consts.CHECKPOINT_TABLE_NAME)
+            raw_data = table_manager.get()
+            # Upgrade migration: if no table entry, check old file-based location
+            if raw_data is None:
+                old_obj = StateManager(consts.CONN_STRING, file_name, consts.FILE_SHARE_NAME_DATA)
+                old_val = old_obj.get()
+                if old_val:
+                    applogger.info(
+                        consts.LOG_FORMAT.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            consts.PARSE_RAW_JSON_DATA_FUNCTION_NAME,
+                            "Migrating parse progress from file share to table. key={}".format(file_name),
+                        )
+                    )
+                    table_manager.post(old_val)
+                    old_obj.delete()
+                    raw_data = old_val
             index_to_start = None
             if raw_data:
                 index_to_start = int(raw_data.split(",")[-1])
@@ -161,20 +178,20 @@ class ParseJsonFiles:
             raise InfobloxException()
 
     def write_to_checkpoint_file(self, file_name, data_file_name, index):
-        """Write file_name and index of file to a checkpoint file.
+        """Write file_name and index of file to a table-based checkpoint.
 
         Args:
-            file_name (str): The name of the file.
-            data_file_name (str): The name of the data file.
-            index (int): The index to start.
+            file_name (str): The checkpoint key (parse progress identifier).
+            data_file_name (str): The name of the data file being parsed.
+            index (int): The byte index to resume from.
 
         Returns:
             None
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            state_manager_obj = StateManager(consts.CONN_STRING, file_name, consts.FILE_SHARE_NAME_DATA)
-            state_manager_obj.post(data_file_name + "," + str(index))
+            table_manager = TableCheckpointManager(consts.CONN_STRING, file_name, consts.CHECKPOINT_TABLE_NAME)
+            table_manager.post(data_file_name + "," + str(index))
         except Exception as error:
             applogger.error(
                 consts.LOG_FORMAT.format(
@@ -352,7 +369,7 @@ class ParseJsonFiles:
                         )
                         data2 = state_manager_obj_file2.get()
                         json_complete_data, data1_index = self.make_complete_json_file(data1, data2, is_first_chunk)
-                        data1 = data2[data1_index:]
+                        data1 = data2[data1_index:].lstrip(",")
                         is_first_chunk = False
                         self.replace_raw_file_with_completed(json_file, json_complete_data)
                         applogger.info(
@@ -365,7 +382,7 @@ class ParseJsonFiles:
                         )
                         self.write_to_checkpoint_file(file_prefix, threat_iocs_file[index + 1], data1_index)
                         continue
-                    data1 = "[" + data1
+                    data1 = "[" + data1.lstrip(",")
                     index_of_last = -1
                     while data1[index_of_last] != "]":
                         index_of_last -= 1
@@ -379,7 +396,7 @@ class ParseJsonFiles:
                     )
                     json_complete_data = data1[: index_of_last + 1]
                     self.replace_raw_file_with_completed(json_file, json_complete_data)
-                    self.utils_obj.delete_files_from_azure_storage([file_prefix], self.parent_dir)
+                    TableCheckpointManager(consts.CONN_STRING, file_prefix, consts.CHECKPOINT_TABLE_NAME).delete()
                 return None
             state_manager_obj = StateManager(consts.CONN_STRING, threat_iocs_file[0], consts.FILE_SHARE_NAME_DATA)
             data = state_manager_obj.get()
@@ -394,7 +411,7 @@ class ParseJsonFiles:
             data = data[: index_of_last + 1]
             self.replace_raw_file_with_completed(threat_iocs_file[0], data)
             if fail_index:
-                self.utils_obj.delete_files_from_azure_storage([file_prefix], self.parent_dir)
+                TableCheckpointManager(consts.CONN_STRING, file_prefix, consts.CHECKPOINT_TABLE_NAME).delete()
             return None
         except InfobloxTimeoutException:
             applogger.error(

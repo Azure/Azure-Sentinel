@@ -1,4 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**       |
 | ----------- |--------------------------------| ------------------------ |
+| 3.1.3       | 21-08-2026                     | Fixed ARM template expression escaping in nested content templates (stray `]` in dcrConfig and playbook expressions) that caused data connector **Connect** deployment to fail with a template language expression parse error.<br>Fixed alerts polling request body to send strict JSON (double-quoted): the Argos API now rejects single-quoted bodies with 422 Unprocessable Entity.<br>Fixed connection template parameter defaults: placeholder values (e.g. `"severity"`) leaked into the API request body when optional connector fields were left empty, failing the connectivity check with 422 (invalid severity enum). Optional filters now default to empty and are omitted from the request. |
+| 3.1.2       | 02-06-2026                     | Updated support contact information and documentation links. |
 | 3.1.0       | 10-03-2026                     | Update **Data Connector**, add bi-directional sync playbooks, analytic rule (ingestion anomaly), workbook (alert overview & sync health), and automation rules. |
 | 3.0.0       | 17-06-2025                     | Initial Solution release. |
