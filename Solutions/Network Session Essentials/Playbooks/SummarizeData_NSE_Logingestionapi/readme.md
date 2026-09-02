@@ -6,6 +6,24 @@ This Logic App summarizes Network Session data into custom Log Analytics tables 
 
 The playbook improves Network Session Essentials workbook and query performance by creating summarized data for key ASIM Network Session dimensions. It uses a data collection endpoint (DCE), data collection rule (DCR), and the playbook's managed identity to ingest data into V1 custom tables.
 
+## V1 custom tables
+
+The playbook creates the following tables. Use these V1 names in custom queries; existing non-V1 tables are not modified.
+
+| Table | Summarized dimensions |
+| --- | --- |
+| `NetworkCustomAnalytics_ipV1_CL` | Source IP, destination IP, network direction, and device action. |
+| `NetworkCustomAnalytics_source_portV1_CL` | Source port, network direction, and device action. |
+| `NetworkCustomAnalytics_countryV1_CL` | Source country, destination country, device action, and network direction. |
+| `NetworkCustomAnalyticsV1_CL` | Overall event result, network direction, device action, and event severity. |
+| `NetworkCustomAnalytics_protocolV1_CL` | Network protocol, destination port, destination application, network direction, and device action. |
+| `NetworkCustomAnalytics_sourceInfoV1_CL` | Event product and device hostname. |
+| `NetworkCustomAnalytics_threatV1_CL` | Threat, threat category, event severity, and device action. |
+| `NetworkCustomAnalytics_threat_iocV1_CL` | Source and destination IP addresses and hostnames. |
+| `NetworkCustomAnalytics_ruleV1_CL` | Rule, network direction, and device action. |
+
+Each table also includes `TimeGenerated`, `EventTime`, and `count_` for its aggregation window and event count.
+
 ## Deployment Instructions
 
 1. Deploy the playbook by selecting the applicable button:
