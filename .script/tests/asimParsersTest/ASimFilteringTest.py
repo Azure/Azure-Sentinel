@@ -831,7 +831,6 @@ all_schemas_parameters = {
     {
 		"ipaddr_has_any_prefix" : "DvcIpAddr",
         "disabled" : "",
-        "pack":"",
         "endtime" : "EventEndTime",
         "hostname_has_any" : "DvcHostname",
 		"username_has_any" : "Username",
