@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "GIBTIA_HI_Threat",
+            "defaultValue": "GIBTIA_Suspicious_ip_scanner",
             "type": "string"
         },
         "UserName": {
@@ -29,12 +29,12 @@
             }
         },
         "LimitPerPortion": {
-            "defaultValue": 10,
+            "defaultValue": 1000,
             "type": "int",
             "minValue": 1,
-            "maxValue": 10,
+            "maxValue": 5000,
             "metadata": {
-                "description": "Records per API call (1-10). Lower default due to larger record size."
+                "description": "Records per API call (1-5000). Use 10 for initial testing."
             }
         },
         "WorkspaceId": {
@@ -47,6 +47,13 @@
             "type": "string",
             "metadata": {
                 "description": "Log Analytics workspace name."
+            }
+        },
+        "IndicatorProcessorPlaybookName": {
+            "defaultValue": "GIBTIA_IndicatorProcessor_v2",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the batch adapter Logic App. Must match exactly."
             }
         }
     },
@@ -101,6 +108,10 @@
                             "defaultValue": "[parameters('LimitPerPortion')]",
                             "type": "Int"
                         },
+                        "IndicatorProcessorPlaybookName": {
+                            "defaultValue": "[parameters('IndicatorProcessorPlaybookName')]",
+                            "type": "String"
+                        },
                         "WorkspaceId": {
                             "defaultValue": "[parameters('WorkspaceId')]",
                             "type": "String"
@@ -151,23 +162,6 @@
                                 ]
                             }
                         },
-                        "Initialize_RecordsArray": {
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "RecordsArray",
-                                        "type": "array",
-                                        "value": []
-                                    }
-                                ]
-                            },
-                            "runAfter": {
-                                "Initialize_IsPortionEmpty": [
-                                    "Succeeded"
-                                ]
-                            }
-                        },
                         "Query_Last_SeqUpdate": {
                             "type": "Http",
                             "inputs": {
@@ -177,7 +171,7 @@
                                     "Content-Type": "application/json"
                                 },
                                 "body": {
-                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"hi/threat\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"suspicious_ip/scanner\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
                                 },
                                 "authentication": {
                                     "type": "ManagedServiceIdentity",
@@ -185,7 +179,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_RecordsArray": [
+                                "Initialize_IsPortionEmpty": [
                                     "Succeeded"
                                 ]
                             }
@@ -216,12 +210,12 @@
                                         "uri": "https://tap.group-ib.com/api/v2/sequence_list",
                                         "queries": {
                                             "date": "@{parameters('StartDate')}",
-                                            "collection": "hi/threat"
+                                            "collection": "suspicious_ip/scanner"
                                         },
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (suspicious-ip-scanner; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -256,7 +250,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "seqUpdate",
-                                        "value": "@body('Parse_SequenceList')?['list']?['hi/threat']"
+                                        "value": "@body('Parse_SequenceList')?['list']?['suspicious_ip/scanner']"
                                     },
                                     "runAfter": {
                                         "Parse_SequenceList": [
@@ -288,7 +282,7 @@
                             "type": "Until",
                             "expression": "@equals(variables('IsPortionEmpty'), true)",
                             "limit": {
-                                "count": 500,
+                                "count": 100,
                                 "timeout": "PT1H"
                             },
                             "actions": {
@@ -296,11 +290,11 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "GET",
-                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/hi/threat/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 10))}",
+                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/suspicious_ip/scanner/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 5000))}",
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (suspicious-ip-scanner; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -388,53 +382,43 @@
                                             "For_each_item": {
                                                 "type": "Foreach",
                                                 "foreach": "@body('Parse_Feed_Response')?['items']",
-                                                "operationOptions": "Sequential",
                                                 "actions": {
-                                                    "Append_to_RecordsArray": {
-                                                        "type": "AppendToArrayVariable",
+                                                    "SendToBatch_IP": {
+                                                        "type": "SendToBatch",
                                                         "inputs": {
-                                                            "name": "RecordsArray",
-                                                            "value": "@items('For_each_item')"
+                                                            "batchName": "GIBIOCBatch",
+                                                            "content": {
+                                                                "type": "indicator",
+                                                                "spec_version": "2.1",
+                                                                "id": "@{concat('indicator--', guid())}",
+                                                                "created": "@{items('For_each_item')?['dateFirstSeen']}",
+                                                                "modified": "@{items('For_each_item')?['dateFirstSeen']}",
+                                                                "name": "@{concat('IP=', items('For_each_item')?['id'])}",
+                                                                "pattern": "@{concat('[ipv4-addr:value = ''', items('For_each_item')?['id'], ''']')}",
+                                                                "pattern_type": "stix",
+                                                                "valid_from": "@{items('For_each_item')?['dateFirstSeen']}",
+                                                                "valid_until": "@{addDays(items('For_each_item')?['dateFirstSeen'], 90)}",
+                                                                "confidence": "@int(coalesce(items('For_each_item')?['evaluation']?['credibility'], 50))",
+                                                                "indicator_types": [
+                                                                    "malicious-activity"
+                                                                ],
+                                                                "labels": [
+                                                                    "Group-IB TI",
+                                                                    "suspicious_ip/scanner"
+                                                                ]
+                                                            },
+                                                            "host": {
+                                                                "triggerName": "Batch_messages",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('IndicatorProcessorPlaybookName'))]"
+                                                                }
+                                                            }
                                                         },
                                                         "runAfter": {}
                                                     }
                                                 },
                                                 "runAfter": {
                                                     "Set_seqUpdate": [
-                                                        "Succeeded"
-                                                    ]
-                                                }
-                                            },
-                                            "Write_batch_to_table": {
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": "@{string(variables('RecordsArray'))}",
-                                                    "headers": {
-                                                        "Log-Type": "GIBHIThreat",
-                                                        "time-generated-field": ""
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/api/logs"
-                                                },
-                                                "runAfter": {
-                                                    "For_each_item": [
-                                                        "Succeeded"
-                                                    ]
-                                                }
-                                            },
-                                            "Reset_RecordsArray": {
-                                                "type": "SetVariable",
-                                                "inputs": {
-                                                    "name": "RecordsArray",
-                                                    "value": []
-                                                },
-                                                "runAfter": {
-                                                    "Write_batch_to_table": [
                                                         "Succeeded"
                                                     ]
                                                 }
@@ -457,7 +441,7 @@
                         "Save_tracking_record": {
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "{\"CollectionName\": \"hi/threat\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+                                "body": "{\"CollectionName\": \"suspicious_ip/scanner\", \"SeqUpdate\": @{variables('seqUpdate')}}",
                                 "headers": {
                                     "Log-Type": "GIBCollectionTracking",
                                     "time-generated-field": ""
@@ -476,8 +460,7 @@
                                 ]
                             }
                         }
-                    },
-                    "outputs": {}
+                    }
                 },
                 "parameters": {
                     "$connections": {

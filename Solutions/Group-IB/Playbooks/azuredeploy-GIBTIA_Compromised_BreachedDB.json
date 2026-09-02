@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "GIBTIA_HI_Threat",
+            "defaultValue": "GIBTIA_Compromised_BreachedDB",
             "type": "string"
         },
         "UserName": {
@@ -29,12 +29,21 @@
             }
         },
         "LimitPerPortion": {
-            "defaultValue": 10,
+            "defaultValue": 100,
             "type": "int",
             "minValue": 1,
-            "maxValue": 10,
+            "maxValue": 100,
             "metadata": {
-                "description": "Records per API call (1-10). Lower default due to larger record size."
+                "description": "Records per API call (1-100). breacheddb is rate-limited to 100 records per request."
+            }
+        },
+        "HasPasswordFilter": {
+            "defaultValue": 1,
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 1,
+            "metadata": {
+                "description": "1 = only ingest breach records that carry a leaked password (default, matches the password-notification use case). 0 = collect all breach records regardless of password presence."
             }
         },
         "WorkspaceId": {
@@ -99,6 +108,10 @@
                         },
                         "LimitPerPortion": {
                             "defaultValue": "[parameters('LimitPerPortion')]",
+                            "type": "Int"
+                        },
+                        "HasPasswordFilter": {
+                            "defaultValue": "[parameters('HasPasswordFilter')]",
                             "type": "Int"
                         },
                         "WorkspaceId": {
@@ -177,7 +190,7 @@
                                     "Content-Type": "application/json"
                                 },
                                 "body": {
-                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"hi/threat\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"compromised/breacheddb\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
                                 },
                                 "authentication": {
                                     "type": "ManagedServiceIdentity",
@@ -216,12 +229,12 @@
                                         "uri": "https://tap.group-ib.com/api/v2/sequence_list",
                                         "queries": {
                                             "date": "@{parameters('StartDate')}",
-                                            "collection": "hi/threat"
+                                            "collection": "compromised/breacheddb"
                                         },
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (compromised-breacheddb; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -256,7 +269,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "seqUpdate",
-                                        "value": "@body('Parse_SequenceList')?['list']?['hi/threat']"
+                                        "value": "@coalesce(body('Parse_SequenceList')?['list']?['compromised/breacheddb'], 0)"
                                     },
                                     "runAfter": {
                                         "Parse_SequenceList": [
@@ -296,11 +309,11 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "GET",
-                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/hi/threat/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 10))}",
+                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/compromised/breacheddb/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 100), '&has_password=', parameters('HasPasswordFilter'))}",
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (compromised-breacheddb; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -390,13 +403,25 @@
                                                 "foreach": "@body('Parse_Feed_Response')?['items']",
                                                 "operationOptions": "Sequential",
                                                 "actions": {
+                                                    "Select_masked_passwords": {
+                                                        "type": "Select",
+                                                        "inputs": {
+                                                            "from": "@coalesce(items('For_each_item')?['password'], json('[]'))",
+                                                            "select": "@if(greater(length(string(item())), 3), concat(substring(string(item()), 0, 3), '****'), '****')"
+                                                        },
+                                                        "runAfter": {}
+                                                    },
                                                     "Append_to_RecordsArray": {
                                                         "type": "AppendToArrayVariable",
                                                         "inputs": {
                                                             "name": "RecordsArray",
-                                                            "value": "@items('For_each_item')"
+                                                            "value": "@setProperty(items('For_each_item'), 'password', body('Select_masked_passwords'))"
                                                         },
-                                                        "runAfter": {}
+                                                        "runAfter": {
+                                                            "Select_masked_passwords": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
                                                     }
                                                 },
                                                 "runAfter": {
@@ -410,7 +435,7 @@
                                                 "inputs": {
                                                     "body": "@{string(variables('RecordsArray'))}",
                                                     "headers": {
-                                                        "Log-Type": "GIBHIThreat",
+                                                        "Log-Type": "GIBCompromisedBreachedDB",
                                                         "time-generated-field": ""
                                                     },
                                                     "host": {
@@ -457,7 +482,7 @@
                         "Save_tracking_record": {
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "{\"CollectionName\": \"hi/threat\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+                                "body": "{\"CollectionName\": \"compromised/breacheddb\", \"SeqUpdate\": @{variables('seqUpdate')}}",
                                 "headers": {
                                     "Log-Type": "GIBCollectionTracking",
                                     "time-generated-field": ""

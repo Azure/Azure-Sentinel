@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "GIBTIA_HI_Threat",
+            "defaultValue": "GIBTIA_Compromised_MaskedCard",
             "type": "string"
         },
         "UserName": {
@@ -29,12 +29,12 @@
             }
         },
         "LimitPerPortion": {
-            "defaultValue": 10,
+            "defaultValue": 100,
             "type": "int",
             "minValue": 1,
-            "maxValue": 10,
+            "maxValue": 500,
             "metadata": {
-                "description": "Records per API call (1-10). Lower default due to larger record size."
+                "description": "Records per API call (1-500). Lower default due to larger record size."
             }
         },
         "WorkspaceId": {
@@ -177,7 +177,7 @@
                                     "Content-Type": "application/json"
                                 },
                                 "body": {
-                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"hi/threat\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"compromised/masked_card\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
                                 },
                                 "authentication": {
                                     "type": "ManagedServiceIdentity",
@@ -216,12 +216,12 @@
                                         "uri": "https://tap.group-ib.com/api/v2/sequence_list",
                                         "queries": {
                                             "date": "@{parameters('StartDate')}",
-                                            "collection": "hi/threat"
+                                            "collection": "compromised/masked_card"
                                         },
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (compromised-masked-card; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -256,7 +256,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "seqUpdate",
-                                        "value": "@body('Parse_SequenceList')?['list']?['hi/threat']"
+                                        "value": "@body('Parse_SequenceList')?['list']?['compromised/masked_card']"
                                     },
                                     "runAfter": {
                                         "Parse_SequenceList": [
@@ -288,7 +288,7 @@
                             "type": "Until",
                             "expression": "@equals(variables('IsPortionEmpty'), true)",
                             "limit": {
-                                "count": 500,
+                                "count": 100,
                                 "timeout": "PT1H"
                             },
                             "actions": {
@@ -296,11 +296,11 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "GET",
-                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/hi/threat/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 10))}",
+                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/compromised/masked_card/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 500))}",
                                         "headers": {
                                             "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
                                             "Accept": "application/json",
-                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (hi-threat; logic-app)"
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (compromised-masked-card; logic-app)"
                                         }
                                     },
                                     "runtimeConfiguration": {
@@ -394,7 +394,7 @@
                                                         "type": "AppendToArrayVariable",
                                                         "inputs": {
                                                             "name": "RecordsArray",
-                                                            "value": "@items('For_each_item')"
+                                                            "value": "@setProperty(items('For_each_item'), 'cardInfo', removeProperty(removeProperty(removeProperty(coalesce(items('For_each_item')?['cardInfo'], json('{}')), 'cvv'), 'pin'), 'dump'))"
                                                         },
                                                         "runAfter": {}
                                                     }
@@ -410,7 +410,7 @@
                                                 "inputs": {
                                                     "body": "@{string(variables('RecordsArray'))}",
                                                     "headers": {
-                                                        "Log-Type": "GIBHIThreat",
+                                                        "Log-Type": "GIBCompromisedMaskedCard",
                                                         "time-generated-field": ""
                                                     },
                                                     "host": {
@@ -457,7 +457,7 @@
                         "Save_tracking_record": {
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "{\"CollectionName\": \"hi/threat\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+                                "body": "{\"CollectionName\": \"compromised/masked_card\", \"SeqUpdate\": @{variables('seqUpdate')}}",
                                 "headers": {
                                     "Log-Type": "GIBCollectionTracking",
                                     "time-generated-field": ""

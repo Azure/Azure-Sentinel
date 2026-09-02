@@ -9,26 +9,58 @@
         "UserName": {
             "defaultValue": "<username>@<domain>",
             "type": "string"
+        },
+        "GIBUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "GIB TI portal login (email)."
+            }
+        },
+        "GIBApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "GIB TI personal API token."
+            }
+        },
+        "StartDate": {
+            "type": "string",
+            "metadata": {
+                "description": "YYYY-MM-DD. Used only on the first run to look up the initial seqUpdate via sequence_list."
+            }
+        },
+        "LimitPerPortion": {
+            "defaultValue": 1000,
+            "type": "int",
+            "minValue": 1,
+            "maxValue": 5000,
+            "metadata": {
+                "description": "Records per API call (1-5000). Use 10 for initial testing."
+            }
+        },
+        "WorkspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics workspace ID (GUID)."
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics workspace name."
+            }
+        },
+        "IndicatorProcessorPlaybookName": {
+            "defaultValue": "GIBTIA_IndicatorProcessor_v2",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the batch adapter Logic App. Must match exactly."
+            }
         }
     },
     "variables": {
-        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "azuremonitorlogsConnectionName": "[concat('azuremon-', parameters('PlaybookName'))]"
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
     },
     "resources": [
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('azuremonitorlogsConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
-                }
-            }
-        },
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
@@ -48,177 +80,73 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
             ],
             "properties": {
                 "state": "Disabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GIBUsername": {
+                            "defaultValue": "[parameters('GIBUsername')]",
+                            "type": "String"
+                        },
+                        "GIBApiKey": {
+                            "defaultValue": "[parameters('GIBApiKey')]",
+                            "type": "SecureString"
+                        },
+                        "StartDate": {
+                            "defaultValue": "[parameters('StartDate')]",
+                            "type": "String"
+                        },
+                        "LimitPerPortion": {
+                            "defaultValue": "[parameters('LimitPerPortion')]",
+                            "type": "Int"
+                        },
+                        "IndicatorProcessorPlaybookName": {
+                            "defaultValue": "[parameters('IndicatorProcessorPlaybookName')]",
+                            "type": "String"
+                        },
+                        "WorkspaceId": {
+                            "defaultValue": "[parameters('WorkspaceId')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1
+                                }
+                            }
+                        }
+                    },
                     "actions": {
-                        "Condition": {
-                            "actions": {
-                                "Set_variable": {
-                                    "inputs": {
-                                        "name": "seqUpdate",
-                                        "value": "@body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'][0]['seqUpdate_d']"
-                                    },
-                                    "runAfter": {},
-                                    "type": "SetVariable"
-                                }
-                            },
-                            "else": {
-                                "actions": {
-                                    "HTTP": {
-                                        "inputs": {
-                                            "headers": {
-                                                "accept": "*/*",
-                                                "x-auth-key": "@variables('GIB API Key')",
-                                                "x-auth-login": "@parameters('GIB Username')"
-                                            },
-                                            "method": "GET",
-                                            "queries": {
-                                                "collection": "@parameters('Collection Name')",
-                                                "date": "@{addDays(utcNow(), -1, 'yyyy-MM-dd')}"
-                                            },
-                                            "uri": "@{parameters('GIB API URL ')}sequence_list"
-                                        },
-                                        "runAfter": {},
-                                        "type": "Http"
-                                    },
-                                    "Parse_JSON": {
-                                        "inputs": {
-                                            "content": "@body('HTTP')",
-                                            "schema": {
-                                                "properties": {
-                                                    "list": {
-                                                        "properties": {
-                                                            "attacks/ddos": {
-                                                                "type": "integer"
-                                                            }
-                                                        },
-                                                        "type": "object"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            }
-                                        },
-                                        "runAfter": {
-                                            "HTTP": [
-                                                "Succeeded"
-                                            ]
-                                        },
-                                        "type": "ParseJson"
-                                    },
-                                    "Update_Last_Item_id_in_Tech_table_": {
-                                        "inputs": {
-                                            "body": "{\n\"collection_name\" : \"@{parameters('Collection Name')}\",\n\"seqUpdate\" :  @{body('Parse_JSON')?['list']?['attacks/ddos']}\n}",
-                                            "headers": {
-                                                "Log-Type": "GIBTechTable"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "path": "/api/logs"
-                                        },
-                                        "runAfter": {
-                                            "Parse_JSON": [
-                                                "Succeeded"
-                                            ]
-                                        },
-                                        "type": "ApiConnection"
-                                    },
-                                    "set_seqUpdate_": {
-                                        "inputs": {
-                                            "name": "seqUpdate",
-                                            "value": "@body('Parse_JSON')?['list']?['attacks/ddos']"
-                                        },
-                                        "runAfter": {
-                                            "Update_Last_Item_id_in_Tech_table_": [
-                                                "Succeeded"
-                                            ]
-                                        },
-                                        "type": "SetVariable"
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@length(body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'])",
-                                                0
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "runAfter": {
-                                "Get_last_received_item_ID_from_Azure_Log_DB": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Get_last_received_item_ID_from_Azure_Log_DB": {
-                            "inputs": {
-                                "body": "GIBTechTable_CL | where collection_name_s == \"@{parameters('Collection Name')}\" |  sort by TimeGenerated | limit 1",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/queryData",
-                                "queries": {
-                                    "subscriptions": "[subscription().subscriptionId]",
-                                    "resourcegroups": "[resourceGroup().name]",
-                                    "resourcetype": "Log Analytics Workspace",
-                                    "resourcename": "",
-                                    "timerange": "Last 7 days"
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_API_Key": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection"
-                        },
-                        "Initialize_API_Key": {
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "GIB API Key",
-                                        "type": "string",
-                                        "value": "<GIB API Key>"
-                                    }
-                                ]
-                            },
-                            "runAfter": {
-                                "Initialize_seqUpdate": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable"
-                        },
                         "Initialize_seqUpdate": {
+                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
                                         "name": "seqUpdate",
-                                        "type": "integer"
+                                        "type": "integer",
+                                        "value": 0
                                     }
                                 ]
                             },
-                            "runAfter": {},
-                            "type": "InitializeVariable"
+                            "runAfter": {}
                         },
-                        "Initialize_variable": {
+                        "Initialize_IsPortionEmpty": {
+                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
@@ -229,18 +157,161 @@
                                 ]
                             },
                             "runAfter": {
-                                "Condition": [
+                                "Initialize_seqUpdate": [
                                     "Succeeded"
                                 ]
+                            }
+                        },
+                        "Query_Last_SeqUpdate": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'), '/query?api-version=2017-10-01')]",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "query": "GIBCollectionTracking_CL | where CollectionName_s == \"attacks/ddos\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+                                },
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://management.azure.com/"
+                                }
                             },
-                            "type": "InitializeVariable"
+                            "runAfter": {
+                                "Initialize_IsPortionEmpty": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Condition_First_Run": {
+                            "type": "If",
+                            "expression": {
+                                "or": [
+                                    {
+                                        "equals": [
+                                            "@actions('Query_Last_SeqUpdate').status",
+                                            "Failed"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@length(coalesce(body('Query_Last_SeqUpdate')?['tables']?[0]?['rows'], json('[]')))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "HTTP_Get_SequenceList": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "uri": "https://tap.group-ib.com/api/v2/sequence_list",
+                                        "queries": {
+                                            "date": "@{parameters('StartDate')}",
+                                            "collection": "attacks/ddos"
+                                        },
+                                        "headers": {
+                                            "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                            "Accept": "application/json",
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (attacks-ddos; logic-app)"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Parse_SequenceList": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_Get_SequenceList')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Get_SequenceList": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Set_seqUpdate_From_SequenceList": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "seqUpdate",
+                                        "value": "@body('Parse_SequenceList')?['list']?['attacks/ddos']"
+                                    },
+                                    "runAfter": {
+                                        "Parse_SequenceList": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_seqUpdate_From_DB": {
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "seqUpdate",
+                                            "value": "@int(body('Query_Last_SeqUpdate')?['tables'][0]?['rows'][0]?[0])"
+                                        },
+                                        "runAfter": {}
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Query_Last_SeqUpdate": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
                         },
                         "Until": {
+                            "type": "Until",
+                            "expression": "@equals(variables('IsPortionEmpty'), true)",
+                            "limit": {
+                                "count": 100,
+                                "timeout": "PT1H"
+                            },
                             "actions": {
-                                "Get_items_from_response": {
+                                "Get_next_portion": {
+                                    "type": "Http",
                                     "inputs": {
-                                        "content": "@body('Get_next_portion_of_events_from_GIB')",
+                                        "method": "GET",
+                                        "uri": "@{concat('https://tap.group-ib.com/api/v2/attacks/ddos/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(parameters('LimitPerPortion'), 5000))}",
+                                        "headers": {
+                                            "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                            "Accept": "application/json",
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (attacks-ddos; logic-app)"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Parse_Feed_Response": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_next_portion')",
                                         "schema": {
+                                            "type": "object",
                                             "properties": {
                                                 "count": {
                                                     "type": [
@@ -248,441 +319,270 @@
                                                         "null"
                                                     ]
                                                 },
-                                                "items": {
-                                                    "items": {
-                                                        "properties": {
-                                                            "cnc": {
-                                                                "properties": {
-                                                                    "cnc": {},
-                                                                    "domain": {},
-                                                                    "ipv4": {
-                                                                        "properties": {
-                                                                            "asn": {},
-                                                                            "city": {},
-                                                                            "countryCode": {},
-                                                                            "countryName": {},
-                                                                            "ip": {},
-                                                                            "provider": {},
-                                                                            "region": {}
-                                                                        },
-                                                                        "type": "object"
-                                                                    },
-                                                                    "ipv6": {},
-                                                                    "url": {}
-                                                                },
-                                                                "type": "object"
-                                                            },
-                                                            "dateBegin": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "dateEnd": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "dateReg": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "evaluation": {
-                                                                "properties": {
-                                                                    "admiraltyCode": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "credibility": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "reliability": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "severity": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "tlp": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "ttl": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    }
-                                                                },
-                                                                "type": "object"
-                                                            },
-                                                            "id": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "isFavourite": {
-                                                                "type": "boolean"
-                                                            },
-                                                            "isHidden": {
-                                                                "type": "boolean"
-                                                            },
-                                                            "malware": {},
-                                                            "messageLink": {},
-                                                            "oldId": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "portalLink": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "protocol": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "seqUpdate": {
-                                                                "type": [
-                                                                    "integer",
-                                                                    "null"
-                                                                ]
-                                                            },
-                                                            "target": {
-                                                                "properties": {
-                                                                    "category": {},
-                                                                    "domain": {},
-                                                                    "domainsCount": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "ipv4": {
-                                                                        "properties": {
-                                                                            "asn": {},
-                                                                            "city": {},
-                                                                            "countryCode": {
-                                                                                "type": [
-                                                                                    "string",
-                                                                                    "null"
-                                                                                ]
-                                                                            },
-                                                                            "countryName": {
-                                                                                "type": [
-                                                                                    "string",
-                                                                                    "null"
-                                                                                ]
-                                                                            },
-                                                                            "ip": {
-                                                                                "type": [
-                                                                                    "string",
-                                                                                    "null"
-                                                                                ]
-                                                                            },
-                                                                            "provider": {
-                                                                                "type": [
-                                                                                    "string",
-                                                                                    "null"
-                                                                                ]
-                                                                            },
-                                                                            "region": {}
-                                                                        },
-                                                                        "type": "object"
-                                                                    },
-                                                                    "port": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "url": {}
-                                                                },
-                                                                "type": "object"
-                                                            },
-                                                            "threatActor": {},
-                                                            "type": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "cnc",
-                                                            "dateBegin",
-                                                            "dateEnd",
-                                                            "dateReg",
-                                                            "evaluation",
-                                                            "id",
-                                                            "malware",
-                                                            "messageLink",
-                                                            "oldId",
-                                                            "portalLink",
-                                                            "protocol",
-                                                            "seqUpdate",
-                                                            "target",
-                                                            "threatActor",
-                                                            "type"
-                                                        ],
-                                                        "type": "object"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "resultId": {
+                                                "seqUpdate": {
                                                     "type": [
-                                                        "string",
+                                                        "integer",
                                                         "null"
                                                     ]
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {}
                                                 }
-                                            },
-                                            "type": "object"
+                                            }
                                         }
                                     },
                                     "runAfter": {
-                                        "Get_next_portion_of_events_from_GIB": [
+                                        "Get_next_portion": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type": "ParseJson"
+                                    }
                                 },
-                                "Get_next_portion_of_events_from_GIB": {
+                                "Set_IsPortionEmpty_on_parse_failure": {
+                                    "type": "SetVariable",
                                     "inputs": {
-                                        "headers": {
-                                            "Accept": "*/*",
-                                            "x-auth-key": "@variables('GIB API Key')",
-                                            "x-auth-login": "@parameters('GIB Username')"
-                                        },
-                                        "method": "GET",
-                                        "queries": {
-                                            "limit": "100",
-                                            "seqUpdate": "@{variables('seqUpdate')}"
-                                        },
-                                        "uri": "@{parameters('GIB API URL ')}@{parameters('Collection Name')}/updated"
+                                        "name": "IsPortionEmpty",
+                                        "value": true
                                     },
-                                    "runAfter": {},
-                                    "type": "Http"
+                                    "runAfter": {
+                                        "Parse_Feed_Response": [
+                                            "Failed",
+                                            "TimedOut"
+                                        ]
+                                    }
                                 },
-                                "IfPortionHasItems": {
+                                "Condition_Set_IsPortionEmpty": {
+                                    "type": "If",
+                                    "expression": {
+                                        "equals": [
+                                            "@body('Parse_Feed_Response')?['count']",
+                                            0
+                                        ]
+                                    },
                                     "actions": {
-                                        "GIBIndicatorProcessor": {
+                                        "Set_IsPortionEmpty": {
+                                            "type": "SetVariable",
                                             "inputs": {
-                                                "batchName": "GIBIndicatorsBatch",
-                                                "content": "@body('Select')",
-                                                "host": {
-                                                    "triggerName": "Batch_messages",
-                                                    "workflow": {
-                                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', 'GIBIndicatorProcessor')]"
-                                                    }
-                                                }
+                                                "name": "IsPortionEmpty",
+                                                "value": true
                                             },
-                                            "runAfter": {
-                                                "Select": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SendToBatch"
-                                        },
-                                        "Save_only_as_Indicators": {
-                                            "actions": {},
-                                            "else": {
-                                                "actions": {
-                                                    "Send_Data": {
-                                                        "inputs": {
-                                                            "body": "@{body('Get_items_from_response')?['items']}",
-                                                            "headers": {
-                                                                "Log-Type": "GIBTIAAttacksDDoS"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/api/logs"
-                                                        },
-                                                        "runAfter": {},
-                                                        "type": "ApiConnection"
-                                                    }
-                                                }
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "equals": [
-                                                            "@parameters('Save only indicators')",
-                                                            true
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "runAfter": {},
-                                            "type": "If"
-                                        },
-                                        "Select": {
-                                            "inputs": {
-                                                "from": "@body('Get_items_from_response')?['items']",
-                                                "select": {
-                                                    "action": "unknown",
-                                                    "activityGroupNames": [
-                                                        "@item()?['threatActor']?['name']"
-                                                    ],
-                                                    "confidence": "@{item()?['evaluation']?['credibility']}",
-                                                    "description": "GIB DDoS Attack",
-                                                    "expirationDateTime": "@{addDays(item()?['dateEnd'], item()?['evaluation']?['ttl'])}",
-                                                    "externalId": "@{item()?['id']}",
-                                                    "killChain": [],
-                                                    "malwareFamilyNames": [],
-                                                    "networkDestinationIPv4": "@{item()?['target']?['ipv4']?['ip']}",
-                                                    "networkDestinationPort": "@item()?['target']?['port']",
-                                                    "networkSourceIPv4": "@{item()?['cnc']?['ipv4']?['ip']}",
-                                                    "severity": 0,
-                                                    "tags": [
-                                                        "attacks-ddos"
-                                                    ],
-                                                    "targetProduct": "Azure Sentinel",
-                                                    "threatType": "DDoS",
-                                                    "tlpLevel": "@{item()?['evaluation']?['tlp']}"
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Save_only_as_Indicators": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Select"
+                                            "runAfter": {}
                                         }
                                     },
                                     "else": {
                                         "actions": {
-                                            "Set_Empty_portion_value": {
+                                            "Set_seqUpdate": {
+                                                "type": "SetVariable",
                                                 "inputs": {
-                                                    "name": "IsPortionEmpty",
-                                                    "value": true
+                                                    "name": "seqUpdate",
+                                                    "value": "@body('Parse_Feed_Response')?['seqUpdate']"
                                                 },
-                                                "runAfter": {},
-                                                "type": "SetVariable"
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@length(body('Get_items_from_response')?['items'])",
-                                                        0
+                                                "runAfter": {}
+                                            },
+                                            "Filter_items_with_domain": {
+                                                "type": "Query",
+                                                "inputs": {
+                                                    "from": "@body('Parse_Feed_Response')?['items']",
+                                                    "where": "@not(equals(item()?['cnc']?['domain'], null))"
+                                                },
+                                                "runAfter": {
+                                                    "Set_seqUpdate": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            },
+                                            "Filter_items_with_ip": {
+                                                "type": "Query",
+                                                "inputs": {
+                                                    "from": "@body('Parse_Feed_Response')?['items']",
+                                                    "where": "@not(equals(item()?['cnc']?['ipv4']?['ip'], null))"
+                                                },
+                                                "runAfter": {
+                                                    "Set_seqUpdate": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            },
+                                            "Filter_items_with_url": {
+                                                "type": "Query",
+                                                "inputs": {
+                                                    "from": "@body('Parse_Feed_Response')?['items']",
+                                                    "where": "@not(equals(item()?['cnc']?['url'], null))"
+                                                },
+                                                "runAfter": {
+                                                    "Set_seqUpdate": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            },
+                                            "For_each_domain_item": {
+                                                "type": "Foreach",
+                                                "foreach": "@body('Filter_items_with_domain')",
+                                                "actions": {
+                                                    "SendToBatch_Domain": {
+                                                        "type": "SendToBatch",
+                                                        "inputs": {
+                                                            "batchName": "GIBIOCBatch",
+                                                            "content": {
+                                                                "type": "indicator",
+                                                                "spec_version": "2.1",
+                                                                "id": "@{concat('indicator--', guid())}",
+                                                                "created": "@{items('For_each_domain_item')?['dateBegin']}",
+                                                                "modified": "@{items('For_each_domain_item')?['dateBegin']}",
+                                                                "name": "@{concat('domain=', items('For_each_domain_item')?['cnc']?['domain'])}",
+                                                                "pattern": "@{concat('[domain-name:value = ''', items('For_each_domain_item')?['cnc']?['domain'], ''']')}",
+                                                                "pattern_type": "stix",
+                                                                "valid_from": "@{items('For_each_domain_item')?['dateBegin']}",
+                                                                "valid_until": "@{addDays(items('For_each_domain_item')?['dateBegin'], 90)}",
+                                                                "confidence": "@int(coalesce(items('For_each_domain_item')?['evaluation']?['credibility'], 50))",
+                                                                "indicator_types": [
+                                                                    "malicious-activity"
+                                                                ],
+                                                                "labels": [
+                                                                    "Group-IB TI",
+                                                                    "attacks/ddos"
+                                                                ]
+                                                            },
+                                                            "host": {
+                                                                "triggerName": "Batch_messages",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('IndicatorProcessorPlaybookName'))]"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {}
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Filter_items_with_domain": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            },
+                                            "For_each_ip_item": {
+                                                "type": "Foreach",
+                                                "foreach": "@body('Filter_items_with_ip')",
+                                                "actions": {
+                                                    "SendToBatch_IP": {
+                                                        "type": "SendToBatch",
+                                                        "inputs": {
+                                                            "batchName": "GIBIOCBatch",
+                                                            "content": {
+                                                                "type": "indicator",
+                                                                "spec_version": "2.1",
+                                                                "id": "@{concat('indicator--', guid())}",
+                                                                "created": "@{items('For_each_ip_item')?['dateBegin']}",
+                                                                "modified": "@{items('For_each_ip_item')?['dateBegin']}",
+                                                                "name": "@{concat('IP=', items('For_each_ip_item')?['cnc']?['ipv4']?['ip'])}",
+                                                                "pattern": "@{concat('[ipv4-addr:value = ''', items('For_each_ip_item')?['cnc']?['ipv4']?['ip'], ''']')}",
+                                                                "pattern_type": "stix",
+                                                                "valid_from": "@{items('For_each_ip_item')?['dateBegin']}",
+                                                                "valid_until": "@{addDays(items('For_each_ip_item')?['dateBegin'], 90)}",
+                                                                "confidence": "@int(coalesce(items('For_each_ip_item')?['evaluation']?['credibility'], 50))",
+                                                                "indicator_types": [
+                                                                    "malicious-activity"
+                                                                ],
+                                                                "labels": [
+                                                                    "Group-IB TI",
+                                                                    "attacks/ddos"
+                                                                ]
+                                                            },
+                                                            "host": {
+                                                                "triggerName": "Batch_messages",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('IndicatorProcessorPlaybookName'))]"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {}
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Filter_items_with_ip": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            },
+                                            "For_each_url_item": {
+                                                "type": "Foreach",
+                                                "foreach": "@body('Filter_items_with_url')",
+                                                "actions": {
+                                                    "SendToBatch_URL": {
+                                                        "type": "SendToBatch",
+                                                        "inputs": {
+                                                            "batchName": "GIBIOCBatch",
+                                                            "content": {
+                                                                "type": "indicator",
+                                                                "spec_version": "2.1",
+                                                                "id": "@{concat('indicator--', guid())}",
+                                                                "created": "@{items('For_each_url_item')?['dateBegin']}",
+                                                                "modified": "@{items('For_each_url_item')?['dateBegin']}",
+                                                                "name": "@{concat('url=', items('For_each_url_item')?['cnc']?['url'])}",
+                                                                "pattern": "@{concat('[url:value = ''', items('For_each_url_item')?['cnc']?['url'], ''']')}",
+                                                                "pattern_type": "stix",
+                                                                "valid_from": "@{items('For_each_url_item')?['dateBegin']}",
+                                                                "valid_until": "@{addDays(items('For_each_url_item')?['dateBegin'], 90)}",
+                                                                "confidence": "@int(coalesce(items('For_each_url_item')?['evaluation']?['credibility'], 50))",
+                                                                "indicator_types": [
+                                                                    "malicious-activity"
+                                                                ],
+                                                                "labels": [
+                                                                    "Group-IB TI",
+                                                                    "attacks/ddos"
+                                                                ]
+                                                            },
+                                                            "host": {
+                                                                "triggerName": "Batch_messages",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('IndicatorProcessorPlaybookName'))]"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {}
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Filter_items_with_url": [
+                                                        "Succeeded"
                                                     ]
                                                 }
                                             }
-                                        ]
+                                        }
                                     },
                                     "runAfter": {
-                                        "Reset_seqUpdate": [
+                                        "Parse_Feed_Response": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Reset_seqUpdate": {
-                                    "inputs": {
-                                        "name": "seqUpdate",
-                                        "value": "@body('Get_items_from_response')?['seqUpdate']"
-                                    },
-                                    "runAfter": {
-                                        "Get_items_from_response": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable"
-                                },
-                                "Save_seqUpdate": {
-                                    "inputs": {
-                                        "body": "{\n\"collection_name\" :  \"@{parameters('Collection Name')}\",\n\"seqUpdate\" : @{variables('seqUpdate')}\n}",
-                                        "headers": {
-                                            "Log-Type": "GIBTechTable"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/api/logs"
-                                    },
-                                    "runAfter": {
-                                        "IfPortionHasItems": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection"
+                                    }
                                 }
                             },
-                            "expression": "@equals(variables('IsPortionEmpty'), true)",
-                            "limit": {
-                                "count": 10,
-                                "timeout": "PT1H"
-                            },
                             "runAfter": {
-                                "Initialize_variable": [
+                                "Condition_First_Run": [
                                     "Succeeded"
                                 ]
+                            }
+                        },
+                        "Save_tracking_record": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "{\"CollectionName\": \"attacks/ddos\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+                                "headers": {
+                                    "Log-Type": "GIBCollectionTracking",
+                                    "time-generated-field": ""
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
                             },
-                            "type": "Until"
-                        }
-                    },
-                    "contentVersion": "1.0.0.0",
-                    "outputs": {},
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        },
-                        "Collection Name": {
-                            "defaultValue": "attacks/ddos",
-                            "type": "String"
-                        },
-                        "GIB API URL ": {
-                            "defaultValue": "https://bt.group-ib.com/api/v2/",
-                            "type": "String"
-                        },
-                        "GIB Username": {
-                            "defaultValue": "<xxxx@domain.com>",
-                            "type": "String"
-                        },
-                        "Save only indicators": {
-                            "defaultValue": true,
-                            "type": "Bool"
-                        }
-                    },
-                    "triggers": {
-                        "Recurrence": {
-                            "recurrence": {
-                                "frequency": "Hour",
-                                "interval": 1
-                            },
-                            "type": "Recurrence"
+                            "runAfter": {
+                                "Until": [
+                                    "Succeeded"
+                                ]
+                            }
                         }
                     }
                 },
@@ -693,15 +593,13 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
                                 "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
-                            },
-                            "azuremonitorlogs": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
-                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
                             }
                         }
                     }
                 }
+            },
+            "identity": {
+                "type": "SystemAssigned"
             }
         }
     ]
