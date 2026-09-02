@@ -1,0 +1,30 @@
+id: 60cf8dc6-b3f7-4bd9-b877-3ed9c9443750
+name: Quarantine Release Percentage
+description: |
+  This query calculates the percentage of quarantined emails that were subsequently released, out of the total quarantined.
+description-detailed: |
+  This query calculates the percentage of quarantined emails in Microsoft Defender for Office 365 that were subsequently released (EmailPostDeliveryEvents Action == "Quarantine release") out of the total quarantined (EmailEvents DeliveryLocation == "Quarantine"). The percentage is guarded against a zero denominator.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailPostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let Quarantine_Releases = toscalar(EmailPostDeliveryEvents
+  | where Timestamp > ago(30d)
+  | where Action == "Quarantine release"
+  | join kind=leftouter (EmailEvents | where Timestamp > ago(30d) | where DeliveryLocation == "Quarantine") on NetworkMessageId
+  | summarize count());
+  let Quarantined_Mailflow = toscalar(EmailEvents
+  | where Timestamp > ago(30d)
+  | where DeliveryLocation == "Quarantine"
+  | summarize count());
+  print
+  Quarantine_Releases = toreal(Quarantine_Releases),
+  Quarantined_Mailflow = toreal(Quarantined_Mailflow),
+  Release_Percentage = iff(Quarantined_Mailflow == 0, 0.0, round((toreal(Quarantine_Releases) / toreal(Quarantined_Mailflow)) * 100, 2))
+version: 1.0.0
