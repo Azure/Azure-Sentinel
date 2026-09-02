@@ -42,8 +42,8 @@ pair per source, so the values never overwrite one another.
 
 ## Installation
 
-1. Open [`ThreatIntelParser.txt`](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/Cyble/ThreatIntelParser.txt)
-   from the Azure-Sentinel repository and copy its contents.
+1. Open [`ThreatIntelParser.yaml`](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/Cyble/ThreatIntelParser.yaml)
+   from the Azure-Sentinel repository and copy the KQL under the `FunctionQuery` block.
 2. In the Azure portal, go to your Microsoft Sentinel workspace and open **Logs**.
 3. Paste the parser into a new query.
 4. Set `SourceSystemName` to the `SourceSystem` value of your TAXII connector. Leaving it as an
