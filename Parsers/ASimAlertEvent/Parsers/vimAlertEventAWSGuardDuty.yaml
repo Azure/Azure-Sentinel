@@ -127,7 +127,7 @@ ParserQuery: |
       | where (array_length(ipaddr_has_any_prefix) == 0)
           or has_any_ipv4_prefix(RemoteIpAddress, ipaddr_has_any_prefix)
           or has_any_ipv4_prefix(LocalIpAddress, ipaddr_has_any_prefix)
-      | where (array_length(hostname_has_any) == 0)
+      | where (array_length(hostname_has_any) == 0) // Parser does not support hostname_has_any - no hostname fields present
       | where (array_length(username_has_any) == 0) or AccountUpn has_any (username_has_any)
       | extend
           FindingLink = iff(
@@ -148,11 +148,12 @@ ParserQuery: |
               todynamic(RemoteAWSAccountId)
           ))
       | extend
+          Type = "AWSGuardDuty",
           EventType = "Alert",
           EventCount = int(1),
-          EventStartTime = TimeCreated,
-          EventEndTime = TimeCreated,
-          EventUid = Id,
+          EventStartTime = coalesce(TimeCreated, TimeGenerated),
+          EventEndTime = TimeGenerated,
+          EventUid = coalesce(Arn, Id),
           EventOriginalUid = Id,
           EventProduct = "GuardDuty",
           EventVendor = "AWS",
@@ -163,8 +164,8 @@ ParserQuery: |
           EventOriginalSeverity = tostring(Severity),
           EventSeverity = case(
               SeverityScore >= 7.0, "High",
-              SeverityScore >= 4.0 and SeverityScore <= 6.9, "Medium",
-              SeverityScore >= 1.0 and SeverityScore <= 3.9, "Low",
+              SeverityScore >= 4.0, "Medium",
+              SeverityScore >= 1.0, "Low",
               "Informational"
           ),
           EventSubType = "Threat",
@@ -231,8 +232,8 @@ ParserQuery: |
       | where (array_length(threatcategory_has_any) == 0)
           or ThreatCategory has_any (threatcategory_has_any)
           or ThreatOriginalCategory has_any (threatcategory_has_any)
-      | where (array_length(attacktactics_has_any) == 0)
-      | where (array_length(attacktechniques_has_any) == 0)
+      | where (array_length(attacktactics_has_any) == 0) // Parser does not support attacktactics_has_any
+      | where (array_length(attacktechniques_has_any) == 0) // Parser does not support attacktechniques_has_any
       | project
           TimeGenerated,
           Type,
