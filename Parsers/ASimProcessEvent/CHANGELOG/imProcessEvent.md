@@ -1,5 +1,9 @@
 # Changelog for imProcessEvent.yaml
 
+## Version 0.1.4
+
+- (2026-08-28) Top-level parser consistency fixes - [PR #14763](https://github.com/Azure/Azure-Sentinel/pull/14763)
+
 ## Version 0.1.3
 
 - (2024-08-01) ASimProcessCreateMicrosoftSysmon.yaml-48 - [PR #10566](https://github.com/Azure/Azure-Sentinel/pull/10566)
