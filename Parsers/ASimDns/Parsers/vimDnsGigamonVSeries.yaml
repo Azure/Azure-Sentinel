@@ -1,0 +1,115 @@
+Parser:
+  Title: Parameterized DNS ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  Version: '1.0.0'
+  LastUpdated: Sep 02, 2026
+Product:
+  Name: Gigamon V-Series Application Metadata Intelligence
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+  - Title: ASIM DNS Schema
+    Link: https://aka.ms/ASimDnsDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Gigamon Application Metadata Intelligence
+    Link: https://docs.gigamon.com/doclib612/Content/GV-Cloud-V-Series-Applications/App_Metadata_Intelligence.html
+Description: |
+  Parameterized ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  DNS records.
+ParserName: vimDnsGigamonVSeries
+EquivalentBuiltInParser: _Im_Dns_GigamonVSeries
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: pack
+    Type: bool
+    Default: false
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      srcipaddr:string='*',
+      domain_has_any:dynamic=dynamic([]),
+      responsecodename:string='*',
+      eventtype:string='Query',
+      pack:bool=false,
+      disabled:bool=false,
+      pack:bool=false
+  ) {
+      GigamonV2_CL
+      | where not(disabled)
+      | where isnotempty(dns_query) or isnotempty(dns_name)
+      | extend
+          EventStartTime = coalesce(todatetime(start_time), TimeGenerated),
+          EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),
+          SrcIpAddr = coalesce(src_ip, src_ipv6),
+          Src = coalesce(src_ip, src_ipv6, src_mac),
+          DnsQuery = coalesce(dns_query, dns_name),
+          ResponseCodeName = coalesce(dns_reply_code, "")
+      | where (isnull(starttime) or EventStartTime >= starttime)
+          and (isnull(endtime) or EventEndTime <= endtime)
+          and (srcipaddr == '*' or SrcIpAddr == srcipaddr)
+          and (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any))
+          and (responsecodename == '*' or ResponseCodeName =~ responsecodename)
+          and (eventtype == 'Query')
+      | project
+          TimeGenerated,
+          EventCount = int(1),
+          EventStartTime,
+          EventEndTime,
+          EventProduct = "V-Series Application Metadata Intelligence",
+          EventVendor = "Gigamon",
+          EventSchema = "Dns",
+          EventSchemaVersion = "0.1.7",
+          EventType = "Query",
+          EventResult = iff(isempty(dns_reply_code) or dns_reply_code in~ ("0", "NOERROR"), "Success", "Failure"),
+          EventResultDetails = ResponseCodeName,
+          Dvc = coalesce(generator, vendor),
+          Src,
+          SrcIpAddr,
+          DstIpAddr = coalesce(dst_ip, dst_ipv6),
+          DnsQuery,
+          DnsQueryType = toint(dns_query_type),
+          DnsQueryTypeName = dns_query_type,
+          DnsResponseCode = toint(dns_reply_code),
+          DnsQueryClass = coalesce(dns_class, dns_host_class),
+          DnsQueryClassName = coalesce(dns_class, dns_host_class),
+          DnsFlags = dns_flags,
+          DnsTtl = toint(dns_ttl),
+          EventUid = id,
+          Type = "GigamonV2_CL"
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr=srcipaddr,
+      domain_has_any=domain_has_any,
+      responsecodename=responsecodename,
+      eventtype=eventtype,
+      pack=pack,
+      disabled=disabled,
+      pack=pack
+  )
