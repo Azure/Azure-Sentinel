@@ -11,7 +11,7 @@ This playbook processes each File Hash entity to query VirusTotal for detailed f
 ## Quick Deployment
 ### Logs Ingestion API playbooks
 
-These playbooks write VirusTotal file information to the `VirusTotalFileInfo_CL` table through the Logs Ingestion API. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
+These playbooks write VirusTotal file information to the `VirusTotalFileInfo_CL` table through the Logs Ingestion API, instead of the older `VTFileInfo_CL` table. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
 
 #### Data stored in `VirusTotalFileInfo_CL`
 
