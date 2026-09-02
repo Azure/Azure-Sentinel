@@ -1,0 +1,379 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Hour",
+          "interval": 1
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "runs": 1
+          }
+        }
+      }
+    },
+    "actions": {
+      "Initialize_seqUpdate": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "seqUpdate",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Initialize_IsPortionEmpty": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "IsPortionEmpty",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_seqUpdate": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Initialize_RecordsArray": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "RecordsArray",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_IsPortionEmpty": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Query_Last_SeqUpdate": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{concat('https://management.azure.com/subscriptions/', appsetting('WORKFLOWS_SUBSCRIPTION_ID'), '/resourceGroups/', appsetting('WORKFLOWS_RESOURCE_GROUP_NAME'), '/providers/microsoft.operationalinsights/workspaces/', appsetting('WorkspaceName'), '/query?api-version=2017-10-01')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "query": "GIBCollectionTracking_CL | where CollectionName_s == \"apt/threat\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com/"
+          }
+        },
+        "runAfter": {
+          "Initialize_RecordsArray": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Condition_First_Run": {
+        "type": "If",
+        "expression": {
+          "or": [
+            {
+              "equals": [
+                "@actions('Query_Last_SeqUpdate').status",
+                "Failed"
+              ]
+            },
+            {
+              "equals": [
+                "@length(coalesce(body('Query_Last_SeqUpdate')?['tables']?[0]?['rows'], json('[]')))",
+                0
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "HTTP_Get_SequenceList": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "https://tap.group-ib.com/api/v2/sequence_list",
+              "queries": {
+                "date": "@{appsetting('StartDate')}",
+                "collection": "apt/threat"
+              },
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (apt-threat; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "Parse_SequenceList": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('HTTP_Get_SequenceList')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "list": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "HTTP_Get_SequenceList": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_seqUpdate_From_SequenceList": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "seqUpdate",
+              "value": "@body('Parse_SequenceList')?['list']?['apt/threat']"
+            },
+            "runAfter": {
+              "Parse_SequenceList": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Set_seqUpdate_From_DB": {
+              "type": "SetVariable",
+              "inputs": {
+                "name": "seqUpdate",
+                "value": "@int(body('Query_Last_SeqUpdate')?['tables'][0]?['rows'][0]?[0])"
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Query_Last_SeqUpdate": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      },
+      "Until": {
+        "type": "Until",
+        "expression": "@equals(variables('IsPortionEmpty'), true)",
+        "limit": {
+          "count": 500,
+          "timeout": "PT1H"
+        },
+        "actions": {
+          "Get_next_portion": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{concat('https://tap.group-ib.com/api/v2/apt/threat/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(int(appsetting('LimitPerPortion')), 10))}",
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (apt-threat; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "Parse_Feed_Response": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('Get_next_portion')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "seqUpdate": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Get_next_portion": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_IsPortionEmpty_on_parse_failure": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "IsPortionEmpty",
+              "value": true
+            },
+            "runAfter": {
+              "Parse_Feed_Response": [
+                "Failed",
+                "TimedOut"
+              ]
+            }
+          },
+          "Condition_Set_IsPortionEmpty": {
+            "type": "If",
+            "expression": {
+              "equals": [
+                "@body('Parse_Feed_Response')?['count']",
+                0
+              ]
+            },
+            "actions": {
+              "Set_IsPortionEmpty": {
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "IsPortionEmpty",
+                  "value": true
+                },
+                "runAfter": {}
+              }
+            },
+            "else": {
+              "actions": {
+                "Set_seqUpdate": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "seqUpdate",
+                    "value": "@body('Parse_Feed_Response')?['seqUpdate']"
+                  },
+                  "runAfter": {}
+                },
+                "For_each_item": {
+                  "type": "Foreach",
+                  "foreach": "@body('Parse_Feed_Response')?['items']",
+                  "operationOptions": "Sequential",
+                  "actions": {
+                    "Append_to_RecordsArray": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "RecordsArray",
+                        "value": "@items('For_each_item')"
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "runAfter": {
+                    "Set_seqUpdate": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Write_batch_to_table": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": "@{string(variables('RecordsArray'))}",
+                    "headers": {
+                      "Log-Type": "GIBAPTThreat",
+                      "time-generated-field": ""
+                    },
+                    "host": {
+                      "connection": {
+                        "referenceName": "azureloganalyticsdatacollector"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/api/logs"
+                  },
+                  "runAfter": {
+                    "For_each_item": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Reset_RecordsArray": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "RecordsArray",
+                    "value": []
+                  },
+                  "runAfter": {
+                    "Write_batch_to_table": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Parse_Feed_Response": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Condition_First_Run": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Save_tracking_record": {
+        "type": "ApiConnection",
+        "inputs": {
+          "body": "{\"CollectionName\": \"apt/threat\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+          "headers": {
+            "Log-Type": "GIBCollectionTracking",
+            "time-generated-field": ""
+          },
+          "host": {
+            "connection": {
+              "referenceName": "azureloganalyticsdatacollector"
+            }
+          },
+          "method": "post",
+          "path": "/api/logs"
+        },
+        "runAfter": {
+          "Until": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}
