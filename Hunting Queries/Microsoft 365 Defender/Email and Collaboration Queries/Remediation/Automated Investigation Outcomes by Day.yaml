@@ -1,0 +1,52 @@
+id: e13d7b0c-1cfa-41dd-a5cf-45d598055cef
+name: Automated Investigation Outcomes by Day
+description: |
+  This query summarizes daily automated investigation outcomes (threat detected versus clean) by correlating automated remediation events with alert evidence, using the EmailPostDeliveryEvents and AlertEvidence tables.
+description-detailed: |
+  This query classifies each automated remediation as Threat Detected or Clean by deriving the verdict from AlertEvidence (last verdict, threat analysis summary, and threat intelligence), weighting mail clusters by their message count, and summarizes the daily volume of each outcome, so SOC teams can see how many post-delivery investigations actually caught a threat.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailPostDeliveryEvents
+  - AlertEvidence
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let AutoRemediations =
+      EmailPostDeliveryEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "Automated Remediation"
+      | summarize arg_max(Timestamp, ActionResult) by NetworkMessageId, RecipientEmailAddress
+      | project NetworkMessageId, RecipientEmailAddress, Timestamp;
+  let EvidenceVerdicts =
+      AlertEvidence
+      | where Timestamp > ago(30d)
+      | where EntityType in ("MailMessage", "MailCluster")
+      | extend extra = todynamic(AdditionalFields)
+      | extend networkIds = iff(
+          isnull(extra.NetworkMessageIds) or array_length(extra.NetworkMessageIds) == 0,
+          pack_array(NetworkMessageId),
+          extra.NetworkMessageIds)
+      | mv-expand nmID = networkIds
+      | extend lastVerdict = tolower(tostring(extra.LastVerdict)),
+               threatAIList = extra.ThreatAnalysisSummary,
+               threatInt = extra.ThreatIntelligence
+      | extend verdictFromAnalysis = iff(array_length(threatAIList) > 0, tolower(tostring(threatAIList[0].Verdict)), ""),
+               verdictTI = iff(array_length(threatInt) > 0, "malicious", "")
+      | extend ThreatDetectedFlag = case(
+          lastVerdict in ("malicious", "suspicious") or verdictFromAnalysis in ("malicious", "suspicious") or verdictTI == "malicious",
+          true, false)
+      | extend MailCountInt = toint(extra.MailCount)
+      | extend Weight = iff(EntityType == "MailCluster", coalesce(MailCountInt, 1), 1)
+      | summarize IsThreatDetected = any(ThreatDetectedFlag), WeightSum = sum(Weight) by nmID = tostring(nmID);
+  AutoRemediations
+  | join kind=leftouter EvidenceVerdicts on $left.NetworkMessageId == $right.nmID
+  | extend isThreat = coalesce(IsThreatDetected, false), effectiveWeight = coalesce(WeightSum, 1)
+  | extend InvestigationOutcome = iif(isThreat, "Threat Detected", "Clean")
+  | summarize PreventionCount = sum(effectiveWeight) by Day = bin(Timestamp, 1d), InvestigationOutcome
+  | order by Day asc, InvestigationOutcome asc
+  | render timechart
+version: 1.0.0

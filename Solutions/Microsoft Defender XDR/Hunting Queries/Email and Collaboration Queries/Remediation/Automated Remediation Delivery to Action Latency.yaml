@@ -1,0 +1,34 @@
+id: 3027abf0-a965-42bd-babe-79f34bbd9e7a
+name: Automated Remediation Delivery to Action Latency
+description: |
+  This query measures how long after delivery Microsoft Defender for Office 365 automated remediation acts on a message, reported as daily average and percentiles, using the EmailEvents and EmailPostDeliveryEvents tables.
+description-detailed: |
+  The delay between a threat email being delivered and automated remediation removing it is a key Security Operations metric. This query joins delivered emails to their automated remediation events and reports the daily average, P80, P90 and P99 delay in minutes, so SOC teams can track and improve time-to-remediation.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailPostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let deliveries = EmailEvents
+    | where Timestamp > ago(30d)
+    | where DeliveryAction == "Delivered"
+    | extend MsgKey = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+    | summarize FirstDelivery = min(Timestamp) by MsgKey, Threat = tostring(ThreatTypes);
+  let remediations = EmailPostDeliveryEvents
+    | where Timestamp > ago(30d)
+    | where ActionType =~ "Automated Remediation"
+    | extend MsgKey = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+    | summarize FirstRemediation = min(Timestamp) by MsgKey;
+  deliveries
+  | join kind=inner remediations on MsgKey
+  | extend DelayMinutes = datetime_diff("minute", FirstRemediation, FirstDelivery)
+  | where DelayMinutes >= 0
+  | summarize ['Avg (min)'] = avg(DelayMinutes), ['P80 (min)'] = percentile(DelayMinutes, 80), ['P90 (min)'] = percentile(DelayMinutes, 90), ['P99 (min)'] = percentile(DelayMinutes, 99), CountEmails = count() by bin(FirstRemediation, 1d)
+  | render timechart
+version: 1.0.0

@@ -14,55 +14,15 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let TimeStart = startofday(ago(30d));
-  let TimeEnd = startofday(now());
-  let baseQuery = EmailEvents
-  | where Timestamp >= TimeStart
-  | where DetectionMethods has "Spam" and DeliveryLocation == "Quarantine";
-  let timerange = 
-  baseQuery
-  | summarize minTime = min(Timestamp), maxTime = max(Timestamp);
-  let ml=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Advanced filter'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "Advanced filter";
-  let gf=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'General filter'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "General filter";
-  let bl=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'BulkFilter'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "BulkFilter";
-  let mx=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Mixed analysis detection'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "Mixed analysis detection";
-  let frp=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Fingerprint matching'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "Fingerprint matching";
-  let umr=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'URL malicious reputation' 
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "URL malicious reputation";
-  let dr=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Domain reputation' 
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "Domain reputation";
-  let ipr=baseQuery
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'IP reputation' 
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
-  | extend Details = "IP reputation";
-  union ml,gf,bl,mx,frp,umr,dr,ipr
+  let minTime = startofday(ago(30d));
+  let maxTime = startofday(now());
+  EmailEvents
+  | where Timestamp >= minTime
+  | where DetectionMethods has "Spam" and DeliveryLocation == "Quarantine"
+  | mv-expand Details = parse_json(DetectionMethods).Spam to typeof(string)
+  | where isnotempty(Details)
+  | where Timestamp < maxTime
+  | make-series Count = count() default = 0 on Timestamp from minTime to maxTime step 1d by Details
   | project Count, Details, Timestamp
   | render timechart
-version: 1.0.0
+version: 1.1.0
