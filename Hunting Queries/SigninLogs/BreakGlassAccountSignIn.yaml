@@ -1,0 +1,94 @@
+id: 1685c69b-d03b-4e71-8171-879d6fefad2d
+name: Break-glass account sign-in detected
+description: |
+  Identifies any sign-in from an account designated as an emergency break-glass account. These
+  accounts exist purely as a last-resort fallback and should show no sign-in activity outside a
+  scheduled quarterly test or a genuine tenant-wide lockout.
+description-detailed: |
+  Break-glass (emergency access) accounts are cloud-only, highly privileged accounts that
+  organizations deliberately exclude from Conditional Access policies and day-to-day MFA
+  enforcement so they remain usable if every other authentication path fails. Because of that
+  exclusion, a successful sign-in to one of these accounts bypasses the same controls that
+  protect every other identity in the tenant, and Microsoft's own guidance is that sign-in and
+  credential-change activity on them should be monitored continuously.
+  This query depends on a watchlist named `BreakGlassAccounts` whose `SearchKey` column holds
+  the user principal names of the tenant's designated emergency access accounts. Populate it
+  once from the tenant's documented break-glass account inventory; there is no reliable way to
+  infer these accounts from sign-in data alone.
+  Any match here should be validated against the change calendar for a planned access-recovery
+  test. Sign-ins that fall outside a documented test window, that originate from an unexpected
+  IP address or country, or that are closely followed by a credential change or a privilege
+  change on the same account (see the two companion hunting queries in this pack, covering
+  credential and security-info modifications and role or group membership changes) warrant
+  immediate escalation.
+  References:
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/security-emergency-access
+  - https://attack.mitre.org/techniques/T1078/004/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078.004
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let BreakGlassAccounts = (
+      _GetWatchlist('BreakGlassAccounts')
+      | project AccountUPN = tolower(tostring(SearchKey))
+  );
+  SigninLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where tolower(UserPrincipalName) in (BreakGlassAccounts)
+  | extend City = tostring(LocationDetails.city)
+  | extend Country = tostring(LocationDetails.countryOrRegion)
+  | extend AccountName      = tostring(split(UserPrincipalName, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | project
+      TimeGenerated,
+      UserPrincipalName,
+      AccountName,
+      AccountUPNSuffix,
+      UserId,
+      IPAddress,
+      City,
+      Country,
+      AppDisplayName,
+      ResourceDisplayName,
+      ResultType,
+      ResultDescription,
+      ConditionalAccessStatus,
+      AuthenticationRequirement,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+customDetails:
+  ResultType: ResultType
+  AppDisplayName: AppDisplayName
+  Country: Country
+  ConditionalAccessStatus: ConditionalAccessStatus
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
