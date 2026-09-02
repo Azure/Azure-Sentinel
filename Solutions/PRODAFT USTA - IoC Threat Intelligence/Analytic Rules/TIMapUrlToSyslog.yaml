@@ -2,7 +2,7 @@ id: 99ae4d06-d352-4926-a1d7-9c28e25b1313
 name: PRODAFT USTA - TI map URL to Syslog
 description: |
   'Identifies a match in Syslog data from any malicious URL indicator ingested from PRODAFT
-  USTA IoC Threat Intelligence (SourceSystem "PRODAFT USTA").'
+  USTA IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Syslog
@@ -23,8 +23,9 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelIndicators
-  | where SourceSystem == "PRODAFT USTA"
-  //extract key part of kv pair
+  // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malicious URLs", etc.)
+  | where SourceSystem startswith "PRODAFT USTA"
+  // ObservableKey is a STIX kv pair ("url:value") - take the type before the colon
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "url"
   | extend Url = ObservableValue
@@ -33,11 +34,11 @@ query: |
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
   | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
   | join kind=innerunique (
     Syslog
     | where TimeGenerated >= ago(dt_lookBack)
-    // Extract URL from the Syslog message but only take messages that include URLs
+    // Pull the first URL out of the free-text message; rows without one drop out of the join
     | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
     | extend Syslog_TimeGenerated = TimeGenerated
   ) on Url

@@ -10,7 +10,7 @@
       "3. The core 'Threat Intelligence' solution installed from the Content hub (provides the Threat Intelligence blade and the ThreatIntelIndicators table)."
     ],
     "postDeployment": [
-      "1. Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace (Access control (IAM) -> Add role assignment). This is required for the Upload STIX Objects call. The API connection deployed with the playbook authenticates with that same managed identity, so no interactive connection authorization is needed.",
+      "1. Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace (Access control (IAM) -> Add role assignment; open IAM on the workspace, NOT on the Logic App, otherwise the assignment is scoped to the playbook itself and grants no workspace access). This is required for the Upload STIX Objects call. The API connection deployed with the playbook authenticates with that same managed identity, so no interactive connection authorization is needed.",
       "2. Run the backfill once from the Logic App: Overview -> Run Trigger -> manual. Optionally POST a body of {\"startTime\":\"YYYY-MM-DDTHH:MM:SSZ\"} to resume from a specific point instead of BackfillDays ago."
     ],
     "lastUpdateTime": "2026-07-08T00:00:00.000Z",
@@ -284,7 +284,7 @@
                               "id": "@concat('indicator--', item()?['id'])",
                               "name": "@item()?['url']",
                               "description": "@concat('PRODAFT USTA - Malicious URL. Host: ', coalesce(item()?['host'], ''))",
-                              "pattern": "@if(or(startsWith(item()?['url'], 'http://'), startsWith(item()?['url'], 'https://')), concat('[url:value = ''', item()?['url'], ''']'), if(equals(item()?['is_domain'], true), concat('[domain-name:value = ''', item()?['host'], ''']'), concat('[url:value = ''http://', item()?['url'], ''']')))",
+                              "pattern": "@concat(if(or(startsWith(item()?['url'], 'http://'), startsWith(item()?['url'], 'https://')), concat('[url:value = ''', item()?['url'], ''']'), if(equals(item()?['is_domain'], true), concat('[domain-name:value = ''', item()?['host'], ''']'), concat('[url:value = ''http://', item()?['url'], ''']'))), if(empty(coalesce(item()?['ip_addresses']?[0], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[0]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[0]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[1], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[1]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[1]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[2], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[2]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[2]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[3], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[3]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[3]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[4], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[4]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[4]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[5], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[5]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[5]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[6], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[6]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[6]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[7], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[7]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[7]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[8], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[8]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[8]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[9], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[9]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[9]), ''']')))",
                               "indicator_types": [
                                 "malicious-activity"
                               ],
@@ -326,16 +326,38 @@
                             }
                           }
                         },
-                        "Set_LastCreated": {
-                          "type": "SetVariable",
+                        "If_Last_Record_Has_Created": {
+                          "description": "Records the resume watermark reported by Terminate_Run_As_Incomplete. A SetVariable action cannot read the variable it writes, so the previous value is kept by skipping the assignment rather than by coalescing onto LastCreated.",
+                          "type": "If",
                           "runAfter": {
                             "Upload_STIX_Objects": [
                               "Succeeded"
                             ]
                           },
-                          "inputs": {
-                            "name": "LastCreated",
-                            "value": "@{coalesce(last(body('Fetch_USTA_Page')?['results'])?['created'], variables('LastCreated'))}"
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@coalesce(last(body('Fetch_USTA_Page')?['results'])?['created'], '')",
+                                    ""
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Set_LastCreated": {
+                              "type": "SetVariable",
+                              "runAfter": {},
+                              "inputs": {
+                                "name": "LastCreated",
+                                "value": "@{last(body('Fetch_USTA_Page')?['results'])?['created']}"
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
                           }
                         }
                       },

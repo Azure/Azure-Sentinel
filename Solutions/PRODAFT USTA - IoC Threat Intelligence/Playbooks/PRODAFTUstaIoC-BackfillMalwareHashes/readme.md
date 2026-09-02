@@ -18,6 +18,17 @@ STIX 2.1 indicator with the **same mapping** as the import playbook, and uploads
 * The trigger allows **one run at a time** (`concurrency: 1`), so pressing Run Trigger again while a
   backfill is still going queues the run instead of doubling the API load.
 
+## Resolved IP addresses
+
+When a record carries `ip_addresses`, every address is appended to the **same** indicator's
+pattern as its own observation expression — `ipv4-addr:value` or `ipv6-addr:value`, chosen per
+address — so the indicator covers the URL/hash and its resolved IPs under one validity window.
+Only the **first 10** addresses of a record are included; any beyond that are dropped.
+
+Sentinel expands a multi-observation pattern into one `ObservableKey`/`ObservableValue` row per
+observable, so those IPs are independently matchable. Note that CDN-fronted hosts resolve to
+shared edge addresses, which can produce false positives if you match on IP alone.
+
 ## Parameters
 
 | Parameter | Required | Default | Notes |
@@ -37,8 +48,8 @@ STIX 2.1 indicator with the **same mapping** as the import playbook, and uploads
 2. The playbook is created with a **system-assigned managed identity** automatically.
 3. **Grant the role**: **Log Analytics workspace → Access control (IAM) → Add → Add role assignment**
    → Role **Microsoft Sentinel Contributor** → **Members: Managed identity** → pick this Logic App →
-   **Review + assign**. The API connection deployed with the playbook uses that same managed identity,
-   so there is no connection to authorize interactively.
+   **Review + assign**. **Open IAM on the workspace itself, not on the Logic App** — granting the role while the playbook's own blade is open scopes it to the Logic App (`.../Microsoft.Logic/workflows/...`), which looks correct in the portal but gives the identity no access to the workspace. The API connection deployed with the playbook uses that
+   same managed identity, so there is no connection to authorize interactively.
 4. Run it: **Logic App → Overview → Run Trigger → manual**. It does **not** run on a schedule.
 
 ## Deploy — via Azure CLI (run from this folder)

@@ -2,7 +2,7 @@ id: c6f85aff-4ef0-4fde-b90e-e0ba1a9c3df6
 name: PRODAFT USTA - TI map Domain to DnsEvents
 description: |
   'Identifies a match in DnsEvents from any domain-name indicator ingested from PRODAFT USTA
-  IoC Threat Intelligence (SourceSystem "PRODAFT USTA").'
+  IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DNS
@@ -20,13 +20,11 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-  // Define the lookback periods for time-based filters
-  let dt_lookBack = 1h; // Look back 1 hour for DNS events
-  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
-  // Fetch PRODAFT USTA threat intelligence indicators related to domains
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
   let Domain_Indicators = ThreatIntelIndicators
-    | where SourceSystem == "PRODAFT USTA"
-    // Filter out indicators without domain names
+    // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malicious URLs", etc.)
+    | where SourceSystem startswith "PRODAFT USTA"
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
     | where IndicatorType == "domain-name"
     | extend DomainName = tolower(ObservableValue)
@@ -35,8 +33,8 @@ query: |
     | where TimeGenerated >= ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
     | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
-  // Create a list of TLDs in our threat feed for later validation
-  let maxListSize = 100000; // Define the maximum allowed size for each list
+  // TLD allow-list built from the feed: lets the DnsEvents scan discard most rows before the join
+  let maxListSize = 100000;
   let list_tlds = Domain_Indicators
     | extend parts = split(DomainName, '.')
     | extend tld = parts[(array_length(parts)-1)]
@@ -44,31 +42,23 @@ query: |
     | summarize count() by tostring(tld)
     | project tld
     | summarize make_list(tld, maxListSize);
-  // Perform a join between domain indicators and DNS events to identify potential malicious activity
   Domain_Indicators
    | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
-    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
     | join kind=innerunique (
       DnsEvents
       | where TimeGenerated > ago(dt_lookBack)
-      // Extract domain patterns from syslog message
       | where isnotempty(Name)
       | extend parts = split(Name, '.')
       | extend tld = parts[(array_length(parts)-1)]
-      // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
       | where tld in~ (list_tlds)
       | extend DNS_TimeGenerated = TimeGenerated
     ) on $left.DomainName==$right.Name
-    // Filter out DNS events that occurred after the expiration of the corresponding indicator
     | where DNS_TimeGenerated < ValidUntil
-    // Group the results by IndicatorId and Name, and keep the DNS event with the latest timestamp
     | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name
-    // Select the desired output fields
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
     | project DNS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, Computer, ClientIP
-    // Extract hostname and DNS domain from the Computer field
     | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
-    // Rename the timestamp field
     | extend timestamp = DNS_TimeGenerated
 entityMappings:
   - entityType: Host

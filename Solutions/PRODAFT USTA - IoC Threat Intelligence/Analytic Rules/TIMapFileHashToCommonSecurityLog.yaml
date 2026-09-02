@@ -2,10 +2,10 @@ id: 9c2cef4e-c3a3-4be9-8923-a2f820d4face
 name: PRODAFT USTA - TI map File Hash to CommonSecurityLog
 description: |
   'Identifies a match in CommonSecurityLog data from any file-hash indicator ingested from
-  PRODAFT USTA IoC Threat Intelligence (SourceSystem "PRODAFT USTA").'
+  PRODAFT USTA IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
 severity: Medium
 requiredDataConnectors:
-  - connectorId: PaloAltoNetworks
+  - connectorId: CefAma
     dataTypes:
       - CommonSecurityLog
   - connectorId: PRODAFTUstaIoCUploadIndicators
@@ -23,8 +23,9 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let fileHashIndicators = ThreatIntelIndicators
-  | where SourceSystem == "PRODAFT USTA"
-  //extract key part of kv pair
+  // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malware Hashes", etc.)
+  | where SourceSystem startswith "PRODAFT USTA"
+  // ObservableKey is a STIX kv pair ("file:hashes.'SHA-256'") - take the type before the colon
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "file"
   | extend FileHashType = replace("'", "", substring(ObservableKey, indexof(ObservableKey, "hashes.") + 7, strlen(ObservableKey) - indexof(ObservableKey, "hashes.") - 7))
@@ -34,11 +35,11 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
   | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
-  // Handle matches against both lower case and uppercase versions of the hash:
+  // CommonSecurityLog hash casing varies by source, so match both forms
   (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
   | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
   | project-reorder *, FileHashType, FileHashValue, Type
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
   |  join kind=innerunique (
     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
