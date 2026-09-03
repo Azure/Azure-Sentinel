@@ -29,7 +29,6 @@ query: |
     | where IndicatorType == "domain-name"
     | extend DomainName = tolower(ObservableValue)
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-    | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
     | where TimeGenerated >= ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
     | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
@@ -56,8 +55,9 @@ query: |
     ) on $left.DomainName==$right.Name
     | where DNS_TimeGenerated < ValidUntil
     | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name
-    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-    | project DNS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, Computer, ClientIP
+    | extend Description = tostring(parse_json(Data).description)
+    | extend IndicatorTags = tostring(parse_json(Data).labels)
+    | project DNS_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence, Computer, ClientIP
     | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
     | extend timestamp = DNS_TimeGenerated
 entityMappings:
@@ -73,9 +73,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIP
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: Url
 version: 1.0.0
 kind: Scheduled
