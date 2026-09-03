@@ -44,9 +44,6 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-  - Name: pack
-    Type: bool
-    Default: false
 ParserQuery: |
   let parser = (
       starttime:datetime=datetime(null),
@@ -56,8 +53,7 @@ ParserQuery: |
       responsecodename:string='*',
       eventtype:string='Query',
       pack:bool=false,
-      disabled:bool=false,
-      pack:bool=false
+      disabled:bool=false
   ) {
       GigamonV2_CL
       | where not(disabled)
@@ -92,10 +88,40 @@ ParserQuery: |
           SrcIpAddr,
           DstIpAddr = coalesce(dst_ip, dst_ipv6),
           DnsQuery,
-          DnsQueryType = toint(dns_query_type),
+          DnsQueryType = case(
+              isnotnull(toint(dns_query_type)), toint(dns_query_type),
+              dns_query_type =~ "A", 1,
+              dns_query_type =~ "NS", 2,
+              dns_query_type =~ "CNAME", 5,
+              dns_query_type =~ "SOA", 6,
+              dns_query_type =~ "PTR", 12,
+              dns_query_type =~ "MX", 15,
+              dns_query_type =~ "TXT", 16,
+              dns_query_type =~ "AAAA", 28,
+              dns_query_type =~ "SRV", 33,
+              int(null)
+          ),
           DnsQueryTypeName = dns_query_type,
-          DnsResponseCode = toint(dns_reply_code),
-          DnsQueryClass = coalesce(dns_class, dns_host_class),
+          DnsResponseCode = case(
+              isnotnull(toint(dns_reply_code)), toint(dns_reply_code),
+              dns_reply_code =~ "NOERROR", 0,
+              dns_reply_code =~ "FORMERR", 1,
+              dns_reply_code =~ "SERVFAIL", 2,
+              dns_reply_code =~ "NXDOMAIN", 3,
+              dns_reply_code =~ "NOTIMP", 4,
+              dns_reply_code =~ "REFUSED", 5,
+              int(null)
+          ),
+          DnsResponseCodeName = coalesce(dns_reply_code, ""),
+          DnsQueryClass = case(
+              isnotnull(toint(coalesce(dns_class, dns_host_class))), toint(coalesce(dns_class, dns_host_class)),
+              coalesce(dns_class, dns_host_class) =~ "IN", 1,
+              coalesce(dns_class, dns_host_class) =~ "CH", 3,
+              coalesce(dns_class, dns_host_class) =~ "HS", 4,
+              coalesce(dns_class, dns_host_class) =~ "NONE", 254,
+              coalesce(dns_class, dns_host_class) =~ "ANY", 255,
+              int(null)
+          ),
           DnsQueryClassName = coalesce(dns_class, dns_host_class),
           DnsFlags = dns_flags,
           DnsTtl = toint(dns_ttl),
@@ -110,6 +136,5 @@ ParserQuery: |
       responsecodename=responsecodename,
       eventtype=eventtype,
       pack=pack,
-      disabled=disabled,
-      pack=pack
+      disabled=disabled
   )

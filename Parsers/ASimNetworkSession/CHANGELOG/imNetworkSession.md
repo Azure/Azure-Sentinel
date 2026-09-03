@@ -1,5 +1,5 @@
 # Changelog for imNetworkSession.yaml
-## Version 0.7.4
+## Version 0.6.6
 
 - (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
 
@@ -30,4 +30,3 @@
 ## Version 0.2
 
 - (2021-09-12) Dev/normalization/network v2 reboot - [PR #3000](https://github.com/Azure/Azure-Sentinel/pull/3000)
-
