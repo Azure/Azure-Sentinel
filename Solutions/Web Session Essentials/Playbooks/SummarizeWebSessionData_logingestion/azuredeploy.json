@@ -2,11 +2,11 @@
     "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion":  "1.0.0.0",
     "metadata":  {
-        "title":  "[Deprecated] Summarize Web Session Data",
-        "description":  "The 'SummarizeWebSessionData' Playbook helps with summarizing the Web Session logs and ingesting them into custom tables for persistence. Although enabling the summarization playbook for the Web Session solution is totally optional, we highly recommend enabling it for a better user experience in environments with high EPS (events per second) data ingestion. After installing the solution, it will be deployed under Playbook Templates in the Automation blade of Microsoft Sentinel. It can be configured and managed from the Manage Solution view in Content Hub. This playbook will create four custom data summarization tables: WebSession_Summarized_SrcInfo_CL, WebSession_Summarized_SrcIP_CL, WebSession_Summarized_DstIP_CL and WebSession_Summarized_ThreatInfo_CL. \n **NOTE: It uses the legacy HTTP data collector API to ingest the data, which is about to be deprecated, so it is recommended to use the SummarizeWebSessionData_logingestion playbook instead.**",
+        "title":  "Summarize Web Session Data using Log Ingestion API",
+        "description":  "The 'SummarizeWebSessionData' Playbook helps with summarizing the Web Session logs and ingesting them into custom tables for persistence. Although enabling the summarization playbook for the Web Session solution is totally optional, we highly recommend enabling it for a better user experience in environments with high EPS (events per second) data ingestion. After installing the solution, it will be deployed under Playbook Templates in the Automation blade of Microsoft Sentinel. It can be configured and managed from the Manage Solution view in Content Hub. This playbook will create four custom data summarization tables: WebSession_Summarized_SrcInfoV1_CL, WebSession_Summarized_SrcIPV1_CL, WebSession_Summarized_DstIPV1_CL and WebSession_Summarized_ThreatInfoV1_CL.",
         "prerequisites":  [],
         "postDeployment":  [
-            "Authorize 'Azure Monitor Logs' and 'Azure Log Analytics Data Collector' API connections."
+            "Authorize the 'Azure Monitor Logs' API connection. Log ingestion uses the playbook's managed identity."
         ],
         "prerequisitesDeployTemplateFile":  [],
         "lastUpdateTime": "2026-09-02T00:00:00.000Z",
@@ -21,7 +21,7 @@
     },
     "parameters":  {
         "PlaybookName":  {
-            "defaultValue":  "SummarizeWebSessionData",
+            "defaultValue":  "SummarizeWebSessionData-logingestion",
             "type":  "string"
         },
         "logAnalyticsName":  {
@@ -44,10 +44,74 @@
         }
     },
     "variables":  {
-        "AzureloganalyticsdatacollectorConnectionName":  "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "suffix": "[uniqueString(resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName')))]",
+        "DCEName": "[concat('web-session-summarization-dce-', variables('suffix'))]",
+        "DCRName": "[concat('web-session-summarization-dcr-', variables('suffix'))]",
+        "workspaceResourceId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]",
+        "destinationName": "[concat('webSessionSummarizationDestination', variables('suffix'))]",
+        "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "roleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName')), resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), variables('monitoringMetricsPublisherRoleId'))]"
     },
     "resources":  [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCEName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for Web Session Essentials summarized logs",
+                "networkAcls": { "publicNetworkAccess": "Enabled" }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('logAnalyticsName'), '/WebSession_Summarized_DstIPV1_CL')]",
+            "properties": { "plan": "Analytics", "schema": { "name": "WebSession_Summarized_DstIPV1_CL", "columns": [ { "name": "SrcBytes_d", "type": "real" }, { "name": "DstBytes_d", "type": "real" }, { "name": "EventCount_d", "type": "real" }, { "name": "DstIpAddr_s", "type": "string" }, { "name": "SrcIPIsPrivate_b", "type": "boolean" }, { "name": "DstPortNumber_d", "type": "real" }, { "name": "DestDomain_s", "type": "string" }, { "name": "DstHostname_s", "type": "string" }, { "name": "EventResult_s", "type": "string" }, { "name": "EventResultDetails_s", "type": "string" }, { "name": "EventProduct_s", "type": "string" }, { "name": "EventType_s", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime_t", "type": "datetime" } ] } }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('logAnalyticsName'), '/WebSession_Summarized_SrcInfoV1_CL')]",
+            "properties": { "plan": "Analytics", "schema": { "name": "WebSession_Summarized_SrcInfoV1_CL", "columns": [ { "name": "SrcBytes_d", "type": "real" }, { "name": "DstBytes_d", "type": "real" }, { "name": "EventCount_d", "type": "real" }, { "name": "HttpUserAgent_s", "type": "string" }, { "name": "EventResultDetails_s", "type": "string" }, { "name": "EventResult_s", "type": "string" }, { "name": "UrlCategory_s", "type": "string" }, { "name": "NetworkApplicationProtocol_s", "type": "string" }, { "name": "HttpRequestMethod_s", "type": "string" }, { "name": "HttpContentType_s", "type": "string" }, { "name": "EventProduct_s", "type": "string" }, { "name": "EventVendor_s", "type": "string" }, { "name": "EventType_s", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime_t", "type": "datetime" } ] } }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('logAnalyticsName'), '/WebSession_Summarized_SrcIPV1_CL')]",
+            "properties": { "plan": "Analytics", "schema": { "name": "WebSession_Summarized_SrcIPV1_CL", "columns": [ { "name": "SrcBytes_d", "type": "real" }, { "name": "DstBytes_d", "type": "real" }, { "name": "EventCount_d", "type": "real" }, { "name": "SrcUsername_s", "type": "string" }, { "name": "SrcIpAddr_s", "type": "string" }, { "name": "SrcHostname_s", "type": "string" }, { "name": "DstIPIsPrivate_b", "type": "boolean" }, { "name": "DestDomain_s", "type": "string" }, { "name": "EventResult_s", "type": "string" }, { "name": "EventResultDetails_s", "type": "string" }, { "name": "EventProduct_s", "type": "string" }, { "name": "EventType_s", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime_t", "type": "datetime" } ] } }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('logAnalyticsName'), '/WebSession_Summarized_ThreatInfoV1_CL')]",
+            "properties": { "plan": "Analytics", "schema": { "name": "WebSession_Summarized_ThreatInfoV1_CL", "columns": [ { "name": "EventCount_d", "type": "real" }, { "name": "ThreatName_s", "type": "string" }, { "name": "ThreatCategory_s", "type": "string" }, { "name": "ThreatRiskLevel_d", "type": "real" }, { "name": "ThreatOriginalConfidence_d", "type": "real" }, { "name": "EventSeverity_s", "type": "string" }, { "name": "ThreatField_s", "type": "string" }, { "name": "SrcIpAddr_s", "type": "string" }, { "name": "SrcUsername_s", "type": "string" }, { "name": "DestDomain_s", "type": "string" }, { "name": "EventResult_s", "type": "string" }, { "name": "DstIpAddr_s", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime_t", "type": "datetime" } ] } }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCRName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [ "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]", "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsName'), 'WebSession_Summarized_DstIPV1_CL')]", "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsName'), 'WebSession_Summarized_SrcInfoV1_CL')]", "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsName'), 'WebSession_Summarized_SrcIPV1_CL')]", "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsName'), 'WebSession_Summarized_ThreatInfoV1_CL')]" ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "streamDeclarations": {
+                    "Custom-WebSession_Summarized_DstIPV1": { "columns": [ { "name": "SrcBytes", "type": "real" }, { "name": "DstBytes", "type": "real" }, { "name": "EventCount", "type": "real" }, { "name": "DstIpAddr", "type": "string" }, { "name": "SrcIPIsPrivate", "type": "boolean" }, { "name": "DstPortNumber", "type": "real" }, { "name": "DestDomain", "type": "string" }, { "name": "DstHostname", "type": "string" }, { "name": "EventResult", "type": "string" }, { "name": "EventResultDetails", "type": "string" }, { "name": "EventProduct", "type": "string" }, { "name": "EventType", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-WebSession_Summarized_SrcInfoV1": { "columns": [ { "name": "SrcBytes", "type": "real" }, { "name": "DstBytes", "type": "real" }, { "name": "EventCount", "type": "real" }, { "name": "HttpUserAgent", "type": "string" }, { "name": "EventResultDetails", "type": "string" }, { "name": "EventResult", "type": "string" }, { "name": "UrlCategory", "type": "string" }, { "name": "NetworkApplicationProtocol", "type": "string" }, { "name": "HttpRequestMethod", "type": "string" }, { "name": "HttpContentType", "type": "string" }, { "name": "EventProduct", "type": "string" }, { "name": "EventVendor", "type": "string" }, { "name": "EventType", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-WebSession_Summarized_SrcIPV1": { "columns": [ { "name": "SrcBytes", "type": "real" }, { "name": "DstBytes", "type": "real" }, { "name": "EventCount", "type": "real" }, { "name": "SrcUsername", "type": "string" }, { "name": "SrcIpAddr", "type": "string" }, { "name": "SrcHostname", "type": "string" }, { "name": "DstIPIsPrivate", "type": "boolean" }, { "name": "DestDomain", "type": "string" }, { "name": "EventResult", "type": "string" }, { "name": "EventResultDetails", "type": "string" }, { "name": "EventProduct", "type": "string" }, { "name": "EventType", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime", "type": "datetime" } ] },
+                    "Custom-WebSession_Summarized_ThreatInfoV1": { "columns": [ { "name": "EventCount", "type": "real" }, { "name": "ThreatName", "type": "string" }, { "name": "ThreatCategory", "type": "string" }, { "name": "ThreatRiskLevel", "type": "real" }, { "name": "ThreatOriginalConfidence", "type": "real" }, { "name": "EventSeverity", "type": "string" }, { "name": "ThreatField", "type": "string" }, { "name": "SrcIpAddr", "type": "string" }, { "name": "SrcUsername", "type": "string" }, { "name": "DestDomain", "type": "string" }, { "name": "EventResult", "type": "string" }, { "name": "DstIpAddr", "type": "string" }, { "name": "TimeGenerated", "type": "datetime" }, { "name": "EventTime", "type": "datetime" } ] }
+                },
+                "destinations": { "logAnalytics": [ { "workspaceResourceId": "[variables('workspaceResourceId')]", "name": "[variables('destinationName')]" } ] },
+                "dataFlows": [
+                    { "streams": [ "Custom-WebSession_Summarized_DstIPV1" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source | project SrcBytes_d=toreal(SrcBytes), DstBytes_d=toreal(DstBytes), EventCount_d=toreal(EventCount), DstIpAddr_s=tostring(DstIpAddr), SrcIPIsPrivate_b=tobool(SrcIPIsPrivate), DstPortNumber_d=toreal(DstPortNumber), DestDomain_s=tostring(DestDomain), DstHostname_s=tostring(DstHostname), EventResult_s=tostring(EventResult), EventResultDetails_s=tostring(EventResultDetails), EventProduct_s=tostring(EventProduct), EventType_s=tostring(EventType), TimeGenerated=todatetime(TimeGenerated), EventTime_t=todatetime(EventTime)", "outputStream": "Custom-WebSession_Summarized_DstIPV1_CL" },
+                    { "streams": [ "Custom-WebSession_Summarized_SrcInfoV1" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source | project SrcBytes_d=toreal(SrcBytes), DstBytes_d=toreal(DstBytes), EventCount_d=toreal(EventCount), HttpUserAgent_s=tostring(HttpUserAgent), EventResultDetails_s=tostring(EventResultDetails), EventResult_s=tostring(EventResult), UrlCategory_s=tostring(UrlCategory), NetworkApplicationProtocol_s=tostring(NetworkApplicationProtocol), HttpRequestMethod_s=tostring(HttpRequestMethod), HttpContentType_s=tostring(HttpContentType), EventProduct_s=tostring(EventProduct), EventVendor_s=tostring(EventVendor), EventType_s=tostring(EventType), TimeGenerated=todatetime(TimeGenerated), EventTime_t=todatetime(EventTime)", "outputStream": "Custom-WebSession_Summarized_SrcInfoV1_CL" },
+                    { "streams": [ "Custom-WebSession_Summarized_SrcIPV1" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source | project SrcBytes_d=toreal(SrcBytes), DstBytes_d=toreal(DstBytes), EventCount_d=toreal(EventCount), SrcUsername_s=tostring(SrcUsername), SrcIpAddr_s=tostring(SrcIpAddr), SrcHostname_s=tostring(SrcHostname), DstIPIsPrivate_b=tobool(DstIPIsPrivate), DestDomain_s=tostring(DestDomain), EventResult_s=tostring(EventResult), EventResultDetails_s=tostring(EventResultDetails), EventProduct_s=tostring(EventProduct), EventType_s=tostring(EventType), TimeGenerated=todatetime(TimeGenerated), EventTime_t=todatetime(EventTime)", "outputStream": "Custom-WebSession_Summarized_SrcIPV1_CL" },
+                    { "streams": [ "Custom-WebSession_Summarized_ThreatInfoV1" ], "destinations": [ "[variables('destinationName')]" ], "transformKql": "source | project EventCount_d=toreal(EventCount), ThreatName_s=tostring(ThreatName), ThreatCategory_s=tostring(ThreatCategory), ThreatRiskLevel_d=toreal(ThreatRiskLevel), ThreatOriginalConfidence_d=toreal(ThreatOriginalConfidence), EventSeverity_s=tostring(EventSeverity), ThreatField_s=tostring(ThreatField), SrcIpAddr_s=tostring(SrcIpAddr), SrcUsername_s=tostring(SrcUsername), DestDomain_s=tostring(DestDomain), EventResult_s=tostring(EventResult), DstIpAddr_s=tostring(DstIpAddr), TimeGenerated=todatetime(TimeGenerated), EventTime_t=todatetime(EventTime)", "outputStream": "Custom-WebSession_Summarized_ThreatInfoV1_CL" }
+                ]
+            }
+        },
         {
             "properties":  {
                 "provisioningState":  "Succeeded",
@@ -72,6 +136,10 @@
                         "subscriptionId":  {
                             "defaultValue":  "[parameters('subscriptionId')]",
                             "type":  "string"
+                        },
+                        "ingestionEndpoint": {
+                            "defaultValue": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/')]",
+                            "type": "string"
                         }
                     },
                     "triggers":  {
@@ -96,19 +164,18 @@
                                         "Send_Data_DstIP":  {
                                             "runAfter":  {
                                             },
-                                            "type":  "ApiConnection",
+                                            "type": "Http",
                                             "inputs":  {
-                                                "body":  "@{items('For_each_DstIP')}",
-                                                "headers":  {
-                                                    "Log-Type":  "WebSession_Summarized_DstIP_CL"
+                                                "body": "@items('For_each_DstIP')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
                                                 },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-WebSession_Summarized_DstIPV1', '?api-version=2023-01-01')"
                                             }
                                         }
                                     },
@@ -154,19 +221,18 @@
                                         "Send_Data_SourceInfo":  {
                                             "runAfter":  {
                                             },
-                                            "type":  "ApiConnection",
+                                            "type": "Http",
                                             "inputs":  {
-                                                "body":  "@{items('For_each_-_SubArray_-_SourceInfo')}",
-                                                "headers":  {
-                                                    "Log-Type":  "WebSession_Summarized_SrcInfo_CL"
+                                                "body": "@items('For_each_-_SubArray_-_SourceInfo')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
                                                 },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-WebSession_Summarized_SrcInfoV1', '?api-version=2023-01-01')"
                                             }
                                         }
                                     },
@@ -212,19 +278,18 @@
                                         "Send_Data_SrcIP":  {
                                             "runAfter":  {
                                             },
-                                            "type":  "ApiConnection",
+                                            "type": "Http",
                                             "inputs":  {
-                                                "body":  "@{items('For_each')}",
-                                                "headers":  {
-                                                    "Log-Type":  "WebSession_Summarized_SrcIP_CL"
+                                                "body": "@items('For_each')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
                                                 },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-WebSession_Summarized_SrcIPV1', '?api-version=2023-01-01')"
                                             }
                                         }
                                     },
@@ -270,19 +335,18 @@
                                         "Send_Data":  {
                                             "runAfter":  {
                                             },
-                                            "type":  "ApiConnection",
+                                            "type": "Http",
                                             "inputs":  {
-                                                "body":  "@{items('For_each_ThreatInfo')}",
-                                                "headers":  {
-                                                    "Log-Type":  "WebSession_Summarized_ThreatInfo_CL"
+                                                "body": "@items('For_each_ThreatInfo')",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
                                                 },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "method": "POST",
+                                                "uri": "@concat(parameters('ingestionEndpoint'), 'Custom-WebSession_Summarized_ThreatInfoV1', '?api-version=2023-01-01')"
                                             }
                                         }
                                     },
@@ -545,7 +609,7 @@
                             },
                             "type":  "ApiConnection",
                             "inputs":  {
-                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_DstIP_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by DstIpAddr, SrcIPIsPrivate = ipv4_is_private(SrcIpAddr), DstPortNumber, DestDomain = tostring(parse_url(Url)[\"Host\"]), DstHostname, EventResult, EventResultDetails, EventProduct,  EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_DstIPV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by DstIpAddr, SrcIPIsPrivate = ipv4_is_private(SrcIpAddr), DstPortNumber, DestDomain = tostring(parse_url(Url)[\"Host\"]), DstHostname, EventResult, EventResultDetails, EventProduct,  EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
                                 "host":  {
                                     "connection":  {
                                         "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -570,7 +634,7 @@
                             },
                             "type":  "ApiConnection",
                             "inputs":  {
-                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by HttpUserAgent, EventResultDetails, EventResult,  UrlCategory, NetworkApplicationProtocol, HttpRequestMethod, HttpContentType, EventTime = bin(TimeGenerated, 1h), EventProduct, EventVendor, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcInfoV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by HttpUserAgent, EventResultDetails, EventResult,  UrlCategory, NetworkApplicationProtocol, HttpRequestMethod, HttpContentType, EventTime = bin(TimeGenerated, 1h), EventProduct, EventVendor, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
                                 "host":  {
                                     "connection":  {
                                         "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -595,7 +659,7 @@
                             },
                             "type":  "ApiConnection",
                             "inputs":  {
-                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcIP_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by SrcUsername, SrcIpAddr, SrcHostname, DstIPIsPrivate = ipv4_is_private(DstIpAddr), DestDomain = tostring(parse_url(Url)[\"Host\"]), EventResult, EventResultDetails, EventProduct, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcIPV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by SrcUsername, SrcIpAddr, SrcHostname, DstIPIsPrivate = ipv4_is_private(DstIpAddr), DestDomain = tostring(parse_url(Url)[\"Host\"]), EventResult, EventResultDetails, EventProduct, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
                                 "host":  {
                                     "connection":  {
                                         "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -620,7 +684,7 @@
                             },
                             "type":  "ApiConnection",
                             "inputs":  {
-                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_ThreatInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| where (ThreatName != 'None' and isnotempty(ThreatName)) or (ThreatCategory != 'None' and isnotempty(ThreatCategory)) or ThreatRiskLevel \u003e 60 or toint(ThreatOriginalConfidence) \u003e 0 or EventSeverity in ('Medium','High') or isnotempty(ThreatField)\n| summarize EventCount=count() by ThreatName, ThreatCategory, ThreatRiskLevel, toint(ThreatOriginalConfidence), EventSeverity, ThreatField, SrcIpAddr, SrcUsername, DestDomain = tostring(parse_url(Url)[\"Host\"]), bin(TimeGenerated, 1h), EventResult, DstIpAddr\n| extend EventTime = TimeGenerated",
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_ThreatInfoV1_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| where (ThreatName != 'None' and isnotempty(ThreatName)) or (ThreatCategory != 'None' and isnotempty(ThreatCategory)) or ThreatRiskLevel \u003e 60 or toint(ThreatOriginalConfidence) \u003e 0 or EventSeverity in ('Medium','High') or isnotempty(ThreatField)\n| summarize EventCount=count() by ThreatName, ThreatCategory, ThreatRiskLevel, toint(ThreatOriginalConfidence), EventSeverity, ThreatField, SrcIpAddr, SrcUsername, DestDomain = tostring(parse_url(Url)[\"Host\"]), bin(TimeGenerated, 1h), EventResult, DstIpAddr\n| extend EventTime = TimeGenerated",
                                 "host":  {
                                     "connection":  {
                                         "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -658,11 +722,6 @@
                 "parameters":  {
                     "$connections":  {
                         "value":  {
-                            "azureloganalyticsdatacollector":  {
-                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "azuremonitorlogs":  {
                                 "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                                 "connectionName":  "[variables('AzuremonitorlogsConnectionName')]",
@@ -684,24 +743,9 @@
             },
             "apiVersion":  "2019-05-01",
             "dependsOn":  [
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
             ]
-        },
-        {
-            "type":  "Microsoft.Web/connections",
-            "apiVersion":  "2016-06-01",
-            "name":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-            "location":  "[resourceGroup().location]",
-            "kind":  "V1",
-            "properties":  {
-                "displayName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues":  {
-                },
-                "api":  {
-                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                }
-            }
         },
         {
             "type":  "Microsoft.Web/connections",
@@ -716,6 +760,21 @@
                 "api":  {
                     "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                 }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('roleAssignmentName')]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             }
         }
     ]
