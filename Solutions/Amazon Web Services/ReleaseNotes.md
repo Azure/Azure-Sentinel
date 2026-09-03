@@ -1,6 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.12      | 24-08-2026                     | Repackaged the solution to include the new AWS GuardDuty **Hunting Queries** and refreshed the solution package artifacts. |
+| 3.0.13      | 03-09-2026                     | Added new AWS GuardDuty **Hunting Queries** for high-severity findings, EKS privilege escalation and credential access, and S3 public exposure; repackaged the solution after incorporating the latest upstream changes. |
+| 3.0.12      | 26-08-2026                     | Updated **Analytic Rules** AWS_LogTampering.yaml (successful log-tampering, High) and AWS_ClearStopChangeTrailLogs.yaml (failed log-tampering attempts, Low) with expanded event coverage and tiered severity; removed duplicate **Analytic Rule** AWS_ConfigServiceResourceDeletion.yaml; refreshed the Data Connectors section in the solution UI (createUiDefinition) |
 | 3.0.11      | 11-08-2026                     | Fixed the AWS WAF Data Connector last-data-received query by removing an invalid test filter. |
 | 3.0.10      | 19-05-2026                     | Added non-analytics tier queries to Amazon Web Services S3 **Data Connector** to support Basic/Auxiliary plan tables. |
 | 3.0.9       | 18-05-2026                     | Update AWS **Hunting Queries** and **Workbooks** for Quality     |

@@ -7,7 +7,7 @@
         "properties": {
             "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
             "streamDeclarations": {
-                "Custom-feedly_indicators_CL": {
+                "Custom-FeedlyIoc": {
                     "columns": [
                         {
                             "name": "subtype",
@@ -47,13 +47,13 @@
             "dataFlows": [
                 {
                     "streams": [
-                        "Custom-feedly_indicators_CL"
+                        "Custom-FeedlyIoc"
                     ],
                     "destinations": [
                         "clv2ws1"
                     ],
-                    "outputStream": "Custom-feedly_indicators_CL",
-                    "transformKql": "source | extend TimeGenerated = now() , value = ['value'] , indicatorType = ['type'] , indicatorSubType = ['subtype'] , source = ['source_name'] , articleUrl = strcat('https://feedly.com/i/entry/', ['source_entry_id']) , articleTitle = ['source_entry_title'] | project TimeGenerated , value , indicatorType , indicatorSubType , source , articleUrl , articleTitle"
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(['value'])\n| extend TimeGenerated = now()\n| extend ObservableValue = tostring(['value'])\n| extend indicatorType = tostring(['type'])\n| extend articleUrl = strcat('https://feedly.com/i/entry/', tostring(['source_entry_id']))\n| extend articleTitle = tostring(['source_entry_title'])\n| extend sourceName = tostring(['source_name'])\n| extend indicatorSubType = tostring(['subtype'])\n| extend ObservableKey = case(\n    indicatorType in ('ipv4-addr', 'ipv4'), 'ipv4-addr:value',\n    indicatorType in ('ipv6-addr', 'ipv6'), 'ipv6-addr:value',\n    indicatorType in ('domain-name', 'domain'), 'domain-name:value',\n    indicatorType == 'url', 'url:value',\n    indicatorType in ('email-addr', 'email'), 'email-addr:value',\n    indicatorType in ('md5', 'MD5'), 'file:hashes.MD5',\n    indicatorType in ('sha1', 'SHA-1', 'sha-1'), \"file:hashes.'SHA-1'\",\n    indicatorType in ('sha256', 'SHA-256', 'sha-256'), \"file:hashes.'SHA-256'\",\n    strcat(indicatorType, ':value'))\n| extend patternValue = replace_string(replace_string(ObservableValue, @\"\\\", @\"\\\\\"), \"'\", @\"\\'\")\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend ValidFrom = now()\n| extend ValidUntil = datetime_add('day', 90, now())\n| extend Created = now()\n| extend Modified = now()\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend Confidence = toint(80)\n| extend SourceSystem = 'Feedly'\n| extend LastUpdateMethod = 'Feedly CCF'\n| extend idSeed = strcat(ObservableKey, '|', ObservableValue, '|', tostring(['source_entry_id']))\n| extend idPad1 = strcat('0000000000000000', tostring(abs(hash_sha256(idSeed))))\n| extend idPad2 = strcat('0000000000000000', tostring(abs(hash_sha256(strcat(idSeed, '|stix')))))\n| extend idHex = strcat(substring(idPad1, strlen(idPad1) - 16, 16), substring(idPad2, strlen(idPad2) - 16, 16))\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend AdditionalFields = bag_pack('articleUrl', articleUrl, 'articleTitle', articleTitle, 'source', sourceName, 'subtype', indicatorSubType, 'stixIdHex', idHex)\n| extend Data = bag_pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', articleTitle, 'description', strcat('Source: ', sourceName, '. Article: ', articleUrl), 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'labels', pack_array(indicatorSubType))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
                 }
             ]
         }

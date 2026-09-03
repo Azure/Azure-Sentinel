@@ -12,7 +12,7 @@ This logic app helps to ingest summarized web session data into custom tables. P
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploywebsessionDataSummarizationPlaybookPublic)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/deploywebsessionDataSummarizationPlaybookGov)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://aka.ms/deploywebsessionDataSummarizationPlaybookGov)
 
 2. Fill in the required parameter:
     * Playbook Name: Enter the playbook name here (Ex: SummarizeWebSessionData)

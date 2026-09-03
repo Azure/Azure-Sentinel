@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.7.0       | 01-09-2026                     | Added the Salesforce Marketing Cloud CCF connector with audit and security event ingestion, custom tables, DCR transformations, and parser aliases. |
+| 3.6.1       | 26-08-2026                     | Corrected the Salesforce Service Cloud parser metadata version |
 | 3.6.0       | 18-08-2026                     | Added Salesforce Audit Logs parser and table definitions, and updated Salesforce connector configurations. |
 | 3.5.1       | 13-08-2026                     | Updated **Salesforce RTEM connector** to include the API URL in ingested events and promote the connector to GA |
 | 3.5.0       | 23-07-2026                     | Marked Salesforce Audit Logs connector as GA and made poller resource names unique per connection. |

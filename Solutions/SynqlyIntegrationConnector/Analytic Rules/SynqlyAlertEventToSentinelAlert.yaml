@@ -1,0 +1,242 @@
+id: 3192085a-e97e-440f-acb7-9227622949a4
+name: Synqly Alert Event
+description: |
+  Creates one Microsoft Sentinel alert for each qualifying Synqly-attributed ASIM Alert Event row. Native ASIM values take precedence, with retained OCSF data used to recover investigation context when normalized fields are empty. Replayed source rows can create additional alerts, and Microsoft Sentinel or Defender XDR may correlate related alerts into a shared incident.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SynqlyIntegrationConnector
+    dataTypes:
+      - ASimAlertEventLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+tactics: []
+relevantTechniques: []
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5M
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{SynqlyAlertName}}"
+  alertDescriptionFormat: "{{SynqlyAlertDescription}}"
+  alertSeverityColumnName: SynqlyAlertSeverity
+  alertTacticsColumnName: SynqlyTactics
+  alertDynamicProperties:
+    - alertProperty: Techniques
+      value: AllAttackTechniques
+    - alertProperty: ConfidenceLevel
+      value: SynqlyConfidenceLevel
+    - alertProperty: ConfidenceScore
+      value: SynqlyConfidenceScore
+    - alertProperty: RemediationSteps
+      value: SynqlyRemediation
+    - alertProperty: AlertLink
+      value: SynqlyAlertLink
+customDetails:
+  SourceAlertId: SynqlyAlertId
+  SourceVendor: SourceVendor
+  SourceProduct: SourceProduct
+  ProductVersion: ProductVersion
+  OriginalSeverity: OriginalSeverity
+  AttackTechniques: AllAttackTechniques
+  SourceRuleId: SourceRuleId
+  SourceIp: SourceIp
+  DestinationIp: DestinationIp
+  DeviceIp: DeviceIp
+  PrimaryIpRole: PrimaryIpRole
+  DestinationDomain: DestinationDomain
+  FilePath: FileValue
+  SourceUrl: EntityUrl
+  MalwareName: MalwareName
+query: |
+  ASimAlertEventLogs
+  | where tostring(AdditionalFields._ConnectorId) == "SynqlySentinelASIMConnector"
+  | extend OCSF = coalesce(todynamic(AdditionalFields.OCSF), dynamic({}))
+  | mv-apply Evidence = array_concat(coalesce(todynamic(OCSF.evidences), dynamic([])), dynamic([{}])) on (
+      mv-apply EvidenceHash = array_concat(coalesce(todynamic(Evidence.data.file.hashes), dynamic([])), coalesce(todynamic(Evidence.data.process.hashes), dynamic([])), dynamic([{}])) on (
+          summarize
+              OcsfSHA256 = take_anyif(tostring(EvidenceHash.value), toupper(tostring(EvidenceHash.algorithm)) == "SHA256"),
+              OcsfSHA1 = take_anyif(tostring(EvidenceHash.value), toupper(tostring(EvidenceHash.algorithm)) == "SHA1"),
+              OcsfMD5 = take_anyif(tostring(EvidenceHash.value), toupper(tostring(EvidenceHash.algorithm)) == "MD5")
+      )
+      | summarize
+          OcsfUserName = take_anyif(tostring(Evidence.data.process.user.name), isnotempty(tostring(Evidence.data.process.user.name))),
+          OcsfUserSid = take_anyif(tostring(Evidence.data.process.user.uid), isnotempty(tostring(Evidence.data.process.user.uid))),
+          OcsfUserDomain = take_anyif(tostring(Evidence.data.process.user.domain), isnotempty(tostring(Evidence.data.process.user.domain))),
+          OcsfProcessId = take_anyif(tostring(Evidence.data.process.pid), isnotempty(tostring(Evidence.data.process.pid))),
+          OcsfProcessCommandLine = take_anyif(tostring(Evidence.data.process.cmd_line), isnotempty(tostring(Evidence.data.process.cmd_line))),
+          OcsfFileName = take_anyif(tostring(Evidence.data.file.name), isnotempty(tostring(Evidence.data.file.name))),
+          OcsfFilePath = take_anyif(tostring(Evidence.data.file.path), isnotempty(tostring(Evidence.data.file.path))),
+          OcsfSourceHost = take_anyif(tostring(Evidence.data.network.src_endpoint.host.hostname), isnotempty(tostring(Evidence.data.network.src_endpoint.host.hostname))),
+          OcsfSourceIp = take_anyif(tostring(Evidence.data.network.src_endpoint.ip), isnotempty(tostring(Evidence.data.network.src_endpoint.ip))),
+          OcsfDestinationIp = take_anyif(tostring(Evidence.data.network.dst_endpoint.ip), isnotempty(tostring(Evidence.data.network.dst_endpoint.ip))),
+          OcsfDestinationDomain = take_anyif(tostring(Evidence.data.network.dst_endpoint.domain), isnotempty(tostring(Evidence.data.network.dst_endpoint.domain))),
+          OcsfSHA256 = take_anyif(OcsfSHA256, isnotempty(OcsfSHA256)),
+          OcsfSHA1 = take_anyif(OcsfSHA1, isnotempty(OcsfSHA1)),
+          OcsfMD5 = take_anyif(OcsfMD5, isnotempty(OcsfMD5))
+  )
+  | mv-apply Attack = array_concat(coalesce(todynamic(OCSF.attacks), dynamic([])), dynamic([{}])) on (
+      extend TacticId = tostring(Attack.tactic.uid), TechniqueId = tostring(Attack.technique.uid), SubTechniqueId = tostring(Attack.sub_technique.uid)
+      | extend TacticName = case(
+          TacticId == "TA0043", "Reconnaissance", TacticId == "TA0042", "ResourceDevelopment",
+          TacticId == "TA0001", "InitialAccess", TacticId == "TA0002", "Execution",
+          TacticId == "TA0003", "Persistence", TacticId == "TA0004", "PrivilegeEscalation",
+          TacticId == "TA0005", "DefenseEvasion", TacticId == "TA0006", "CredentialAccess",
+          TacticId == "TA0007", "Discovery", TacticId == "TA0008", "LateralMovement",
+          TacticId == "TA0009", "Collection", TacticId == "TA0010", "Exfiltration",
+          TacticId == "TA0011", "CommandAndControl", TacticId == "TA0040", "Impact", "")
+      | summarize
+          OcsfTactics = make_set_if(TacticName, isnotempty(TacticName), 14),
+          OcsfTechniques = make_set_if(TechniqueId, isnotempty(TechniqueId), 50),
+          OcsfSubTechniques = make_set_if(SubTechniqueId, isnotempty(SubTechniqueId), 50)
+  )
+  | extend
+      ActorUser = todynamic(OCSF.actor.process.user),
+      Malware = todynamic(OCSF.malware[0]),
+      NativeConfidenceValue = toreal(ThreatConfidence),
+      OcsfConfidenceValue = toreal(OCSF.confidence_score),
+      NativeConfidenceLabel = tolower(trim(" ", tostring(ThreatOriginalConfidence))),
+      OcsfConfidenceLabel = tolower(trim(" ", tostring(OCSF.confidence))),
+      NativeSourceId = coalesce(tostring(EventUid), tostring(AlertId), tostring(EventOriginalUid)),
+      OcsfSourceId = coalesce(tostring(OCSF.finding_info.uid), tostring(OCSF.uid)),
+      SourceIdMaterial = tostring(pack_array(tostring(OCSF.class_uid), tostring(OCSF.type_uid), tostring(OCSF.activity_id), tostring(EventStartTime), tostring(EventEndTime), tostring(EventVendor), tostring(EventProduct), tostring(EventMessage), tostring(OCSF["time"])))
+  | extend
+      SynqlyAlertId = coalesce(NativeSourceId, OcsfSourceId, strcat("generated-", hash_sha256(SourceIdMaterial))),
+      SynqlyAlertName = coalesce(tostring(AlertName), tostring(OCSF.finding_info["title"]), tostring(OCSF.class_name), "Synqly normalized alert event"),
+      SynqlyAlertDescription = coalesce(tostring(EventMessage), tostring(AlertDescription), tostring(OCSF.message), "Synqly normalized alert event"),
+      SeverityValue = tolower(coalesce(tostring(EventSeverity), tostring(EventOriginalSeverity), tostring(OCSF.severity))),
+      SynqlyTactics = coalesce(tostring(AttackTactics), strcat_array(OcsfTactics, ",")),
+      AllAttackTechniques = coalesce(tostring(AttackTechniques), strcat_array(array_concat(OcsfTechniques, OcsfSubTechniques), ",")),
+      SynqlyConfidenceScore = coalesce(
+          iff(NativeConfidenceValue between (0.0 .. 100.0), NativeConfidenceValue / 100.0, real(null)),
+          iff(OcsfConfidenceValue between (0.0 .. 100.0), OcsfConfidenceValue / 100.0, real(null))),
+      SynqlyConfidenceLevel = case(
+          NativeConfidenceLabel == "high", "High",
+          NativeConfidenceLabel == "low", "Low",
+          NativeConfidenceLabel == "unknown", "Unknown",
+          isnotempty(NativeConfidenceLabel), "",
+          OcsfConfidenceLabel == "high", "High",
+          OcsfConfidenceLabel == "low", "Low",
+          OcsfConfidenceLabel == "unknown", "Unknown",
+          ""),
+      SynqlyRemediation = coalesce(tostring(AttackRemediationSteps), strcat_array(todynamic(OCSF.remediation.kb_articles), "; ")),
+      SynqlyAlertLink = coalesce(tostring(EventReportUrl), tostring(OCSF.finding_info.src_url)),
+      SourceVendor = coalesce(tostring(EventVendor), tostring(OCSF.metadata.product.vendor_name)),
+      SourceProduct = coalesce(tostring(EventProduct), tostring(OCSF.metadata.product.name)),
+      ProductVersion = coalesce(tostring(EventProductVersion), tostring(OCSF.metadata.product.version)),
+      OriginalSeverity = coalesce(tostring(EventOriginalSeverity), tostring(OCSF.severity)),
+      SourceRuleId = coalesce(
+          tostring(Rule),
+          tostring(OCSF.finding_info.analytic.uid),
+          iff(isnotempty(tostring(RuleName)) and not(tostring(RuleName) matches regex @"^\d+$"), tostring(RuleName), "")),
+      AccountName = coalesce(tostring(Username), tostring(User), tostring(ActorUser.name), OcsfUserName),
+      AccountSid = coalesce(iff(tolower(tostring(UserIdType)) contains "sid", tostring(UserId), ""), tostring(ActorUser.uid), OcsfUserSid),
+      AccountDomain = coalesce(tostring(UserScope), tostring(ActorUser.domain), OcsfUserDomain),
+      NativeDeviceHost = coalesce(tostring(DvcHostname), tostring(DvcFQDN)),
+      NativeDeviceHostDomain = coalesce(tostring(DvcDomain), extract(@"^[^.]+\.(.+)$", 1, tostring(DvcFQDN)), extract(@"^[^.]+\.(.+)$", 1, tostring(DvcHostname))),
+      DeviceIp = tostring(DvcIpAddr),
+      DestinationDomain = OcsfDestinationDomain,
+      EntityUrl = coalesce(tostring(Url), tostring(OCSF.finding_info.src_url)),
+      FileValue = coalesce(tostring(FilePath), OcsfFilePath),
+      ProcessIdValue = coalesce(tostring(ProcessId), OcsfProcessId),
+      ProcessCommandLineValue = coalesce(tostring(ProcessCommandLine), OcsfProcessCommandLine),
+      MalwareName = coalesce(tostring(ThreatName), tostring(Malware.name)),
+      FileHashValue = coalesce(tostring(FileSHA256), OcsfSHA256, tostring(FileSHA1), OcsfSHA1, tostring(FileMD5), OcsfMD5)
+  | extend
+      SourceIp = OcsfSourceIp,
+      DestinationIp = OcsfDestinationIp,
+      HostValue = coalesce(NativeDeviceHost, OcsfSourceHost),
+      HostDomainValue = iff(isnotempty(NativeDeviceHost), NativeDeviceHostDomain, extract(@"^[^.]+\.(.+)$", 1, OcsfSourceHost))
+  | extend
+      PrimaryIp = coalesce(SourceIp, DestinationIp, tostring(DvcIpAddr)),
+      PrimaryIpRole = case(isnotempty(SourceIp), "Source", isnotempty(DestinationIp), "Destination", isnotempty(tostring(DvcIpAddr)), "Device", "")
+  | extend
+      SynqlyAlertSeverity = case(
+          SeverityValue == "informational", "Informational",
+          SeverityValue == "low", "Low",
+          SeverityValue == "medium", "Medium",
+          SeverityValue in ("high", "critical", "fatal"), "High",
+          "Medium"),
+      HostNameValue = coalesce(extract(@"^([^.]+)", 1, HostValue), HostValue),
+      FileHashAlgorithm = case(
+          isnotempty(FileSHA256) or isnotempty(OcsfSHA256), "SHA256",
+          isnotempty(FileSHA1) or isnotempty(OcsfSHA1), "SHA1",
+          isnotempty(FileMD5) or isnotempty(OcsfMD5), "MD5",
+          "")
+  | project
+      TimeGenerated,
+      SynqlyAlertId,
+      SynqlyAlertName,
+      SynqlyAlertDescription,
+      SynqlyAlertSeverity,
+      SynqlyTactics,
+      AllAttackTechniques,
+      SynqlyConfidenceLevel,
+      SynqlyConfidenceScore,
+      SynqlyRemediation,
+      SynqlyAlertLink,
+      SourceVendor,
+      SourceProduct,
+      ProductVersion,
+      OriginalSeverity,
+      SourceRuleId,
+      AccountName,
+      AccountSid,
+      AccountDomain,
+      HostNameValue,
+      HostDomainValue,
+      SourceIp,
+      DestinationIp,
+      DeviceIp,
+      PrimaryIp,
+      PrimaryIpRole,
+      DestinationDomain,
+      EntityUrl,
+      FileValue,
+      FileHashAlgorithm,
+      FileHashValue,
+      ProcessIdValue,
+      ProcessCommandLineValue,
+      MalwareName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: Sid
+        columnName: AccountSid
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostNameValue
+      - identifier: DnsDomain
+        columnName: HostDomainValue
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PrimaryIp
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashAlgorithm
+      - identifier: Value
+        columnName: FileHashValue
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdValue
+      - identifier: CommandLine
+        columnName: ProcessCommandLineValue
+version: 1.0.0
+kind: Scheduled

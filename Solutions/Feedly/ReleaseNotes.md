@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                              |
 |-------------|--------------------------------|-----------------------------------------------------------------|
+| 3.0.5       | 28-08-2026                     | Ingest Feedly IoCs into native **ThreatIntelIndicators** (SourceSystem=Feedly) |
 | 3.0.4       | 16-02-2026                     | Migrate to CCF connector |
 | 3.0.3       | 28-11-2023                     | Added missing python packages to the  **Data Connector**        |
 | 3.0.2       | 10-11-2023                     | Fixed the app service plan                                      | 
