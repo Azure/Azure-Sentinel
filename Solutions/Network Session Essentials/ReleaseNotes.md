@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.0.12      | 02-09-2026                     | Added **Summarize Data for Network Session Essentials using log ingestion API** Playbook |
 | 3.0.11      | 24-03-2026                     | Bump solution version and Updated links to remove review.learn.                                 |
 | 3.0.10      | 14-02-2026                     | Updated links to remove review.learn.                                 |
 | 3.0.9       | 06-02-2026                     | Updated the relevant techniques in the **hunting queries**.	       |
