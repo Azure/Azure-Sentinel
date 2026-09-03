@@ -1,0 +1,847 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "FireCompass - support@firecompass.com",
+    "comments": "Solution template for FireCompassRisks"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+  },
+  "variables": {
+    "email": "support@firecompass.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "FireCompassRisks",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "firecompass.firecompass-risks",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "FireCompassRisksConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "FireCompassRisksConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "FireCompass Risks",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "FireCompassRisksConnector",
+                  "title": "FireCompass Risks",
+                  "publisher": "FireCompass",
+                  "descriptionMarkdown": "The FireCompass data connector allows ingesting risk and vulnerability data from the FireCompass API into Microsoft Sentinel. The data connector is built on the Microsoft Sentinel Codeless Connector Platform.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total risk logs received",
+                      "legend": "FireCompass Risks",
+                      "baseQuery": "FCRisks_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get a sample of FireCompass risk logs",
+                      "query": "FCRisks_CL | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "FCRisks_CL",
+                      "lastDataReceivedQuery": "FCRisks_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Configuration steps for the FireCompass API\nGenerate your API Token from the FireCompass platform and paste it below to authenticate the connector."
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "FIRECOMPASS Management URL",
+                            "placeholder": "https://example.FIRECOMPASSTEST.net/",
+                            "type": "text",
+                            "name": "managementUrl"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API endpoint path",
+                            "type": "text",
+                            "name": "apiPath",
+                            "placeholder": "/internal_risks/v1/risk",
+                            "description": "Path appended to the host, e.g. /internal_risks/v1/risk"
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "FireCompass API Token",
+                            "placeholder": "Enter API Token",
+                            "type": "securestring",
+                            "name": "apitoken"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false,
+                  "graphQueriesTableName": "FCRisks_CL"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "FireCompass",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "FireCompass",
+                  "tier": "Partner",
+                  "link": "https://www.firecompass.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "FireCompassRisksDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                "streamDeclarations": {
+                  "Custom-FCRisks_API": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "title_alias",
+                        "type": "string"
+                      },
+                      {
+                        "name": "description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asset",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asset_ref",
+                        "type": "string"
+                      },
+                      {
+                        "name": "primary_domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "remediation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "state",
+                        "type": "string"
+                      },
+                      {
+                        "name": "impact",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updated_at",
+                        "type": "string"
+                      },
+                      {
+                        "name": "error_message",
+                        "type": "string"
+                      },
+                      {
+                        "name": "target_details",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "evidences",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "evidence_report",
+                        "type": "string"
+                      },
+                      {
+                        "name": "comments",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "tags",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "asset_groups",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "assessment_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "assessment_start_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asset_details",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "version",
+                        "type": "int"
+                      },
+                      {
+                        "name": "organization_unit",
+                        "type": "string"
+                      },
+                      {
+                        "name": "organization_unit_alias",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-FCRisks_API"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-FCRisks_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotnull(todatetime(['updated_at'])), todatetime(['updated_at']), iff(isnotnull(todatetime(['created_at'])), todatetime(['created_at']), now())) | extend RiskId = tostring(['id']), Title = tostring(['title']), TitleAlias = tostring(['title_alias']), Description = tostring(['description']), Asset = tostring(['asset']), AssetRef = tostring(['asset_ref']), PrimaryDomain = tostring(['primary_domain']), Remediation = tostring(['remediation']), RiskType = tostring(['type']), Category = tostring(['category']), Severity = tostring(['severity']), State = tostring(['state']), Impact = tostring(['impact']), CreatedAt = todatetime(['created_at']), UpdatedAt = todatetime(['updated_at']), ErrorMessage = tostring(['error_message']), TargetDetails = ['target_details'], Evidences = ['evidences'], EvidenceReport = tostring(['evidence_report']), Comments = ['comments'], Tags = ['tags'], AssetGroups = ['asset_groups'], AssessmentName = tostring(['assessment_name']), AssessmentStartDate = todatetime(['assessment_start_date']), AssetDetails = ['asset_details'], RiskVersion = toint(['version']), OrganizationUnit = tostring(['organization_unit']), OrganizationUnitAlias = tostring(['organization_unit_alias']) | project TimeGenerated, RiskId, Title, TitleAlias, Description, Asset, AssetRef, PrimaryDomain, Remediation, RiskType, Category, Severity, State, Impact, CreatedAt, UpdatedAt, ErrorMessage, TargetDetails, Evidences, EvidenceReport, Comments, Tags, AssetGroups, AssessmentName, AssessmentStartDate, AssetDetails, RiskVersion, OrganizationUnit, OrganizationUnitAlias"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "FCRisks_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "FCRisks_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "RiskId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Title",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TitleAlias",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Asset",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetRef",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PrimaryDomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Remediation",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RiskType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Category",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "State",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Impact",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "UpdatedAt",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ErrorMessage",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetDetails",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Evidences",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "EvidenceReport",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Comments",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "AssetGroups",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "AssessmentName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssessmentStartDate",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AssetDetails",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "RiskVersion",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OrganizationUnit",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OrganizationUnitAlias",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "FireCompassRisksConnector",
+          "title": "FireCompass Risks",
+          "publisher": "FireCompass",
+          "descriptionMarkdown": "The FireCompass data connector allows ingesting risk and vulnerability data from the FireCompass API into Microsoft Sentinel. The data connector is built on the Microsoft Sentinel Codeless Connector Platform.",
+          "graphQueries": [
+            {
+              "metricName": "Total risk logs received",
+              "legend": "FireCompass Risks",
+              "baseQuery": "FCRisks_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get a sample of FireCompass risk logs",
+              "query": "FCRisks_CL | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "FCRisks_CL",
+              "lastDataReceivedQuery": "FCRisks_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Configuration steps for the FireCompass API\nGenerate your API Token from the FireCompass platform and paste it below to authenticate the connector."
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "FIRECOMPASS Management URL",
+                    "placeholder": "https://example.FIRECOMPASSTEST.net/",
+                    "type": "text",
+                    "name": "managementUrl"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API endpoint path",
+                    "type": "text",
+                    "name": "apiPath",
+                    "placeholder": "/internal_risks/v1/risk",
+                    "description": "Path appended to the host, e.g. /internal_risks/v1/risk"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "FireCompass API Token",
+                    "placeholder": "Enter API Token",
+                    "type": "securestring",
+                    "name": "apitoken"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false,
+          "graphQueriesTableName": "FCRisks_CL"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "FireCompass",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "FireCompass",
+          "tier": "Partner",
+          "link": "https://www.firecompass.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "FireCompass Risks",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "FireCompass Risks",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "managementUrl": {
+              "defaultValue": "managementUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiPath": {
+              "defaultValue": "apiPath",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apitoken": {
+              "defaultValue": "apitoken",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "FireCompass",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "FireCompass",
+                  "tier": "Partner",
+                  "link": "https://www.firecompass.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'FireCompassRisksPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "FireCompassRisksConnector",
+                "dataType": "FCRisks_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-FCRisks_API",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apitoken')]",
+                  "ApiKeyName": "X-Api-Token"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('managementUrl'), parameters('apiPath'))]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "from_date": "{_QueryWindowStartTime}",
+                    "to_date": "{_QueryWindowEndTime}",
+                    "page_size": "50",
+                    "allow_timestamp": "true"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "CountBasedPaging",
+                  "pageNumberParaName": "page",
+                  "pageSize": 50,
+                  "zeroBasedIndexing": false,
+                  "totalResultsJsonPath": "$.count",
+                  "pageCountJsonPath": "$.total_pages",
+                  "pageNumberJsonPath": "$.page"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "FireCompassRisks",
+        "publisherDisplayName": "FireCompass",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/FireCompassRisks/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <strong>FireCompass Risks</strong> solution provides a Codeless Connector Framework (CCF) data connector that pulls risk findings from the FireCompass platform REST API into Microsoft Sentinel. Risk records are ingested into the FCRisks_CL custom table for analysis, correlation with endpoint telemetry, and closed-loop remediation.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/firecompass.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "FireCompassRisks",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "FireCompass",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "FireCompass",
+          "tier": "Partner",
+          "link": "https://www.firecompass.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-05",
+        "providers": [
+          "FireCompass"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Vulnerability Management"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
