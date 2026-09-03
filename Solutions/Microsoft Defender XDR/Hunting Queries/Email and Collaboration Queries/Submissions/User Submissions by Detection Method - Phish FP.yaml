@@ -15,16 +15,19 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  CloudAppEvents
-  | where ActionType == "UserSubmission"
-  | extend SubmissionType = tostring((parse_json(RawEventData)).SubmissionType), SubmissionContentType = tostring((parse_json(RawEventData)).SubmissionContentType), RecipientObjectId = AccountObjectId, NetworkMessageId = tostring((parse_json(RawEventData)).ObjectId)
-  | where SubmissionContentType == "Mail" and SubmissionType == "3"
-  | join kind=inner EmailEvents on NetworkMessageId, RecipientObjectId
+  let Submissions = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "UserSubmission"
+      | extend RawData = parse_json(RawEventData)
+      | where tostring(RawData.SubmissionContentType) == "Mail" and tostring(RawData.SubmissionType) == "3"
+      | extend NetworkMessageId = tostring(RawData.ObjectId), RecipientObjectId = AccountObjectId
+      | distinct NetworkMessageId, RecipientObjectId;
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | join kind=inner Submissions on NetworkMessageId, RecipientObjectId
+  // De-duplicate to the latest EmailEvents record per message and recipient so the verdict is read once
+  | summarize arg_max(Timestamp, *) by NetworkMessageId, RecipientObjectId
   | where EmailDirection == "Inbound" and DetectionMethods has 'Phish'
-  // De-duplicate each delivery (NetworkMessageId + recipient) before reading the verdict so re-scanned messages are counted once
-  | extend Key = strcat(NetworkMessageId, '-', RecipientObjectId)
-  | summarize arg_max(Timestamp, *) by Key
-  // Robustly expand the Phish detection sub-methods rather than brittle JSON substring matching
   | mv-expand Phish = parse_json(DetectionMethods).Phish to typeof(string)
   | where isnotempty(Phish)
   | summarize count() by Phish
