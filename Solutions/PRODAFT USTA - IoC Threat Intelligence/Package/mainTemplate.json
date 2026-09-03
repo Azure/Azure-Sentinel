@@ -248,7 +248,7 @@
                 "description": "Identifies a match in Syslog data from any malicious URL indicator ingested from PRODAFT\nUSTA IoC Threat Intelligence (SourceSystem starting with \"PRODAFT USTA\").",
                 "displayName": "PRODAFT USTA - TI map URL to Syslog",
                 "enabled": false,
-                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n// Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malicious URLs\", etc.)\n| where SourceSystem startswith \"PRODAFT USTA\"\n// ObservableKey is a STIX kv pair (\"url:value\") - take the type before the colon\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n// innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n| join kind=innerunique (\n  Syslog\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Pull the first URL out of the free-text message; rows without one drop out of the join\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,SyslogMessage)\n  | extend Syslog_TimeGenerated = TimeGenerated\n) on Url\n| where Syslog_TimeGenerated < ValidUntil\n| summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend IndicatorTags = tostring(parse_json(Data).labels)\n| project timestamp = Syslog_TimeGenerated, Description, IndicatorTags, Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url, HostIP\n",
+                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n// Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malicious URLs\", etc.)\n| where SourceSystem startswith \"PRODAFT USTA\"\n// ObservableKey is a STIX kv pair (\"url:value\") - take the type before the colon\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n// innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n| join kind=innerunique (\n  Syslog\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Pull the first URL out of the free-text message; rows without one drop out of the join\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,SyslogMessage)\n  | extend Syslog_TimeGenerated = TimeGenerated\n) on Url\n// non-expiring indicators are allowed above, so they must survive this filter too\n| where isempty(ValidUntil) or Syslog_TimeGenerated < ValidUntil\n| summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend IndicatorTags = tostring(parse_json(Data).labels)\n| project timestamp = Syslog_TimeGenerated, Description, IndicatorTags, Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url, HostIP\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -259,16 +259,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "Syslog",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "Syslog"
+                    ]
                   },
                   {
+                    "connectorId": "PRODAFTUstaIoCUploadIndicators",
                     "dataTypes": [
                       "ThreatIntelIndicators"
-                    ],
-                    "connectorId": "PRODAFTUstaIoCUploadIndicators"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -279,31 +279,31 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "Computer"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "HostIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "HostIP"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
-                    ]
+                    ],
+                    "entityType": "URL"
                   }
                 ]
               }
@@ -376,7 +376,7 @@
                 "description": "Identifies a match in DnsEvents from any domain-name indicator ingested from PRODAFT USTA\nIoC Threat Intelligence (SourceSystem starting with \"PRODAFT USTA\").",
                 "displayName": "PRODAFT USTA - TI map Domain to DnsEvents",
                 "enabled": false,
-                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet Domain_Indicators = ThreatIntelIndicators\n  // Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malicious URLs\", etc.)\n  | where SourceSystem startswith \"PRODAFT USTA\"\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"domain-name\"\n  | extend DomainName = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// TLD allow-list built from the feed: lets the DnsEvents scan discard most rows before the join\nlet maxListSize = 100000;\nlet list_tlds = Domain_Indicators\n  | extend parts = split(DomainName, '.')\n  | extend tld = parts[(array_length(parts)-1)]\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | summarize count() by tostring(tld)\n  | project tld\n  | summarize make_list(tld, maxListSize);\nDomain_Indicators\n | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type\n  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n  | join kind=innerunique (\n    DnsEvents\n    | where TimeGenerated > ago(dt_lookBack)\n    | where isnotempty(Name)\n    | extend parts = split(Name, '.')\n    | extend tld = parts[(array_length(parts)-1)]\n    | where tld in~ (list_tlds)\n    | extend DNS_TimeGenerated = TimeGenerated\n  ) on $left.DomainName==$right.Name\n  | where DNS_TimeGenerated < ValidUntil\n  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name\n  | extend Description = tostring(parse_json(Data).description)\n  | extend IndicatorTags = tostring(parse_json(Data).labels)\n  | project DNS_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence, Computer, ClientIP\n  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n  | extend timestamp = DNS_TimeGenerated\n",
+                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet Domain_Indicators = ThreatIntelIndicators\n  // Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malicious URLs\", etc.)\n  | where SourceSystem startswith \"PRODAFT USTA\"\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"domain-name\"\n  | extend DomainName = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// TLD allow-list built from the feed: lets the DnsEvents scan discard most rows before the join\nlet maxListSize = 100000;\nlet list_tlds = Domain_Indicators\n  | extend parts = split(DomainName, '.')\n  | extend tld = parts[(array_length(parts)-1)]\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | summarize count() by tostring(tld)\n  | project tld\n  | summarize make_list(tld, maxListSize);\nDomain_Indicators\n | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type\n  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n  | join kind=innerunique (\n    DnsEvents\n    | where TimeGenerated > ago(dt_lookBack)\n    | where isnotempty(Name)\n    // DnsEvents.Name keeps the queried casing; the indicator side is lowercased, and the join below is case-sensitive\n    | extend Name = tolower(Name)\n    | extend parts = split(Name, '.')\n    | extend tld = parts[(array_length(parts)-1)]\n    | where tld in~ (list_tlds)\n    | extend DNS_TimeGenerated = TimeGenerated\n  ) on $left.DomainName==$right.Name\n  // non-expiring indicators are allowed above, so they must survive this filter too\n  | where isempty(ValidUntil) or DNS_TimeGenerated < ValidUntil\n  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name\n  | extend Description = tostring(parse_json(Data).description)\n  | extend IndicatorTags = tostring(parse_json(Data).labels)\n  | project DNS_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence, Computer, ClientIP\n  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n  | extend timestamp = DNS_TimeGenerated\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -387,16 +387,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "PRODAFTUstaIoCUploadIndicators",
                     "dataTypes": [
                       "ThreatIntelIndicators"
-                    ],
-                    "connectorId": "PRODAFTUstaIoCUploadIndicators"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -407,30 +407,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "Computer"
                       },
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -503,7 +503,7 @@
                 "description": "Identifies a match in CommonSecurityLog data from any file-hash indicator ingested from\nPRODAFT USTA IoC Threat Intelligence (SourceSystem starting with \"PRODAFT USTA\").",
                 "displayName": "PRODAFT USTA - TI map File Hash to CommonSecurityLog",
                 "enabled": false,
-                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelIndicators\n// Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malware Hashes\", etc.)\n| where SourceSystem startswith \"PRODAFT USTA\"\n// ObservableKey is a STIX kv pair (\"file:hashes.'SHA-256'\") - take the type before the colon\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"file\"\n| extend FileHashType = replace(\"'\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n| extend FileHashValue = toupper(ObservableValue)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// CommonSecurityLog hash casing varies by source, so match both forms\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n| project-reorder *, FileHashType, FileHashValue, Type\n// innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| extend Description = tostring(parse_json(Data).description)\n| extend IndicatorTags = tostring(parse_json(Data).labels)\n| project CommonSecurityLog_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType, Url\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
+                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelIndicators\n// Each USTA IoC feed uploads under its own SourceSystem (\"PRODAFT USTA - Malware Hashes\", etc.)\n| where SourceSystem startswith \"PRODAFT USTA\"\n// ObservableKey is a STIX kv pair (\"file:hashes.'SHA-256'\") - take the type before the colon\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"file\"\n| extend FileHashType = extract(@\"hashes\\.'([^']+)'\", 1, ObservableKey)\n| where isnotempty(FileHashType)\n| extend FileHashValue = toupper(ObservableValue)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// CommonSecurityLog hash casing varies by source, so match both forms\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n| project-reorder *, FileHashType, FileHashValue, Type\n// innerunique: one match per indicator is enough to alert, and it keeps the join cheap\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n// non-expiring indicators are allowed above, so they must survive this filter too\n| where isempty(ValidUntil) or CommonSecurityLog_TimeGenerated < ValidUntil\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| extend Description = tostring(parse_json(Data).description)\n| extend IndicatorTags = tostring(parse_json(Data).labels)\n| project CommonSecurityLog_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType, Url\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -514,16 +514,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CefAma",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CefAma"
+                    ]
                   },
                   {
+                    "connectorId": "PRODAFTUstaIoCUploadIndicators",
                     "dataTypes": [
                       "ThreatIntelIndicators"
-                    ],
-                    "connectorId": "PRODAFTUstaIoCUploadIndicators"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -534,69 +534,69 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceUserName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "SourceUserName"
                       },
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "DeviceName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "DeviceName"
                       },
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
-                    ]
+                    ],
+                    "entityType": "URL"
                   },
                   {
-                    "entityType": "FileHash",
                     "fieldMappings": [
                       {
-                        "columnName": "FileHashValue",
-                        "identifier": "Value"
+                        "identifier": "Value",
+                        "columnName": "FileHashValue"
                       },
                       {
-                        "columnName": "FileHashType",
-                        "identifier": "Algorithm"
+                        "identifier": "Algorithm",
+                        "columnName": "FileHashType"
                       }
-                    ]
+                    ],
+                    "entityType": "FileHash"
                   }
                 ]
               }
@@ -716,7 +716,7 @@
                         "requiredPermissions": {
                           "write": true,
                           "read": true,
-                          "delete": true
+                          "delete": false
                         }
                       }
                     ],
@@ -875,7 +875,7 @@
                 "requiredPermissions": {
                   "write": true,
                   "read": true,
-                  "delete": true
+                  "delete": false
                 }
               }
             ],
@@ -1405,7 +1405,7 @@
           ],
           "metadata": {
             "title": "PRODAFT USTA - Import Malicious URLs",
-            "description": "Polls the PRODAFT USTA malicious-URL IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Malicious URLs'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids). The watermark query and the upload both use the playbook's managed identity and the same 'Microsoft Sentinel Contributor' role.",
+            "description": "Polls the PRODAFT USTA malicious-URL IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Malicious URLs'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids). The watermark query and the upload both use the playbook's managed identity, which needs two roles on the workspace: 'Microsoft Sentinel Contributor' for the Upload STIX Objects call, and 'Log Analytics Reader' for the watermark query - Sentinel Contributor does not cover Microsoft.OperationalInsights/workspaces/read.",
             "prerequisites": [
               "1. A PRODAFT USTA long-lived API key with access to the Security Intelligence IoC endpoints.",
               "2. The name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to.",
@@ -1942,7 +1942,7 @@
           ],
           "metadata": {
             "title": "PRODAFT USTA - Import Malware Hashes",
-            "description": "Polls the PRODAFT USTA malware-hash IoC feed hourly, maps each record to a STIX 2.1 file indicator (MD5/SHA-1/SHA-256), and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Malware Hashes'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids). The watermark query and the upload both use the playbook's managed identity and the same 'Microsoft Sentinel Contributor' role.",
+            "description": "Polls the PRODAFT USTA malware-hash IoC feed hourly, maps each record to a STIX 2.1 file indicator (MD5/SHA-1/SHA-256), and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Malware Hashes'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids). The watermark query and the upload both use the playbook's managed identity, which needs two roles on the workspace: 'Microsoft Sentinel Contributor' for the Upload STIX Objects call, and 'Log Analytics Reader' for the watermark query - Sentinel Contributor does not cover Microsoft.OperationalInsights/workspaces/read.",
             "prerequisites": [
               "1. A PRODAFT USTA long-lived API key with access to the Security Intelligence IoC endpoints.",
               "2. The name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to.",
@@ -2492,7 +2492,7 @@
           ],
           "metadata": {
             "title": "PRODAFT USTA - Import Phishing Sites",
-            "description": "Polls the PRODAFT USTA phishing-site IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. This feed has no expiry, so a validity window (default 365 days, one year) is synthesized from each site's created date. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Phishing Sites'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids derived from the feed id). The watermark query and the upload both use the playbook's managed identity and the same 'Microsoft Sentinel Contributor' role.",
+            "description": "Polls the PRODAFT USTA phishing-site IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. This feed has no expiry, so a validity window (default 365 days, one year) is synthesized from each site's created date. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Phishing Sites'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids derived from the feed id). The watermark query and the upload both use the playbook's managed identity, which needs two roles on the workspace: 'Microsoft Sentinel Contributor' for the Upload STIX Objects call, and 'Log Analytics Reader' for the watermark query - Sentinel Contributor does not cover Microsoft.OperationalInsights/workspaces/read.",
             "prerequisites": [
               "1. A PRODAFT USTA long-lived API key with access to the Security Intelligence IoC endpoints.",
               "2. The name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to.",

@@ -48,12 +48,15 @@ query: |
       DnsEvents
       | where TimeGenerated > ago(dt_lookBack)
       | where isnotempty(Name)
+      // DnsEvents.Name keeps the queried casing; the indicator side is lowercased, and the join below is case-sensitive
+      | extend Name = tolower(Name)
       | extend parts = split(Name, '.')
       | extend tld = parts[(array_length(parts)-1)]
       | where tld in~ (list_tlds)
       | extend DNS_TimeGenerated = TimeGenerated
     ) on $left.DomainName==$right.Name
-    | where DNS_TimeGenerated < ValidUntil
+    // non-expiring indicators are allowed above, so they must survive this filter too
+    | where isempty(ValidUntil) or DNS_TimeGenerated < ValidUntil
     | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name
     | extend Description = tostring(parse_json(Data).description)
     | extend IndicatorTags = tostring(parse_json(Data).labels)
