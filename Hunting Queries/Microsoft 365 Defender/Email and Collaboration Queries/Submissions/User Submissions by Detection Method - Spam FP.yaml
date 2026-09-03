@@ -1,0 +1,35 @@
+id: 91a1a3f0-1386-4c70-9c66-215f59b2af28
+name: User Submissions by Detection Method - Spam (FP)
+description: |
+  This query visualises user false positive submissions by the original spam filter verdict on the reported message.
+description-detailed: |
+  This query visualises user false positive submissions by the original spam filter verdict on the reported message.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let Submissions = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "UserSubmission"
+      | extend RawData = parse_json(RawEventData)
+      | where tostring(RawData.SubmissionContentType) == "Mail" and tostring(RawData.SubmissionType) == "3"
+      | extend NetworkMessageId = tostring(RawData.ObjectId), RecipientObjectId = AccountObjectId
+      | distinct NetworkMessageId, RecipientObjectId;
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | join kind=inner Submissions on NetworkMessageId, RecipientObjectId
+  // De-duplicate to the latest EmailEvents record per message and recipient so the verdict is read once
+  | summarize arg_max(Timestamp, *) by NetworkMessageId, RecipientObjectId
+  | where EmailDirection == "Inbound" and DetectionMethods has 'Spam'
+  | mv-expand Spam = parse_json(DetectionMethods).Spam to typeof(string)
+  | where isnotempty(Spam)
+  | summarize count() by Spam
+  | render piechart
+version: 1.0.0
