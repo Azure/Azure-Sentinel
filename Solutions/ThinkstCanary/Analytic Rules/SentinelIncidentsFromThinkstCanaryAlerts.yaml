@@ -1,0 +1,122 @@
+id: 06360572-94a7-42a4-add7-58fb933b2353
+name: Canary alerts to incidents
+description: Creates Microsoft Sentinel incidents from Thinkst Canary alerts.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ThinkstCanary
+    dataTypes:
+      - ThinkstCanaryIncidents_CL
+tactics:
+  - LateralMovement
+  - Exfiltration
+relevantTechniques:
+  - T1021
+  - T1041
+query: |
+  ThinkstCanaryIncidents_CL
+  | where Description != "Canary Disconnected"
+  | where Description != "Canary Reconnected"
+  | where Description != "Canary Settings Changed"
+  | where Description != "Fake Location"
+  | where Description != "Network Settings Roll-back"
+  | extend EventData = todynamic(RawEvent[0])
+  | extend IsCanarytoken = Description contains "Canarytoken"
+      or LogType startswith "16"
+      or LogType startswith "17"
+      or isnotempty(tostring(EventData.canarytoken))
+  | extend PhysicalCanaryName = coalesce(tostring(Host.name), NodeId),
+      PhysicalCanaryIP = coalesce(tostring(Host.ip_address), DestinationIP, IpAddress),
+      TokenMemo = iff(IsCanarytoken, substring(Memo, 0, 256), ""),
+      TokenType = coalesce(tostring(EventData.kind), tostring(EventData.type)),
+      TokenHostname = tostring(EventData.hostname),
+      TokenTarget = substring(coalesce(tostring(EventData.url), tostring(EventData.hostname), tostring(EventData.cloned_site), tostring(EventData.original_site), tostring(EventData.generic_data), tostring(EventData.location)), 0, 512),
+      TokenUsername = coalesce(tostring(EventData.windows_desktopini_access_username), tostring(EventData.ms_macro_username), tostring(EventData.cmd_user_name)),
+      TokenDomain = coalesce(tostring(EventData.windows_desktopini_access_domain), tostring(EventData.cmd_machine_name)),
+      TokenHost = coalesce(tostring(EventData.windows_desktopini_computer_name), tostring(EventData.cmd_computer_name), tostring(EventData.cmd_workstation), tostring(EventData.cmd_machine_name)),
+      TokenSourceIP = coalesce(tostring(EventData.cmd_resolved_ip), tostring(EventData.ms_macro_ip)),
+      TokenCity = coalesce(tostring(EventData.geoip.city), tostring(EventData.geoip.City), tostring(EventData.City)),
+      TokenCountry = coalesce(tostring(EventData.geoip.country), tostring(EventData.geoip.country_name), tostring(EventData.geoip.Country), tostring(EventData.Country)),
+      TokenContext = case(
+        isnotempty(tostring(EventData.client_public_key)), strcat("WireGuard public key: ", substring(tostring(EventData.client_public_key), 0, 128), "; session: ", tostring(EventData.client_session_index)),
+        isnotempty(tostring(EventData.masked_card_number)), strcat("Masked card: ", tostring(EventData.masked_card_number), "; transaction: ", tostring(EventData.transaction_amount), " ", tostring(EventData.transaction_currency), "; merchant: ", tostring(EventData.merchant)),
+        isnotempty(tostring(EventData.referer)), strcat("Referrer: ", substring(tostring(EventData.referer), 0, 256)),
+        ""),
+      UserAgent = substring(coalesce(tostring(EventData.USERAGENT), tostring(EventData.HEADERS['user-agent']), tostring(EventData.headers['User-Agent']), tostring(EventData.headers['user-agent'])), 0, 512)
+  | extend ActorUsername = coalesce(tostring(EventData.USERNAME), tostring(EventData.USER), tostring(EventData.FORMDATA.username), tostring(EventData.POSTDATA.username), TokenUsername),
+      ActorDomain = coalesce(tostring(EventData.DOMAIN), tostring(EventData.DOMAINNAME), TokenDomain),
+      ActorHost = coalesce(TokenHost, tostring(EventData.HOSTNAME)),
+      Activity = coalesce(TokenContext, TokenType, tostring(EventData.INSTANCE_NAME), tostring(EventData.FUNC_NAME), tostring(EventData.METHOD), tostring(EventData.OPCODE), tostring(EventData.COMMAND), tostring(EventData.FUNCTION), Description)
+  | extend SourceIP = coalesce(SourceIP, tostring(EventData.src_host), TokenSourceIP),
+      SourceGeo = case(isnotempty(TokenCity) and isnotempty(TokenCountry), strcat(TokenCity, ", ", TokenCountry), isnotempty(TokenCity), TokenCity, TokenCountry),
+      AssetType = iff(IsCanarytoken, "Canarytoken", "Canary"),
+      AssetName = iff(IsCanarytoken, coalesce(TokenMemo, TokenTarget, TokenType, NodeId), PhysicalCanaryName),
+      AssetNode = NodeId,
+      AssetIP = iff(IsCanarytoken, "", PhysicalCanaryIP),
+      AssetLocation = iff(IsCanarytoken, "", tostring(Host.description)),
+      CanaryEntityName = iff(IsCanarytoken, "", PhysicalCanaryName),
+      CanaryEntityIP = iff(IsCanarytoken, "", PhysicalCanaryIP)
+  | extend SourceDisplay = coalesce(SourceIP, SrcHostReverse, "unknown source")
+  | project TimeGenerated, Description, IncidentId, AssetType, AssetName, AssetNode,
+      AssetIP, AssetLocation, FlockName, TokenMemo, TokenType, TokenTarget,
+      TokenHostname, ActorUsername, ActorDomain, ActorHost, SourceGeo, SourceIP,
+      SourceDisplay, SrcHostReverse, DestinationPort, Activity, UserAgent, LogType,
+      EventsCount, CanaryEntityName, CanaryEntityIP
+suppressionDuration: 1h
+suppressionEnabled: false
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}} - {{AssetName}} from {{SourceDisplay}}'
+  alertDescriptionFormat: 'Thinkst {{AssetType}} {{AssetName}} recorded this activity from {{SourceDisplay}}. Review the mapped entities and custom details for asset, actor, and activity context.'
+customDetails:
+  AssetType: AssetType
+  AssetName: AssetName
+  AssetNode: AssetNode
+  AssetIP: AssetIP
+  AssetLocation: AssetLocation
+  FlockName: FlockName
+  TokenMemo: TokenMemo
+  TokenType: TokenType
+  TokenTarget: TokenTarget
+  ActorUsername: ActorUsername
+  ActorDomain: ActorDomain
+  ActorHost: ActorHost
+  SourceGeo: SourceGeo
+  IncidentKey: IncidentId
+  SourceIP: SourceIP
+  DestinationPort: DestinationPort
+  Activity: Activity
+  UserAgent: UserAgent
+  LogType: LogType
+  EventsCount: EventsCount
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CanaryEntityIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: CanaryEntityName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ActorUsername
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: TokenHostname
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.2
+kind: NRT

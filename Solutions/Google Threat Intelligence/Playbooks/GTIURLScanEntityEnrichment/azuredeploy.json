@@ -1,0 +1,813 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Google Threat Intelligence - URLScan Entity Enrichment",
+    "description": "Triggered by a Microsoft Sentinel URL entity, submits the URL to the GTI private API, polls analysis with progressive back-off (30s→60s→120s, max 30 min), retrieves the full URL report using the URL ID from the analysis meta, ingests the complete data object into GTI_URLScan_CL via DCE/DCR, then calls GTIAddCommentToIncident with the full response and playbook name.",
+    "prerequisites": [
+      "A Key Vault must exist containing the GTI (VirusTotal) API key as a secret.",
+      "The Logic App managed identity must have 'Key Vault Secrets User' role on the vault.",
+      "The Logic App managed identity must have 'Monitoring Metrics Publisher' role on the DCR.",
+      "The Key Vault must have 'enabledForTemplateDeployment' set to true.",
+      "The GTIAddCommentToIncident playbook must be deployed before this playbook."
+    ],
+    "entities": ["Url"],
+    "tags": ["Enrichment", "URL Scanning", "GTI", "Entity"],
+    "support": { "tier": "Partner" },
+    "author": { "name": "Crest Data" },
+    "postDeployment": [
+      "Grant the Logic App managed identity 'Microsoft Sentinel Responder' role on the Sentinel workspace.",
+      "Grant the Logic App managed identity 'Key Vault Secrets User' role on the Key Vault.",
+      "The 'Monitoring Metrics Publisher' role on the DCR is automatically assigned by this template.",
+      "Create an automation rule in Sentinel to trigger this playbook on URL entities.",
+      "Ensure GTIAddCommentToIncident playbook is deployed and its managed identity has 'Microsoft Sentinel Responder' role."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial version",
+        "notes": [
+          "Initial release.",
+          "Entity trigger — processes a single URL entity directly.",
+          "Submits to GTI private API, polls analysis with progressive back-off (30s→60s→120s, max 30 min).",
+          "Retrieves full URL report using URL ID from analysis meta, ingests complete data into GTI_URLScan_CL via DCE/DCR.",
+          "Calls GTIAddCommentToIncident with full report response and playbook name 'GTIURLScanEntityEnrichment'.",
+          "Explicit 200/400/429 handling for all three API calls.",
+          "Try_Scope / Catch_Scope pattern — no Terminate inside scopes."
+        ]
+      }
+    ],
+    "lastUpdateTime": "2026-07-06T00:00:00.000Z",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "GTIURLScanEntityEnrichment",
+      "type": "String",
+      "metadata": { "description": "Name of the Logic App / Playbook resource." }
+    },
+    "KeyVaultName": {
+      "type": "String",
+      "metadata": { "description": "Name of the Azure Key Vault that stores the GTI API key." }
+    },
+    "KeyVaultSecretName": {
+      "defaultValue": "GTIApiKey",
+      "type": "String",
+      "metadata": { "description": "Name of the Key Vault secret that holds the GTI (VirusTotal) API key." }
+    },
+    "WorkspaceName": {
+      "type": "String",
+      "metadata": { "description": "Name of the Log Analytics workspace for GTI_URLScan_CL ingestion." }
+    },
+    "GTIAddCommentPlaybookName": {
+      "defaultValue": "GTIAddCommentToIncident",
+      "type": "String",
+      "metadata": { "description": "Name of the GTIAddCommentToIncident Logic App used to post enrichment comments to incidents." }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "GTIBaseUri": "https://www.virustotal.com",
+    "DCEName": "[concat('GTI-DCE-Entity-', uniqueString(parameters('PlaybookName')))]",
+    "DCRName": "[concat('GTI-DCR-Entity-', uniqueString(parameters('PlaybookName')))]",
+    "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+    "RoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', concat('GTI-DCR-Entity-', uniqueString(parameters('PlaybookName')))), resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '3913510d-42f4-4e42-8a64-420c390055eb')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('DCEName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "networkAcls": { "publicNetworkAccess": "Enabled" }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('WorkspaceName'), '/GTI_URLScan_CL')]",
+      "properties": {
+        "schema": {
+          "name": "GTI_URLScan_CL",
+          "columns": [
+            { "name": "id", "type": "string" },
+            { "name": "UrlType", "type": "string" },
+            { "name": "links_self", "type": "string" },
+            { "name": "attributes_sigma_analysis_results", "type": "dynamic" },
+            { "name": "attributes_html_meta", "type": "dynamic" },
+            { "name": "attributes_html_meta_viewport", "type": "dynamic" },
+            { "name": "attributes_tld", "type": "string" },
+            { "name": "attributes_sandbox_verdicts", "type": "dynamic" },
+            { "name": "attributes_private", "type": "boolean" },
+            { "name": "attributes_expiration", "type": "real" },
+            { "name": "attributes_last_http_response_content_sha256", "type": "string" },
+            { "name": "attributes_tags", "type": "dynamic" },
+            { "name": "attributes_title", "type": "string" },
+            { "name": "attributes_url", "type": "string" },
+            { "name": "attributes_detected_brands", "type": "dynamic" },
+            { "name": "attributes_crowdsourced_ids_results", "type": "dynamic" },
+            { "name": "attributes_last_final_url", "type": "string" },
+            { "name": "attributes_sigma_analysis_summary", "type": "dynamic" },
+            { "name": "attributes_outgoing_links", "type": "dynamic" },
+            { "name": "attributes_last_http_response_content_length", "type": "real" },
+            { "name": "attributes_trackers", "type": "dynamic" },
+            { "name": "attributes_last_http_response_headers", "type": "dynamic" },
+            { "name": "attributes_last_http_response_headers_age", "type": "string" },
+            { "name": "attributes_last_http_response_headers_date", "type": "string" },
+            { "name": "attributes_last_http_response_headers_cf_ray", "type": "string" },
+            { "name": "attributes_last_http_response_headers_content_encoding", "type": "string" },
+            { "name": "attributes_last_http_response_headers_last_modified", "type": "string" },
+            { "name": "attributes_last_http_response_headers_content_type", "type": "string" },
+            { "name": "attributes_last_http_response_headers_server", "type": "string" },
+            { "name": "attributes_last_http_response_headers_cf_cache_status", "type": "string" },
+            { "name": "attributes_last_http_response_headers_allow", "type": "string" },
+            { "name": "attributes_last_http_response_code", "type": "real" },
+            { "name": "attributes_redirection_chain", "type": "dynamic" },
+            { "name": "attributes_gti_assessment", "type": "dynamic" },
+            { "name": "attributes_gti_assessment_severity", "type": "dynamic" },
+            { "name": "attributes_gti_assessment_severity_value", "type": "string" },
+            { "name": "attributes_gti_assessment_threat_score", "type": "dynamic" },
+            { "name": "attributes_gti_assessment_threat_score_value", "type": "real" },
+            { "name": "attributes_gti_assessment_verdict", "type": "dynamic" },
+            { "name": "attributes_gti_assessment_verdict_value", "type": "string" },
+            { "name": "attributes_gti_assessment_contributing_factors", "type": "dynamic" },
+            { "name": "attributes_gti_cf_safebrowsing_verdict", "type": "string" },
+            { "name": "attributes_gti_cf_pervasive_indicator", "type": "boolean" },
+            { "name": "attributes_gti_cf_mandiant_confidence_score", "type": "real" },
+            { "name": "attributes_gti_cf_gti_confidence_score", "type": "real" },
+            { "name": "attributes_gti_assessment_description", "type": "string" },
+            { "name": "context_attributes_shared_with_me", "type": "boolean" },
+            { "name": "context_attributes_role", "type": "string" },
+            { "name": "TimeGenerated", "type": "datetime" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('DCRName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'GTI_URLScan_CL')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "streamDeclarations": {
+          "Custom-GTI_URLScan_CL": {
+            "columns": [
+              { "name": "id", "type": "string" },
+              { "name": "type", "type": "string" },
+              { "name": "links", "type": "dynamic" },
+              { "name": "attributes", "type": "dynamic" },
+              { "name": "context_attributes", "type": "dynamic" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+              "name": "GTIWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": ["Custom-GTI_URLScan_CL"],
+            "destinations": ["GTIWorkspace"],
+            "transformKql": "source\n| extend TimeGenerated = now(), UrlType = tostring(type), links_self = tostring(parse_json(links)['self']), attributes_url = tostring(parse_json(attributes)['url']), attributes_tld = tostring(parse_json(attributes)['tld']), attributes_private = tobool(parse_json(attributes)['private']), attributes_expiration = toreal(parse_json(attributes)['expiration']), attributes_last_http_response_code = toreal(parse_json(attributes)['last_http_response_code'])\n| extend attributes_last_final_url = tostring(parse_json(attributes)['last_final_url']), attributes_last_http_response_content_length = toreal(parse_json(attributes)['last_http_response_content_length']), attributes_last_http_response_content_sha256 = tostring(parse_json(attributes)['last_http_response_content_sha256']), attributes_title = tostring(parse_json(attributes)['title']), attributes_gti_assessment_description = tostring(parse_json(parse_json(attributes)['gti_assessment'])['description']), attributes_gti_assessment_verdict_value = tostring(parse_json(parse_json(attributes)['gti_assessment'])['verdict']['value']), attributes_gti_assessment_severity_value = tostring(parse_json(parse_json(attributes)['gti_assessment'])['severity']['value']), attributes_gti_assessment_threat_score_value = toreal(parse_json(parse_json(attributes)['gti_assessment'])['threat_score']['value'])\n| extend attributes_gti_cf_safebrowsing_verdict = tostring(parse_json(parse_json(parse_json(attributes)['gti_assessment'])['contributing_factors'])['safebrowsing_verdict']), attributes_gti_cf_pervasive_indicator = tobool(parse_json(parse_json(parse_json(attributes)['gti_assessment'])['contributing_factors'])['pervasive_indicator']), attributes_gti_cf_mandiant_confidence_score = toreal(parse_json(parse_json(parse_json(attributes)['gti_assessment'])['contributing_factors'])['mandiant_confidence_score']), attributes_gti_cf_gti_confidence_score = toreal(parse_json(parse_json(parse_json(attributes)['gti_assessment'])['contributing_factors'])['gti_confidence_score']), context_attributes_shared_with_me = tobool(parse_json(context_attributes)['shared_with_me']), context_attributes_role = tostring(parse_json(context_attributes)['role'])\n| extend attributes_sigma_analysis_results = parse_json(attributes)['sigma_analysis_results'], attributes_html_meta = parse_json(attributes)['html_meta'], attributes_html_meta_viewport = parse_json(parse_json(attributes)['html_meta'])['viewport'], attributes_sandbox_verdicts = parse_json(attributes)['sandbox_verdicts'], attributes_tags = parse_json(attributes)['tags'], attributes_detected_brands = parse_json(attributes)['detected_brands'], attributes_crowdsourced_ids_results = parse_json(attributes)['crowdsourced_ids_results']\n| extend attributes_sigma_analysis_summary = parse_json(attributes)['sigma_analysis_summary'], attributes_outgoing_links = parse_json(attributes)['outgoing_links'], attributes_trackers = parse_json(attributes)['trackers'], attributes_redirection_chain = parse_json(attributes)['redirection_chain'], attributes_last_http_response_headers = parse_json(attributes)['last_http_response_headers'], attributes_gti_assessment = parse_json(attributes)['gti_assessment'], attributes_gti_assessment_severity = parse_json(parse_json(attributes)['gti_assessment'])['severity'], attributes_gti_assessment_threat_score = parse_json(parse_json(attributes)['gti_assessment'])['threat_score'], attributes_gti_assessment_verdict = parse_json(parse_json(attributes)['gti_assessment'])['verdict'], attributes_gti_assessment_contributing_factors = parse_json(parse_json(attributes)['gti_assessment'])['contributing_factors']\n| extend attributes_last_http_response_headers_age = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['age']), attributes_last_http_response_headers_date = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['date']), attributes_last_http_response_headers_server = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['server']), attributes_last_http_response_headers_allow = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['allow']), attributes_last_http_response_headers_cf_ray = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['cf-ray']), attributes_last_http_response_headers_content_encoding = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['content-encoding']), attributes_last_http_response_headers_last_modified = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['last-modified']), attributes_last_http_response_headers_content_type = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['content-type']), attributes_last_http_response_headers_cf_cache_status = tostring(parse_json(parse_json(attributes)['last_http_response_headers'])['cf-cache-status'])\n| project-away links, attributes, context_attributes, type",
+            "outputStream": "Custom-GTI_URLScan_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyVaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyVaultConnectionName')]",
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": { "vaultName": "[parameters('KeyVaultName')]" },
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "GTIURLScanEntityEnrichment",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'GTI_URLScan_CL')]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "DCEIngestionEndpoint": {
+              "type": "String",
+              "defaultValue": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/Custom-GTI_URLScan_CL?api-version=2023-01-01')]"
+            },
+            "GTIBaseUri": {
+              "type": "String",
+              "defaultValue": "[variables('GTIBaseUri')]"
+            },
+            "GTIAddCommentPlaybookName": {
+              "type": "String",
+              "defaultValue": "[parameters('GTIAddCommentPlaybookName')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_entity": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/entity/@{encodeURIComponent('UrlEntity')}"
+              }
+            }
+          },
+          "actions": {
+            "Get_Secret": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs", "outputs"] }
+              }
+            },
+            "Terminate_Secret_Failed": {
+              "type": "Terminate",
+              "inputs": { "runStatus": "Cancelled" },
+              "runAfter": {
+                "Get_Secret": ["Failed", "TimedOut", "Skipped"]
+              }
+            },
+            "Initialize_AnalysisId": {
+              "type": "InitializeVariable",
+              "runAfter": { "Get_Secret": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "AnalysisId", "type": "String", "value": "" }]
+              }
+            },
+            "Initialize_UrlId": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_AnalysisId": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "UrlId", "type": "String", "value": "" }]
+              }
+            },
+            "Initialize_Retry_Count": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_UrlId": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "RetryCount", "type": "Integer", "value": 0 }]
+              }
+            },
+            "Initialize_API_Status_Code": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Retry_Count": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "APIStatusCode", "type": "Integer", "value": 0 }]
+              }
+            },
+            "Initialize_Poll_Delay_Seconds": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_API_Status_Code": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "PollDelaySeconds", "type": "Integer", "value": 30 }]
+              }
+            },
+            "Try_Scope": {
+              "type": "Scope",
+              "runAfter": { "Initialize_Poll_Delay_Seconds": ["Succeeded"] },
+              "actions": {
+
+                "Reset_Retry_Count": {
+                  "type": "SetVariable",
+                  "runAfter": {},
+                  "inputs": { "name": "RetryCount", "value": 0 }
+                },
+                "Retry_Submit_Until_Not_429": {
+                  "type": "Until",
+                  "runAfter": { "Reset_Retry_Count": ["Succeeded"] },
+                  "expression": "@or(not(equals(variables('APIStatusCode'), 429)), greaterOrEquals(variables('RetryCount'), 3))",
+                  "limit": { "count": 4, "timeout": "PT10M" },
+                  "actions": {
+                    "Submit_Uri": {
+                      "type": "Http",
+                      "runAfter": {},
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/private/urls')}",
+                        "headers": {
+                          "x-apikey": "@body('Get_Secret')?['value']",
+                          "User-Agent": "azure-sentinel-gti-playbook/1.0.0",
+                          "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        "body": "url=@{encodeURIComponent(triggerBody()?['Entity']?['properties']?['Url'])}"
+                      }
+                    },
+                    "Set_API_Status_Submit": {
+                      "type": "SetVariable",
+                      "runAfter": { "Submit_Uri": ["Succeeded", "Failed"] },
+                      "inputs": { "name": "APIStatusCode", "value": "@outputs('Submit_Uri')['statusCode']" }
+                    },
+                    "Check_If_429_Submit": {
+                      "type": "If",
+                      "runAfter": { "Set_API_Status_Submit": ["Succeeded"] },
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('APIStatusCode')", 429] },
+                          { "less": ["@variables('RetryCount')", 3] }
+                        ]
+                      },
+                      "actions": {
+                        "Delay_Rate_Limit_Submit": {
+                          "type": "Wait",
+                          "runAfter": {},
+                          "inputs": { "interval": { "count": 60, "unit": "Second" } }
+                        },
+                        "Increment_Retry_Submit": {
+                          "type": "IncrementVariable",
+                          "runAfter": { "Delay_Rate_Limit_Submit": ["Succeeded"] },
+                          "inputs": { "name": "RetryCount", "value": 1 }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    }
+                  }
+                },
+
+                "Check_Submit_Status": {
+                  "type": "If",
+                  "runAfter": { "Retry_Submit_Until_Not_429": ["Succeeded"] },
+                  "expression": {
+                    "and": [{ "equals": ["@variables('APIStatusCode')", 200] }]
+                  },
+                  "actions": {
+
+                    "Set_AnalysisId": {
+                      "type": "SetVariable",
+                      "runAfter": {},
+                      "inputs": { "name": "AnalysisId", "value": "@body('Submit_Uri')?['data']?['id']" }
+                    },
+                    "Check_AnalysisId_Valid": {
+                      "type": "If",
+                      "runAfter": { "Set_AnalysisId": ["Succeeded"] },
+                      "expression": { "and": [{ "equals": ["@variables('AnalysisId')", ""] }] },
+                      "actions": {
+                        "Terminate_Null_AnalysisId": {
+                          "type": "Terminate",
+                          "runAfter": {},
+                          "inputs": {
+                            "runStatus": "Failed",
+                            "runError": {
+                              "code": "400",
+                              "message": "@{concat('GTI API returned null Analysis ID for URL: ', triggerBody()?['Entity']?['properties']?['Url'], '. The URL may be invalid or unsupported.')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Reset_Retry_Count_Poll": {
+                      "type": "SetVariable",
+                      "runAfter": { "Check_AnalysisId_Valid": ["Succeeded"] },
+                      "inputs": { "name": "RetryCount", "value": 0 }
+                    },
+                    "Reset_Poll_Delay": {
+                      "type": "SetVariable",
+                      "runAfter": { "Reset_Retry_Count_Poll": ["Succeeded"] },
+                      "inputs": { "name": "PollDelaySeconds", "value": 30 }
+                    },
+
+                    "Poll_Analysis_Until_Completed": {
+                      "type": "Until",
+                      "runAfter": { "Reset_Poll_Delay": ["Succeeded"] },
+                      "expression": "@or(equals(body('Get_Analysis')?['data']?['attributes']?['status'], 'completed'), equals(variables('APIStatusCode'), 400), equals(variables('APIStatusCode'), 404), greaterOrEquals(variables('RetryCount'), 3))",
+                      "limit": { "count": 60, "timeout": "PT30M" },
+                      "actions": {
+                        "Get_Analysis": {
+                          "type": "Http",
+                          "runAfter": {},
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/private/analyses/', variables('AnalysisId'))}",
+                            "headers": {
+                              "x-apikey": "@body('Get_Secret')?['value']",
+                              "User-Agent": "azure-sentinel-gti-playbook/1.0.0"
+                            }
+                          }
+                        },
+                        "Set_API_Status_Analysis": {
+                          "type": "SetVariable",
+                          "runAfter": { "Get_Analysis": ["Succeeded", "Failed"] },
+                          "inputs": { "name": "APIStatusCode", "value": "@outputs('Get_Analysis')['statusCode']" }
+                        },
+                        "Check_If_429_Analysis": {
+                          "type": "If",
+                          "runAfter": { "Set_API_Status_Analysis": ["Succeeded"] },
+                          "expression": {
+                            "and": [
+                              { "equals": ["@variables('APIStatusCode')", 429] },
+                              { "less": ["@variables('RetryCount')", 3] }
+                            ]
+                          },
+                          "actions": {
+                            "Delay_Rate_Limit_Analysis": {
+                              "type": "Wait",
+                              "runAfter": {},
+                              "inputs": { "interval": { "count": 60, "unit": "Second" } }
+                            },
+                            "Increment_Retry_Analysis": {
+                              "type": "IncrementVariable",
+                              "runAfter": { "Delay_Rate_Limit_Analysis": ["Succeeded"] },
+                              "inputs": { "name": "RetryCount", "value": 1 }
+                            }
+                          },
+                          "else": { "actions": {} }
+                        },
+                        "Check_Analysis_Complete": {
+                          "type": "If",
+                          "runAfter": { "Check_If_429_Analysis": ["Succeeded"] },
+                          "expression": {
+                            "and": [
+                              { "equals": ["@body('Get_Analysis')?['data']?['attributes']?['status']", "completed"] }
+                            ]
+                          },
+                          "actions": {},
+                          "else": {
+                            "actions": {
+                              "Delay_Poll": {
+                                "type": "Wait",
+                                "runAfter": {},
+                                "inputs": { "interval": { "count": "@variables('PollDelaySeconds')", "unit": "Second" } }
+                              },
+                              "Compose_New_Poll_Delay": {
+                                "type": "Compose",
+                                "runAfter": { "Delay_Poll": ["Succeeded"] },
+                                "inputs": "@if(less(variables('PollDelaySeconds'), 120), mul(variables('PollDelaySeconds'), 2), 120)"
+                              },
+                              "Update_Poll_Delay": {
+                                "type": "SetVariable",
+                                "runAfter": { "Compose_New_Poll_Delay": ["Succeeded"] },
+                                "inputs": { "name": "PollDelaySeconds", "value": "@outputs('Compose_New_Poll_Delay')" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+
+                    "Check_Analysis_Exit_Status": {
+                      "type": "If",
+                      "runAfter": { "Poll_Analysis_Until_Completed": ["Succeeded"] },
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('APIStatusCode')", 200] },
+                          { "equals": ["@body('Get_Analysis')?['data']?['attributes']?['status']", "completed"] }
+                        ]
+                      },
+                      "actions": {
+
+                        "Set_UrlId": {
+                          "type": "SetVariable",
+                          "runAfter": {},
+                          "inputs": {
+                            "name": "UrlId",
+                            "value": "@body('Get_Analysis')?['meta']?['url_info']?['id']"
+                          }
+                        },
+                        "Reset_Retry_Count_Report": {
+                          "type": "SetVariable",
+                          "runAfter": { "Set_UrlId": ["Succeeded"] },
+                          "inputs": { "name": "RetryCount", "value": 0 }
+                        },
+
+                        "Retry_Report_Until_Not_429": {
+                          "type": "Until",
+                          "runAfter": { "Reset_Retry_Count_Report": ["Succeeded"] },
+                          "expression": "@or(not(equals(variables('APIStatusCode'), 429)), greaterOrEquals(variables('RetryCount'), 3))",
+                          "limit": { "count": 4, "timeout": "PT10M" },
+                          "actions": {
+                            "Get_URL_Report": {
+                              "type": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "method": "GET",
+                                "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/private/urls/', variables('UrlId'))}",
+                                "headers": {
+                                  "x-apikey": "@body('Get_Secret')?['value']",
+                                  "x-tool": "azure-sentinel-gti-workbook",
+                                  "User-Agent": "azure-sentinel-gti-playbook/1.0.0"
+                                }
+                              }
+                            },
+                            "Set_API_Status_Report": {
+                              "type": "SetVariable",
+                              "runAfter": { "Get_URL_Report": ["Succeeded", "Failed"] },
+                              "inputs": { "name": "APIStatusCode", "value": "@outputs('Get_URL_Report')['statusCode']" }
+                            },
+                            "Check_If_429_Report": {
+                              "type": "If",
+                              "runAfter": { "Set_API_Status_Report": ["Succeeded"] },
+                              "expression": {
+                                "and": [
+                                  { "equals": ["@variables('APIStatusCode')", 429] },
+                                  { "less": ["@variables('RetryCount')", 3] }
+                                ]
+                              },
+                              "actions": {
+                                "Delay_Rate_Limit_Report": {
+                                  "type": "Wait",
+                                  "runAfter": {},
+                                  "inputs": { "interval": { "count": 60, "unit": "Second" } }
+                                },
+                                "Increment_Retry_Report": {
+                                  "type": "IncrementVariable",
+                                  "runAfter": { "Delay_Rate_Limit_Report": ["Succeeded"] },
+                                  "inputs": { "name": "RetryCount", "value": 1 }
+                                }
+                              },
+                              "else": { "actions": {} }
+                            }
+                          }
+                        },
+
+                        "Check_Report_Status": {
+                          "type": "If",
+                          "runAfter": { "Retry_Report_Until_Not_429": ["Succeeded"] },
+                          "expression": {
+                            "and": [{ "equals": ["@variables('APIStatusCode')", 200] }]
+                          },
+                          "actions": {
+                            "Ingest_URL_Scan_Result": {
+                              "type": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@parameters('DCEIngestionEndpoint')",
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "User-Agent": "azure-sentinel-gti-playbook/1.0.0"
+                                },
+                                "body": "@createArray(body('Get_URL_Report')?['data'])",
+                                "authentication": {
+                                  "type": "ManagedServiceIdentity",
+                                  "audience": "https://monitor.azure.com/"
+                                },
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 3,
+                                  "interval": "PT10S",
+                                  "minimumInterval": "PT10S",
+                                  "maximumInterval": "PT1H"
+                                }
+                              }
+                            },
+                            "Call_GTIAddCommentToIncident": {
+                              "type": "Workflow",
+                              "runAfter": { "Ingest_URL_Scan_Result": ["Succeeded"] },
+                              "inputs": {
+                                "host": {
+                                  "triggerName": "manual",
+                                  "workflow": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('GTIAddCommentPlaybookName'))]"
+                                  }
+                                },
+                                "body": {
+                                  "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                  "scanResponse": "@body('Get_URL_Report')",
+                                  "urlScanned": "@triggerBody()?['Entity']?['properties']?['Url']",
+                                  "playbookName": "GTIURLScanEntityEnrichment"
+                                }
+                              },
+                              "runtimeConfiguration": {
+                                "secureData": { "properties": ["inputs", "outputs"] }
+                              }
+                            }
+                          },
+                          "else": { "actions": {} }
+                        }
+
+                      },
+                      "else": {
+                        "actions": {
+                          "Check_Analysis_Error_Type": {
+                            "type": "If",
+                            "runAfter": {},
+                            "expression": {
+                              "and": [{ "equals": ["@variables('APIStatusCode')", 429] }]
+                            },
+                            "actions": {
+                              "Terminate_Rate_Limited_Analysis": {
+                                "type": "Terminate",
+                                "runAfter": {},
+                                "inputs": {
+                                  "runStatus": "Failed",
+                                  "runError": {
+                                    "code": "429",
+                                    "message": "@{concat('GTI API rate limit exceeded after 3 retries on GET /analyses. AnalysisId: ', variables('AnalysisId'), '. URL: ', triggerBody()?['Entity']?['properties']?['Url'])}"
+                                  }
+                                }
+                              }
+                            },
+                            "else": {
+                              "actions": {
+                                "Check_If_400_Analysis": {
+                                  "type": "If",
+                                  "runAfter": {},
+                                  "expression": {
+                                    "or": [{ "equals": ["@variables('APIStatusCode')", 400] }, { "equals": ["@variables('APIStatusCode')", 404] }]
+                                  },
+                                  "actions": {
+                                    "Terminate_API_Error_Analysis": {
+                                      "type": "Terminate",
+                                      "runAfter": {},
+                                      "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                          "code": "@{variables('APIStatusCode')}",
+                                          "message": "@{concat('GTI API returned ', variables('APIStatusCode'), ' on GET /analyses. AnalysisId: ', variables('AnalysisId'), '. URL: ', triggerBody()?['Entity']?['properties']?['Url'])}"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Terminate_Analysis_Timeout": {
+                                        "type": "Terminate",
+                                        "runAfter": {},
+                                        "inputs": {
+                                          "runStatus": "Failed",
+                                          "runError": {
+                                            "code": "408",
+                                            "message": "@{concat('GTI analysis did not complete within 30 minutes. AnalysisId: ', variables('AnalysisId'), '. Last status: ', body('Get_Analysis')?['data']?['attributes']?['status'], '. URL: ', triggerBody()?['Entity']?['properties']?['Url'])}"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                  },
+                  "else": { "actions": {} }
+                }
+
+              }
+            },
+
+            "Catch_Scope": {
+              "type": "Scope",
+              "runAfter": { "Try_Scope": ["Failed", "TimedOut", "Skipped"] },
+              "actions": {
+                "Call_GTIAddCommentToIncident_Error": {
+                  "type": "Workflow",
+                  "runAfter": {},
+                  "inputs": {
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('GTIAddCommentPlaybookName'))]"
+                      }
+                    },
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                      "scanResponse": {},
+                      "urlScanned": "@triggerBody()?['Entity']?['properties']?['Url']",
+                      "playbookName": "GTIURLScanEntityEnrichment",
+                      "errorMessage": "@{result('Try_Scope')?[0]?['error']?['message']}"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": { "properties": ["inputs", "outputs"] }
+                  }
+                },
+                "Terminate_On_Error": {
+                  "type": "Terminate",
+                  "runAfter": { "Call_GTIAddCommentToIncident_Error": ["Succeeded", "Failed"] },
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "500",
+                      "message": "@{concat('GTIURLScanEntityEnrichment failed for URL: ', triggerBody()?['Entity']?['properties']?['Url'], '. Error: ', result('Try_Scope')?[0]?['error']?['message'])}"
+                    }
+                  }
+                }
+              }
+            }
+
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "connectionName": "[variables('KeyVaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('RoleAssignmentName')]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]",
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('MonitoringMetricsPublisherRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "String",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "DCEResourceId": {
+      "type": "String",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]"
+    },
+    "DCRResourceId": {
+      "type": "String",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]"
+    }
+  }
+}

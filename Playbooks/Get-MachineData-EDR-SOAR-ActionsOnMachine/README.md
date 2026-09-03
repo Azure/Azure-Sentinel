@@ -52,7 +52,7 @@ API connections for the above mentioned prerequisites are created as a part of A
 
 ## Deploy to Azure
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json)
 
 ## Support
 Optionally, you can always reachout to kloudynetklassrooms@kloudynet.com to get further assistance.

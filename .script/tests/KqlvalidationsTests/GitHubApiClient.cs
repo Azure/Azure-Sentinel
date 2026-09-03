@@ -46,7 +46,6 @@ namespace Kqlvalidations.Tests
         /// Creates singleton instance of <see cref="GitHubApiClient"/>
         /// </summary>
         /// <returns>singleton instance of GitHub Client</returns>
-        /// <exception cref="InvalidOperationException">Throws an exception if there is an issue with app id, installation id, private key.</exception>
         public static GitHubApiClient Create()
         {
             if (_instance == null)
@@ -66,18 +65,20 @@ namespace Kqlvalidations.Tests
                             var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
                             if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                             {
-                                throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
+                                _instance = new GitHubApiClient();
                             }
-
-                            try
+                            else
                             {
-                                var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                                var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
-                                _instance = new GitHubApiClient(accessToken);
-                            }
-                            catch (Exception ex)
-                            {
-                                throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                                try
+                                {
+                                    var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                                    var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
+                                    _instance = new GitHubApiClient(accessToken);
+                                }
+                                catch (Exception ex)
+                                {
+                                    throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                                }
                             }
                         }
                     }
