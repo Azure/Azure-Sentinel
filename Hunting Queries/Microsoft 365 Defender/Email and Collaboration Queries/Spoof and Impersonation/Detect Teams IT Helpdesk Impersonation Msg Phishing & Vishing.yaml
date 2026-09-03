@@ -1,0 +1,44 @@
+id: d9fee5bc-e4f8-4ae2-a729-dc399a419cce
+name: Display Name - Detect Teams IT Helpdesk Impersonation Msg Phishing & Vishing
+description: |
+  This query check Teams IT helpdesk impersonation initial access via Teams chat and voice
+description-detailed: |
+  This query check Teams IT helpdesk impersonation initial access via Teams chat and voice
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+   let TeamsVishing =
+   CloudAppEvents
+   | where Timestamp > ago(1h)
+   | where Application == @"Microsoft Teams" and ActionType == @"CallParticipantDetail" and tostring(RawEventData.Attendees) has "@"
+   | extend CallerPSTN = tostring(RawEventData.UserId)
+   | extend Domain = tostring(split(CallerPSTN, "@")[1])
+   | extend Caller = tostring(split(CallerPSTN, "@")[0])
+   | where CallerPSTN has "onmicrosoft.com" and (CallerPSTN has "helpdesk" or CallerPSTN has "support" or CallerPSTN has "admin")
+   | distinct Caller, Domain;
+   CloudAppEvents
+   | where Timestamp > ago(1h)
+   | where Application == "Microsoft Teams" and ActionType == "ChatCreated" and IsExternalUser == true
+   | extend ThreadCreatorUpn = tostring(RawEventData.Members[0].UPN)
+       ,ThreadCreatorDisplayName = tostring(RawEventData.Members[0].DisplayName)
+       ,ThreadCreatorOrganizationId = tostring(RawEventData.Members[0].OrganizationId)
+       ,TRecipient1Upn = tostring(RawEventData.Members[1].UPN)
+       ,Recipient1DisplayName = tostring(RawEventData.Members[1].DisplayName)
+       ,Recipient1OrganizationId = tostring(RawEventData.Members[1].OrganizationId)
+       ,Recipient2Upn = tostring(RawEventData.Members[2].UPN)
+       ,Recipient2DisplayName = tostring(RawEventData.Members[2].DisplayName)
+       ,Recipient2OrganizationId = tostring(RawEventData.Members[2].OrganizationId)
+       ,ThreadId = tostring(RawEventData.ChatThreadId)
+   | where ThreadCreatorUpn has "onmicrosoft.com" and (ThreadCreatorUpn has "helpdesk" or ThreadCreatorUpn has "support" or ThreadCreatorUpn has "admin")
+   | summarize by ThreadCreatorUpn, ThreadCreatorDisplayName, ThreadCreatorOrganizationId,
+       TRecipient1Upn, Recipient1DisplayName, Recipient1OrganizationId,
+       Recipient2Upn, Recipient2DisplayName, Recipient2OrganizationId,
+       ThreadId, tostring(IsExternalUser), tostring(IsImpersonated)
+   | union TeamsVishing
+version: 1.0.0
