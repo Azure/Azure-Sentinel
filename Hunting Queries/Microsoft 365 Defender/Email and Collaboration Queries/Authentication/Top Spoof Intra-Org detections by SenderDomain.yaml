@@ -15,12 +15,14 @@ relevantTechniques:
   - T1566
 query: |
   EmailEvents
+  | where Timestamp > ago(30d)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
   | where EmailDirection == "Inbound"
   | summarize TotalEmailCount = count(),
-  SpoofInternalCount = countif(DetectionMethods has_any ('Phish":["Spoof intra-org"]')) by P1Sender=SenderMailFromDomain, P2Sender=SenderFromDomain
+              SpoofInternalCount = countif(set_has_element(parse_json(DetectionMethods).Phish, "Spoof intra-org")) by P1Sender=SenderMailFromDomain, P2Sender=SenderFromDomain
   | extend SpoofInternal_Traffic_Percentage = todouble(round(SpoofInternalCount / todouble(TotalEmailCount) * 100, 2))
-  | where SpoofInternalCount !=0
-  | sort by SpoofInternalCount desc 
-  | project P1Sender,P2Sender,SpoofInternalCount,TotalEmailCount,SpoofInternal_Traffic_Percentage
+  | where SpoofInternalCount != 0
   | top 10 by SpoofInternalCount
-version: 1.0.0
+  | project P1Sender, P2Sender, SpoofInternalCount, TotalEmailCount, SpoofInternal_Traffic_Percentage
+version: 1.1.0
