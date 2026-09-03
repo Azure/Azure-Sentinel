@@ -2627,7 +2627,10 @@ function GenerateAlertRule($file, $contentResourceDetails) {
         }
     }
     else {
-        $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
+        $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
+        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+        }
     }
 
     if (!$yaml.severity) {
@@ -3011,9 +3014,9 @@ function RunArmTtkOnPackage {
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
         if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
             Write-Output "Missing arm-ttk validations. Downloading module..."
-            Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
+            & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
         }
-        Invoke-Expression "& '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
+        & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
     }
 }
 

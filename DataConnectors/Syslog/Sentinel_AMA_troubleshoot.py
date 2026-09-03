@@ -1,4 +1,4 @@
-#! /usr/local/bin/python3
+#!/usr/bin/env python3
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
@@ -15,9 +15,13 @@ import select
 import re
 import argparse
 import sys
-from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.51
+
+def _parse_version(v):
+    parts = tuple(int(x) for x in v.split('.'))
+    return parts + (0,) * (3 - len(parts))
+
+SCRIPT_VERSION = 2.52
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -298,7 +302,7 @@ class AgentInstallationVerifications:
         This function tess whether the agent on the machine is running with this updated agent version.
         """
         global IS_AGENT_VERSION_UPDATED
-        IS_AGENT_VERSION_UPDATED = StrictVersion(UPDATED_AGENT_VERSION) <= StrictVersion(AGENT_VERSION)
+        IS_AGENT_VERSION_UPDATED = _parse_version(UPDATED_AGENT_VERSION) <= _parse_version(AGENT_VERSION)
 
     @staticmethod
     def print_arc_version():
@@ -588,7 +592,7 @@ class OperatingSystemVerifications:
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        if StrictVersion(AGENT_VERSION) < StrictVersion(AGENT_MIN_HARDENING_VERSION):
+        if _parse_version(AGENT_VERSION) < _parse_version(AGENT_MIN_HARDENING_VERSION):
             command_object.run_full_test(True)
             if not command_object.is_successful:
                 print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)

@@ -1,5 +1,9 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
 |-------------|--------------------------------|-------------------------------------------------------------|
+| 3.3.1       | 26-08-2026                     | Fixed Cisco Umbrella CCF connection resource naming to include the S3 bucket, region, and prefix, preventing connections for different account prefixes from overwriting each other. |
+| 3.3.0       | 14-08-2026                     | Updated **CCF Data Connector** for Cisco Cloud Security log schema version 16: enabled Gzip decompression for all log streams, added **DestinationSgtOriginId** and **FwBlockReason** columns to CiscoUmbrellaCloudFirewall, added **IsolationProfileId** column to CiscoUmbrellaWebTraffic, and added connector instruction notes for optional headers and Cisco-managed/customer-managed Amazon S3 buckets. |
+| 3.2.2       | 04-08-2026                     | Fixed broken **Deploy to Azure Gov** button link in **Data Connectors** and **Playbooks**. |
+| 3.2.1       | 27-07-2026                     | Updated Parser to set EventType for dnslogs, proxylogs, cloudfirewalllogs. |
 | 3.2.0       | 01-07-2026                     | Updated Cisco Umbrella CCF data connector as generally available (isPreview false). |
 | 3.1.0       | 22-05-2026                     | Added new CCF (Codeless Connector) for Cisco Umbrella with 10 new tables (DNS, WebTraffic, CloudFirewall, AdminAudit, DLP, FileEvent, IPS, RemoteAccessVPN, ZeroTrustAccess, ZeroTrustAccessFlow) and updated parser to union new tables. (Public Preview) |
 | 3.0.10      | 23-03-2026                     | Added null-byte sanitization for corrupted state manager timestamps in Data Connector to prevent crashes on corrupted Azure File Share markers. Added null-byte stripping in date formatting to handle corrupted date fields from csv file. |

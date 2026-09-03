@@ -17,13 +17,15 @@ relevantTechniques:
 query: |
   //This query visualises total inbound emails with Spam detections summarizing the data by the top 15 email sender P2 domain (SenderFromDomain). Adding additional insights for total inbound emails and bad traffic percentage for each sender domain.
   EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
   | where EmailDirection == "Inbound"
-  | where Timestamp > ago(30d) // last 30 days by default, replace 30d with the desired period
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
   | summarize TotalEmailCount = count(),
-            SpamEmailCount = countif(ThreatTypes has "Spam") by SenderFromDomain
+              SpamEmailCount = countif(ThreatTypes has "Spam") by SenderFromDomain
   | extend Bad_Traffic_Percentage_Inbound = todouble(round(SpamEmailCount / todouble(TotalEmailCount) * 100, 2))
-  | where SpamEmailCount !=0
-  | sort by SpamEmailCount desc 
-  | project SenderFromDomain,SpamEmailCount,TotalEmailCount,Bad_Traffic_Percentage_Inbound
+  | where SpamEmailCount != 0
   | top 15 by SpamEmailCount
-version: 1.0.0
+  | project SenderFromDomain, SpamEmailCount, TotalEmailCount, Bad_Traffic_Percentage_Inbound
+version: 1.1.0
