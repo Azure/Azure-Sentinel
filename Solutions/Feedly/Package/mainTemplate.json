@@ -45,11 +45,11 @@
   },
   "variables": {
     "_solutionName": "Feedly",
-    "_solutionVersion": "3.0.4",
+    "_solutionVersion": "3.0.5",
     "solutionId": "feedlyinc1693853810319.azure-sentinel-solution-feedly",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "1.0.0",
+    "dataConnectorCCPVersion": "3.0.5",
     "_dataConnectorContentIdConnectorDefinition1": "FeedlyCCPDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "FeedlyCCPDefinitionConnections",
@@ -88,33 +88,37 @@
                   "id": "FeedlyCCPDefinition",
                   "title": "Feedly IoC",
                   "publisher": "Feedly",
-                  "descriptionMarkdown": "The [Feedly](https://feedly.com/) IoC data connector provides the capability to ingest Indicators of Compromise (IoCs) from Feedly API into Microsoft Sentinel.",
-                  "graphQueriesTableName": "feedly_indicators_CL",
+                  "descriptionMarkdown": "The [Feedly](https://feedly.com/) IoC data connector ingests Indicators of Compromise from the Feedly API into the native [ThreatIntelIndicators](https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelindicators) table in Microsoft Sentinel. Indicators are tagged with `SourceSystem == \"Feedly\"` so they participate in Microsoft Sentinel threat-intelligence matching, analytics, and hunting the same way as other TIP integrations (for example Recorded Future via the Upload Indicators API).",
+                  "graphQueriesTableName": "ThreatIntelIndicators",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
                       "legend": "Feedly IoCs",
-                      "baseQuery": "{{graphQueriesTableName}}\n| summarize count() by bin(TimeGenerated, 1h)"
+                      "baseQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| summarize count() by bin(TimeGenerated, 1h)"
                     }
                   ],
                   "sampleQueries": [
                     {
-                      "description": "All IoCs collected",
-                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                      "description": "All Feedly IoCs collected",
+                      "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| sort by TimeGenerated desc"
                     },
                     {
                       "description": "IP addresses",
-                      "query": "{{graphQueriesTableName}}\n| where indicatorType == \"ipv4-addr\"\n| sort by TimeGenerated desc"
+                      "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"ipv4-addr:value\"\n| sort by TimeGenerated desc"
                     },
                     {
                       "description": "Domain names",
-                      "query": "{{graphQueriesTableName}}\n| where indicatorType == \"domain-name\"\n| sort by TimeGenerated desc"
+                      "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"domain-name:value\"\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "URLs",
+                      "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"url:value\"\n| sort by TimeGenerated desc"
                     }
                   ],
                   "dataTypes": [
                     {
                       "name": "{{graphQueriesTableName}}",
-                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "availability": {
@@ -148,7 +152,7 @@
                   },
                   "instructionSteps": [
                     {
-                      "description": "1) Go to https://feedly.com/i/team/api and generate a new API token for the connector.\n2) In Sentinel, in the connector page - provide your Feedly API Key and Stream IDs. Then click \"Connect\".",
+                      "description": "1) Go to https://feedly.com/i/team/api and generate a new API token for the connector.\n2) In Microsoft Sentinel, provide your Feedly API Key and Stream IDs, then click Connect.\n3) Indicators are written to the native ThreatIntelIndicators table with SourceSystem Feedly. Query them with: ThreatIntelIndicators | where SourceSystem == \"Feedly\"",
                       "instructions": [
                         {
                           "type": "Textbox",
@@ -227,7 +231,7 @@
               "properties": {
                 "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
                 "streamDeclarations": {
-                  "Custom-feedly_indicators_CL": {
+                  "Custom-FeedlyIoc": {
                     "columns": [
                       {
                         "name": "subtype",
@@ -267,66 +271,15 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Custom-feedly_indicators_CL"
+                      "Custom-FeedlyIoc"
                     ],
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "outputStream": "Custom-feedly_indicators_CL",
-                    "transformKql": "source | extend TimeGenerated = now() , value = ['value'] , indicatorType = ['type'] , indicatorSubType = ['subtype'] , source = ['source_name'] , articleUrl = strcat('https://feedly.com/i/entry/', ['source_entry_id']) , articleTitle = ['source_entry_title'] | project TimeGenerated , value , indicatorType , indicatorSubType , source , articleUrl , articleTitle"
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(['value'])\n| extend TimeGenerated = now()\n| extend ObservableValue = tostring(['value'])\n| extend indicatorType = tostring(['type'])\n| extend articleUrl = strcat('https://feedly.com/i/entry/', tostring(['source_entry_id']))\n| extend articleTitle = tostring(['source_entry_title'])\n| extend sourceName = tostring(['source_name'])\n| extend indicatorSubType = tostring(['subtype'])\n| extend ObservableKey = case(\n    indicatorType in ('ipv4-addr', 'ipv4'), 'ipv4-addr:value',\n    indicatorType in ('ipv6-addr', 'ipv6'), 'ipv6-addr:value',\n    indicatorType in ('domain-name', 'domain'), 'domain-name:value',\n    indicatorType == 'url', 'url:value',\n    indicatorType in ('email-addr', 'email'), 'email-addr:value',\n    indicatorType in ('md5', 'MD5'), 'file:hashes.MD5',\n    indicatorType in ('sha1', 'SHA-1', 'sha-1'), \"file:hashes.'SHA-1'\",\n    indicatorType in ('sha256', 'SHA-256', 'sha-256'), \"file:hashes.'SHA-256'\",\n    strcat(indicatorType, ':value'))\n| extend patternValue = replace_string(replace_string(ObservableValue, @\"\\\", @\"\\\\\"), \"'\", @\"\\'\")\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend ValidFrom = now()\n| extend ValidUntil = datetime_add('day', 90, now())\n| extend Created = now()\n| extend Modified = now()\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend Confidence = toint(80)\n| extend SourceSystem = 'Feedly'\n| extend LastUpdateMethod = 'Feedly CCF'\n| extend idSeed = strcat(ObservableKey, '|', ObservableValue, '|', tostring(['source_entry_id']))\n| extend idPad1 = strcat('0000000000000000', tostring(abs(hash_sha256(idSeed))))\n| extend idPad2 = strcat('0000000000000000', tostring(abs(hash_sha256(strcat(idSeed, '|stix')))))\n| extend idHex = strcat(substring(idPad1, strlen(idPad1) - 16, 16), substring(idPad2, strlen(idPad2) - 16, 16))\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend AdditionalFields = bag_pack('articleUrl', articleUrl, 'articleTitle', articleTitle, 'source', sourceName, 'subtype', indicatorSubType, 'stixIdHex', idHex)\n| extend Data = bag_pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', articleTitle, 'description', strcat('Source: ', sourceName, '. Article: ', articleUrl), 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'labels', pack_array(indicatorSubType))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
                   }
                 ]
-              }
-            },
-            {
-              "name": "feedly_indicators_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "totalRetentionInDays": 365,
-                "plan": "Analytics",
-                "schema": {
-                  "name": "feedly_indicators_CL",
-                  "description": "Feedly IoC data collected from Feedly API",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "DateTime"
-                    },
-                    {
-                      "name": "indicatorType",
-                      "type": "String",
-                      "description": "Type of indicator (e.g., ipv4-addr, domain-name, url)"
-                    },
-                    {
-                      "name": "indicatorSubType",
-                      "type": "String",
-                      "description": "Subtype classification of the indicator"
-                    },
-                    {
-                      "name": "value",
-                      "type": "String",
-                      "description": "The Indicator of Compromise value, such as an IP address, domain name, URL, hash, or email"
-                    },
-                    {
-                      "name": "articleTitle",
-                      "type": "String",
-                      "description": "Title of the source article"
-                    },
-                    {
-                      "name": "articleUrl",
-                      "type": "String",
-                      "description": "URL to the source article in Feedly"
-                    },
-                    {
-                      "name": "source",
-                      "type": "String",
-                      "description": "Source publication name"
-                    }
-                  ]
-                }
               }
             }
           ]
@@ -351,33 +304,37 @@
           "id": "FeedlyCCPDefinition",
           "title": "Feedly IoC",
           "publisher": "Feedly",
-          "descriptionMarkdown": "The [Feedly](https://feedly.com/) IoC data connector provides the capability to ingest Indicators of Compromise (IoCs) from Feedly API into Microsoft Sentinel.",
-          "graphQueriesTableName": "feedly_indicators_CL",
+          "descriptionMarkdown": "The [Feedly](https://feedly.com/) IoC data connector ingests Indicators of Compromise from the Feedly API into the native [ThreatIntelIndicators](https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelindicators) table in Microsoft Sentinel. Indicators are tagged with `SourceSystem == \"Feedly\"` so they participate in Microsoft Sentinel threat-intelligence matching, analytics, and hunting the same way as other TIP integrations (for example Recorded Future via the Upload Indicators API).",
+          "graphQueriesTableName": "ThreatIntelIndicators",
           "graphQueries": [
             {
               "metricName": "Total data received",
               "legend": "Feedly IoCs",
-              "baseQuery": "{{graphQueriesTableName}}\n| summarize count() by bin(TimeGenerated, 1h)"
+              "baseQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| summarize count() by bin(TimeGenerated, 1h)"
             }
           ],
           "sampleQueries": [
             {
-              "description": "All IoCs collected",
-              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+              "description": "All Feedly IoCs collected",
+              "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| sort by TimeGenerated desc"
             },
             {
               "description": "IP addresses",
-              "query": "{{graphQueriesTableName}}\n| where indicatorType == \"ipv4-addr\"\n| sort by TimeGenerated desc"
+              "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"ipv4-addr:value\"\n| sort by TimeGenerated desc"
             },
             {
               "description": "Domain names",
-              "query": "{{graphQueriesTableName}}\n| where indicatorType == \"domain-name\"\n| sort by TimeGenerated desc"
+              "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"domain-name:value\"\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "URLs",
+              "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\" and ObservableKey == \"url:value\"\n| sort by TimeGenerated desc"
             }
           ],
           "dataTypes": [
             {
               "name": "{{graphQueriesTableName}}",
-              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"Feedly\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "availability": {
@@ -411,7 +368,7 @@
           },
           "instructionSteps": [
             {
-              "description": "1) Go to https://feedly.com/i/team/api and generate a new API token for the connector.\n2) In Sentinel, in the connector page - provide your Feedly API Key and Stream IDs. Then click \"Connect\".",
+              "description": "1) Go to https://feedly.com/i/team/api and generate a new API token for the connector.\n2) In Microsoft Sentinel, provide your Feedly API Key and Stream IDs, then click Connect.\n3) Indicators are written to the native ThreatIntelIndicators table with SourceSystem Feedly. Query them with: ThreatIntelIndicators | where SourceSystem == \"Feedly\"",
               "instructions": [
                 {
                   "type": "Textbox",
@@ -569,11 +526,11 @@
               "kind": "RestApiPoller",
               "properties": {
                 "connectorDefinitionName": "FeedlyCCPDefinition",
-                "dataType": "feedly_indicators_CL",
+                "dataType": "ThreatIntelIndicators",
                 "dcrConfig": {
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
-                  "streamName": "Custom-feedly_indicators_CL"
+                  "streamName": "Custom-FeedlyIoc"
                 },
                 "auth": {
                   "type": "APIKey",
@@ -629,7 +586,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.4",
+        "version": "3.0.5",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Feedly",

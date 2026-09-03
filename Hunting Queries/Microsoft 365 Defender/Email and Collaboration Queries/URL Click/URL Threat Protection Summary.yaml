@@ -1,0 +1,25 @@
+id: 074959c6-2e9d-4f11-b9c8-971b7387aa99
+name: URL Threat Protection Summary
+description: |
+  This query summarises URL threat protection activity (Safe Links click outcomes and distinct URLs seen in email) as a set of headline metrics for the selected period.
+description-detailed: |
+  This query summarises URL threat protection activity in Microsoft Defender for Office 365 as headline metrics: malicious clicks blocked, clicks allowed through, distinct users clicking links (from UrlClickEvents), and distinct URLs seen in email (from EmailUrlInfo).
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - UrlClickEvents
+  - EmailUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let clicks = UrlClickEvents | where Timestamp > ago(30d);
+  union
+  (clicks | where ActionType in ("ClickBlocked","ClickBlockedByTenantPolicy") | summarize Count = count() | extend Details = "Malicious Clicks Blocked", Ord = 1),
+  (clicks | where ActionType == "ClickAllowed" | summarize Count = count() | extend Details = "Clicks Allowed Through", Ord = 2),
+  (clicks | summarize Count = dcount(AccountUpn) | extend Details = "Users Clicking Links", Ord = 3),
+  (EmailUrlInfo | where Timestamp > ago(30d) | summarize Count = dcount(Url) | extend Details = "Distinct URLs in Email", Ord = 4)
+  | sort by Ord asc
+  | project Count, Details
+version: 1.0.0

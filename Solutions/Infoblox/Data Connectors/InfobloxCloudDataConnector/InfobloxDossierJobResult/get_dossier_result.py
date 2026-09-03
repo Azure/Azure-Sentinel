@@ -8,7 +8,7 @@ from ..SharedCode.infoblox_exception import InfobloxException
 from ..SharedCode import consts
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import Utils
-from ..SharedCode.sentinel import post_data
+from ..SharedCode.sentinel import ingest_logs
 
 
 class DossierGetResult(Utils):
@@ -19,8 +19,9 @@ class DossierGetResult(Utils):
         super().__init__(consts.DOSSIER_GET_RESULT_FUNCTION_NAME)
         self.check_environment_var_exist(
             [
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
+                {"AzureClientId": consts.AZURE_CLIENT_ID},
+                {"AzureClientSecret": consts.AZURE_CLIENT_SECRET},
+                {"AzureTenantId": consts.AZURE_TENANT_ID},
                 {"API_Token": consts.API_TOKEN},
             ]
         )
@@ -47,7 +48,7 @@ class DossierGetResult(Utils):
                     consts.UNEXPECTED_ERROR_MSG.format(error),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
 
     def separate_data_into_chunks(self, raw_data, size_of_data):
         """Return data by separating it into 20 mb chunks.
@@ -75,17 +76,17 @@ class DossierGetResult(Utils):
 
         Args:
             suffix (str): A suffix to be used in the data processing.
-            data (dict): The data to be processed and sent to Sentinel.
+            data (dict): The data to be processed and sent to Sentinel. Each item is a
+                split-out array element (threat/records/matches) already carrying its
+                injected `task_id` (see `store_data_in_separate_table`), sent as-is with
+                no wrapping envelope.
             source (str): The source of the data.
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
             size_of_list = self.get_size_of_json(data)
             for chunk in self.separate_data_into_chunks(data, size_of_list):
-                post_data(
-                    json.dumps(chunk, ensure_ascii=False),
-                    "{}_{}_{}".format(consts.DOSSIER, source, suffix),
-                )
+                ingest_logs(list(chunk), "{}_{}".format(source, suffix))
         except Exception as error:
             applogger.error(
                 self.log_format.format(
@@ -95,7 +96,7 @@ class DossierGetResult(Utils):
                     consts.UNEXPECTED_ERROR_MSG.format(error),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
 
     def store_data_in_separate_table(self, key, data, source):
         """Store data in a separate table based on the key, data, and source.
@@ -134,7 +135,7 @@ class DossierGetResult(Utils):
                     "Key error : Error-{} source = {}".format(error, source),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
         except Exception as error:
             applogger.error(
                 self.log_format.format(
@@ -144,7 +145,7 @@ class DossierGetResult(Utils):
                     "Unexpected error : Error-{} source = {}".format(error, source),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
 
     def parse_response_and_ingest_to_sentinel(self, json_response):
         """Parse the JSON response and ingest the data to Sentinel based on the source.
@@ -168,7 +169,11 @@ class DossierGetResult(Utils):
                     result_data = self.store_data_in_separate_table("records", result_data, source)
                 elif (source == "nameserver") and ("matches" in result_data["data"]):
                     result_data = self.store_data_in_separate_table("matches", result_data, source)
-                elif source == "threat_actor":
+                elif (
+                    source == "threat_actor"
+                    and "data" in result_data
+                    and "related_indicators" in result_data["data"]
+                ):
                     del result_data["data"]["related_indicators"]
                 applogger.info(
                     self.log_format.format(
@@ -179,9 +184,9 @@ class DossierGetResult(Utils):
                     )
                 )
                 result_data["status_message_for_dossier"] = consts.DOSSIER_STATUS_MESSAGE
-                post_data(json.dumps(result_data, ensure_ascii=False), "{}_{}".format(consts.DOSSIER, source))
+                ingest_logs([result_data], source)
         except InfobloxException:
-            raise InfobloxException()
+            raise
         except Exception as error:
             applogger.error(
                 self.log_format.format(
@@ -191,7 +196,7 @@ class DossierGetResult(Utils):
                     "Unexpected error : Error-{} source = {}".format(error, source),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
 
     def get_job_result_and_ingest_in_sentinel(self, job_id):
         """Retrieve the job result and ingest it in Sentinel.
@@ -221,7 +226,7 @@ class DossierGetResult(Utils):
             else:
                 return "Dossier result failed"
         except InfobloxException:
-            raise InfobloxException()
+            raise
         except Exception as error:
             applogger.error(
                 self.log_format.format(
@@ -231,4 +236,4 @@ class DossierGetResult(Utils):
                     consts.UNEXPECTED_ERROR_MSG.format(error),
                 )
             )
-            raise InfobloxException()
+            raise InfobloxException(str(error)) from error
