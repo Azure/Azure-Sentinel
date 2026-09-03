@@ -42,6 +42,7 @@ These standard tables integrate natively with the Microsoft Sentinel Solution fo
 | `IntegrationSuiteHelpers.ps1` | Shared helper functions for Azure, DCR/DCE, CSV processing, and CF operations |
 | `SAPCC_DCR.json` | Data Collection Rule template with SAP data streams |
 | `destinations-sample.csv` | Sample CSV file showing expected destination format |
+| [`AUDIT-LOG-SMOKE-TEST.md`](AUDIT-LOG-SMOKE-TEST.md) | Manual smoke test to validate the Security Audit Log RFC on the SAP backend before raising a support ticket |
 
 ## Architecture
 
