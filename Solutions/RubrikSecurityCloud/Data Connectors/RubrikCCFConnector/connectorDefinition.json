@@ -1,0 +1,202 @@
+{
+  "name": "RubrikSecurityEventsPush",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "[parameters('workspace-location')]",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "RubrikSecurityEventsPush",
+      "title": "Rubrik Security Cloud Security Events (Push)",
+      "publisher": "Rubrik",
+      "descriptionMarkdown": "The Rubrik Security Cloud Security Events (Push) connector ingests security events from Rubrik Security Cloud into Microsoft Sentinel in real time using the Codeless Connector Framework (CCF) Push pattern. Rubrik Security Cloud webhooks authenticate with OAuth 2.0 and post events directly to the Azure Monitor Logs Ingestion API, with no intermediate compute to deploy or operate. Events are routed to per-category tables for anomalies, ransomware analysis, threat hunts, security violations, and general activity.",
+      "graphQueries": [
+        {
+          "metricName": "Anomaly events",
+          "legend": "Rubrik_Anomaly_Data_CL",
+          "baseQuery": "Rubrik_Anomaly_Data_CL"
+        },
+        {
+          "metricName": "Ransomware analysis events",
+          "legend": "Rubrik_Ransomware_Data_CL",
+          "baseQuery": "Rubrik_Ransomware_Data_CL"
+        },
+        {
+          "metricName": "Threat hunt events",
+          "legend": "Rubrik_ThreatHunt_Data_CL",
+          "baseQuery": "Rubrik_ThreatHunt_Data_CL"
+        },
+        {
+          "metricName": "Other events",
+          "legend": "Rubrik_Events_Data_CL",
+          "baseQuery": "Rubrik_Events_Data_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All anomaly events, most recent first",
+          "query": "Rubrik_Anomaly_Data_CL\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Critical severity events across all categories",
+          "query": "union isfuzzy=true Rubrik_Anomaly_Data_CL, Rubrik_Ransomware_Data_CL, Rubrik_ThreatHunt_Data_CL, Rubrik_Events_Data_CL\n| where severity_s =~ 'critical'\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Event volume by category over the last 24 hours",
+          "query": "union isfuzzy=true withsource=SourceTable Rubrik_Anomaly_Data_CL, Rubrik_Ransomware_Data_CL, Rubrik_ThreatHunt_Data_CL, Rubrik_Events_Data_CL\n| where TimeGenerated > ago(24h)\n| summarize Events = count() by SourceTable\n| sort by Events desc"
+        },
+        {
+          "description": "Objects with the most anomaly events",
+          "query": "Rubrik_Anomaly_Data_CL\n| summarize Events = count() by custom_details_objectName_s, custom_details_objectType_s, custom_details_clusterName_s\n| sort by Events desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "Rubrik_Anomaly_Data_CL",
+          "lastDataReceivedQuery": "Rubrik_Anomaly_Data_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Rubrik_Ransomware_Data_CL",
+          "lastDataReceivedQuery": "Rubrik_Ransomware_Data_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Rubrik_ThreatHunt_Data_CL",
+          "lastDataReceivedQuery": "Rubrik_ThreatHunt_Data_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Rubrik_Events_Data_CL",
+          "lastDataReceivedQuery": "Rubrik_Events_Data_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "union isfuzzy=true Rubrik_Anomaly_Data_CL, Rubrik_Ransomware_Data_CL, Rubrik_ThreatHunt_Data_CL, Rubrik_Events_Data_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+          },
+          {
+            "name": "Rubrik Security Cloud",
+            "description": "An account with permission to create and manage webhooks in Rubrik Security Cloud."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Deploy the ingestion resources",
+          "description": "This connector lets Rubrik Security Cloud push security events directly to Microsoft Sentinel through the Azure Monitor Logs Ingestion API.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated configuration\nSelecting **Deploy** creates the Log Analytics tables and a Data Collection Rule (DCR), registers a Microsoft Entra application, links the DCR to that application, and assigns the required role. Rubrik Security Cloud then uses the resulting credentials to send events securely to the DCR."
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy Rubrik Security Cloud push connector resources",
+                "applicationDisplayName": "Rubrik Security Cloud Push Connector Application"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Collect the connection details",
+          "description": "After deployment completes, copy these values. You will enter them when creating the webhooks in Rubrik Security Cloud.",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [
+                  "TenantId"
+                ],
+                "placeholder": "Deploy the push connector to get the Tenant ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Application ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy the push connector to get the Application ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy the push connector to get the Application Secret"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint Uri",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy the push connector to get the Data Collection Endpoint Uri"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Rule Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy the push connector to get the Data Collection Rule Immutable ID"
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Create the webhooks in Rubrik Security Cloud",
+          "description": "Create one webhook per event category. Each webhook posts to the same Data Collection Endpoint but targets a different stream, which determines the destination table.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Webhook authentication\nIn Rubrik Security Cloud, create each webhook with the **Microsoft Sentinel** provider and set the authentication type to **OAuth 2.0** using these values:\n\n| Setting | Value |\n| --- | --- |\n| Grant type | `client_credentials` |\n| Token URL | `https://login.microsoftonline.com/<Tenant ID>/oauth2/v2.0/token` |\n| Client ID | `<Application ID>` |\n| Client secret | `<Application Secret>` |\n| Scope | `https://monitor.azure.com//.default` |\n\n#### Webhook URLs\nUse the following URL for each webhook, replacing `<Data Collection Endpoint Uri>` and `<Data Collection Rule Immutable ID>` with the values copied above, and `<Stream Name>` with the stream for that event category:\n\n`<Data Collection Endpoint Uri>/dataCollectionRules/<Data Collection Rule Immutable ID>/streams/<Stream Name>?api-version=2023-01-01`\n\n| Event category | Stream name | Destination table |\n| --- | --- | --- |\n| Anomaly | `Custom-Rubrik_Anomaly_Data` | `Rubrik_Anomaly_Data_CL` |\n| Ransomware analysis | `Custom-Rubrik_Ransomware_Data` | `Rubrik_Ransomware_Data_CL` |\n| Threat hunt | `Custom-Rubrik_ThreatHunt_Data` | `Rubrik_ThreatHunt_Data_CL` |\n| All other events | `Custom-Rubrik_Events_Data` | `Rubrik_Events_Data_CL` |\n\nScope each webhook's event-type and severity filters to the matching category so that events are routed to the correct table."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.5.3       | 03-09-2026                     | Added RubrikCCFConnector to ingest Anomaly, Ransomware, ThreatHunt and other events data along with audit logs via webhook.
 | 3.5.2       | 16-07-2026                     | Added RubrikSecurityCloud CCF (Codeless Connector Framework) Data Connector for ingesting Rubrik Protection Status data into Microsoft Sentinel. Enables backup compliance monitoring, ransomware recovery assessment, and incident correlation with protection status for Azure VMs. Update python package version to resolve vulnerability |
 | 3.5.1       | 05-11-2025                     | Updated API Host Name default value in playbooks and custom connector |
 | 3.5.0       | 25-07-2025                     | Added RubrikTurboThreatHunt and RubrikAdvanceThreatHunt playbooks. RubrikThreatMonitoring and RubrikCriticalAnomaly Analytic Rules also added.
