@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1.4       | 04-09-2026                     | Updated the **CCF Data Connector** to use the QualysKnowledgeBase schema, explicit table queries, configurable discovery and patchability filters, and simplified QualysKB migration guidance. Enhanced the **QualysKB Parser** to normalize all 22 fields and deduplicate record versions by QID and last modification time. |
 | 3.1.3       | 17-07-2026                     | **CCF connector** - fix incomplete data ingestion. |
 | 3.1.2       | 29-04-2026                     | Moving Connector to GA. |
 | 3.1.1       | 23-04-2026                     | Moved endpoint to target Qualys KB API v4.0 |
