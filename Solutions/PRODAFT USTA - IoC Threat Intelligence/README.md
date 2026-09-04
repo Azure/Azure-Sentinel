@@ -36,7 +36,7 @@ Each import playbook is a Logic App that, every hour:
    `ip_addresses`, each address is appended to the **same** indicator's pattern as its own
    observation expression — `ipv4-addr:value` or `ipv6-addr:value`, picked per address — so the
    URL/hash and its resolved IPs travel as one indicator sharing one validity window.
-3. Uploads batches (≤100) to Sentinel via the **Upload STIX Objects** action using the Logic
+3. Uploads batches (≤100) to Microsoft Sentinel via the **Upload STIX Objects** action using the Logic
    App's **system-assigned managed identity**.
 
 STIX ids are **deterministic** (the USTA record id for URLs/hashes; a stable UUID derived
@@ -67,7 +67,7 @@ the feed, so a validity window (`ValidityDays`, default 365) is synthesized from
    assignment to `.../Microsoft.Logic/workflows/<playbook>`, which looks right in the portal but
    grants no workspace access. Assign:
    **Microsoft Sentinel Contributor** for the Upload STIX Objects call, and **Log Analytics Reader**
-   for the watermark query. Sentinel Contributor alone is not enough for the query — it grants
+   for the watermark query. Microsoft Sentinel Contributor alone is not enough for the query — it grants
    `Microsoft.OperationalInsights/workspaces/*/read`, which does not cover the bare
    `Microsoft.OperationalInsights/workspaces/read` action the Azure Monitor Logs connection
    performs, so the run fails with `AuthorizationFailed`. The **backfill** playbooks upload only
@@ -115,7 +115,7 @@ deploying its own `azuredeploy.json`), then complete the role assignments (step 
   connectors (Syslog, DNS, CEF) to be enabled to produce matches.
 * **Resolved IP addresses** from each feed's `ip_addresses` field are included in the
   indicator pattern (up to the first **10** per record; additional addresses are dropped).
-  Sentinel splits a multi-observation pattern into one `ObservableKey`/`ObservableValue` row
+  Microsoft Sentinel splits a multi-observation pattern into one `ObservableKey`/`ObservableValue` row
   per observable, so these IPs are matchable on their own — including by the source-agnostic
   IP TI-map rules shipped with the Microsoft **Threat Intelligence** solution.
 * **Shared hosting caveat:** many phishing hosts sit behind CDNs, so a resolved address is

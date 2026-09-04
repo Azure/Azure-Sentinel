@@ -25,7 +25,7 @@ pattern as its own observation expression — `ipv4-addr:value` or `ipv6-addr:va
 address — so the indicator covers the URL/hash and its resolved IPs under one validity window.
 Only the **first 10** addresses of a record are included; any beyond that are dropped.
 
-Sentinel expands a multi-observation pattern into one `ObservableKey`/`ObservableValue` row per
+Microsoft Sentinel expands a multi-observation pattern into one `ObservableKey`/`ObservableValue` row per
 observable, so those IPs are independently matchable. Note that CDN-fronted hosts resolve to
 shared edge addresses, which can produce false positives if you match on IP alone.
 
@@ -58,7 +58,7 @@ shared edge addresses, which can produce false positives if you match on IP alon
 ```bash
 # ---- configuration ----
 SUB="<subscription-id>"
-RG="<resource-group>"                  # resource group of the Sentinel workspace
+RG="<resource-group>"                  # resource group of the Microsoft Sentinel workspace
 WS="<workspace-name>"                  # Log Analytics workspace name
 USTA_API_KEY="<usta-api-key>"
 BACKFILL_DAYS=90
