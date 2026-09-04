@@ -1,0 +1,691 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Rubrik IR Violation Remediation",
+    "description": "Incident-triggered playbook that reads a Rubrik IR (Identity) violation ID from the Sentinel incident Custom Details, authenticates to Rubrik Security Cloud through the RubrikCustomConnector, retrieves the latest violation details via GraphQL, extracts the affected identity (userPrincipalName, displayName, idpType), the policy details (type, name, severity) and the policy's manualRemediationProcess, posts a formatted notification to a SOC Microsoft Teams channel, adds a matching comment to the incident, and sets the violation status to IN_PROGRESS. Every Rubrik API call is guarded with error handling that comments on the incident and terminates the run on failure.",
+    "prerequisites": [
+      "Deploy the RubrikCustomConnector (Microsoft.Web/customApis) first; this playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
+      "A Rubrik Security Cloud service account (client_id + client_secret) with permission to read and update policy violations.",
+      "An Azure Key Vault containing the Rubrik client_id and client_secret secrets.",
+      "A Microsoft Teams team/channel for SOC notifications."
+    ],
+    "entities": ["Account"],
+    "tags": ["Microsoft Sentinel", "Incident", "Rubrik", "Identity Resilience", "Remediation"],
+    "support": { "tier": "community" },
+    "author": { "name": "Crest Data" },
+    "postDeployment": [
+      "Deploy the RubrikCustomConnector template before this playbook and pass its name via the 'Rubrik Connector name' parameter.",
+      "Grant the Logic App's system-assigned Managed Identity the 'Microsoft Sentinel Responder' role on the Sentinel workspace.",
+      "Grant the Logic App's system-assigned Managed Identity the 'Key Vault Secrets User' role (or a get-secret access policy) on the Key Vault named by the KeyVaultName parameter.",
+      "Store the Rubrik service-account credentials in Key Vault as two secrets named 'Rubrik-AS-Int-ClientId' and 'Rubrik-AS-Int-ClientSecret' (same secrets used by the other Rubrik playbooks).",
+      "Authorize the RubrikCustomConnector API connection in the portal.",
+      "Authorize the Microsoft Teams API connection in the portal (sign in with an account that can post to the target SOC channel), and supply the TeamsGroupId and TeamsChannelId parameters.",
+      "Create a Sentinel automation rule that runs this playbook on incidents produced by the Rubrik IR-violation analytics rule."
+    ],
+    "releaseNotes": [
+      { "version": "1.0.0.0", "title": "Initial release", "notes": ["Retrieve Rubrik IR violation, post a formatted notification to a SOC Teams channel and a matching incident comment, mark violation In Progress, with full API error handling."] }
+    ],
+    "lastUpdateTime": "2026-07-10T00:00:00Z"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "RubrikIRViolationRemediation",
+      "type": "string",
+      "metadata": { "description": "Name of the Logic App / playbook resource." }
+    },
+    "API Hostname": {
+      "type": "string",
+      "metadata": { "description": "Hostname of the Rubrik Security Cloud instance (e.g. customer.my.rubrik.com), without scheme or trailing slash." }
+    },
+    "Rubrik Connector name": {
+      "defaultValue": "RubrikCustomConnector",
+      "type": "string",
+      "metadata": { "description": "Name of the previously deployed Rubrik custom connector (Microsoft.Web/customApis)." }
+    },
+    "KeyVaultName": {
+      "type": "string",
+      "metadata": { "description": "Name of the Azure Key Vault that holds the Rubrik service-account credentials." }
+    },
+    "TeamsGroupId": {
+      "type": "string",
+      "metadata": { "description": "Microsoft Teams group (Team) ID for the SOC channel used as the fallback notification target." }
+    },
+    "TeamsChannelId": {
+      "type": "string",
+      "metadata": { "description": "Microsoft Teams channel ID within the Team used as the fallback notification target." }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "RubrikcustomconnectorConnectionName": "[concat('Rubrikcustomconnector-', parameters('PlaybookName'))]",
+    "KeyvaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('RubrikcustomconnectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('RubrikcustomconnectorConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyvaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "Rubrik-IR-Violation-Remediation",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": {
+                  "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Base_URL": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "Base_URL", "type": "string", "value": "[concat('https://', parameters('API Hostname'))]" }]
+              }
+            },
+            "Initialize_User_Agent": {
+              "runAfter": { "Initialize_Base_URL": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "User_Agent", "type": "string", "value": "MSFTSentinel-1.0.0" }]
+              }
+            },
+            "Initialize_Access_Token": {
+              "runAfter": { "Initialize_User_Agent": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "Access_Token", "type": "string" }]
+              }
+            },
+            "Initialize_Error_Messages": {
+              "runAfter": { "Initialize_Access_Token": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "Error_Messages", "type": "array", "value": [] }]
+              }
+            },
+            "Initialize_ViolationId": {
+              "runAfter": { "Initialize_Error_Messages": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "ViolationId", "type": "string" }]
+              }
+            },
+            "Initialize_UserPrincipalName": {
+              "runAfter": { "Initialize_ViolationId": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "UserPrincipalName", "type": "string" }]
+              }
+            },
+            "Initialize_DisplayName": {
+              "runAfter": { "Initialize_UserPrincipalName": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "DisplayName", "type": "string" }]
+              }
+            },
+            "Initialize_IdpType": {
+              "runAfter": { "Initialize_DisplayName": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "IdpType", "type": "string" }]
+              }
+            },
+            "Initialize_ManualRemediationProcess": {
+              "runAfter": { "Initialize_IdpType": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "ManualRemediationProcess", "type": "string" }]
+              }
+            },
+            "Initialize_PolicyType": {
+              "runAfter": { "Initialize_ManualRemediationProcess": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [{ "name": "PolicyType", "type": "string" }]
+              }
+            },
+            "Parse_JSON_-_Alert_Custom_Details": {
+              "runAfter": { "Initialize_PolicyType": ["Succeeded"] },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@first(triggerBody()?['object']?['properties']?['alerts'])?['properties']?['additionalData']?['Custom Details']",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ViolationId": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            },
+            "Set_ViolationId": {
+              "runAfter": { "Parse_JSON_-_Alert_Custom_Details": ["Succeeded"] },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "ViolationId",
+                "value": "@{first(coalesce(body('Parse_JSON_-_Alert_Custom_Details')?['ViolationId'], json('[]')))}"
+              }
+            },
+            "Check_ViolationId_present": {
+              "runAfter": { "Set_ViolationId": ["Succeeded"] },
+              "type": "If",
+              "expression": {
+                "and": [
+                  { "equals": ["@variables('ViolationId')", ""] }
+                ]
+              },
+              "actions": {
+                "Comment_-_No_ViolationId": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><b>Rubrik IR Violation Remediation failed.</b></p><p>No <b>ViolationId</b> was found in the incident alert Custom Details. Verify that the analytics rule maps ViolationId into Custom Details.</p>"
+                    },
+                    "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Terminate_-_No_ViolationId": {
+                  "runAfter": { "Comment_-_No_ViolationId": ["Succeeded", "Failed"] },
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "MissingViolationId",
+                      "message": "No ViolationId present in the incident Custom Details."
+                    }
+                  }
+                }
+              },
+              "else": { "actions": {} }
+            },
+            "Get_Client_ID": {
+              "runAfter": { "Check_ViolationId_present": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs", "outputs"] }
+              }
+            },
+            "Get_Client_Secret": {
+              "runAfter": { "Get_Client_ID": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs", "outputs"] }
+              }
+            },
+            "Authentication": {
+              "runAfter": { "Get_Client_Secret": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['RubrikCustomConnector']['connectionId']" } },
+                "method": "post",
+                "body": {
+                  "client_id": "@body('Get_Client_ID')?['value']",
+                  "client_secret": "@body('Get_Client_Secret')?['value']"
+                },
+                "headers": {
+                  "Content-Type": "application/json",
+                  "User-Agent": "@variables('User_Agent')"
+                },
+                "path": "/api/client_token"
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs", "outputs"] }
+              }
+            },
+            "Is_Authentication_Failed": {
+              "runAfter": { "Authentication": ["Succeeded", "Failed"] },
+              "type": "If",
+              "expression": {
+                "or": [
+                  { "not": { "equals": ["@outputs('Authentication')['statusCode']", 200] } },
+                  { "equals": ["@empty(body('Authentication')?['access_token'])", true] }
+                ]
+              },
+              "actions": {
+                "Append_auth_failure": {
+                  "runAfter": {},
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "Error_Messages",
+                    "value": "Authentication (/api/client_token) failed with status @{outputs('Authentication')?['statusCode']}. Verify the Key Vault secrets and the Rubrik custom connector."
+                  }
+                },
+                "Comment_auth_failure": {
+                  "runAfter": { "Append_auth_failure": ["Succeeded"] },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><b>Rubrik IR Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                    },
+                    "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Terminate_-_Authentication_failed": {
+                  "runAfter": { "Comment_auth_failure": ["Succeeded", "Failed"] },
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "AuthFailed",
+                      "message": "@{join(variables('Error_Messages'), ' | ')}"
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Set_Access_Token": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "Access_Token",
+                      "value": "@{body('Authentication')?['access_token']}"
+                    }
+                  }
+                }
+              }
+            },
+            "HTTP_-_Get_IR_Violation": {
+              "runAfter": { "Is_Authentication_Failed": ["Succeeded"] },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@{variables('Base_URL')}/api/graphql",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer @{variables('Access_Token')}",
+                  "User-Agent": "@variables('User_Agent')"
+                },
+                "body": {
+                  "query": "query DataSecurityViolationGetQuery($violationId: String!, $policyTypes: [PolicyType!]!) {\n  policyViolation(violationId: $violationId, policyTypes: $policyTypes) {\n    policyViolationId\n    violationSeverity\n    createdAt\n    resourceId\n    resourceType\n    status\n    lastUpdatedAt\n    policy {\n      policyId\n      name\n      description\n      policySeverity\n      policyType\n      policyCategory\n      frameworks\n      manualRemediationProcess\n      __typename\n    }\n    details {\n      ... on IdentityViolationDetails {\n        domainUniqueId\n        principalUniqueId\n        __typename\n      }\n      ... on IdpViolationDetails {\n        domainUniqueId\n        __typename\n      }\n      __typename\n    }\n    resourceMetadata {\n      metadata {\n        ... on IdentityMetadata {\n          displayName\n          domainName\n          idpType\n          principalType\n          privilegeType\n          userPrincipalName\n          status\n          title\n          source\n          identityTags\n          uniqueId\n          nativeType\n          __typename\n        }\n        ... on IdpMetadata {\n          domainName\n          domainUniqueId\n          idpType\n          rootDomainName\n          rootDomainId\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}",
+                  "variables": {
+                    "violationId": "@variables('ViolationId')",
+                    "policyTypes": ["POLICY_TYPE_IDENTITY", "POLICY_TYPE_IDP", "POLICY_TYPE_IDENTITY_EVENT"]
+                  }
+                }
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs"] }
+              }
+            },
+            "Is_Get_IR_Violation_Failed": {
+              "runAfter": { "HTTP_-_Get_IR_Violation": ["Succeeded", "Failed"] },
+              "type": "If",
+              "expression": {
+                "or": [
+                  { "not": { "equals": ["@outputs('HTTP_-_Get_IR_Violation')['statusCode']", 200] } },
+                  { "not": { "equals": ["@empty(body('HTTP_-_Get_IR_Violation')?['errors'])", true] } },
+                  { "equals": ["@empty(body('HTTP_-_Get_IR_Violation')?['data']?['policyViolation'])", true] }
+                ]
+              },
+              "actions": {
+                "Append_-_Get_violation_failed": {
+                  "runAfter": {},
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "Error_Messages",
+                    "value": "Get IR Violation failed for violation @{variables('ViolationId')} (status @{outputs('HTTP_-_Get_IR_Violation')?['statusCode']})."
+                  }
+                },
+                "Comment_-_Get_violation_failed": {
+                  "runAfter": { "Append_-_Get_violation_failed": ["Succeeded"] },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><b>Rubrik IR Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                    },
+                    "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Terminate_-_Get_violation_failed": {
+                  "runAfter": { "Comment_-_Get_violation_failed": ["Succeeded", "Failed"] },
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "GetViolationFailed",
+                      "message": "@{join(variables('Error_Messages'), ' | ')}"
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Parse_JSON_-_Violation": {
+                    "runAfter": {},
+                    "type": "ParseJson",
+                    "inputs": {
+                      "content": "@body('HTTP_-_Get_IR_Violation')",
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "data": {
+                            "type": "object",
+                            "properties": {
+                              "policyViolation": {
+                                "type": "object",
+                                "properties": {
+                                  "policyViolationId": { "type": "string" },
+                                  "violationSeverity": { "type": "string" },
+                                  "status": { "type": "string" },
+                                  "policy": {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": { "type": "string" },
+                                      "policyType": { "type": "string" },
+                                      "manualRemediationProcess": { "type": "string" }
+                                    }
+                                  },
+                                  "resourceMetadata": {
+                                    "type": "object",
+                                    "properties": {
+                                      "metadata": {
+                                        "type": "object",
+                                        "properties": {
+                                          "displayName": { "type": "string" },
+                                          "idpType": { "type": "string" },
+                                          "userPrincipalName": { "type": "string" }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "Set_UserPrincipalName": {
+                    "runAfter": { "Parse_JSON_-_Violation": ["Succeeded"] },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "UserPrincipalName",
+                      "value": "@{coalesce(body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['userPrincipalName'], '')}"
+                    }
+                  },
+                  "Set_DisplayName": {
+                    "runAfter": { "Set_UserPrincipalName": ["Succeeded"] },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "DisplayName",
+                      "value": "@{coalesce(body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['displayName'], '')}"
+                    }
+                  },
+                  "Set_IdpType": {
+                    "runAfter": { "Set_DisplayName": ["Succeeded"] },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "IdpType",
+                      "value": "@{coalesce(body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['idpType'], '')}"
+                    }
+                  },
+                  "Set_ManualRemediationProcess": {
+                    "runAfter": { "Set_IdpType": ["Succeeded"] },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "ManualRemediationProcess",
+                      "value": "@{coalesce(body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['policy']?['manualRemediationProcess'], '')}"
+                    }
+                  },
+                  "Set_PolicyType": {
+                    "runAfter": { "Set_ManualRemediationProcess": ["Succeeded"] },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "PolicyType",
+                      "value": "@{coalesce(body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['policy']?['policyType'], '')}"
+                    }
+                  },
+                  "Post_message_in_Teams_channel": {
+                    "runAfter": { "Set_PolicyType": ["Succeeded"] },
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "recipient": {
+                          "groupId": "[parameters('TeamsGroupId')]",
+                          "channelId": "[parameters('TeamsChannelId')]"
+                        },
+                        "messageBody": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Rubrik IR Violation</strong></b></p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Violation ID</strong></b>: @{variables('ViolationId')}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Violation Severity</strong></b>: @{body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['violationSeverity']}<br><b><strong class=\"editor-text-bold\">Name</strong></b>: @{if(empty(variables('DisplayName')), 'N/A', variables('DisplayName'))}<br><b><strong class=\"editor-text-bold\">Email</strong></b>: @{if(empty(variables('UserPrincipalName')), 'N/A', variables('UserPrincipalName'))}<br><b><strong class=\"editor-text-bold\">Policy Name</strong></b>: @{body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['policy']?['name']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Policy Type</strong></b>: @{variables('PolicyType')}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Idp Type: </strong></b>@{if(empty(variables('IdpType')), 'N/A', variables('IdpType'))}<br><b><strong class=\"editor-text-bold\">Manual remediation steps</strong></b>: @{variables('ManualRemediationProcess')}<br><b><strong class=\"editor-text-bold\">MS Sentinel Incident:</strong></b> @{triggerBody()?['object']?['properties']?['incidentUrl']}</p>"
+                      },
+                      "host": { "connection": { "name": "@parameters('$connections')['teams']['connectionId']" } },
+                      "method": "post",
+                      "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('channel')}"
+                    }
+                  },
+                  "HTTP_-_Update_Violation_Status": {
+                    "runAfter": { "Post_message_in_Teams_channel": ["Succeeded"] },
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{variables('Base_URL')}/api/graphql",
+                      "headers": {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer @{variables('Access_Token')}",
+                        "User-Agent": "@variables('User_Agent')"
+                      },
+                      "body": {
+                        "query": "mutation UpdatePolicyViolationsMutation($input: BulkUpdatePolicyViolationsInput!) {\n  bulkUpdatePolicyViolations(input: $input)\n}",
+                        "variables": {
+                          "input": {
+                            "newPolicyViolationStatus": "POLICY_VIOLATION_STATUS_IN_PROGRESS",
+                            "policyViolationIds": ["@variables('ViolationId')"]
+                          }
+                        }
+                      }
+                    },
+                    "runtimeConfiguration": {
+                      "secureData": { "properties": ["inputs"] }
+                    }
+                  },
+                  "Is_Update_Violation_Status_Failed": {
+                    "runAfter": { "HTTP_-_Update_Violation_Status": ["Succeeded", "Failed"] },
+                    "type": "If",
+                    "expression": {
+                      "or": [
+                        { "not": { "equals": ["@outputs('HTTP_-_Update_Violation_Status')['statusCode']", 200] } },
+                        { "not": { "equals": ["@empty(body('HTTP_-_Update_Violation_Status')?['errors'])", true] } }
+                      ]
+                    },
+                    "actions": {
+                      "Append_-_Update_status_failed": {
+                        "runAfter": {},
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                          "name": "Error_Messages",
+                          "value": "Update violation status to IN_PROGRESS failed for violation @{variables('ViolationId')} (status @{outputs('HTTP_-_Update_Violation_Status')?['statusCode']})."
+                        }
+                      },
+                      "Comment_-_Update_status_failed": {
+                        "runAfter": { "Append_-_Update_status_failed": ["Succeeded"] },
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                            "message": "<p><b>Rubrik IR Violation Remediation partially completed.</b></p><p>The affected party was notified, but updating the Rubrik violation status failed:</p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                          },
+                          "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                          "method": "post",
+                          "path": "/Incidents/Comment"
+                        }
+                      },
+                      "Terminate_-_Update_status_failed": {
+                        "runAfter": { "Comment_-_Update_status_failed": ["Succeeded", "Failed"] },
+                        "type": "Terminate",
+                        "inputs": {
+                          "runStatus": "Failed",
+                          "runError": {
+                            "code": "UpdateStatusFailed",
+                            "message": "@{join(variables('Error_Messages'), ' | ')}"
+                          }
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Rubrik IR Violation</strong></b></p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Violation ID</strong></b>: @{variables('ViolationId')}<br><b><strong class=\"editor-text-bold\">Name</strong></b>: @{variables('DisplayName')}<br><b><strong class=\"editor-text-bold\">Email</strong></b>: @{if(empty(variables('UserPrincipalName')), 'N/A', variables('UserPrincipalName'))}<br><b><strong class=\"editor-text-bold\">Violation Severity</strong></b>: @{body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['violationSeverity']}<br><b><strong class=\"editor-text-bold\">Policy Type</strong></b>: @{variables('PolicyType')}<br><b><strong class=\"editor-text-bold\">Policy Name:</strong></b> @{body('Parse_JSON_-_Violation')?['data']?['policyViolation']?['policy']?['name']}<br><b><strong class=\"editor-text-bold\">Recommended remediation steps</strong></b>: @{variables('ManualRemediationProcess')}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Violation Status</strong></b>: In Progress</p><br><p class=\"editor-paragraph\">The violation status was set to <b><strong class=\"editor-text-bold\">IN_PROGRESS</strong></b> in Rubrik and the notification was posted to the SOC Teams channel.</p>"
+                            },
+                            "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "RubrikCustomConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                "connectionName": "[variables('RubrikcustomconnectorConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "connectionName": "[variables('KeyvaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

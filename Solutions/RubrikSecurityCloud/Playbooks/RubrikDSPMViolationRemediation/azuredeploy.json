@@ -1,0 +1,1968 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Rubrik DSPM Violation Remediation",
+    "description": "Incident-triggered playbook that remediates Rubrik Security Cloud (RSC) DSPM violations. Branches on eventType: for SecurityViolation it retrieves the violation, exports the violation-files CSV and the remediation-actions log (create -> poll Download Bar -> download bytes -> upload to a blob container -> generate SAS link), lists the violation file hits, quarantines each file via the RubrikQuarantineFiles sub-playbook, notifies the file owner in Teams, and marks the violation REMEDIATED only when every quarantine succeeded. For ClassificationResultsAvailable (no DSPM license) it runs a reduced flow: list file hits (objectId + snapshotId) -> quarantine -> notify. Both flows write a final comment to the Sentinel incident.",
+    "prerequisites": [
+      "Deploy the RubrikCustomConnector (Microsoft.Web/customApis) first; this playbook uses its 'Authentication' (/api/client_token) operation to obtain the RSC bearer token.",
+      "Deploy the RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) before this playbook; it is called once per file to quarantine and must return { status, newLocation }.",
+      "An Azure Key Vault holding the RSC service-account credentials in secrets 'Rubrik-AS-Int-ClientId' and 'Rubrik-AS-Int-ClientSecret'.",
+      "An Azure Storage account and blob container for the exported CSV/log files (SecurityViolation flow only).",
+      "A Microsoft Teams team and channel for owner notifications.",
+      "An analytics rule that maps the Rubrik event fields into incident Custom Details (eventType, objectId, objectName, objectType, seriesId, eventName, snapshotId)."
+    ],
+    "entities": [],
+    "tags": ["Microsoft Sentinel", "Incident", "Rubrik", "DSPM", "Remediation", "Quarantine"],
+    "support": { "tier": "community" },
+    "author": { "name": "Rubrik" },
+    "postDeployment": [
+      "Grant the Logic App system-assigned managed identity the 'Microsoft Sentinel Responder' role on the Sentinel workspace (comment on and update incidents).",
+      "Grant the Logic App managed identity 'Key Vault Secrets User' (or an access policy with Get on secrets) on the Key Vault named by KeyVaultName.",
+      "Authorize the RubrikCustomConnector API connection (used for the /api/client_token authentication call).",
+      "Authorize (sign in to) the Microsoft Teams API connection so the owner-notification card can be posted.",
+      "Authorize the Azure Blob Storage API connection (StorageAccountName). The account used by that connection must have write access to StorageContainerName; the connection is used to upload the CSV/log and to create the read-only SAS link.",
+      "Deploy the RubrikQuarantineFiles sub-playbook and set RubrikQuarantineFilesPlaybookName to its Logic App name; it must exist in the same resource group and expose an HTTP Request trigger returning { status, newLocation }.",
+      "Create a Microsoft Sentinel automation rule to run this playbook on the relevant DSPM incidents (playbooks do not auto-attach)."
+    ],
+    "releaseNotes": [
+      { "version": "1.2.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Hardened the Download Snapshot Results CSV and Download Remediation Log flows. Validate the incident-supplied Object Name (case-insensitive), Resource ID, and Snapshot ID against the policyViolation and hard-fail on mismatch. Locate the exported file in allUserFiles by object-name filename pattern (spaces replaced with hyphens for the CSV) in addition to file type and post-start-time, and fail the export (non-fatal) when more than one file matches after the action start time. Fixed the remediation-log filter to match REMEDIATION_ACTIONS_LOG_CSV instead of SNAPSHOT_RESULTS_CSV. CSV export-trigger failure is now non-fatal (matches the remediation-log path); every download failure/edge case sets a descriptive link message so the final incident comment never shows a blank link. Download links in the incident comment are now rendered as the raw URL instead of an HTML anchor tag so they redirect correctly. Hardened createdAt comparison to use ticks()."] },
+      { "version": "1.1.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Added physicalHost to the per-file records sent to RubrikQuarantineFiles so the NTFS (WINDOWS_FILESHARE) branch can resolve the Microsoft Defender for Endpoint device. physicalHost is captured once from the DSPM violation (resourceMetadata.metadata.physicalHost) and stamped onto every file. Removed the ONEDRIVE fallback when selecting a file's objectType, so an unknown objectType is no longer coerced to ONEDRIVE (the child returns NotImplemented instead)."] },
+      { "version": "1.0.0", "title": "Rubrik DSPM Violation Remediation", "notes": ["Initial version. Handles SecurityViolation (full flow) and ClassificationResultsAvailable (reduced flow)."] }
+    ],
+    "lastUpdateTime": "2026-07-22T00:00:00Z"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "RubrikDSPMViolationRemediation",
+      "type": "string",
+      "metadata": { "description": "Name of the Logic App / playbook resource." }
+    },
+    "API Hostname": {
+      "type": "string",
+      "metadata": { "description": "Hostname of the Rubrik Security Cloud instance (e.g. customer.my.rubrik.com)." }
+    },
+    "Rubrik Connector name": {
+      "defaultValue": "RubrikCustomConnector",
+      "type": "string",
+      "metadata": { "description": "Name of the previously deployed Rubrik custom connector (Microsoft.Web/customApis)." }
+    },
+    "KeyVaultName": {
+      "type": "string",
+      "metadata": { "description": "Key Vault holding the RSC service-account secrets 'Rubrik-AS-Int-ClientId' and 'Rubrik-AS-Int-ClientSecret'." }
+    },
+    "RubrikQuarantineFilesPlaybookName": {
+      "defaultValue": "RubrikQuarantineFiles",
+      "type": "string",
+      "metadata": { "description": "Logic App name of the RubrikQuarantineFiles sub-playbook (HTTP Request-triggered) in this resource group. Called once per file to quarantine." }
+    },
+    "StorageAccountName": {
+      "type": "string",
+      "metadata": { "description": "Azure Storage account name used to persist the exported CSV/log (SecurityViolation flow only)." }
+    },
+    "StorageContainerName": {
+      "type": "string",
+      "metadata": { "description": "Name of an EXISTING blob container in StorageAccountName where the violation-files CSV and remediation log are uploaded. The container must be created beforehand; the playbook does not create it at runtime." }
+    },
+    "SasTokenTtlHours": {
+      "defaultValue": 72,
+      "type": "int",
+      "metadata": { "description": "Validity window (hours) for the read-only SAS link added to the incident comment." }
+    },
+    "TeamsGroupId": {
+      "type": "string",
+      "metadata": { "description": "Microsoft Teams team (group) ID for the owner-notification card." }
+    },
+    "TeamsChannelId": {
+      "type": "string",
+      "metadata": { "description": "Microsoft Teams channel ID (within TeamsGroupId) for the owner-notification card." }
+    },
+    "DownloadPollIntervalSec": {
+      "defaultValue": 15,
+      "type": "int",
+      "metadata": { "description": "Seconds to wait between Download Bar polls." }
+    },
+    "DownloadPollMaxAttempts": {
+      "defaultValue": 20,
+      "type": "int",
+      "metadata": { "description": "Maximum Download Bar poll attempts before giving up on an export." }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "RubrikcustomconnectorConnectionName": "[concat('Rubrikcustomconnector-', parameters('PlaybookName'))]",
+    "KeyvaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]",
+    "AzureblobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('RubrikcustomconnectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('RubrikcustomconnectorConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyvaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyvaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('TeamsConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureblobConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureblobConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "RubrikViolationRemediation",
+        "hidden-SentinelTemplateVersion": "1.2.0"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" },
+            "StorageContainerName": { "defaultValue": "", "type": "String" },
+            "SasTokenTtlHours": { "defaultValue": 72, "type": "Int" }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": {
+                  "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Base_URL": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Base_URL", "type": "string", "value": "[concat('https://', parameters('API Hostname'))]" }
+                ]
+              }
+            },
+            "Initialize_User_Agent": {
+              "runAfter": { "Initialize_Base_URL": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "User_Agent", "type": "string", "value": "MSFTSentinel-3.5.2" }
+                ]
+              }
+            },
+            "Initialize_Access_Token": {
+              "runAfter": { "Initialize_User_Agent": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Access_Token", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Event_Type": {
+              "runAfter": { "Initialize_Access_Token": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Event_Type", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Object_ID": {
+              "runAfter": { "Initialize_Event_Type": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Object_ID", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Object_Name": {
+              "runAfter": { "Initialize_Object_ID": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Object_Name", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Object_Type": {
+              "runAfter": { "Initialize_Object_Name": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Object_Type", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Violation_ID": {
+              "runAfter": { "Initialize_Object_Type": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Violation_ID", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Snapshot_Fid": {
+              "runAfter": { "Initialize_Violation_ID": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Snapshot_Fid", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Snappable_Fid": {
+              "runAfter": { "Initialize_Snapshot_Fid": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Snappable_Fid", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Event_Name": {
+              "runAfter": { "Initialize_Snappable_Fid": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Event_Name", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Platform": {
+              "runAfter": { "Initialize_Event_Name": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Platform", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Physical_Host": {
+              "runAfter": { "Initialize_Platform": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Physical_Host", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Policy_Name": {
+              "runAfter": { "Initialize_Physical_Host": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Policy_Name", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Owner_UPN": {
+              "runAfter": { "Initialize_Policy_Name": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Owner_UPN", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Files_To_Process": {
+              "runAfter": { "Initialize_Owner_UPN": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Files_To_Process", "type": "array", "value": [] }
+                ]
+              }
+            },
+            "Initialize_Quarantine_Results": {
+              "runAfter": { "Initialize_Files_To_Process": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Quarantine_Results", "type": "array", "value": [] }
+                ]
+              }
+            },
+            "Initialize_All_Quarantine_Succeeded": {
+              "runAfter": { "Initialize_Quarantine_Results": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "All_Quarantine_Succeeded", "type": "boolean", "value": true }
+                ]
+              }
+            },
+            "Initialize_Files_CSV_Link": {
+              "runAfter": { "Initialize_All_Quarantine_Succeeded": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Files_CSV_Link", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Remediation_Log_Link": {
+              "runAfter": { "Initialize_Files_CSV_Link": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Remediation_Log_Link", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Next_Cursor": {
+              "runAfter": { "Initialize_Remediation_Log_Link": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Next_Cursor", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Has_Next_Page": {
+              "runAfter": { "Initialize_Next_Cursor": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Has_Next_Page", "type": "boolean", "value": true }
+                ]
+              }
+            },
+            "Initialize_Download_External_Id": {
+              "runAfter": { "Initialize_Has_Next_Page": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Download_External_Id", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Download_Ready": {
+              "runAfter": { "Initialize_Download_External_Id": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Download_Ready", "type": "boolean", "value": false }
+                ]
+              }
+            },
+            "Initialize_Error_Messages": {
+              "runAfter": { "Initialize_Download_Ready": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Error_Messages", "type": "array", "value": [] }
+                ]
+              }
+            },
+            "Initialize_CSV_Export_Start": {
+              "runAfter": { "Initialize_Error_Messages": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "CSV_Export_Start", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Log_Export_Start": {
+              "runAfter": { "Initialize_CSV_Export_Start": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Log_Export_Start", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_CSV_Downloads": {
+              "runAfter": { "Initialize_Log_Export_Start": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "CSV_Downloads", "type": "array", "value": [] }
+                ]
+              }
+            },
+            "Initialize_File_Hits_Failed": {
+              "runAfter": { "Initialize_CSV_Downloads": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "File_Hits_Failed", "type": "boolean", "value": false }
+                ]
+              }
+            },
+            "Initialize_CSV_Name_Pattern": {
+              "runAfter": { "Initialize_File_Hits_Failed": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "CSV_Name_Pattern", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Log_Name_Pattern": {
+              "runAfter": { "Initialize_CSV_Name_Pattern": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Log_Name_Pattern", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_CSV_Match_Count": {
+              "runAfter": { "Initialize_Log_Name_Pattern": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "CSV_Match_Count", "type": "integer", "value": 0 }
+                ]
+              }
+            },
+            "Initialize_Log_Match_Count": {
+              "runAfter": { "Initialize_CSV_Match_Count": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Log_Match_Count", "type": "integer", "value": 0 }
+                ]
+              }
+            },
+            "Initialize_Provided_Object_Name": {
+              "runAfter": { "Initialize_Log_Match_Count": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Provided_Object_Name", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Provided_Snappable_Fid": {
+              "runAfter": { "Initialize_Provided_Object_Name": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Provided_Snappable_Fid", "type": "string" }
+                ]
+              }
+            },
+            "Initialize_Provided_Snapshot_Fid": {
+              "runAfter": { "Initialize_Provided_Snappable_Fid": ["Succeeded"] },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  { "name": "Provided_Snapshot_Fid", "type": "string" }
+                ]
+              }
+            },
+            "Get_Client_ID": {
+              "runAfter": { "Initialize_Provided_Snapshot_Fid": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+              },
+              "runtimeConfiguration": { "secureData": { "properties": ["inputs", "outputs"] } }
+            },
+            "Get_Client_Secret": {
+              "runAfter": { "Get_Client_ID": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+              },
+              "runtimeConfiguration": { "secureData": { "properties": ["inputs", "outputs"] } }
+            },
+            "Authentication": {
+              "runAfter": { "Get_Client_Secret": ["Succeeded"] },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['RubrikCustomConnector']['connectionId']" } },
+                "method": "post",
+                "body": {
+                  "client_id": "@body('Get_Client_ID')?['value']",
+                  "client_secret": "@body('Get_Client_Secret')?['value']"
+                },
+                "headers": {
+                  "Content-Type": "application/json",
+                  "User-Agent": "@variables('User_Agent')"
+                },
+                "path": "/api/client_token"
+              },
+              "runtimeConfiguration": { "secureData": { "properties": ["inputs", "outputs"] } }
+            },
+            "Is_Authentication_Failed": {
+              "runAfter": { "Authentication": ["Succeeded", "Failed"] },
+              "type": "If",
+              "expression": {
+                "or": [
+                  { "not": { "equals": ["@outputs('Authentication')['statusCode']", 200] } },
+                  { "equals": ["@empty(body('Authentication')?['access_token'])", true] }
+                ]
+              },
+              "actions": {
+                "Append_auth_failure": {
+                  "runAfter": {},
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "Error_Messages",
+                    "value": "Authentication (/api/client_token) failed with status @{outputs('Authentication')?['statusCode']}. Verify the Key Vault secrets and the Rubrik custom connector."
+                  }
+                },
+                "Comment_auth_failure": {
+                  "runAfter": { "Append_auth_failure": ["Succeeded"] },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><b>Rubrik DSPM Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                    },
+                    "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Terminate_-_Authentication_failed": {
+                  "runAfter": { "Comment_auth_failure": ["Succeeded", "Failed"] },
+                  "type": "Terminate",
+                  "inputs": { "runStatus": "Failed", "runError": { "code": "AuthFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Set_Access_Token": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": { "name": "Access_Token", "value": "@{body('Authentication')?['access_token']}" }
+                  }
+                }
+              }
+            },
+            "For_each_alert": {
+              "runAfter": { "Is_Authentication_Failed": ["Succeeded"] },
+              "type": "Foreach",
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+              "actions": {
+                "Parse_JSON_for_alert": {
+                  "runAfter": {},
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_alert')?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "EventType": { "type": "array", "items": { "type": "string" } },
+                        "ObjectID": { "type": "array", "items": { "type": "string" } },
+                        "ObjectName": { "type": "array", "items": { "type": "string" } },
+                        "ObjectType": { "type": "array", "items": { "type": "string" } },
+                        "ViolationID": { "type": "array", "items": { "type": "string" } },
+                        "EventName": { "type": "array", "items": { "type": "string" } },
+                        "SnapshotID": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
+                  }
+                },
+                "Set_Event_Type": {
+                  "runAfter": { "Parse_JSON_for_alert": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Event_Type", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['EventType'], json('[]')))}" }
+                },
+                "Set_Object_ID": {
+                  "runAfter": { "Set_Event_Type": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Object_ID", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['ObjectID'], json('[]')))}" }
+                },
+                "Set_Object_Name": {
+                  "runAfter": { "Set_Object_ID": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Object_Name", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['ObjectName'], json('[]')))}" }
+                },
+                "Set_Object_Type": {
+                  "runAfter": { "Set_Object_Name": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Object_Type", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['ObjectType'], json('[]')))}" }
+                },
+                "Set_Violation_ID": {
+                  "runAfter": { "Set_Object_Type": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Violation_ID", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['ViolationID'], json('[]')))}" }
+                },
+                "Set_Event_Name": {
+                  "runAfter": { "Set_Violation_ID": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Event_Name", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['EventName'], json('[]')))}" }
+                },
+                "Set_Snapshot_Fid_from_incident": {
+                  "runAfter": { "Set_Event_Name": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Snapshot_Fid", "value": "@{first(coalesce(body('Parse_JSON_for_alert')?['SnapshotID'], json('[]')))}" }
+                },
+                "Set_Snappable_Fid_default": {
+                  "runAfter": { "Set_Snapshot_Fid_from_incident": ["Succeeded"] },
+                  "type": "SetVariable",
+                  "inputs": { "name": "Snappable_Fid", "value": "@variables('Object_ID')" }
+                }
+              }
+            },
+            "Switch_on_event_type": {
+              "runAfter": { "For_each_alert": ["Succeeded"] },
+              "type": "Switch",
+              "expression": "@variables('Event_Type')",
+              "cases": {
+                "SecurityViolation": {
+                  "case": "SecurityViolation",
+                  "actions": {
+                    "Get_DSPM_Violation": {
+                      "runAfter": {},
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{variables('Base_URL')}/api/graphql",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('Access_Token')}",
+                          "Content-Type": "application/json",
+                          "User-Agent": "@variables('User_Agent')"
+                        },
+                        "body": {
+                          "query": "query DataSecurityViolationGetQuery($violationId: String!) {\n  policyViolation(\n    violationId: $violationId\n    policyTypes: [POLICY_TYPE_DATAGOV]\n  ) {\n    ...DataAtRiskPanelFragment\n    status\n    violationSeverity\n    policyViolationId\n    createdAt\n    lastUpdatedAt\n    resourceId\n    policy {\n      policyId\n      name\n      description\n      policyCategory\n      policySeverity\n      containsAccessFilters\n      __typename\n    }\n    remediations {\n      remediationId\n      state\n      remediationDetails {\n        details {\n          ticketNumber\n          ticketUrl\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    resourceMetadata {\n      metadata {\n        ... on CommonAssetMetadata {\n          platform\n          cloudAccountInfo {\n            accountName\n            __typename\n          }\n          objectType\n          clusterInfo {\n            clusterName\n            clusterUuid\n            __typename\n          }\n          creationTime\n          lastAccessTime\n          snapshotTimestamp\n          physicalHost\n          name\n          isDeleted\n          region\n          __typename\n        }\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment SensitiveHitsChartFragment on DataGovViolationDetails {\n  snapshotId\n  violatedSensitiveHits\n  violatedNoRiskSensitiveHits\n  violatedLowRiskSensitiveHits\n  violatedMediumRiskSensitiveHits\n  violatedHighRiskSensitiveHits\n  __typename\n}\n\nfragment DataAtRiskPanelFragment on PolicyViolation {\n  details {\n    ...SensitiveHitsChartFragment\n    ... on DataGovViolationDetails {\n      dataCategories {\n        id\n        name\n        totalViolatedHits\n        __typename\n      }\n      dataTypes {\n        id\n        name\n        totalViolatedHits\n        __typename\n      }\n      mipLabels {\n        id\n        totalViolatedHits\n        name\n        __typename\n      }\n      documentTypes {\n        id\n        name\n        totalViolatedHits\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}",
+                          "variables": { "violationId": "@variables('Violation_ID')" }
+                        }
+                      }
+                    },
+                    "Check_Get_DSPM_Violation": {
+                      "runAfter": { "Get_DSPM_Violation": ["Succeeded", "Failed"] },
+                      "type": "If",
+                      "expression": {
+                        "or": [
+                          { "not": { "equals": ["@outputs('Get_DSPM_Violation')['statusCode']", 200] } },
+                          { "not": { "equals": ["@coalesce(body('Get_DSPM_Violation')?['errors'], '')", ""] } }
+                        ]
+                      },
+                      "actions": {
+                        "Append_-_Get_violation_failed": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "Error_Messages",
+                            "value": "Get DSPM Violation failed for violation @{variables('Violation_ID')} (status @{outputs('Get_DSPM_Violation')?['statusCode']})."
+                          }
+                        },
+                        "Comment_-_Get_violation_failed": {
+                          "runAfter": { "Append_-_Get_violation_failed": ["Succeeded"] },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p><b>Rubrik DSPM Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                            },
+                            "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Terminate_-_Get_violation_failed": {
+                          "runAfter": { "Comment_-_Get_violation_failed": ["Succeeded", "Failed"] },
+                          "type": "Terminate",
+                          "inputs": { "runStatus": "Failed", "runError": { "code": "GetViolationFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Capture_Provided_Object_Name": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": { "name": "Provided_Object_Name", "value": "@{coalesce(variables('Object_Name'), '')}" }
+                          },
+                          "Capture_Provided_Snappable_Fid": {
+                            "runAfter": { "Capture_Provided_Object_Name": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Provided_Snappable_Fid", "value": "@{coalesce(variables('Snappable_Fid'), '')}" }
+                          },
+                          "Capture_Provided_Snapshot_Fid": {
+                            "runAfter": { "Capture_Provided_Snappable_Fid": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Provided_Snapshot_Fid", "value": "@{coalesce(variables('Snapshot_Fid'), '')}" }
+                          },
+                          "Validate_violation_identifiers": {
+                            "runAfter": { "Capture_Provided_Snapshot_Fid": ["Succeeded"] },
+                            "type": "If",
+                            "expression": {
+                              "or": [
+                                {
+                                  "and": [
+                                    { "not": { "equals": ["@empty(trim(variables('Provided_Object_Name')))", true] } },
+                                    { "not": { "equals": ["@toLower(trim(variables('Provided_Object_Name')))", "@toLower(trim(coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['name'], '')))"] } }
+                                  ]
+                                },
+                                {
+                                  "and": [
+                                    { "not": { "equals": ["@empty(trim(variables('Provided_Snappable_Fid')))", true] } },
+                                    { "not": { "equals": ["@trim(variables('Provided_Snappable_Fid'))", "@trim(coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceId'], ''))"] } }
+                                  ]
+                                },
+                                {
+                                  "and": [
+                                    { "not": { "equals": ["@empty(trim(variables('Provided_Snapshot_Fid')))", true] } },
+                                    { "not": { "equals": ["@trim(variables('Provided_Snapshot_Fid'))", "@trim(coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['details']?['snapshotId'], ''))"] } }
+                                  ]
+                                }
+                              ]
+                            },
+                            "actions": {
+                              "Append_-_Validation_failed": {
+                                "runAfter": {},
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                  "name": "Error_Messages",
+                                  "value": "Provided information is invalid for violation @{variables('Violation_ID')}. One or more of the supplied identifiers does not match the violation. Object Name (provided='@{variables('Provided_Object_Name')}', actual='@{coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['name'], '')}'); Resource ID (provided='@{variables('Provided_Snappable_Fid')}', actual='@{coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceId'], '')}'); Snapshot ID (provided='@{variables('Provided_Snapshot_Fid')}', actual='@{coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['details']?['snapshotId'], '')}')."
+                                }
+                              },
+                              "Comment_-_Validation_failed": {
+                                "runAfter": { "Append_-_Validation_failed": ["Succeeded"] },
+                                "type": "ApiConnection",
+                                "inputs": {
+                                  "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p><b>Rubrik DSPM Violation Remediation failed (validation).</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                                  },
+                                  "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                                  "method": "post",
+                                  "path": "/Incidents/Comment"
+                                }
+                              },
+                              "Terminate_-_Validation_failed": {
+                                "runAfter": { "Comment_-_Validation_failed": ["Succeeded", "Failed"] },
+                                "type": "Terminate",
+                                "inputs": { "runStatus": "Failed", "runError": { "code": "ValidationFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                              }
+                            },
+                            "else": { "actions": {} }
+                          },
+                          "Set_Object_Name_from_violation": {
+                            "runAfter": { "Validate_violation_identifiers": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Object_Name", "value": "@{if(empty(trim(variables('Provided_Object_Name'))), coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['name'], ''), variables('Provided_Object_Name'))}" }
+                          },
+                          "Set_Snapshot_Fid_from_violation": {
+                            "runAfter": { "Set_Object_Name_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Snapshot_Fid", "value": "@{if(empty(trim(variables('Provided_Snapshot_Fid'))), coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['details']?['snapshotId'], ''), variables('Provided_Snapshot_Fid'))}" }
+                          },
+                          "Set_Snappable_Fid_from_violation": {
+                            "runAfter": { "Set_Snapshot_Fid_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Snappable_Fid", "value": "@{if(empty(trim(variables('Provided_Snappable_Fid'))), coalesce(body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceId'], ''), variables('Provided_Snappable_Fid'))}" }
+                          },
+                          "Set_Platform_from_violation": {
+                            "runAfter": { "Set_Snappable_Fid_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Platform", "value": "@{body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['platform']}" }
+                          },
+                          "Set_Physical_Host_from_violation": {
+                            "runAfter": { "Set_Platform_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Physical_Host", "value": "@{body('Get_DSPM_Violation')?['data']?['policyViolation']?['resourceMetadata']?['metadata']?['physicalHost']}" }
+                          },
+                          "Set_Policy_Name_from_violation": {
+                            "runAfter": { "Set_Physical_Host_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Policy_Name", "value": "@{body('Get_DSPM_Violation')?['data']?['policyViolation']?['policy']?['name']}" }
+                          },
+                          "Set_CSV_Name_Pattern": {
+                            "runAfter": { "Set_Policy_Name_from_violation": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "CSV_Name_Pattern", "value": "@{toLower(concat(replace(variables('Object_Name'), ' ', '-'), '-violating-files_file_results'))}" }
+                          },
+                          "Set_Log_Name_Pattern": {
+                            "runAfter": { "Set_CSV_Name_Pattern": ["Succeeded"] },
+                            "type": "SetVariable",
+                            "inputs": { "name": "Log_Name_Pattern", "value": "@{toLower(concat(variables('Object_Name'), ' actions log'))}" }
+                          }
+                        }
+                      }
+                    },
+                    "Set_Status_In_Progress": {
+                      "runAfter": { "Check_Get_DSPM_Violation": ["Succeeded"] },
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{variables('Base_URL')}/api/graphql",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('Access_Token')}",
+                          "Content-Type": "application/json",
+                          "User-Agent": "@variables('User_Agent')"
+                        },
+                        "body": {
+                          "query": "mutation UpdatePolicyViolationsMutation($input: BulkUpdatePolicyViolationsInput!) {\n  bulkUpdatePolicyViolations(input: $input)\n}",
+                          "variables": {
+                            "input": {
+                              "newPolicyViolationStatus": "POLICY_VIOLATION_STATUS_IN_PROGRESS",
+                              "policyViolationIds": ["@variables('Violation_ID')"]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Check_Set_Status_In_Progress": {
+                      "runAfter": { "Set_Status_In_Progress": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "If",
+                      "expression": {
+                        "or": [
+                          { "not": { "equals": ["@outputs('Set_Status_In_Progress')['statusCode']", 200] } },
+                          { "not": { "equals": ["@coalesce(body('Set_Status_In_Progress')?['errors'], '')", ""] } }
+                        ]
+                      },
+                      "actions": {
+                        "Append_-_Set_Status_In_Progress_failed": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "Error_Messages",
+                            "value": "Update violation status to IN_PROGRESS failed for violation @{variables('Violation_ID')} (status @{outputs('Set_Status_In_Progress')?['statusCode']})."
+                          }
+                        },
+                        "Comment_-_Set_Status_In_Progress_failed": {
+                          "runAfter": { "Append_-_Set_Status_In_Progress_failed": ["Succeeded"] },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p><b>Rubrik DSPM Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                            },
+                            "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Terminate_-_Set_Status_In_Progress_failed": {
+                          "runAfter": { "Comment_-_Set_Status_In_Progress_failed": ["Succeeded", "Failed"] },
+                          "type": "Terminate",
+                          "inputs": { "runStatus": "Failed", "runError": { "code": "SetStatusInProgressFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Stamp_CSV_Export_Start": {
+                      "runAfter": { "Check_Set_Status_In_Progress": ["Succeeded"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "CSV_Export_Start", "value": "@{utcNow()}" }
+                    },
+                    "Trigger_Files_CSV_export": {
+                      "runAfter": { "Stamp_CSV_Export_Start": ["Succeeded"] },
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{variables('Base_URL')}/api/graphql",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('Access_Token')}",
+                          "Content-Type": "application/json",
+                          "User-Agent": "@variables('User_Agent')"
+                        },
+                        "body": {
+                          "query": "mutation DownloadFullSnapshotResultsCsvMutation($filters: DownloadResultsCsvFiltersInput, $snappableFid: String!, $snapshotFid: String!) {\n  downloadSnapshotResultsCsv(\n    snappableFid: $snappableFid\n    snapshotFid: $snapshotFid\n    downloadFilter: $filters\n  ) {\n    isSuccessful\n    __typename\n  }\n}",
+                          "variables": {
+                            "snappableFid": "@variables('Snappable_Fid')",
+                            "snapshotFid": "@variables('Snapshot_Fid')",
+                            "filters": { "policyViolationId": "@variables('Violation_ID')", "fileType": "HITS" }
+                          }
+                        }
+                      }
+                    },
+                    "Check_Trigger_Files_CSV_export": {
+                      "runAfter": { "Trigger_Files_CSV_export": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "If",
+                      "expression": {
+                        "or": [
+                          { "not": { "equals": ["@outputs('Trigger_Files_CSV_export')['statusCode']", 200] } },
+                          { "not": { "equals": ["@coalesce(body('Trigger_Files_CSV_export')?['errors'], '')", ""] } },
+                          { "not": { "equals": ["@coalesce(body('Trigger_Files_CSV_export')?['data']?['downloadSnapshotResultsCsv']?['isSuccessful'], false)", true] } }
+                        ]
+                      },
+                      "actions": {
+                        "Append_-_Trigger_Files_CSV_failed": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "Error_Messages",
+                            "value": "Files CSV export request (downloadSnapshotResultsCsv) failed or returned isSuccessful=false for violation @{variables('Violation_ID')} (status @{outputs('Trigger_Files_CSV_export')?['statusCode']})."
+                          }
+                        },
+                        "Set_Files_CSV_Link_trigger_failed": {
+                          "runAfter": { "Append_-_Trigger_Files_CSV_failed": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Files_CSV_Link", "value": "Files CSV export request (downloadSnapshotResultsCsv) failed or returned isSuccessful=false; no CSV link available." }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Reset_Download_Ready_for_CSV": {
+                      "runAfter": { "Check_Trigger_Files_CSV_export": ["Succeeded"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "Download_Ready", "value": false }
+                    },
+                    "Reset_Download_External_Id_for_CSV": {
+                      "runAfter": { "Reset_Download_Ready_for_CSV": ["Succeeded"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "Download_External_Id", "value": "@null" }
+                    },
+                    "Poll_Download_Bar_for_CSV": {
+                      "runAfter": { "Reset_Download_External_Id_for_CSV": ["Succeeded"] },
+                      "type": "Until",
+                      "expression": "@equals(variables('Download_Ready'), true)",
+                      "limit": { "count": "[parameters('DownloadPollMaxAttempts')]", "timeout": "PT1H" },
+                      "actions": {
+                        "Wait_before_CSV_poll": {
+                          "runAfter": {},
+                          "type": "Wait",
+                          "inputs": { "interval": { "count": "[parameters('DownloadPollIntervalSec')]", "unit": "Second" } }
+                        },
+                        "Download_Bar_CSV": {
+                          "runAfter": { "Wait_before_CSV_poll": ["Succeeded"] },
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{variables('Base_URL')}/api/graphql",
+                            "headers": {
+                              "Authorization": "Bearer @{variables('Access_Token')}",
+                              "Content-Type": "application/json",
+                              "User-Agent": "@variables('User_Agent')"
+                            },
+                            "body": {
+                              "query": "query DownloadBarQuery {\n    allUserFiles {\n        downloads {\n        externalId\n        createdAt\n        expiresAt\n        completedAt\n        creator\n        filename\n        type\n        state\n        __typename\n        }\n        __typename\n    }\n}",
+                              "variables": {}
+                            }
+                          }
+                        },
+                        "Filter_snapshot_csv_downloads": {
+                          "runAfter": { "Download_Bar_CSV": ["Succeeded"] },
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@coalesce(first(coalesce(body('Download_Bar_CSV')?['data']?['allUserFiles'], json('[]')))?['downloads'], json('[]'))",
+                            "where": "@and(equals(item()?['type'], 'SNAPSHOT_RESULTS_CSV'), and(contains(toLower(coalesce(item()?['filename'], '')), variables('CSV_Name_Pattern')), greater(ticks(coalesce(item()?['createdAt'], '1970-01-01T00:00:00Z')), ticks(variables('CSV_Export_Start')))))"
+                          }
+                        },
+                        "Set_CSV_Match_Count": {
+                          "runAfter": { "Filter_snapshot_csv_downloads": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "CSV_Match_Count", "value": "@length(coalesce(body('Filter_snapshot_csv_downloads'), json('[]')))" }
+                        },
+                        "Sort_snapshot_csv_desc": {
+                          "runAfter": { "Set_CSV_Match_Count": ["Succeeded"] },
+                          "type": "Compose",
+                          "inputs": "@reverse(sort(body('Filter_snapshot_csv_downloads'), 'createdAt'))"
+                        },
+                        "If_csv_match_ambiguous": {
+                          "runAfter": { "Sort_snapshot_csv_desc": ["Succeeded"] },
+                          "type": "If",
+                          "expression": {
+                            "and": [
+                              { "greater": ["@variables('CSV_Match_Count')", 1] }
+                            ]
+                          },
+                          "actions": {
+                            "Append_CSV_ambiguous": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": { "name": "Error_Messages", "value": "Files CSV export could not be matched unambiguously for violation @{variables('Violation_ID')}: @{variables('CSV_Match_Count')} files matched the object-name pattern after the export start time. Not attached." }
+                            },
+                            "Set_CSV_Ready_on_ambiguous": {
+                              "runAfter": { "Append_CSV_ambiguous": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "Download_Ready", "value": true }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "If_newest_csv_ready_or_failed": {
+                                "runAfter": {},
+                                "type": "If",
+                                "expression": {
+                                  "and": [
+                                    { "equals": ["@variables('CSV_Match_Count')", 1] },
+                                    { "equals": ["@first(outputs('Sort_snapshot_csv_desc'))?['state']", "READY"] }
+                                  ]
+                                },
+                                "actions": {
+                                  "Set_CSV_External_Id": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": { "name": "Download_External_Id", "value": "@{first(outputs('Sort_snapshot_csv_desc'))?['externalId']}" }
+                                  },
+                                  "Set_CSV_Ready_true": {
+                                    "runAfter": { "Set_CSV_External_Id": ["Succeeded"] },
+                                    "type": "SetVariable",
+                                    "inputs": { "name": "Download_Ready", "value": true }
+                                  }
+                                },
+                                "else": {
+                                  "actions": {
+                                    "If_newest_csv_failed": {
+                                      "runAfter": {},
+                                      "type": "If",
+                                      "expression": {
+                                        "and": [
+                                          { "equals": ["@variables('CSV_Match_Count')", 1] },
+                                          { "equals": ["@first(outputs('Sort_snapshot_csv_desc'))?['state']", "FAILED"] }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Append_CSV_export_failed": {
+                                          "runAfter": {},
+                                          "type": "AppendToArrayVariable",
+                                          "inputs": { "name": "Error_Messages", "value": "Rubrik reported the files CSV export (SNAPSHOT_RESULTS_CSV) as FAILED for violation @{variables('Violation_ID')}; CSV link will be unavailable." }
+                                        },
+                                        "Set_CSV_Ready_on_failure": {
+                                          "runAfter": { "Append_CSV_export_failed": ["Succeeded"] },
+                                          "type": "SetVariable",
+                                          "inputs": { "name": "Download_Ready", "value": true }
+                                        }
+                                      },
+                                      "else": { "actions": {} }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "If_CSV_external_id_present": {
+                      "runAfter": { "Poll_Download_Bar_for_CSV": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          { "not": { "equals": ["@variables('Download_External_Id')", ""] } }
+                        ]
+                      },
+                      "actions": {
+                        "Download_Files_CSV_bytes": {
+                          "runAfter": {},
+                          "type": "Http",
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{variables('Base_URL')}/file-downloads/@{encodeURIComponent(variables('Download_External_Id'))}",
+                            "headers": {
+                              "Authorization": "Bearer @{variables('Access_Token')}",
+                              "User-Agent": "@variables('User_Agent')"
+                            }
+                          }
+                        },
+                        "Upload_Files_CSV_blob": {
+                          "runAfter": { "Download_Files_CSV_bytes": ["Succeeded"] },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                            "method": "post",
+                            "body": "@body('Download_Files_CSV_bytes')",
+                            "headers": { "Content-Type": "text/csv" },
+                            "path": "[concat('/v2/datasets/@{encodeURIComponent(encodeURIComponent(''', parameters('StorageAccountName'), '''))}/files')]",
+                            "queries": {
+                              "folderPath": "@{concat('/', parameters('StorageContainerName'), '/dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'))}",
+                              "name": "@{concat('violation_files_', variables('Violation_ID'), '.csv')}",
+                              "queryParametersSingleEncoded": true
+                            }
+                          }
+                        },
+                        "Create_SAS_for_Files_CSV": {
+                          "runAfter": { "Upload_Files_CSV_blob": ["Succeeded"] },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                            "method": "post",
+                            "body": {
+                              "Permissions": "Read",
+                              "ExpiryTime": "@{addHours(utcNow(), parameters('SasTokenTtlHours'))}"
+                            },
+                            "path": "[concat('/v2/datasets/@{encodeURIComponent(encodeURIComponent(''', parameters('StorageAccountName'), '''))}/CreateSharedLinkByPath')]",
+                            "queries": {
+                              "path": "@{concat('/', parameters('StorageContainerName'), '/dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'), '/violation_files_', variables('Violation_ID'), '.csv')}"
+                            }
+                          }
+                        },
+                        "Set_Files_CSV_Link": {
+                          "runAfter": { "Create_SAS_for_Files_CSV": ["Succeeded", "Failed", "Skipped"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Files_CSV_Link", "value": "@{coalesce(body('Create_SAS_for_Files_CSV')?['WebUrl'], concat('CSV uploaded to blob folder dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'), ' (SAS unavailable).'))}" }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "If_CSV_trigger_succeeded_for_message": {
+                            "runAfter": {},
+                            "type": "If",
+                            "expression": {
+                              "and": [
+                                { "equals": ["@outputs('Trigger_Files_CSV_export')['statusCode']", 200] },
+                                { "equals": ["@coalesce(body('Trigger_Files_CSV_export')?['data']?['downloadSnapshotResultsCsv']?['isSuccessful'], false)", true] }
+                              ]
+                            },
+                            "actions": {
+                              "Set_Files_CSV_Link_unavailable": {
+                                "runAfter": {},
+                                "type": "SetVariable",
+                                "inputs": { "name": "Files_CSV_Link", "value": "@{if(equals(variables('CSV_Match_Count'), 0), 'Files CSV download reference could not be located (no file matched the object-name pattern after the export start time, or the export failed/timed out); no CSV link available.', 'Files CSV export was not READY (failed, timed out, or ambiguous match); no CSV link available.')}" }
+                              }
+                            },
+                            "else": { "actions": {} }
+                          }
+                        }
+                      }
+                    },
+                    "Stamp_Log_Export_Start": {
+                      "runAfter": { "If_CSV_external_id_present": ["Succeeded", "Failed", "Skipped"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "Log_Export_Start", "value": "@{utcNow()}" }
+                    },
+                    "Trigger_Remediation_Log_export": {
+                      "runAfter": { "Stamp_Log_Export_Start": ["Succeeded"] },
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{variables('Base_URL')}/api/graphql",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('Access_Token')}",
+                          "Content-Type": "application/json",
+                          "User-Agent": "@variables('User_Agent')"
+                        },
+                        "body": {
+                          "query": "mutation CreateViolationRemediationMutation($input: CreateViolationRemediationInput!) {\n  createViolationRemediation(input: $input) {\n    remediationId\n    __typename\n  }\n}",
+                          "variables": {
+                            "input": {
+                              "targets": { "targetIds": ["@variables('Violation_ID')"], "targetType": "REMEDIATION_TARGET_TYPE_VIOLATION" },
+                              "remediationType": "REMEDIATION_TYPE_EXPORT_ACTIONS_LOG_TO_CSV",
+                              "resourceId": "@variables('Snappable_Fid')"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Check_Trigger_Remediation_Log_export": {
+                      "runAfter": { "Trigger_Remediation_Log_export": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "If",
+                      "expression": {
+                        "or": [
+                          { "not": { "equals": ["@outputs('Trigger_Remediation_Log_export')['statusCode']", 200] } },
+                          { "not": { "equals": ["@coalesce(body('Trigger_Remediation_Log_export')?['errors'], '')", ""] } },
+                          { "equals": ["@coalesce(body('Trigger_Remediation_Log_export')?['data']?['createViolationRemediation']?['remediationId'], '')", ""] }
+                        ]
+                      },
+                      "actions": {
+                        "Append_-_Trigger_Log_failed": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "Error_Messages",
+                            "value": "Remediation actions-log export request (createViolationRemediation) failed or returned no remediationId for violation @{variables('Violation_ID')} (status @{outputs('Trigger_Remediation_Log_export')?['statusCode']}); remediation log link will be unavailable."
+                          }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "If_Log_trigger_succeeded": {
+                      "runAfter": { "Check_Trigger_Remediation_Log_export": ["Succeeded"] },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          { "equals": ["@outputs('Trigger_Remediation_Log_export')['statusCode']", 200] },
+                          { "equals": ["@coalesce(body('Trigger_Remediation_Log_export')?['errors'], '')", ""] },
+                          { "not": { "equals": ["@coalesce(body('Trigger_Remediation_Log_export')?['data']?['createViolationRemediation']?['remediationId'], '')", ""] } }
+                        ]
+                      },
+                      "actions": {
+                        "Reset_Download_Ready_for_Log": {
+                          "runAfter": {},
+                          "type": "SetVariable",
+                          "inputs": { "name": "Download_Ready", "value": false }
+                        },
+                        "Reset_Download_External_Id_for_Log": {
+                          "runAfter": { "Reset_Download_Ready_for_Log": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Download_External_Id", "value": "@null" }
+                        },
+                        "Poll_Download_Bar_for_Log": {
+                          "runAfter": { "Reset_Download_External_Id_for_Log": ["Succeeded"] },
+                          "type": "Until",
+                          "expression": "@equals(variables('Download_Ready'), true)",
+                          "limit": { "count": "[parameters('DownloadPollMaxAttempts')]", "timeout": "PT1H" },
+                          "actions": {
+                            "Wait_before_Log_poll": {
+                              "runAfter": {},
+                              "type": "Wait",
+                              "inputs": { "interval": { "count": "[parameters('DownloadPollIntervalSec')]", "unit": "Second" } }
+                            },
+                            "Download_Bar_Log": {
+                              "runAfter": { "Wait_before_Log_poll": ["Succeeded"] },
+                              "type": "Http",
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@{variables('Base_URL')}/api/graphql",
+                                "headers": {
+                                  "Authorization": "Bearer @{variables('Access_Token')}",
+                                  "Content-Type": "application/json",
+                                  "User-Agent": "@variables('User_Agent')"
+                                },
+                                "body": {
+                                  "query": "query DownloadBarQuery {\n    allUserFiles {\n        downloads {\n        externalId\n        createdAt\n        expiresAt\n        completedAt\n        creator\n        filename\n        type\n        state\n        __typename\n        }\n        __typename\n    }\n}",
+                                  "variables": {}
+                                }
+                              }
+                            },
+                            "Filter_snapshot_log_downloads": {
+                              "runAfter": { "Download_Bar_Log": ["Succeeded"] },
+                              "type": "Query",
+                              "inputs": {
+                                "from": "@coalesce(first(coalesce(body('Download_Bar_Log')?['data']?['allUserFiles'], json('[]')))?['downloads'], json('[]'))",
+                                "where": "@and(equals(item()?['type'], 'REMEDIATION_ACTIONS_LOG_CSV'), and(contains(toLower(coalesce(item()?['filename'], '')), variables('Log_Name_Pattern')), greater(ticks(coalesce(item()?['createdAt'], '1970-01-01T00:00:00Z')), ticks(variables('Log_Export_Start')))))"
+                              }
+                            },
+                            "Set_Log_Match_Count": {
+                              "runAfter": { "Filter_snapshot_log_downloads": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "Log_Match_Count", "value": "@length(coalesce(body('Filter_snapshot_log_downloads'), json('[]')))" }
+                            },
+                            "Sort_snapshot_log_desc": {
+                              "runAfter": { "Set_Log_Match_Count": ["Succeeded"] },
+                              "type": "Compose",
+                              "inputs": "@reverse(sort(body('Filter_snapshot_log_downloads'), 'createdAt'))"
+                            },
+                            "If_log_match_ambiguous": {
+                              "runAfter": { "Sort_snapshot_log_desc": ["Succeeded"] },
+                              "type": "If",
+                              "expression": {
+                                "and": [
+                                  { "greater": ["@variables('Log_Match_Count')", 1] }
+                                ]
+                              },
+                              "actions": {
+                                "Append_Log_ambiguous": {
+                                  "runAfter": {},
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": { "name": "Error_Messages", "value": "Remediation actions-log export could not be matched unambiguously for violation @{variables('Violation_ID')}: @{variables('Log_Match_Count')} files matched the object-name pattern after the export start time. Not attached." }
+                                },
+                                "Set_Log_Ready_on_ambiguous": {
+                                  "runAfter": { "Append_Log_ambiguous": ["Succeeded"] },
+                                  "type": "SetVariable",
+                                  "inputs": { "name": "Download_Ready", "value": true }
+                                }
+                              },
+                              "else": {
+                                "actions": {
+                                  "If_newest_log_ready_or_failed": {
+                                    "runAfter": {},
+                                    "type": "If",
+                                    "expression": {
+                                      "and": [
+                                        { "equals": ["@variables('Log_Match_Count')", 1] },
+                                        { "equals": ["@first(outputs('Sort_snapshot_log_desc'))?['state']", "READY"] }
+                                      ]
+                                    },
+                                    "actions": {
+                                      "Set_Log_External_Id": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": { "name": "Download_External_Id", "value": "@{first(outputs('Sort_snapshot_log_desc'))?['externalId']}" }
+                                      },
+                                      "Set_Log_Ready_true": {
+                                        "runAfter": { "Set_Log_External_Id": ["Succeeded"] },
+                                        "type": "SetVariable",
+                                        "inputs": { "name": "Download_Ready", "value": true }
+                                      }
+                                    },
+                                    "else": {
+                                      "actions": {
+                                        "If_newest_log_failed": {
+                                          "runAfter": {},
+                                          "type": "If",
+                                          "expression": {
+                                            "and": [
+                                              { "equals": ["@variables('Log_Match_Count')", 1] },
+                                              { "equals": ["@first(outputs('Sort_snapshot_log_desc'))?['state']", "FAILED"] }
+                                            ]
+                                          },
+                                          "actions": {
+                                            "Append_Log_export_failed": {
+                                              "runAfter": {},
+                                              "type": "AppendToArrayVariable",
+                                              "inputs": { "name": "Error_Messages", "value": "Rubrik reported the remediation actions-log export (REMEDIATION_ACTIONS_LOG_CSV) as FAILED for violation @{variables('Violation_ID')}; remediation log link will be unavailable." }
+                                            },
+                                            "Set_Log_Ready_on_failure": {
+                                              "runAfter": { "Append_Log_export_failed": ["Succeeded"] },
+                                              "type": "SetVariable",
+                                              "inputs": { "name": "Download_Ready", "value": true }
+                                            }
+                                          },
+                                          "else": { "actions": {} }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "If_Log_external_id_present": {
+                          "runAfter": { "Poll_Download_Bar_for_Log": ["Succeeded", "Failed", "TimedOut"] },
+                          "type": "If",
+                          "expression": {
+                            "and": [
+                              { "not": { "equals": ["@variables('Download_External_Id')", ""] } }
+                            ]
+                          },
+                          "actions": {
+                            "Download_Remediation_Log_bytes": {
+                              "runAfter": {},
+                              "type": "Http",
+                              "inputs": {
+                                "method": "GET",
+                                "uri": "@{variables('Base_URL')}/file-downloads/@{encodeURIComponent(variables('Download_External_Id'))}",
+                                "headers": {
+                                  "Authorization": "Bearer @{variables('Access_Token')}",
+                                  "User-Agent": "@variables('User_Agent')"
+                                }
+                              }
+                            },
+                            "Upload_Remediation_Log_blob": {
+                              "runAfter": { "Download_Remediation_Log_bytes": ["Succeeded"] },
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                                "method": "post",
+                                "body": "@body('Download_Remediation_Log_bytes')",
+                                "headers": { "Content-Type": "text/csv" },
+                                "path": "[concat('/v2/datasets/@{encodeURIComponent(encodeURIComponent(''', parameters('StorageAccountName'), '''))}/files')]",
+                                "queries": {
+                                  "folderPath": "@{concat('/', parameters('StorageContainerName'), '/dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'))}",
+                                  "name": "@{concat('remediation_log_', variables('Violation_ID'), '.csv')}",
+                                  "queryParametersSingleEncoded": true
+                                }
+                              }
+                            },
+                            "Create_SAS_for_Remediation_Log": {
+                              "runAfter": { "Upload_Remediation_Log_blob": ["Succeeded"] },
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                                "method": "post",
+                                "body": {
+                                  "Permissions": "Read",
+                                  "ExpiryTime": "@{addHours(utcNow(), parameters('SasTokenTtlHours'))}"
+                                },
+                                "path": "[concat('/v2/datasets/@{encodeURIComponent(encodeURIComponent(''', parameters('StorageAccountName'), '''))}/CreateSharedLinkByPath')]",
+                                "queries": {
+                                  "path": "@{concat('/', parameters('StorageContainerName'), '/dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'), '/remediation_log_', variables('Violation_ID'), '.csv')}"
+                                }
+                              }
+                            },
+                            "Set_Remediation_Log_Link": {
+                              "runAfter": { "Create_SAS_for_Remediation_Log": ["Succeeded", "Failed", "Skipped"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "Remediation_Log_Link", "value": "@{coalesce(body('Create_SAS_for_Remediation_Log')?['WebUrl'], concat('Remediation log uploaded to blob folder dspm/', triggerBody()?['object']?['name'], '/', variables('Violation_ID'), ' (SAS unavailable).'))}" }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Set_Remediation_Log_Link_unavailable": {
+                                "runAfter": {},
+                                "type": "SetVariable",
+                                "inputs": { "name": "Remediation_Log_Link", "value": "@{if(equals(variables('Log_Match_Count'), 0), 'Remediation actions-log download reference could not be located (no file matched the object-name pattern after the export start time, or the export failed/timed out); no remediation log link available.', 'Remediation actions-log export was not READY (failed, timed out, or ambiguous match); no remediation log link available.')}" }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Set_Remediation_Log_Link_trigger_failed": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": { "name": "Remediation_Log_Link", "value": "Remediation actions-log export request failed; no remediation log link available." }
+                          }
+                        }
+                      }
+                    },
+                    "List_file_hits_full": {
+                      "runAfter": { "If_Log_trigger_succeeded": ["Succeeded", "Failed", "Skipped"] },
+                      "type": "Until",
+                      "expression": "@equals(variables('Has_Next_Page'), false)",
+                      "limit": { "count": 100, "timeout": "PT1H" },
+                      "actions": {
+                        "List_DSPM_Violation_File_Hits_full": {
+                          "runAfter": {},
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{variables('Base_URL')}/api/graphql",
+                            "headers": {
+                              "Authorization": "Bearer @{variables('Access_Token')}",
+                              "Content-Type": "application/json",
+                              "User-Agent": "@variables('User_Agent')"
+                            },
+                            "body": {
+                              "query": "query DSPMViolationFileListQuery(\n  $first: Int!\n  $after: String\n  $snappableFid: String!\n  $snapshotFid: String!\n  $filters: ListFileResultFiltersInput\n  $sort: FileResultSortInput\n  $timezone: String!\n) {\n  policyObj(snappableFid: $snappableFid, snapshotFid: $snapshotFid) {\n    id: snapshotFid\n    fileResultConnection(\n      first: $first\n      after: $after\n      filter: $filters\n      sort: $sort\n      timezone: $timezone\n    ) {\n      edges {\n        cursor\n        node {\n          nativePath\n          stdPath\n          filename\n          mode\n          size\n          directory\n          createdBy\n          modifiedBy\n          hits {\n            totalHits\n            violations\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      pageInfo {\n        startCursor\n        endCursor\n        hasNextPage\n        hasPreviousPage\n        __typename\n      }\n      hasLatestData\n      __typename\n    }\n    __typename\n  }\n}",
+                              "variables": {
+                                "first": 25,
+                                "after": "@if(empty(variables('Next_Cursor')), null, variables('Next_Cursor'))",
+                                "snappableFid": "@variables('Snappable_Fid')",
+                                "snapshotFid": "@variables('Snapshot_Fid')",
+                                "sort": { "sortBy": "HITS", "sortOrder": "DESC" },
+                                "filters": {
+                                  "violationId": "@variables('Violation_ID')",
+                                  "fileType": "HITS"
+                                },
+                                "timezone": "UTC"
+                              }
+                            }
+                          }
+                        },
+                        "Check_List_file_hits_full": {
+                          "runAfter": { "List_DSPM_Violation_File_Hits_full": ["Succeeded", "Failed", "TimedOut"] },
+                          "type": "If",
+                          "expression": {
+                            "or": [
+                              { "not": { "equals": ["@outputs('List_DSPM_Violation_File_Hits_full')['statusCode']", 200] } },
+                              { "not": { "equals": ["@coalesce(body('List_DSPM_Violation_File_Hits_full')?['errors'], '')", ""] } }
+                            ]
+                          },
+                          "actions": {
+                            "Append_-_List_file_hits_full_failed": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "Error_Messages",
+                                "value": "Listing DSPM violation file hits failed for violation @{variables('Violation_ID')} (status @{outputs('List_DSPM_Violation_File_Hits_full')?['statusCode']})."
+                              }
+                            },
+                            "Set_File_Hits_Failed_full": {
+                              "runAfter": { "Append_-_List_file_hits_full_failed": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "File_Hits_Failed", "value": true }
+                            },
+                            "Set_Has_Next_Page_false_on_full_failure": {
+                              "runAfter": { "Set_File_Hits_Failed_full": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "Has_Next_Page", "value": false }
+                            }
+                          },
+                          "else": { "actions": {} }
+                        },
+                        "Append_files_full": {
+                          "runAfter": { "Check_List_file_hits_full": ["Succeeded"] },
+                          "type": "Foreach",
+                          "foreach": "@coalesce(body('List_DSPM_Violation_File_Hits_full')?['data']?['policyObj']?['fileResultConnection']?['edges'], json('[]'))",
+                          "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+                          "actions": {
+                            "Append_file_record_full": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "Files_To_Process",
+                                "value": {
+                                  "filename": "@items('Append_files_full')?['node']?['filename']",
+                                  "nativePath": "@items('Append_files_full')?['node']?['nativePath']",
+                                  "stdPath": "@items('Append_files_full')?['node']?['stdPath']",
+                                  "createdBy": "@items('Append_files_full')?['node']?['createdBy']",
+                                  "modifiedBy": "@items('Append_files_full')?['node']?['modifiedBy']",
+                                  "platform": "@variables('Platform')",
+                                  "physicalHost": "@variables('Physical_Host')"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Set_Has_Next_Page_full": {
+                          "runAfter": { "Append_files_full": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Has_Next_Page", "value": "@coalesce(body('List_DSPM_Violation_File_Hits_full')?['data']?['policyObj']?['fileResultConnection']?['pageInfo']?['hasNextPage'], false)" }
+                        },
+                        "Set_Next_Cursor_full": {
+                          "runAfter": { "Set_Has_Next_Page_full": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Next_Cursor", "value": "@{body('List_DSPM_Violation_File_Hits_full')?['data']?['policyObj']?['fileResultConnection']?['pageInfo']?['endCursor']}" }
+                        }
+                      }
+                    },
+                    "Check_File_Hits_Failed_full": {
+                      "runAfter": { "List_file_hits_full": ["Succeeded"] },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('File_Hits_Failed')", true] }
+                        ]
+                      },
+                      "actions": {
+                        "Comment_-_File_hits_failed_full": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p><b>Rubrik DSPM Violation Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                            },
+                            "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Terminate_-_File_hits_failed_full": {
+                          "runAfter": { "Comment_-_File_hits_failed_full": ["Succeeded", "Failed"] },
+                          "type": "Terminate",
+                          "inputs": { "runStatus": "Failed", "runError": { "code": "ListFileHitsFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Select_files_for_quarantine_full": {
+                      "runAfter": { "Check_File_Hits_Failed_full": ["Succeeded"] },
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@variables('Files_To_Process')",
+                        "select": {
+                          "filename": "@item()?['filename']",
+                          "filePath": "@item()?['nativePath']",
+                          "ownerUpn": "@coalesce(item()?['createdBy'], item()?['modifiedBy'], '')",
+                          "objectType": "@coalesce(item()?['platform'], variables('Object_Type'), '')",
+                          "physicalHost": "@item()?['physicalHost']"
+                        }
+                      }
+                    },
+                    "Call_RubrikQuarantineFiles_full": {
+                      "runAfter": { "Select_files_for_quarantine_full": ["Succeeded"] },
+                      "type": "Workflow",
+                      "inputs": {
+                        "host": {
+                          "triggerName": "manual",
+                          "workflow": {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('RubrikQuarantineFilesPlaybookName'))]"
+                          }
+                        },
+                        "body": {
+                          "objectType": "@variables('Object_Type')",
+                          "files": "@body('Select_files_for_quarantine_full')"
+                        }
+                      },
+                      "runtimeConfiguration": { "secureData": { "properties": ["inputs", "outputs"] } }
+                    },
+                    "Set_Quarantine_Results_full": {
+                      "runAfter": { "Call_RubrikQuarantineFiles_full": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "Quarantine_Results", "value": "@coalesce(body('Call_RubrikQuarantineFiles_full')?['results'], json('[]'))" }
+                    },
+                    "Set_All_Quarantine_Succeeded_full": {
+                      "runAfter": { "Set_Quarantine_Results_full": ["Succeeded"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "All_Quarantine_Succeeded", "value": "@equals(toLower(coalesce(body('Call_RubrikQuarantineFiles_full')?['status'], 'failed')), 'success')" }
+                    },
+                    "Notify_owner_full": {
+                      "runAfter": { "Set_All_Quarantine_Succeeded_full": ["Succeeded"] },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['teams']['connectionId']" } },
+                        "method": "post",
+                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('channel')}",
+                        "body": {
+                          "recipient": {
+                            "groupId": "[parameters('TeamsGroupId')]",
+                            "channelId": "[parameters('TeamsChannelId')]"
+                          },
+                          "messageBody": "<h3>Rubrik DSPM Violation Remediation</h3><p>Hi @{coalesce(variables('Owner_UPN'), 'file owner')},<br>The Rubrik DSPM policy <b>@{variables('Policy_Name')}</b> (severity: @{triggerBody()?['object']?['properties']?['severity']}) was raised on object <b>@{variables('Object_Name')}</b>.</p><p><b>Violation ID:</b> @{variables('Violation_ID')}<br><b>Files processed:</b> @{length(variables('Quarantine_Results'))}<br><b>All quarantine succeeded:</b> @{variables('All_Quarantine_Succeeded')}</p><p>The listed files have been processed for quarantine. See the Sentinel incident for the CSV/log export links and per-file results.</p>"
+                        }
+                      }
+                    },
+                    "If_all_quarantine_succeeded_full": {
+                      "runAfter": { "Notify_owner_full": ["Succeeded", "Failed"] },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('All_Quarantine_Succeeded')", true] },
+                          { "greater": ["@length(variables('Quarantine_Results'))", 0] }
+                        ]
+                      },
+                      "actions": {
+                        "Set_Status_Remediated": {
+                          "runAfter": {},
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{variables('Base_URL')}/api/graphql",
+                            "headers": {
+                              "Authorization": "Bearer @{variables('Access_Token')}",
+                              "Content-Type": "application/json",
+                              "User-Agent": "@variables('User_Agent')"
+                            },
+                            "body": {
+                              "query": "mutation UpdatePolicyViolationsMutation($input: BulkUpdatePolicyViolationsInput!) {\n  bulkUpdatePolicyViolations(input: $input)\n}",
+                              "variables": {
+                                "input": {
+                                  "newPolicyViolationStatus": "POLICY_VIOLATION_STATUS_REMEDIATED",
+                                  "policyViolationIds": ["@variables('Violation_ID')"]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Comment_full_summary": {
+                      "runAfter": { "If_all_quarantine_succeeded_full": ["Succeeded"] },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<h3>Rubrik DSPM Violation Remediation</h3><p><b>Event type:</b> SecurityViolation<br><b>Policy:</b> @{variables('Policy_Name')}<br><b>Object:</b> @{variables('Object_Name')} (@{variables('Object_Type')})<br><b>Violation ID:</b> @{variables('Violation_ID')}</p><p><b>Exports:</b><br>Files CSV: @{if(empty(coalesce(variables('Files_CSV_Link'), '')), 'Not generated.', variables('Files_CSV_Link'))}<br>Remediation log: @{if(empty(coalesce(variables('Remediation_Log_Link'), '')), 'Not generated.', variables('Remediation_Log_Link'))}<br>(SAS links expire in @{parameters('SasTokenTtlHours')} hours)</p><p><b>Files processed:</b> @{length(variables('Quarantine_Results'))}<br><b>All quarantine succeeded:</b> @{variables('All_Quarantine_Succeeded')}<br><b>Final violation status:</b> @{if(and(equals(variables('All_Quarantine_Succeeded'), true), greater(length(variables('Quarantine_Results')), 0)), 'REMEDIATED', 'IN_PROGRESS')}</p><p><b>Quarantine results:</b><br>@{string(variables('Quarantine_Results'))}</p>"
+                        },
+                        "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  }
+                },
+                "Classification": {
+                  "case": "Classification",
+                  "actions": {
+                    "List_file_hits_reduced": {
+                      "runAfter": {},
+                      "type": "Until",
+                      "expression": "@equals(variables('Has_Next_Page'), false)",
+                      "limit": { "count": 100, "timeout": "PT1H" },
+                      "actions": {
+                        "List_DSPM_Violation_File_Hits_reduced": {
+                          "runAfter": {},
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{variables('Base_URL')}/api/graphql",
+                            "headers": {
+                              "Authorization": "Bearer @{variables('Access_Token')}",
+                              "Content-Type": "application/json",
+                              "User-Agent": "@variables('User_Agent')"
+                            },
+                            "body": {
+                              "query": "query DSPMViolationFileListQuery(\n  $first: Int!\n  $after: String\n  $snappableFid: String!\n  $snapshotFid: String!\n  $filters: ListFileResultFiltersInput\n  $sort: FileResultSortInput\n  $timezone: String!\n) {\n  policyObj(snappableFid: $snappableFid, snapshotFid: $snapshotFid) {\n    id: snapshotFid\n    fileResultConnection(\n      first: $first\n      after: $after\n      filter: $filters\n      sort: $sort\n      timezone: $timezone\n    ) {\n      edges {\n        cursor\n        node {\n          nativePath\n          stdPath\n          filename\n          mode\n          size\n          directory\n          createdBy\n          modifiedBy\n          hits {\n            totalHits\n            violations\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      pageInfo {\n        startCursor\n        endCursor\n        hasNextPage\n        hasPreviousPage\n        __typename\n      }\n      hasLatestData\n      __typename\n    }\n    __typename\n  }\n}",
+                              "variables": {
+                                "first": 25,
+                                "after": "@if(empty(variables('Next_Cursor')), null, variables('Next_Cursor'))",
+                                "snappableFid": "@variables('Object_ID')",
+                                "snapshotFid": "@variables('Snapshot_Fid')",
+                                "sort": { "sortBy": "HITS", "sortOrder": "DESC" },
+                                "filters": { "fileType": "HITS" },
+                                "timezone": "UTC"
+                              }
+                            }
+                          }
+                        },
+                        "Check_List_file_hits_reduced": {
+                          "runAfter": { "List_DSPM_Violation_File_Hits_reduced": ["Succeeded", "Failed", "TimedOut"] },
+                          "type": "If",
+                          "expression": {
+                            "or": [
+                              { "not": { "equals": ["@outputs('List_DSPM_Violation_File_Hits_reduced')['statusCode']", 200] } },
+                              { "not": { "equals": ["@coalesce(body('List_DSPM_Violation_File_Hits_reduced')?['errors'], '')", ""] } }
+                            ]
+                          },
+                          "actions": {
+                            "Append_-_List_file_hits_reduced_failed": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "Error_Messages",
+                                "value": "Listing DSPM classification file hits failed for object @{variables('Object_ID')} (status @{outputs('List_DSPM_Violation_File_Hits_reduced')?['statusCode']})."
+                              }
+                            },
+                            "Set_File_Hits_Failed_reduced": {
+                              "runAfter": { "Append_-_List_file_hits_reduced_failed": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "File_Hits_Failed", "value": true }
+                            },
+                            "Set_Has_Next_Page_false_on_reduced_failure": {
+                              "runAfter": { "Set_File_Hits_Failed_reduced": ["Succeeded"] },
+                              "type": "SetVariable",
+                              "inputs": { "name": "Has_Next_Page", "value": false }
+                            }
+                          },
+                          "else": { "actions": {} }
+                        },
+                        "Append_files_reduced": {
+                          "runAfter": { "Check_List_file_hits_reduced": ["Succeeded"] },
+                          "type": "Foreach",
+                          "foreach": "@coalesce(body('List_DSPM_Violation_File_Hits_reduced')?['data']?['policyObj']?['fileResultConnection']?['edges'], json('[]'))",
+                          "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+                          "actions": {
+                            "Append_file_record_reduced": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "Files_To_Process",
+                                "value": {
+                                  "filename": "@items('Append_files_reduced')?['node']?['filename']",
+                                  "nativePath": "@items('Append_files_reduced')?['node']?['nativePath']",
+                                  "stdPath": "@items('Append_files_reduced')?['node']?['stdPath']",
+                                  "createdBy": "@items('Append_files_reduced')?['node']?['createdBy']",
+                                  "modifiedBy": "@items('Append_files_reduced')?['node']?['modifiedBy']",
+                                  "platform": "@variables('Object_Type')",
+                                  "physicalHost": "@variables('Physical_Host')"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Set_Has_Next_Page_reduced": {
+                          "runAfter": { "Append_files_reduced": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Has_Next_Page", "value": "@coalesce(body('List_DSPM_Violation_File_Hits_reduced')?['data']?['policyObj']?['fileResultConnection']?['pageInfo']?['hasNextPage'], false)" }
+                        },
+                        "Set_Next_Cursor_reduced": {
+                          "runAfter": { "Set_Has_Next_Page_reduced": ["Succeeded"] },
+                          "type": "SetVariable",
+                          "inputs": { "name": "Next_Cursor", "value": "@{body('List_DSPM_Violation_File_Hits_reduced')?['data']?['policyObj']?['fileResultConnection']?['pageInfo']?['endCursor']}" }
+                        }
+                      }
+                    },
+                    "Check_File_Hits_Failed_reduced": {
+                      "runAfter": { "List_file_hits_reduced": ["Succeeded"] },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          { "equals": ["@variables('File_Hits_Failed')", true] }
+                        ]
+                      },
+                      "actions": {
+                        "Comment_-_File_hits_failed_reduced": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p><b>Rubrik DSPM Classification Remediation failed.</b></p><p>@{join(variables('Error_Messages'), '<br>')}</p>"
+                            },
+                            "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Terminate_-_File_hits_failed_reduced": {
+                          "runAfter": { "Comment_-_File_hits_failed_reduced": ["Succeeded", "Failed"] },
+                          "type": "Terminate",
+                          "inputs": { "runStatus": "Failed", "runError": { "code": "ListFileHitsFailed", "message": "@{join(variables('Error_Messages'), ' | ')}" } }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    },
+                    "Select_files_for_quarantine_reduced": {
+                      "runAfter": { "Check_File_Hits_Failed_reduced": ["Succeeded"] },
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@variables('Files_To_Process')",
+                        "select": {
+                          "filename": "@item()?['filename']",
+                          "filePath": "@item()?['nativePath']",
+                          "ownerUpn": "@coalesce(item()?['createdBy'], item()?['modifiedBy'], '')",
+                          "objectType": "@coalesce(item()?['platform'], variables('Object_Type'), '')",
+                          "physicalHost": "@item()?['physicalHost']"
+                        }
+                      }
+                    },
+                    "Call_RubrikQuarantineFiles_reduced": {
+                      "runAfter": { "Select_files_for_quarantine_reduced": ["Succeeded"] },
+                      "type": "Workflow",
+                      "inputs": {
+                        "host": {
+                          "triggerName": "manual",
+                          "workflow": {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('RubrikQuarantineFilesPlaybookName'))]"
+                          }
+                        },
+                        "body": {
+                          "objectType": "@variables('Object_Type')",
+                          "files": "@body('Select_files_for_quarantine_reduced')"
+                        }
+                      },
+                      "runtimeConfiguration": { "secureData": { "properties": ["inputs", "outputs"] } }
+                    },
+                    "Set_Quarantine_Results_reduced": {
+                      "runAfter": { "Call_RubrikQuarantineFiles_reduced": ["Succeeded", "Failed", "TimedOut"] },
+                      "type": "SetVariable",
+                      "inputs": { "name": "Quarantine_Results", "value": "@coalesce(body('Call_RubrikQuarantineFiles_reduced')?['results'], json('[]'))" }
+                    },
+                    "Notify_owner_reduced": {
+                      "runAfter": { "Set_Quarantine_Results_reduced": ["Succeeded"] },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['teams']['connectionId']" } },
+                        "method": "post",
+                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('channel')}",
+                        "body": {
+                          "recipient": {
+                            "groupId": "[parameters('TeamsGroupId')]",
+                            "channelId": "[parameters('TeamsChannelId')]"
+                          },
+                          "messageBody": "<h3>Rubrik DSPM Classification Remediation</h3><p>Hi @{coalesce(variables('Owner_UPN'), 'file owner')},<br>Classification policy hits were found on object <b>@{variables('Object_Name')}</b> (@{variables('Object_Type')}), severity @{triggerBody()?['object']?['properties']?['severity']}.</p><p><b>Object ID:</b> @{variables('Object_ID')}<br><b>Files processed:</b> @{length(variables('Quarantine_Results'))}</p><p>The listed files have been processed for quarantine. See the Sentinel incident for per-file results.</p>"
+                        }
+                      }
+                    },
+                    "Comment_reduced_summary": {
+                      "runAfter": { "Notify_owner_reduced": ["Succeeded", "Failed"] },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<h3>Rubrik DSPM Classification Remediation</h3><p><b>Event type:</b> Classification<br><b>Object:</b> @{variables('Object_Name')} (@{variables('Object_Type')})<br><b>Object ID:</b> @{variables('Object_ID')}<br><b>Snapshot ID:</b> @{variables('Snapshot_Fid')}</p><p><b>Files processed:</b> @{length(variables('Quarantine_Results'))}</p><p><b>Quarantine results:</b><br>@{string(variables('Quarantine_Results'))}</p><p><i>No CSV/log export or violation status update is performed for classification events (no DSPM license / no violation object).</i></p>"
+                        },
+                        "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "actions": {
+                  "Comment_unknown_event_type": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p><b>Rubrik DSPM Violation Remediation:</b> unrecognized eventType '@{variables('Event_Type')}'. Expected 'SecurityViolation' or 'Classification'. No action taken.</p>"
+                      },
+                      "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "RubrikCustomConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                "connectionName": "[variables('RubrikcustomconnectorConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "connectionName": "[variables('KeyvaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+              },
+              "azureblob": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                "connectionName": "[variables('AzureblobConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+              }
+            }
+          },
+          "StorageContainerName": { "value": "[parameters('StorageContainerName')]" },
+          "SasTokenTtlHours": { "value": "[parameters('SasTokenTtlHours')]" }
+        }
+      }
+    }
+  ]
+}

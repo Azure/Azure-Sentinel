@@ -1,0 +1,60 @@
+id: 77e7519f-be7e-41fc-8f02-76bb0a7d5496
+name: Create Incident for Identity Security Violation and Identity Alerts events for IR violations
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Creates an incident for Identity Security Violation and Identity Alerts events for IR violations.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: RubrikSecurityCloudAzureFunctions
+    dataTypes:
+      - RubrikViolationData
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+  Rubrik_Violation_Data_CL
+  | where (Class == "IdentityViolation" and EventName in ("CriticalSeverityDataViolationDetected",
+  "CriticalSeverityDataViolationReOpen", "HighSeverityDataViolationDetected",
+  "HighSeverityDataViolationReOpen", "LowOrMediumSeverityDataViolationDetected",
+  "LowOrMediumSeverityDataViolationReOpen")) or
+  (Class == "IdentityAlerts" and EventName in ("CriticalSeverityIdentityAlertDetected",
+  "CriticalSeverityIdentityAlertReOpened", "HighSeverityIdentityAlertDetected",
+  "HighSeverityIdentityAlertReOpened", "LowOrMediumSeverityIdentityAlertDetected",
+  "LowOrMediumSeverityIdentityAlertReOpened"
+  ))
+  | extend NewSeverity = case(Severity=="info", "Low",
+                              Severity=="warning", "Medium",
+                              Severity=="critical", "High",
+                              "Informational")
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - ViolationId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Class}} event occurred for object {{ObjectName}} with type {{ObjectType}}'
+  alertDescriptionFormat: '{{Summary}}'
+  alertSeverityColumnName: NewSeverity
+customDetails:
+  ObjectId: ObjectId
+  ObjectName: ObjectName
+  ObjectType: ObjectType
+  EventType: Class
+  EventName: EventName
+  ViolationId: SeriesId
+  Summary: Summary
+  EventTimestamp: EventTimestamp
+  Severity: Severity
