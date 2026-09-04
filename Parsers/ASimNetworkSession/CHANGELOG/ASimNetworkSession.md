@@ -1,4 +1,7 @@
 # Changelog for ASimNetworkSession.yaml
+## Version 0.7.4
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
 
 ## Version 0.7.3
 

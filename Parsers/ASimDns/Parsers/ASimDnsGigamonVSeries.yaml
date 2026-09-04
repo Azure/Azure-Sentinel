@@ -1,0 +1,61 @@
+Parser:
+  Title: DNS ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  Version: '1.0.0'
+  LastUpdated: Sep 02, 2026
+Product:
+  Name: Gigamon V-Series Application Metadata Intelligence
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+  - Title: ASIM DNS Schema
+    Link: https://aka.ms/ASimDnsDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Gigamon Application Metadata Intelligence
+    Link: https://docs.gigamon.com/doclib612/Content/GV-Cloud-V-Series-Applications/App_Metadata_Intelligence.html
+Description: |
+  This ASIM parser normalizes Gigamon V-Series Application Metadata Intelligence
+  DNS records to the ASIM Dns schema.
+ParserName: ASimDnsGigamonVSeries
+EquivalentBuiltInParser: _ASim_Dns_GigamonVSeries
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) {
+      GigamonV2_CL
+      | where not(disabled)
+      | where isnotempty(dns_query) or isnotempty(dns_name)
+      | project
+          TimeGenerated,
+          EventCount = int(1),
+          EventStartTime = coalesce(todatetime(start_time), TimeGenerated),
+          EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),
+          EventProduct = "V-Series Application Metadata Intelligence",
+          EventVendor = "Gigamon",
+          EventSchema = "Dns",
+          EventSchemaVersion = "0.1.7",
+          EventType = "Query",
+          EventResult = iff(isempty(dns_reply_code) or dns_reply_code in~ ("0", "NOERROR"), "Success", "Failure"),
+          EventResultDetails = coalesce(dns_reply_code, ""),
+          Dvc = coalesce(generator, vendor),
+          Src = coalesce(src_ip, src_ipv6, src_mac),
+          SrcIpAddr = coalesce(src_ip, src_ipv6),
+          DstIpAddr = coalesce(dst_ip, dst_ipv6),
+          DnsQuery = coalesce(dns_query, dns_name),
+          DnsQueryType = toint(dns_query_type),
+          DnsQueryTypeName = dns_query_type,
+          DnsResponseCode = toint(dns_reply_code),
+          DnsQueryClass = coalesce(dns_class, dns_host_class),
+          DnsQueryClassName = coalesce(dns_class, dns_host_class),
+          DnsFlags = dns_flags,
+          DnsTtl = toint(dns_ttl),
+          EventUid = id,
+          Type = "GigamonV2_CL"
+  };
+  parser(disabled=disabled)

@@ -1,0 +1,119 @@
+Parser:
+  Title: Parameterized Network Session ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  Version: '1.0.0'
+  LastUpdated: Sep 02, 2026
+Product:
+  Name: Gigamon V-Series Application Metadata Intelligence
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.7'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Gigamon Application Metadata Intelligence
+    Link: https://docs.gigamon.com/doclib612/Content/GV-Cloud-V-Series-Applications/App_Metadata_Intelligence.html
+Description: |
+  Parameterized ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  flow records.
+ParserName: vimNetworkSessionGigamonVSeries
+EquivalentBuiltInParser: _Im_NetworkSession_GigamonVSeries
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: pack
+    Type: bool
+    Default: false
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      srcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dstipaddr_has_any_prefix:dynamic=dynamic([]),
+      dstportnumber:int=int(null),
+      eventresult:string='*',
+      pack:bool=false,
+      disabled:bool=false,
+      pack:bool=false
+  ) {
+      GigamonV2_CL
+      | where not(disabled)
+      | extend
+          EventStartTime = coalesce(todatetime(start_time), TimeGenerated),
+          EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),
+          NetworkProtocol = case(
+              isempty(protocol), "",
+              protocol in~ ("6", "TCP"), "TCP",
+              protocol in~ ("17", "UDP"), "UDP",
+              protocol
+          ),
+          SrcIpAddr = coalesce(src_ip, src_ipv6),
+          DstIpAddr = coalesce(dst_ip, dst_ipv6)
+      | where (isnull(starttime) or EventStartTime >= starttime)
+          and (isnull(endtime) or EventEndTime <= endtime)
+          and (array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr has_any (srcipaddr_has_any_prefix))
+          and (array_length(dstipaddr_has_any_prefix) == 0 or DstIpAddr has_any (dstipaddr_has_any_prefix))
+          and (isnull(dstportnumber) or toint(dst_port) == dstportnumber)
+          and (eventresult == '*' or eventresult == 'Success')
+      | project
+          TimeGenerated,
+          EventCount = int(1),
+          EventStartTime,
+          EventEndTime,
+          EventProduct = "V-Series Application Metadata Intelligence",
+          EventVendor = "Gigamon",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.7",
+          EventType = "NetworkSession",
+          EventResult = "Success",
+          Dvc = coalesce(generator, vendor),
+          SrcIpAddr,
+          DstIpAddr,
+          Src = coalesce(src_ip, src_ipv6, src_mac),
+          Dst = coalesce(dst_ip, dst_ipv6, dst_mac),
+          SrcPortNumber = toint(src_port),
+          DstPortNumber = toint(dst_port),
+          NetworkProtocol,
+          SrcBytes = tolong(src_bytes),
+          DstBytes = tolong(dst_bytes),
+          SrcPackets = tolong(src_packets),
+          DstPackets = tolong(dst_packets),
+          Application = coalesce(app_name, app_id),
+          DnsQuery = coalesce(dns_query, dns_name),
+          EventUid = id,
+          Type = "GigamonV2_CL"
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      dstipaddr_has_any_prefix=dstipaddr_has_any_prefix,
+      dstportnumber=dstportnumber,
+      eventresult=eventresult,
+      pack=pack,
+      disabled=disabled,
+      pack=pack
+  )

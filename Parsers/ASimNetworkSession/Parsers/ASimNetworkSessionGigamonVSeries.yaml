@@ -1,0 +1,70 @@
+Parser:
+  Title: Network Session ASIM parser for Gigamon V-Series Application Metadata Intelligence
+  Version: '1.0.0'
+  LastUpdated: Sep 02, 2026
+Product:
+  Name: Gigamon V-Series Application Metadata Intelligence
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.7'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Gigamon Application Metadata Intelligence
+    Link: https://docs.gigamon.com/doclib612/Content/GV-Cloud-V-Series-Applications/App_Metadata_Intelligence.html
+Description: |
+  This ASIM parser normalizes Gigamon V-Series Application Metadata Intelligence
+  flow records to the ASIM NetworkSession schema.
+ParserName: ASimNetworkSessionGigamonVSeries
+EquivalentBuiltInParser: _ASim_NetworkSession_GigamonVSeries
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) {
+      GigamonV2_CL
+      | where not(disabled)
+      | extend
+          EventStartTime = coalesce(todatetime(start_time), TimeGenerated),
+          EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),
+          NetworkProtocol = case(
+              isempty(protocol), "",
+              protocol in~ ("6", "TCP"), "TCP",
+              protocol in~ ("17", "UDP"), "UDP",
+              protocol
+          )
+      | project
+          TimeGenerated,
+          EventCount = int(1),
+          EventStartTime,
+          EventEndTime,
+          EventProduct = "V-Series Application Metadata Intelligence",
+          EventVendor = "Gigamon",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.7",
+          EventType = "NetworkSession",
+          EventResult = "Success",
+          Dvc = coalesce(generator, vendor),
+          SrcIpAddr = coalesce(src_ip, src_ipv6),
+          DstIpAddr = coalesce(dst_ip, dst_ipv6),
+          Src = coalesce(src_ip, src_ipv6, src_mac),
+          Dst = coalesce(dst_ip, dst_ipv6, dst_mac),
+          SrcPortNumber = toint(src_port),
+          DstPortNumber = toint(dst_port),
+          NetworkProtocol,
+          SrcBytes = tolong(src_bytes),
+          DstBytes = tolong(dst_bytes),
+          SrcPackets = tolong(src_packets),
+          DstPackets = tolong(dst_packets),
+          Application = coalesce(app_name, app_id),
+          DnsQuery = coalesce(dns_query, dns_name),
+          EventUid = id,
+          Type = "GigamonV2_CL"
+  };
+  parser(disabled=disabled)
