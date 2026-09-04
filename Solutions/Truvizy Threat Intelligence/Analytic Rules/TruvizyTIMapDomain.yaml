@@ -1,0 +1,53 @@
+id: a94f9551-0c4d-44ec-92db-7fdfe5f252b9
+name: Truvizy TI map domain indicator to DnsEvents
+description: |
+  'Identifies matches between domain indicators confirmed by the Truvizy detection network and DNS lookups in DnsEvents. Truvizy domain indicators are dedicated scam and phishing domains (shared platforms are never listed at the domain level); a DNS resolution from your environment indicates a user was directed to a confirmed scam site.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: TruvizyThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where SourceSystem == "Truvizy"
+  | where Active == true and isnotempty(DomainName)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | extend DomainName = tolower(DomainName)
+  | join kind=innerunique (
+      DnsEvents
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where SubType == "LookupQuery" and isnotempty(Name)
+      | extend DomainName = tolower(Name)
+      | extend DNS_TimeGenerated = TimeGenerated
+    ) on DomainName
+  | project LatestIndicatorTime, Description, IndicatorId, ThreatType, ExpirationDateTime,
+      ConfidenceScore, DomainName, DNS_TimeGenerated, ClientIP, Computer
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+version: 1.0.0
+kind: Scheduled
