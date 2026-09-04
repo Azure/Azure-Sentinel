@@ -30,9 +30,9 @@ rule, and a set of automation playbooks.
   confidence-thresholded ticketing, a scheduled executive digest, app-owner notification, and a
   human-approval-gated Teams notification for crown-jewel-reaching findings. All playbooks are
   read-only/notification-only — none execute remediation actions.
-- **Connectivity Health-Check** (optional Azure Function) independently verifies that
-  `PrancerFindings_CL` ingestion is still flowing and alerts via webhook if it stalls, so a silent
-  connector failure doesn't go unnoticed.
+- **Ingestion health** is monitored in-product by the *Data-quality degradation or ingestion
+  staleness* analytic rule, which raises a Sentinel incident if no new `PrancerFindings_CL` rows
+  arrive within the expected window, so a silent connector failure doesn't go unnoticed.
 
 ## Prerequisites
 
@@ -50,13 +50,13 @@ rule, and a set of automation playbooks.
 Deploy from the Microsoft Sentinel **Content Hub** (search "Prancer PenSuiteAI Integration") or
 via the solution's `Package/mainTemplate.json`. After the core solution is installed:
 
-1. Configure the `PrancerLogData` connector with your workspace's DCE/DCR details (see
-   `Data Connectors/PrancerLogData.json` and its in-product connector page for exact steps).
-2. Optionally deploy `Data Connectors/PrancerConnectivityHealthCheck/` (see its own `readme.md`)
-   for independent ingestion-health monitoring.
-3. Populate the `Prancer Crown Jewel Assets` watchlist with your organization's critical assets
+1. Open the **Prancer Data Connector** page in Microsoft Sentinel and deploy it: the solution
+   provisions the Data Collection Endpoint, Data Collection Rule and `PrancerFindings_CL` table,
+   then grant Prancer's Entra application the *Monitoring Metrics Publisher* role on the deployed
+   DCR and configure Prancer with the DCE endpoint and DCR immutable ID shown on the connector page.
+2. Populate the `Prancer Crown Jewel Assets` watchlist with your organization's critical assets
    (see `Watchlists/PrancerCrownJewelAssets.json` for the expected schema).
-4. Deploy whichever playbooks fit your operating model from `Playbooks/` — each has its own
+3. Deploy whichever playbooks fit your operating model from `Playbooks/` — each has its own
    `readme.md` with parameters, required API connections, and post-deployment steps (e.g.
    authorizing connections, attaching the playbook to an automation rule).
 
