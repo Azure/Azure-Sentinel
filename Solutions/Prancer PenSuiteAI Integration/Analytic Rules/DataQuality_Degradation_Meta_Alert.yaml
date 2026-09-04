@@ -1,0 +1,123 @@
+id: 740e4954-2bec-42db-a079-accdd707ae1d
+name: Data-quality degradation spike or ingestion staleness by ScanType
+description: |
+  'Meta-alert covering two operational-telemetry conditions over PrancerFindings_CL. (1) Data-quality
+  spike: the rate of IsDataQualityIssue-flagged findings per ScanType rising against a trailing 7-day
+  baseline, surfaced alongside ScannerVersion so a scanner-release regression can be correlated directly.
+  (2) Ingestion staleness: no new PrancerFindings_CL rows within the staleness threshold (default 6h),
+  which replaces the previous standalone connectivity health-check function by answering "is Prancer data
+  still flowing?" natively in Sentinel. Each firing carries an AlertType column distinguishing
+  DataQualitySpike from IngestionStalled. This is an operational-telemetry rule, not an attacker-technique
+  detection - tactics/techniques are intentionally left unmapped.'
+severity: Medium
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics: []
+relevantTechniques: []
+query: |
+  // Branch 1 (DataQualitySpike): both windows are pre-aggregated with summarize (no parse_json/mv-expand
+  // needed - IsDataQualityIssue and ScannerVersion are already plain parser-derived columns), then joined
+  // on ScanType (a small, low-cardinality key) before the volume/rate-delta thresholds are applied.
+  // Branch 2 (IngestionStalled): checks whether the newest PrancerFindings_CL row across the query period
+  // is older than the staleness threshold - this is the "is data still flowing?" job formerly done by the
+  // deleted connectivity health-check Azure Function. Both branches are unioned into one result set
+  // with a shared schema and an AlertType discriminator.
+  let CurrentWindow = 1d;
+  let BaselineWindow = 7d;
+  let MinVolumeToEvaluate = 20;
+  let StalenessThreshold = 6h;
+  let CurrentStats = PrancerFindings
+      | where TimeGenerated > ago(CurrentWindow)
+      | summarize
+          TotalFindings = count(),
+          DataQualityIssues = countif(IsDataQualityIssue),
+          AffectedScannerVersions = make_set_if(ScannerVersion, IsDataQualityIssue, 20)
+        by ScanType
+      | extend CurrentIssueRatePct = round(100.0 * DataQualityIssues / TotalFindings, 2);
+  let BaselineStats = PrancerFindings
+      | where TimeGenerated between (ago(BaselineWindow + CurrentWindow) .. ago(CurrentWindow))
+      | summarize
+          BaselineTotalFindings = count(),
+          BaselineDataQualityIssues = countif(IsDataQualityIssue)
+        by ScanType
+      | extend BaselineIssueRatePct = round(100.0 * BaselineDataQualityIssues / BaselineTotalFindings, 2);
+  let QualitySpikes = CurrentStats
+      | join kind=inner (BaselineStats) on ScanType
+      | where TotalFindings >= MinVolumeToEvaluate
+      | extend RateDeltaPct = CurrentIssueRatePct - BaselineIssueRatePct
+      | where (BaselineIssueRatePct > 0 and CurrentIssueRatePct >= 2 * BaselineIssueRatePct and RateDeltaPct >= 5.0)
+           or (BaselineIssueRatePct == 0 and CurrentIssueRatePct >= 10.0)
+      | extend
+          AlertType = 'DataQualitySpike',
+          Reason = strcat(
+              ScanType, ' data-quality issue rate ', CurrentIssueRatePct, '% (baseline ', BaselineIssueRatePct,
+              '%) across scanner version(s) ', tostring(AffectedScannerVersions))
+      | project
+          AlertType,
+          ScanType,
+          Reason,
+          CurrentIssueRatePct = todouble(CurrentIssueRatePct),
+          BaselineIssueRatePct = todouble(BaselineIssueRatePct),
+          AffectedScannerVersions = tostring(AffectedScannerVersions),
+          LastReceived = datetime(null),
+          StalenessHours = toreal(real(null));
+  let IngestionStaleness = PrancerFindings
+      | summarize LastReceived = max(TimeGenerated)
+      | where isnotempty(LastReceived) and LastReceived < ago(StalenessThreshold)
+      | extend
+          StalenessHours = round((now() - LastReceived) / 1h, 2),
+          AlertType = 'IngestionStalled',
+          ScanType = 'ALL'
+      | extend Reason = strcat(
+          'No new Prancer findings ingested for ', tostring(StalenessHours),
+          'h (most recent row at ', format_datetime(LastReceived, 'yyyy-MM-dd HH:mm:ss'),
+          ' UTC); ingestion into PrancerFindings_CL may be stalled.')
+      | project
+          AlertType,
+          ScanType,
+          Reason,
+          CurrentIssueRatePct = toreal(real(null)),
+          BaselineIssueRatePct = toreal(real(null)),
+          AffectedScannerVersions = '',
+          LastReceived,
+          StalenessHours = todouble(StalenessHours);
+  QualitySpikes
+  | union IngestionStaleness
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ScanType
+customDetails:
+  AlertType: AlertType
+  ScanType: ScanType
+  Reason: Reason
+  CurrentIssueRatePct: CurrentIssueRatePct
+  BaselineIssueRatePct: BaselineIssueRatePct
+  StalenessHours: StalenessHours
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - AlertType
+      - ScanType
+alertDetailsOverride:
+  alertDisplayNameFormat: "Prancer telemetry alert ({{AlertType}}): {{ScanType}}"
+  alertDescriptionFormat: "{{Reason}}"
+version: 1.0.0
+kind: Scheduled
