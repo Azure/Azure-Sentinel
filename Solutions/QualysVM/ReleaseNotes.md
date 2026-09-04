@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            	|
 |-------------|--------------------------------|----------------------------------------------------------------|
+| 3.0.11       | 04-09-2026                     | Updated the **Qualys Host Detection Parser** to expose processing timestamps and deduplicate unchanged vulnerability versions. Updated the **CCP Data Connector** to use explicit table references for Defender portal query compatibility. |
 | 3.0.10      | 22-06-2026                     | Increased **CCP Connector** request timeout to 300s (platform max), reduced query window to 10 min, added a connectivity check using the `/msp/about.php` endpoint, and clarified Truncation Limit options to reduce timeouts on large environments. |
 | 3.0.9       | 29-05-2026                     | Adding new query string parameter                              |
 | 3.0.8       | 14-05-2026                     | Bumping API version                                            |

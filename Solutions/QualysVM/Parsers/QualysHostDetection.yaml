@@ -1,8 +1,8 @@
 id: 7162903e-e07f-426b-9b07-63b8c7eb77b1
 Function:
-  Title: Parser for QualysHostDetection
-  Version: '1.0.1'
-  LastUpdated: '2025-03-28'
+    Title: Parser for QualysHostDetection
+    Version: '1.0.2'
+    LastUpdated: '2026-08-28'
 Category: Microsoft Sentinel Parser
 FunctionName: QualysHostDetection
 FunctionAlias: QualysHostDetection
@@ -44,7 +44,8 @@ FunctionQuery: |
         LastFound = column_ifexists('LastFound_t', ''),
         TimesFound = column_ifexists('TimesFound_s', ''),
         FirstFound = column_ifexists('FirstFound_t', ''),
-        LastUpdate = column_ifexists('LastUpdate_t', ''),
+        LastUpdate = column_ifexists('LastUpdate_t', datetime(null)),
+        LastProcessedDateTime = column_ifexists('LastProcessed_t', datetime(null)),
         Result_column_count = tostring(column_ifexists('Result_column_count_d', '')),
         Results_0 = column_ifexists('Results_0_s', ''),
         Type = column_ifexists('Type', ''),
@@ -81,7 +82,8 @@ FunctionQuery: |
         LastFound = column_ifexists('LastFound_t', ''),
         TimesFound = column_ifexists('TimesFound_s', ''),
         FirstFound = column_ifexists('FirstFound_t', ''),
-        LastUpdate = column_ifexists('LastUpdate_t', ''),
+        LastUpdate = column_ifexists('LastUpdate_t', datetime(null)),
+        LastProcessedDateTime = column_ifexists('LastProcessed_t', datetime(null)),
         Result_column_count = tostring(column_ifexists('Result_column_count_d', '')),
         Results_0 = column_ifexists('Results_0_s', ''),
         Type = column_ifexists('Type', ''),
@@ -122,6 +124,9 @@ FunctionQuery: |
         TimesFound = tostring(Detections.TIMES_FOUND),
         FirstFound = todatetime(Detections.FIRST_FOUND_DATETIME),
         LastUpdate = todatetime(Detections.LAST_UPDATE_DATETIME),
+        LastProcessedDateTime = coalesce(
+            todatetime(Detections.LAST_PROCESSED_DATETIME),
+            todatetime(Detections.LAST_PROCESSED_DATE)),
         Results_0 = tostring(Detections['RESULTS']['#cdata-section']),
         Result_column_count = "1",
         Type = tostring(Detections.TYPE),
@@ -163,6 +168,18 @@ FunctionQuery: |
         TimesFound,
         FirstFound,
         LastUpdate,
+        LastProcessedDateTime,
         Result_column_count,
         Results_0,
         _ResourceId
+    | extend
+        HostId = tostring(HostId),
+        QID = tostring(QID),
+        Status = tostring(Status),
+        LastProcessedDateTime = todatetime(LastProcessedDateTime),
+        LastUpdate = todatetime(LastUpdate),
+        LastFound = todatetime(LastFound),
+        _IngestionTime = todatetime(TimeGenerated)
+    | summarize arg_max(_IngestionTime, *) by HostId, QID, Status, LastProcessedDateTime, LastUpdate
+    | extend TimeGenerated = coalesce(LastProcessedDateTime, LastUpdate, LastFound, _IngestionTime)
+    | project-away _IngestionTime
