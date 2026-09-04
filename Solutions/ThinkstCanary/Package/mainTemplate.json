@@ -1,0 +1,1137 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Thinkst Applied Research - support@canary.tools",
+    "comments": "Solution template for ThinkstCanary"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@canary.tools",
+    "_email": "[variables('email')]",
+    "_solutionName": "ThinkstCanary",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "87073660.azure-sentinel-solution-thinkst-canary",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "ThinkstCanary",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "ThinkstCanaryConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.2",
+      "_analyticRulecontentId1": "06360572-94a7-42a4-add7-58fb933b2353",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '06360572-94a7-42a4-add7-58fb933b2353')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('06360572-94a7-42a4-add7-58fb933b2353')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','06360572-94a7-42a4-add7-58fb933b2353','-', '1.0.2')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Thinkst Canary",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "ThinkstCanary",
+                  "title": "Thinkst Canary",
+                  "publisher": "Thinkst Engineering",
+                  "descriptionMarkdown": "The Thinkst Canary connector allows you to ingest security incidents from your Thinkst Canary honeypot network into Microsoft Sentinel. Canary devices detect unauthorized access attempts including SSH logins, RDP sessions, HTTP requests, database queries, file share access, and Canarytoken triggers. This connector automatically pulls all incident data for analysis and alerting.",
+                  "graphQueriesTableName": "ThinkstCanaryIncidents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total incidents received",
+                      "legend": "Thinkst Canary Incidents",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Thinkst Canary incidents in the last 24 hours",
+                      "query": "ThinkstCanaryIncidents_CL\n| where TimeGenerated > ago(24h)\n| order by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Top 10 source IPs triggering incidents",
+                      "query": "ThinkstCanaryIncidents_CL\n| summarize IncidentCount = count() by SourceIP\n| where isnotempty(SourceIP)\n| top 10 by IncidentCount desc"
+                    },
+                    {
+                      "description": "Incidents by type",
+                      "query": "ThinkstCanaryIncidents_CL\n| summarize Count = count() by Description\n| order by Count desc"
+                    },
+                    {
+                      "description": "Incidents with event detail data",
+                      "query": "ThinkstCanaryIncidents_CL\n| where isnotempty(RawEvent)\n| project TimeGenerated, Description, SourceIP, DestinationIP, DestinationPort, RawEvent"
+                    },
+                    {
+                      "description": "Incidents by flock",
+                      "query": "ThinkstCanaryIncidents_CL\n| summarize Count = count() by FlockId\n| order by Count desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ThinkstCanaryIncidents_CL",
+                      "lastDataReceivedQuery": "ThinkstCanaryIncidents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Thinkst Canary API Key",
+                        "description": "A Thinkst Canary API authentication token is required. [See the documentation](https://docs.canary.tools/guide/user-settings.html#generating-an-api-key) to learn how to generate an API key."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Thinkst Canary to Microsoft Sentinel",
+                      "description": "Provide your Thinkst Canary Console domain (e.g. 'yourhash' from yourhash.canary.tools) and API authentication token.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Canary Console Domain",
+                            "placeholder": "yourhash",
+                            "type": "text",
+                            "name": "clientId",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Authentication Token",
+                            "placeholder": "Enter your Canary API token",
+                            "type": "password",
+                            "name": "clientSecret",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "name": "toggle",
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Thinkst Applied Research",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Thinkst Applied Research",
+                  "email": "support@canary.tools",
+                  "tier": "Partner",
+                  "link": "https://help.canary.tools/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "ThinkstCanaryDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Direct",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-ThinkstCanaryIncidents_CL": {
+                    "columns": [
+                      {
+                        "name": "acknowledged",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_printable",
+                        "type": "string"
+                      },
+                      {
+                        "name": "description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dst_host",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dst_port",
+                        "type": "string"
+                      },
+                      {
+                        "name": "events_count",
+                        "type": "string"
+                      },
+                      {
+                        "name": "events_list",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "flock_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "flock_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "hash_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "incident_key",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_address",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ippers",
+                        "type": "string"
+                      },
+                      {
+                        "name": "key",
+                        "type": "string"
+                      },
+                      {
+                        "name": "local_time",
+                        "type": "string"
+                      },
+                      {
+                        "name": "logdata",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "logtype",
+                        "type": "string"
+                      },
+                      {
+                        "name": "mac_address",
+                        "type": "string"
+                      },
+                      {
+                        "name": "memo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "node_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "notified",
+                        "type": "string"
+                      },
+                      {
+                        "name": "previously_seen_count",
+                        "type": "real"
+                      },
+                      {
+                        "name": "sensor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "src_host",
+                        "type": "string"
+                      },
+                      {
+                        "name": "src_host_reverse",
+                        "type": "string"
+                      },
+                      {
+                        "name": "src_port",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updated",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updated_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "updated_time",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updated_time_printable",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-ThinkstCanaryIncidents_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-ThinkstCanaryIncidents_CL",
+                    "transformKql": "source | extend TimeGenerated = datetime_add('second', tolong(updated_time), datetime(1970-01-01)) | project TimeGenerated, IncidentId = tostring(incident_key), Description = tostring(description), Acknowledged = tostring(acknowledged), Created = toreal(created), CreatedPrintable = tostring(created_printable), DestinationIP = tostring(dst_host), DestinationPort = tostring(dst_port), EventsCount = tostring(events_count), Events = todynamic(events_list), FlockId = tostring(flock_id), FlockName = tostring(flock_name), HashId = tostring(hash_id), Host = todynamic(host), IpAddress = tostring(ip_address), IncidentUpdated = TimeGenerated, LocalTime = tostring(local_time), Memo = tostring(memo), RawEvent = todynamic(logdata), LogType = tostring(logtype), NodeId = tostring(node_id), Notified = tostring(notified), PreviouslySeenCount = toreal(previously_seen_count), Sensor = tostring(sensor), SourceIP = tostring(src_host), SrcHostReverse = tostring(src_host_reverse), SourcePort = tostring(src_port), UpdatedId = toreal(updated_id), UpdatedTimePrintable = tostring(updated_time_printable)"
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]"
+              }
+            },
+            {
+              "name": "ThinkstCanaryIncidents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "ThinkstCanaryIncidents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Timestamp when the incident was last updated"
+                    },
+                    {
+                      "name": "IncidentId",
+                      "type": "string",
+                      "description": "Unique incident key identifier"
+                    },
+                    {
+                      "name": "Description",
+                      "type": "string",
+                      "description": "Incident type description (e.g. SSH Login Attempt)"
+                    },
+                    {
+                      "name": "Acknowledged",
+                      "type": "string",
+                      "description": "Whether the incident has been acknowledged"
+                    },
+                    {
+                      "name": "Created",
+                      "type": "real",
+                      "description": "Unix timestamp of incident creation"
+                    },
+                    {
+                      "name": "CreatedPrintable",
+                      "type": "string",
+                      "description": "Human readable creation time"
+                    },
+                    {
+                      "name": "DestinationIP",
+                      "type": "string",
+                      "description": "Destination IP address (Canary device)"
+                    },
+                    {
+                      "name": "DestinationPort",
+                      "type": "string",
+                      "description": "Destination port targeted"
+                    },
+                    {
+                      "name": "EventsCount",
+                      "type": "string",
+                      "description": "Number of events in this incident"
+                    },
+                    {
+                      "name": "Events",
+                      "type": "dynamic",
+                      "description": "Array of event timestamps in milliseconds"
+                    },
+                    {
+                      "name": "FlockId",
+                      "type": "string",
+                      "description": "Flock ID the incident belongs to"
+                    },
+                    {
+                      "name": "FlockName",
+                      "type": "string",
+                      "description": "Flock name the incident belongs to"
+                    },
+                    {
+                      "name": "HashId",
+                      "type": "string",
+                      "description": "Hash identifier for the incident"
+                    },
+                    {
+                      "name": "Host",
+                      "type": "dynamic",
+                      "description": "Device details object (name, IP, version, services)"
+                    },
+                    {
+                      "name": "IpAddress",
+                      "type": "string",
+                      "description": "IP address field"
+                    },
+                    {
+                      "name": "IncidentUpdated",
+                      "type": "datetime",
+                      "description": "Datetime of last incident update"
+                    },
+                    {
+                      "name": "LocalTime",
+                      "type": "string",
+                      "description": "Local time of the incident on the device"
+                    },
+                    {
+                      "name": "Memo",
+                      "type": "string",
+                      "description": "Canarytoken reminder describing where the token was placed"
+                    },
+                    {
+                      "name": "RawEvent",
+                      "type": "dynamic",
+                      "description": "Array of detailed event log objects"
+                    },
+                    {
+                      "name": "LogType",
+                      "type": "string",
+                      "description": "Numeric log type identifier"
+                    },
+                    {
+                      "name": "NodeId",
+                      "type": "string",
+                      "description": "Node ID of the Canary or Canarytoken"
+                    },
+                    {
+                      "name": "Notified",
+                      "type": "string",
+                      "description": "Whether notification was sent"
+                    },
+                    {
+                      "name": "PreviouslySeenCount",
+                      "type": "real",
+                      "description": "Number of times this source was previously seen"
+                    },
+                    {
+                      "name": "Sensor",
+                      "type": "string",
+                      "description": "Sensor type (e.g. thinkstcanary)"
+                    },
+                    {
+                      "name": "SourceIP",
+                      "type": "string",
+                      "description": "Source IP address of the attacker"
+                    },
+                    {
+                      "name": "SrcHostReverse",
+                      "type": "string",
+                      "description": "Reverse DNS of the attacker"
+                    },
+                    {
+                      "name": "SourcePort",
+                      "type": "string",
+                      "description": "Source port of the attacker"
+                    },
+                    {
+                      "name": "UpdatedId",
+                      "type": "real",
+                      "description": "Incremental update ID for polling"
+                    },
+                    {
+                      "name": "UpdatedTimePrintable",
+                      "type": "string",
+                      "description": "Human readable last update time"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "ThinkstCanary",
+          "title": "Thinkst Canary",
+          "publisher": "Thinkst Engineering",
+          "descriptionMarkdown": "The Thinkst Canary connector allows you to ingest security incidents from your Thinkst Canary honeypot network into Microsoft Sentinel. Canary devices detect unauthorized access attempts including SSH logins, RDP sessions, HTTP requests, database queries, file share access, and Canarytoken triggers. This connector automatically pulls all incident data for analysis and alerting.",
+          "graphQueriesTableName": "ThinkstCanaryIncidents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total incidents received",
+              "legend": "Thinkst Canary Incidents",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Thinkst Canary incidents in the last 24 hours",
+              "query": "ThinkstCanaryIncidents_CL\n| where TimeGenerated > ago(24h)\n| order by TimeGenerated desc"
+            },
+            {
+              "description": "Top 10 source IPs triggering incidents",
+              "query": "ThinkstCanaryIncidents_CL\n| summarize IncidentCount = count() by SourceIP\n| where isnotempty(SourceIP)\n| top 10 by IncidentCount desc"
+            },
+            {
+              "description": "Incidents by type",
+              "query": "ThinkstCanaryIncidents_CL\n| summarize Count = count() by Description\n| order by Count desc"
+            },
+            {
+              "description": "Incidents with event detail data",
+              "query": "ThinkstCanaryIncidents_CL\n| where isnotempty(RawEvent)\n| project TimeGenerated, Description, SourceIP, DestinationIP, DestinationPort, RawEvent"
+            },
+            {
+              "description": "Incidents by flock",
+              "query": "ThinkstCanaryIncidents_CL\n| summarize Count = count() by FlockId\n| order by Count desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ThinkstCanaryIncidents_CL",
+              "lastDataReceivedQuery": "ThinkstCanaryIncidents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": false
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Thinkst Canary API Key",
+                "description": "A Thinkst Canary API authentication token is required. [See the documentation](https://docs.canary.tools/guide/user-settings.html#generating-an-api-key) to learn how to generate an API key."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Thinkst Canary to Microsoft Sentinel",
+              "description": "Provide your Thinkst Canary Console domain (e.g. 'yourhash' from yourhash.canary.tools) and API authentication token.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Canary Console Domain",
+                    "placeholder": "yourhash",
+                    "type": "text",
+                    "name": "clientId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Authentication Token",
+                    "placeholder": "Enter your Canary API token",
+                    "type": "password",
+                    "name": "clientSecret",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "name": "toggle",
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Thinkst Applied Research",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Thinkst Applied Research",
+          "email": "support@canary.tools",
+          "tier": "Partner",
+          "link": "https://help.canary.tools/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Thinkst Canary",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Thinkst Canary",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Thinkst Applied Research",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Thinkst Applied Research",
+                  "email": "support@canary.tools",
+                  "tier": "Partner",
+                  "link": "https://help.canary.tools/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'ThinkstCanaryIncidentsConnector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "ThinkstCanary",
+                "dataType": "ThinkstCanaryIncidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-ThinkstCanaryIncidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "apiKey": "not-used-by-canary",
+                  "apiKeyIdentifier": "QueryParameter",
+                  "apiKeyName": "not_used_by_canary"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('clientId'),'.canary.tools/api/v1/incidents/search')]",
+                  "httpMethod": "GET",
+                  "headers": {
+                    "X-Canary-Auth-Token": "[[parameters('clientSecret')]",
+                    "User-Agent": "Microsoft Sentinel Thinkst Canary Connector - Version 1.0",
+                    "Accept": "application/json"
+                  },
+                  "rateLimitQPS": 10,
+                  "StartTimeAttributeName": "newer_than",
+                  "queryTimeFormat": "yyyy-MM-dd-HH:mm:ss",
+                  "queryWindowInMin": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "queryParameters": {
+                    "filter_incident_state": "all",
+                    "limit": "100"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.incidents"
+                  ],
+                  "format": "json",
+                  "successStatusJsonPath": "$.result",
+                  "successStatusValue": "success"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.cursor.next",
+                  "NextPageParaName": "cursor",
+                  "pageSize": 100
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SentinelIncidentsFromThinkstCanaryAlerts_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "NRT",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Creates Microsoft Sentinel incidents from Thinkst Canary alerts.",
+                "displayName": "Canary alerts to incidents",
+                "enabled": false,
+                "query": "ThinkstCanaryIncidents_CL\n| where Description != \"Canary Disconnected\"\n| where Description != \"Canary Reconnected\"\n| where Description != \"Canary Settings Changed\"\n| where Description != \"Fake Location\"\n| where Description != \"Network Settings Roll-back\"\n| extend EventData = todynamic(RawEvent[0])\n| extend IsCanarytoken = Description contains \"Canarytoken\"\n    or LogType startswith \"16\"\n    or LogType startswith \"17\"\n    or isnotempty(tostring(EventData.canarytoken))\n| extend PhysicalCanaryName = coalesce(tostring(Host.name), NodeId),\n    PhysicalCanaryIP = coalesce(tostring(Host.ip_address), DestinationIP, IpAddress),\n    TokenMemo = iff(IsCanarytoken, substring(Memo, 0, 256), \"\"),\n    TokenType = coalesce(tostring(EventData.kind), tostring(EventData.type)),\n    TokenHostname = tostring(EventData.hostname),\n    TokenTarget = substring(coalesce(tostring(EventData.url), tostring(EventData.hostname), tostring(EventData.cloned_site), tostring(EventData.original_site), tostring(EventData.generic_data), tostring(EventData.location)), 0, 512),\n    TokenUsername = coalesce(tostring(EventData.windows_desktopini_access_username), tostring(EventData.ms_macro_username), tostring(EventData.cmd_user_name)),\n    TokenDomain = coalesce(tostring(EventData.windows_desktopini_access_domain), tostring(EventData.cmd_machine_name)),\n    TokenHost = coalesce(tostring(EventData.windows_desktopini_computer_name), tostring(EventData.cmd_computer_name), tostring(EventData.cmd_workstation), tostring(EventData.cmd_machine_name)),\n    TokenSourceIP = coalesce(tostring(EventData.cmd_resolved_ip), tostring(EventData.ms_macro_ip)),\n    TokenCity = coalesce(tostring(EventData.geoip.city), tostring(EventData.geoip.City), tostring(EventData.City)),\n    TokenCountry = coalesce(tostring(EventData.geoip.country), tostring(EventData.geoip.country_name), tostring(EventData.geoip.Country), tostring(EventData.Country)),\n    TokenContext = case(\n      isnotempty(tostring(EventData.client_public_key)), strcat(\"WireGuard public key: \", substring(tostring(EventData.client_public_key), 0, 128), \"; session: \", tostring(EventData.client_session_index)),\n      isnotempty(tostring(EventData.masked_card_number)), strcat(\"Masked card: \", tostring(EventData.masked_card_number), \"; transaction: \", tostring(EventData.transaction_amount), \" \", tostring(EventData.transaction_currency), \"; merchant: \", tostring(EventData.merchant)),\n      isnotempty(tostring(EventData.referer)), strcat(\"Referrer: \", substring(tostring(EventData.referer), 0, 256)),\n      \"\"),\n    UserAgent = substring(coalesce(tostring(EventData.USERAGENT), tostring(EventData.HEADERS['user-agent']), tostring(EventData.headers['User-Agent']), tostring(EventData.headers['user-agent'])), 0, 512)\n| extend ActorUsername = coalesce(tostring(EventData.USERNAME), tostring(EventData.USER), tostring(EventData.FORMDATA.username), tostring(EventData.POSTDATA.username), TokenUsername),\n    ActorDomain = coalesce(tostring(EventData.DOMAIN), tostring(EventData.DOMAINNAME), TokenDomain),\n    ActorHost = coalesce(TokenHost, tostring(EventData.HOSTNAME)),\n    Activity = coalesce(TokenContext, TokenType, tostring(EventData.INSTANCE_NAME), tostring(EventData.FUNC_NAME), tostring(EventData.METHOD), tostring(EventData.OPCODE), tostring(EventData.COMMAND), tostring(EventData.FUNCTION), Description)\n| extend SourceIP = coalesce(SourceIP, tostring(EventData.src_host), TokenSourceIP),\n    SourceGeo = case(isnotempty(TokenCity) and isnotempty(TokenCountry), strcat(TokenCity, \", \", TokenCountry), isnotempty(TokenCity), TokenCity, TokenCountry),\n    AssetType = iff(IsCanarytoken, \"Canarytoken\", \"Canary\"),\n    AssetName = iff(IsCanarytoken, coalesce(TokenMemo, TokenTarget, TokenType, NodeId), PhysicalCanaryName),\n    AssetNode = NodeId,\n    AssetIP = iff(IsCanarytoken, \"\", PhysicalCanaryIP),\n    AssetLocation = iff(IsCanarytoken, \"\", tostring(Host.description)),\n    CanaryEntityName = iff(IsCanarytoken, \"\", PhysicalCanaryName),\n    CanaryEntityIP = iff(IsCanarytoken, \"\", PhysicalCanaryIP)\n| extend SourceDisplay = coalesce(SourceIP, SrcHostReverse, \"unknown source\")\n| project TimeGenerated, Description, IncidentId, AssetType, AssetName, AssetNode,\n    AssetIP, AssetLocation, FlockName, TokenMemo, TokenType, TokenTarget,\n    TokenHostname, ActorUsername, ActorDomain, ActorHost, SourceGeo, SourceIP,\n    SourceDisplay, SrcHostReverse, DestinationPort, Activity, UserAgent, LogType,\n    EventsCount, CanaryEntityName, CanaryEntityIP\n",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "ThinkstCanaryIncidents_CL"
+                    ],
+                    "connectorId": "ThinkstCanary"
+                  }
+                ],
+                "tactics": [
+                  "LateralMovement",
+                  "Exfiltration"
+                ],
+                "techniques": [
+                  "T1021",
+                  "T1041"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "columnName": "SourceIP",
+                        "identifier": "Address"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "columnName": "CanaryEntityIP",
+                        "identifier": "Address"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "columnName": "CanaryEntityName",
+                        "identifier": "HostName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "columnName": "ActorUsername",
+                        "identifier": "Name"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "DNS",
+                    "fieldMappings": [
+                      {
+                        "columnName": "TokenHostname",
+                        "identifier": "DomainName"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                  "AssetLocation": "AssetLocation",
+                  "ActorUsername": "ActorUsername",
+                  "UserAgent": "UserAgent",
+                  "AssetName": "AssetName",
+                  "AssetType": "AssetType",
+                  "EventsCount": "EventsCount",
+                  "TokenType": "TokenType",
+                  "SourceGeo": "SourceGeo",
+                  "AssetIP": "AssetIP",
+                  "ActorHost": "ActorHost",
+                  "ActorDomain": "ActorDomain",
+                  "SourceIP": "SourceIP",
+                  "DestinationPort": "DestinationPort",
+                  "TokenMemo": "TokenMemo",
+                  "LogType": "LogType",
+                  "IncidentKey": "IncidentId",
+                  "TokenTarget": "TokenTarget",
+                  "FlockName": "FlockName",
+                  "Activity": "Activity",
+                  "AssetNode": "AssetNode"
+                },
+                "alertDetailsOverride": {
+                  "alertDescriptionFormat": "Thinkst {{AssetType}} {{AssetName}} recorded this activity from {{SourceDisplay}}. Review the mapped entities and custom details for asset, actor, and activity context.",
+                  "alertDisplayNameFormat": "{{Description}} - {{AssetName}} from {{SourceDisplay}}"
+                },
+                "incidentConfiguration": {
+                  "groupingConfiguration": {
+                    "reopenClosedIncident": false,
+                    "matchingMethod": "AllEntities",
+                    "lookbackDuration": "PT5H",
+                    "enabled": false
+                  },
+                  "createIncident": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "ThinkstCanary Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ThinkstCanary",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Thinkst Applied Research",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Thinkst Applied Research",
+                  "email": "support@canary.tools",
+                  "tier": "Partner",
+                  "link": "https://help.canary.tools/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Canary alerts to incidents",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "ThinkstCanary",
+        "publisherDisplayName": "Thinkst Applied Research",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ThinkstCanary/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Thinkst Canary solution for Microsoft Sentinel ingests Canary and Canarytoken incidents through the Codeless Connector Framework and provides normalized parsers, detections and response automation.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/ThinkstCanary.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ThinkstCanary",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Thinkst Applied Research",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Thinkst Applied Research",
+          "email": "support@canary.tools",
+          "tier": "Partner",
+          "link": "https://help.canary.tools/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-18",
+        "lastPublishDate": "2026-08-18",
+        "providers": [
+          "Thinkst Applied Research"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
