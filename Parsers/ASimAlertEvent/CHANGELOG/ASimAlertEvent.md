@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.1.8
+
+- (2026-08-31) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+
 ## Version 0.1.7
 
 - (2026-07-01) Google Threat Intelligence - AlertEvent ASIM Parser - [PR #14420](https://github.com/Azure/Azure-Sentinel/pull/14420)

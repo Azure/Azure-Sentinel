@@ -1,0 +1,331 @@
+Parser:
+  Title: Alert Event ASIM filtering parser for Wiz Cloud (WizIssuesV3_CL)
+  Version: '0.1.0'
+  LastUpdated: Aug 31, 2026
+Product:
+  Name: Wiz Cloud
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Wiz Docs
+  Link: https://docs.wiz.io/docs/microsoft-sentinel-integration
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports filtering and normalizing Wiz Cloud issues, stored in the WizIssuesV3_CL table, to the ASIM Alert Event normalized schema. This source has no IP address data or MITRE ATT&CK mapping, so `ipaddr_has_any_prefix`, `attacktactics_has_any`, and `attacktechniques_has_any` are accepted for compatibility but are not functional. `username_has_any` filters on the entity name when the issue's affected entity is an identity (USER_ACCOUNT/SERVICE_ACCOUNT). It is a not functional for resource-type entities, which have no username. AlertVerdict filtering is also not supported by this source.
+ParserName: vimAlertEventWizCloud
+EquivalentBuiltInParser: _Im_AlertEvent_WizCloud
+Exceptions:
+- Field: AttackTactics
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: AttackTechniques
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: EventResultDetails
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // -------------------------------------------------------------------------
+  // EventSubType is derived from issueType: THREAT_DETECTION issues are always
+  // "Threat". TOXIC_COMBINATION issues are only "Threat" when the rule NAME
+  // contains a confirmed-exploit/compromise keyword (malware, exfiltration,
+  // C2, brute force, validated unauthorized access, etc.) as most TOXIC_COMBINATIONS
+  // are not direct threat signals, but occassional a malware detection is
+  // classified as TOXIC_COMBINATION vs. a THREAT_DETECTION
+  //
+  // This source has no IP address data and no MITRE tactic or technique
+  // fields, so ipaddr_has_any_prefix, attacktactics_has_any, and
+  // attacktechniques_has_any are not functional (accepted for imAlertEvent
+  // compatibility only). username_has_any filters on identity-typed entities
+  // (USER_ACCOUNT/SERVICE_ACCOUNT) only. AlertVerdict is also unsupported.
+  // -------------------------------------------------------------------------
+  let ThreatKeywordRegex = @'(?i)(malware|ransomware|phishing|spyware|rootkit|adware|trojan|worm|infected|exploit|unauthorized access|backdoor|\bc2\b|command and control|crypto.?min|cryptojack|exfiltrat|compromis|botnet|keylog|brute force|reverse shell|web ?shell)';
+  // ASIM's Hostname logical type is a single DNS label, Regex matches ASIMs data tester
+  // Wiz primaryResource.name for some VM/container entities holds
+  // an ARM resource ID, a multi-label FQDN (e.g. AWS EC2 internal DNS names), a VMSS
+  // instance ID with underscores (e.g. "aks-apps2-16464496-vmss_6"), or other
+  let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      ipaddr_has_any_prefix: dynamic = dynamic([]),
+      hostname_has_any: dynamic = dynamic([]),
+      username_has_any: dynamic = dynamic([]),
+      attacktactics_has_any: dynamic = dynamic([]),
+      attacktechniques_has_any: dynamic = dynamic([]),
+      threatcategory_has_any: dynamic = dynamic([]),
+      alertverdict_has_any: dynamic = dynamic([]),
+      eventseverity_has_any: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      WizIssuesV3_CL
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+      | extend
+          _RuleName = tostring(sourceRule.name),
+          _RuleDescription = tostring(sourceRule.description),
+          _EntityName = tostring(entitySnapshot.name),
+          _EntityType = tostring(entitySnapshot.type)
+      | extend
+          _IsIdentityEntity = _EntityType in ("USER_ACCOUNT", "SERVICE_ACCOUNT"),
+          _IsHostEntity = _EntityType in ("VIRTUAL_MACHINE", "CONTAINER", "DB_SERVER")
+      | where array_length(eventseverity_has_any) == 0 or (
+          ("High" in (eventseverity_has_any) and severity in ("HIGH", "CRITICAL"))
+          or ("Medium" in (eventseverity_has_any) and severity == "MEDIUM")
+          or ("Low" in (eventseverity_has_any) and severity == "LOW")
+          or ("Informational" in (eventseverity_has_any) and severity == "INFORMATIONAL")
+      )
+      | where array_length(alertverdict_has_any) == 0 // Source does not support AlertVerdict
+      | where array_length(attacktactics_has_any) == 0 // Source has no MITRE tactic data
+      | where array_length(attacktechniques_has_any) == 0 // Source has no MITRE technique data
+      | where array_length(username_has_any) == 0 or (_IsIdentityEntity and _EntityName has_any (username_has_any))
+      | where array_length(ipaddr_has_any_prefix) == 0 // Source has no actor/IP data
+      | where array_length(hostname_has_any) == 0 or (
+          _IsHostEntity
+          and _EntityName has_any (hostname_has_any)
+      )
+      | extend
+          _RuleId = tostring(sourceRule.id),
+          _RuleResolution = tostring(sourceRule.resolutionRecommendation),
+          _RuleSourceType = tostring(sourceRule.sourceType),
+          _EntityId = tostring(entitySnapshot.id),
+          _EntityNativeType = tostring(entitySnapshot.nativeType),
+          _EntityExternalId = tostring(entitySnapshot.externalId),
+          _EntityProviderId = tostring(entitySnapshot.providerId),
+          _EntityCloudPlatform = tostring(entitySnapshot.cloudPlatform),
+          _EntitySubscriptionExtId = tostring(entitySnapshot.subscriptionExternalId),
+          _EntitySubscriptionName = tostring(entitySnapshot.subscriptionName)
+      | extend
+          _IsAzureArmId = _EntityCloudPlatform == "Azure" and _EntityExternalId matches regex @'(?i)^/subscriptions/',
+          _IsThreatKeywordMatch = _RuleName matches regex ThreatKeywordRegex
+      | extend
+          EventStartTime = coalesce(createdAt, TimeGenerated),
+          EventEndTime = coalesce(resolvedAt, updatedAt, TimeGenerated),
+          EventCount = toint(1),
+          EventType = "Alert",
+          EventSubType = case(
+              issueType == "THREAT_DETECTION", "Threat",
+              issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat",
+              "Compliance Violation"
+          ),
+          EventProduct = "Cloud",
+          EventVendor = "Wiz",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "0.1",
+          EventUid = issueId,
+          EventOriginalUid = issueId,
+          EventOriginalType = issueType,
+          EventOriginalSubType = _RuleSourceType,
+          EventOriginalSeverity = severity,
+          EventSeverity = case(
+              severity == "CRITICAL", "High",
+              severity == "HIGH", "High",
+              severity == "MEDIUM", "Medium",
+              severity == "LOW", "Low",
+              severity == "INFORMATIONAL", "Informational",
+              "Informational"
+          ),
+          // WizIssuesV3_CL has no success/failure outcome concept
+          EventResult = "NA",
+          EventMessage = iff(isnotempty(_RuleDescription), _RuleDescription, _RuleName),
+          EventReportUrl = sourceURL,
+          Url = sourceURL,
+          AlertName = _RuleName,
+          AlertOriginalStatus = status,
+          AlertStatus = case(
+              status in ("OPEN", "IN_PROGRESS"), "Active",
+              status in ("REJECTED", "RESOLVED"), "Closed",
+              ""
+          )
+      | extend
+          ThreatCategory = case(
+              _RuleName has "malware", "Malware",
+              _RuleName has "ransomware", "Ransomware",
+              _RuleName has "phishing", "Phishing",
+              _RuleName has "spyware", "Spyware",
+              _RuleName has "rootkit", "Rootkit",
+              _RuleName has "adware", "Adware",
+              _RuleName has "trojan", "Trojan",
+              _RuleName has "worm", "Worm",
+              _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominer",
+              EventSubType == "Compliance Violation", "Security Policy Violation",
+              "Unknown"
+          )
+      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
+      | extend
+          RuleName = _RuleId,
+          RuleDescription = _RuleDescription,
+          AttackRemediationSteps = _RuleResolution,
+          DetectionMethod = "Cloud Security Posture Management",
+          DvcId = iff(_IsIdentityEntity, "", coalesce(_EntityExternalId, _EntityProviderId, _EntityId)),
+          DvcIdType = iff(_IsIdentityEntity, "", iff(_IsAzureArmId, "AzureResourceId", "Other")),
+          DvcScopeId = iff(_IsIdentityEntity, "", _EntitySubscriptionExtId),
+          DvcScope = iff(_IsIdentityEntity, "", _EntitySubscriptionName),
+          DvcHostname = iff(_IsHostEntity and _EntityName matches regex HostnameFormatRegex, _EntityName, ""),
+          Username = iff(_IsIdentityEntity, _EntityName, ""),
+          UserId = iff(_IsIdentityEntity, coalesce(_EntityExternalId, _EntityProviderId, _EntityId), "")
+      | extend
+          UserIdType = case(
+              isempty(UserId), "",
+              UserId startswith "arn:", "AWSId",
+              "Other"
+          ),
+          UserType = case(
+              _EntityType == "SERVICE_ACCOUNT", "Service Principal",
+              _EntityType == "USER_ACCOUNT", "Regular",
+              ""
+          ),
+          OriginalUserType = iff(_IsIdentityEntity, _EntityNativeType, ""),
+          IndicatorType = case(
+              _IsIdentityEntity, "User",
+              _IsHostEntity, "Host",
+              isnotempty(_EntityId) or isnotempty(_EntityExternalId), "Cloud Resource",
+              ""
+          )
+      | extend
+          UsernameType = case(
+              isempty(Username), "",
+              Username has "@", "UPN",
+              "Simple"
+          ),
+          ThreatFirstReportedTime = EventStartTime,
+          ThreatLastReportedTime = EventEndTime,
+          AlertId = EventUid,
+          AlertDescription = EventMessage,
+          Rule = RuleName,
+          Hostname = DvcHostname,
+          User = Username,
+          Dvc = case(
+              isnotempty(DvcId), DvcId,
+              isnotempty(DvcHostname), DvcHostname,
+              EventProduct
+          )
+      | extend
+          AdditionalFields = iff(
+              pack,
+              pack(
+                  "SourceRule", sourceRule,
+                  "EntitySnapshot", entitySnapshot,
+                  "Evidence", evidence,
+                  "DueAt", dueAt,
+                  "StatusChangedAt", statusChangedAt,
+                  "ServiceTickets", serviceTickets,
+                  "Projects", projects,
+                  "Notes", notes
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated,
+          EventStartTime,
+          EventEndTime,
+          EventCount,
+          EventType,
+          EventSubType,
+          EventResult,
+          EventSeverity,
+          EventOriginalSeverity,
+          EventProduct,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventUid,
+          EventOriginalUid,
+          EventOriginalType,
+          EventOriginalSubType,
+          EventMessage,
+          EventReportUrl,
+          Url,
+          AlertName,
+          AlertId,
+          AlertDescription,
+          AlertOriginalStatus,
+          AlertStatus,
+          ThreatCategory,
+          ThreatFirstReportedTime,
+          ThreatLastReportedTime,
+          RuleName,
+          RuleDescription,
+          Rule,
+          AttackRemediationSteps,
+          DetectionMethod,
+          Username,
+          UsernameType,
+          UserId,
+          UserIdType,
+          UserType,
+          OriginalUserType,
+          User,
+          DvcId,
+          DvcHostname,
+          DvcIdType,
+          DvcScopeId,
+          DvcScope,
+          Dvc,
+          Hostname,
+          IndicatorType,
+          AdditionalFields,
+          Type
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      hostname_has_any=hostname_has_any,
+      username_has_any=username_has_any,
+      attacktactics_has_any=attacktactics_has_any,
+      attacktechniques_has_any=attacktechniques_has_any,
+      threatcategory_has_any=threatcategory_has_any,
+      alertverdict_has_any=alertverdict_has_any,
+      eventseverity_has_any=eventseverity_has_any,
+      disabled=disabled,
+      pack=pack
+  )

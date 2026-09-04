@@ -1,0 +1,179 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Wiz Cloud
+  Version: '0.1.0'
+  LastUpdated: Aug 31, 2026
+Product:
+  Name: Wiz Cloud
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Wiz Docs
+  Link: https://docs.wiz.io/docs/microsoft-sentinel-integration
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports filtering and normalizing Wiz Cloud (Auditlogs) authentication-relevant events (Login, TokenRefresh actions), stored in the WizAuditlogsV3_CL table, to the ASIM Authentication normalized schema.
+ParserName: vimAuthenticationWizCloud
+EquivalentBuiltInParser: _Im_Authentication_WizCloud
+Exceptions:
+- Field: DvcAction
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: TargetDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: TargetHostname
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // -------------------------------------------------------------------------
+  // Source: WizAuditlogsV3_CL (The Wiz Connector specifies WizAuditLogsV3_CL instead,
+  // but is pushing to a table with a lower "l")
+  // Only the "Login" and "TokenRefresh" audit actions are authentication-relevant.
+  // -------------------------------------------------------------------------
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      eventresultdetails_in: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      // srchostname_has_any, targetappname_has_any, eventresultdetails_in are accepted for
+      // compatibility with the imAuthentication unifying parser's documented parameter set,
+      // but are not functional. This source has no SrcHostname data, TargetAppName is always the
+      // constant "Wiz", and EventResultDetails is always empty.
+      let AuthActions = dynamic(["Login", "TokenRefresh"]);
+      WizAuditlogsV3_CL
+          | where not(disabled)
+          | where (isnull(starttime) or timestamp >= starttime)
+                  and (isnull(endtime) or timestamp <= endtime)
+          | where (array_length(eventtype_in) == 0 or "Logon" in (eventtype_in))
+          | where action in (AuthActions)
+          | where (eventresult == '*' or (eventresult == "Success" and status == "SUCCESS") or (eventresult == "Failure" and status == "FAILED"))
+          | where (array_length(srcipaddr_has_any_prefix) == 0 or sourceIP has_any (srcipaddr_has_any_prefix))
+          | extend
+              _UserName = tostring(user.name),
+              _UserId = tostring(user.id),
+              _SaName = tostring(serviceAccount.name),
+              _SaId = tostring(serviceAccount.id),
+              _Email = tostring(user.email)
+          | extend _TargetUsername = iff(isnotempty(_UserName), _UserName, _SaName)
+          | where (array_length(username_has_any) == 0 or _TargetUsername has_any (username_has_any))
+          | extend
+              _IsServiceAccount = isempty(_UserName) and isnotempty(_SaName),
+              TargetUsername = iff(isnotempty(_UserName), _UserName, _SaName),
+              TargetUserId = iff(isnotempty(_UserName), _UserId, _SaId)
+          | extend
+              TargetUsernameType = iff(isempty(TargetUsername), "", iff(TargetUsername has "@", "UPN", "Simple")),
+              TargetUserType = iff(isnotempty(_UserName), "Regular", iff(isnotempty(_SaName), "Service", "")),
+              TargetUserIdType = iff(isempty(TargetUserId), "", "Other"),
+              EventResult = case(status == "SUCCESS", "Success", status == "FAILED", "Failure", "NA"),
+              EventSeverity = iff(status == "FAILED", "Low", "Informational"),
+              EventSubType = iff(_IsServiceAccount, "Service", "Interactive")
+          | extend
+              LogonMethod = iff(_IsServiceAccount, "Service Principal", "Other")
+          | extend
+              AdditionalFields = iff(pack, bag_pack("TenantId", TenantId, "UserEmail", _Email), dynamic(null))
+          | project
+              EventCount = int(1),
+              EventProduct = "Cloud",
+              EventVendor = "Wiz",
+              EventSchema = "Authentication",
+              EventSchemaVersion = "0.1.4",
+              EventStartTime = timestamp,
+              EventEndTime = timestamp,
+              EventType = "Logon",
+              EventSubType,
+              EventResult,
+              EventResultDetails = "", // Isn't logged at the source
+              EventSeverity,
+              EventOriginalUid = auditlogId,
+              EventOriginalType = action,
+              EventOriginalResultDetails = status,
+              EventUid = _ItemId,
+              LogonMethod,
+              LogonTarget = "Wiz",
+              Dvc = "Wiz",
+              DvcHostname = "Wiz",
+              TargetAppName = "Wiz",
+              TargetAppType = "SaaS application",
+              TargetUsername,
+              TargetUserId,
+              TargetUsernameType,
+              TargetUserType,
+              TargetUserIdType,
+              SrcIpAddr = sourceIP,
+              Src = sourceIP,
+              HttpUserAgent = userAgent,
+              User = TargetUsername,
+              Dst = "Wiz",
+              Application = "Wiz",
+              IpAddr = sourceIP,
+              AdditionalFields,
+              TimeGenerated,
+              Type
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      eventresultdetails_in=eventresultdetails_in,
+      disabled=disabled,
+      pack=pack
+  )
