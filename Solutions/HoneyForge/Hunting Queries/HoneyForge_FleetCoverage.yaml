@@ -1,0 +1,50 @@
+id: 7bf37318-4d5e-6f7a-0b1c-2d3e4f5a6b7c
+name: HoneyForge - Sensor Fleet Coverage and Health
+description: |
+  Provides a per-sensor event summary for the past 30 days, giving visibility
+  into which sensors are active, which are quiet, and which may be offline or
+  misconfigured (no events in the last 10 minutes is the offline threshold).
+
+  Use this query during routine operations to confirm full fleet coverage and
+  identify any gaps in your deception layer before an attacker does.
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+tactics: []
+relevantTechniques: []
+query: |
+  let lookback = 30d;
+  let offlineThreshold = 10m;
+  CommonSecurityLog
+  | where TimeGenerated >= ago(lookback)
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SensorID   = tostring(DeviceCustomString1),
+      CustomerID = tostring(DeviceCustomString2),
+      SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))
+  | summarize
+      TotalEvents     = count(),
+      UniqueSources   = dcount(SourceIP),
+      FirstEvent      = min(TimeGenerated),
+      LastEvent       = max(TimeGenerated),
+      Protocols       = make_set(tostring(Protocol), 10)
+      by SensorID, SensorName, CustomerID
+  | extend
+      MinutesSinceLast = datetime_diff('minute', now(), LastEvent),
+      SensorStatus     = iff(datetime_diff('minute', now(), LastEvent) <= 10, "Online", "Offline / No Recent Events"),
+      ProtocolStr      = strcat_array(Protocols, ", ")
+  | sort by SensorStatus asc, LastEvent desc
+  | project
+      SensorName,
+      SensorID,
+      CustomerID,
+      SensorStatus,
+      MinutesSinceLast,
+      TotalEvents,
+      UniqueSources,
+      FirstEvent,
+      LastEvent,
+      ProtocolStr
+version: 1.0.0
