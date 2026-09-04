@@ -66,7 +66,7 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json)
 
 ### Connector via on-premises data gateway
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
@@ -75,15 +75,15 @@ Custom connector should be deployed in the Resource Group where the playbooks th
     * Service Endpoint: The URL to the Cisco Firepower REST API
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy-gateway.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy-gateway.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy-gateway.json)
 
 <br><br>
 
 ## 2. Deploy the required playbook template (or create your own playbook from scratch)
 This integration offers 3 playbook templates that blocks IP in 3 different methods. Each one has it's own documentation and quick deployment button:
 * [Cisco Firepower - Add FQDN to a Network Group object](./CiscoFirepower-BlockFQDN-NetworkGroup#deployment-instructions)
-* [Cisco Firepower - Add IP Addresses to a Network Group object](./CiscoFirepower-BlockIP-NetworkGroup#deployment-instructions)
-* [Cisco Firepower - Add IP Addresses to a Network Group object with Teams](./CiscoFirepower-BlockIP-Teams#deployment-instructions)
+* [Cisco Firepower - Add IP Addresses to a Network Group object](./CiscoFirepower-BlockIP-NetworkGroup#deployment-instructions) - auto-contain. **Gate/Prove:** auto-contain is denied when the incident is ML-only (SnortML / GID 411). Attach only to signature-high or corroborated analytics.
+* [Cisco Firepower - Add IP Addresses to a Network Group object with Teams](./CiscoFirepower-BlockIP-Teams#deployment-instructions) - HITL. Warns on ML-only; analyst confirmation is still required before BlockIP.
 
 
 <a name="references"></a>
