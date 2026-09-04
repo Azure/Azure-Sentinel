@@ -1,15 +1,18 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "2.0.0.0",
+    "contentVersion": "3.0.0.0",
     "metadata": {
         "title": "RecordedFuture-Sandbox_StorageAccount",
         "description": "This playbook will trigger on files in a Storage Account and send them to Recorded Future Sandbox. The result will be written to a custom log (RecordedFutureSandboxResults_CL). To create Microsoft Defender incidents from sandbox results, use a Analytics Rule that queries the RecordedFutureSandboxResults_CL table. Direct incident creation via Logic Apps is no longer supported in the unified Microsoft Defender portal.",
-        "prerequisites": "To use the Recorded Future Sandbox connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/#how-to-get-credentials",
+        "prerequisites": [
+            "Deploy the Data Connectors infrastructure (DCE, DCR, Log Analytics table) by deploying the azuredeploy.json template from the Data Connectors folder before deploying this playbook. This playbook must be deployed into the same resource group as the Data Connectors infrastructure.",
+            "To use the Recorded Future Sandbox connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/#how-to-get-credentials"
+        ],
         "postDeployment": [
             "After deployment you have to open the playbook and configure and authorize all connections and press save."
         ],
-        "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2026-04-13T00:00:00.000Z",
+        "prerequisitesDeployTemplateFile": "../../../Data Connectors/azuredeploy.json",
+        "lastUpdateTime": "2026-08-04T00:00:00.000Z",
         "entities": [],
         "tags": [ "Enrichment" ],
         "support": {
@@ -45,6 +48,16 @@
                     "Sandbox results are now written to RecordedFutureSandboxResults_CL custom log table.",
                     "To create incidents, deploy a Analytics Rule that queries RecordedFutureSandboxResults_CL."
                 ]
+            },
+            {
+                "version": "3.0",
+                "title": "RecordedFuture-Sandbox_StorageAccount",
+                "notes": [
+                    "BREAKING CHANGE: Migrated from deprecated HTTP Data Collector API (azureloganalyticsdatacollector connector) to the Log Ingestion API (DCE/DCR with MSI authentication).",
+                    "Data now ingested into RecordedFutureSandboxResults_V2_CL (new table). RecordedFutureSandboxResults_CL will no longer receive data after this update.",
+                    "Deploy the Data Connectors infrastructure template (azuredeploy.json) before deploying this playbook.",
+                    "Automatically assigns Monitoring Metrics Publisher role on the DCR to the Logic App managed identity."
+                ]
             }
         ]
     },
@@ -71,12 +84,24 @@
                 "us",
                 "apj"
             ]
+        },
+        "create_role_assignment": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "If true, automatically assigns the Monitoring Metrics Publisher role on the shared DCR to the Logic App managed identity."
+            }
         }
     },
     "variables": {
         "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "RecordedFuture-Azureloganalyticsdatacollector",
-        "RecordedfuturesandboConnectionName": "Recordedfuture-SandboConnection"
+        "RecordedfuturesandboConnectionName": "Recordedfuture-SandboConnection",
+        "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "DceName": "recorded-future-dce",
+        "DcrName": "recorded-future-dcr-sandbox-results",
+        "StreamName": "Custom-RecordedFutureSandboxResults_V2_CL",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]"
     },
     "resources": [
         {
@@ -98,6 +123,15 @@
                         "SandboxRegion": {
                             "defaultValue": "[parameters('SandboxRegion')]",
                             "type": "string"
+                        },
+                        "DceEndpoint": {
+                            "type": "String"
+                        },
+                        "DcrImmutableId": {
+                            "type": "String"
+                        },
+                        "StreamName": {
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -114,27 +148,6 @@
                         }
                     },
                     "actions": {
-                        "Send_sandbox_results_to_log_analytics": {
-                            "runAfter": {
-                                "Get_the_full_report": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "{\n\"FileName\": \"@{body('Get_Blob_Metadata_(V2)')?['DisplayName']}\",\n\"SandboxScore\": \"@{body('Get_the_full_report')?['analysis']?['score']}\",\n\"SandboxVerdict\": \"@{body('Get_the_full_report')?['analysis']?['verdict']}\",\n\"SampleId\": \"@{body('Get_the_full_report')?['id']}\",\n\"HtmlReport\": \"@{body('Get_the_full_report')?['html_report']}\",\n\"Source\": \"StorageAccount\",\n\"ScanTime\": \"@{utcNow()}\"\n}",
-                                "headers": {
-                                    "Log-Type": "RecordedFutureSandboxResults"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/api/logs"
-                            }
-                        },
                         "Get_Blob_Metadata_(V2)": {
                             "runAfter": {
                                 "Get_blob_content_(V2)": [
@@ -300,6 +313,43 @@
                                 "timeout": "PT1H"
                             },
                             "type": "Until"
+                        },
+                        "Compose_Record": {
+                            "runAfter": {
+                                "Get_the_full_report": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "FileName": "@{body('Get_Blob_Metadata_(V2)')?['DisplayName']}",
+                                "SandboxScore": "@{body('Get_the_full_report')?['analysis']?['score']}",
+                                "SandboxVerdict": "@{body('Get_the_full_report')?['analysis']?['verdict']}",
+                                "SampleId": "@{body('Get_the_full_report')?['id']}",
+                                "HtmlReport": "@{body('Get_the_full_report')?['html_report']}",
+                                "Source": "StorageAccount",
+                                "ScanTime": "@{utcNow()}"
+                            }
+                        },
+                        "Send_Data": {
+                            "runAfter": {
+                                "Compose_Record": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "@{parameters('DceEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": "@createArray(outputs('Compose_Record'))",
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://monitor.azure.com"
+                                }
+                            }
                         }
                     },
                     "outputs": {}
@@ -312,17 +362,21 @@
                                 "connectionName": "[variables('AzureblobConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
                             },
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "recordedfuturesandbo": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]",
                                 "connectionName": "[variables('RecordedfuturesandboConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturesandbo')]"
                             }
                         }
+                    },
+                    "DceEndpoint": {
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+                    },
+                    "DcrImmutableId": {
+                        "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
+                    },
+                    "StreamName": {
+                        "value": "[variables('StreamName')]"
                     }
                 }
             },
@@ -331,7 +385,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "RecordedFuture-Sandbox_StorageAccount",
-                "hidden-SentinelTemplateVersion": "2.0"
+                "hidden-SentinelTemplateVersion": "3.0"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -339,7 +393,6 @@
             "apiVersion": "2017-07-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]"
             ]
         },
@@ -360,19 +413,6 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
             "name": "[variables('RecordedfuturesandboConnectionName')]",
             "location": "[resourceGroup().location]",
             "kind": "V1",
@@ -383,6 +423,21 @@
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturesandbo')]"
                 }
             }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('dcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "condition": "[parameters('create_role_assignment')]"
         }
     ]
 }
