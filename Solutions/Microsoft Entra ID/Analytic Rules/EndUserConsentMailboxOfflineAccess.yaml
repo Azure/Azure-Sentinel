@@ -1,0 +1,90 @@
+id: 43df1e4c-61f8-4ab8-bc86-65eca7ecab9a
+name: End-user consent to app with mailbox and offline access delegated scopes
+description: |
+  Identifies an illicit consent grant where a non-admin user consents to an
+  application requesting high-risk delegated mailbox permissions
+  (Mail.Read, Mail.ReadWrite, Mail.Send or MailboxSettings.ReadWrite) together
+  with offline_access. offline_access returns a long-lived refresh token, so a
+  single successful end-user consent gives an attacker-controlled application
+  durable, silent read/send access to the victim mailbox without re-prompting
+  for MFA. This is a common precursor to business email compromise (BEC),
+  mailbox exfiltration and internal phishing. This rule complements
+  "Suspicious application consent for offline access": it drops the
+  known-application allowlist join and instead pins the high-fidelity scope
+  combination, and it additionally covers mailbox write/send scopes
+  (Mail.ReadWrite, Mail.Send, MailboxSettings.ReadWrite), not only read.
+  For AuditLogs schema see https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let detectionWindow = 1d;
+  AuditLogs
+  | where TimeGenerated > ago(detectionWindow)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Consent to application"
+  | where TargetResources has "offline_access"
+  | mv-apply TargetResource = TargetResources on
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend AppDisplayName = tostring(TargetResource.displayName),
+                 ServicePrincipalId = tolower(tostring(TargetResource.id)),
+                 ModifiedProperties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = ModifiedProperties on
+    (
+        where Property.displayName =~ "ConsentAction.Permissions"
+        | extend ConsentFull = trim(@'"', tostring(Property.newValue))
+    )
+  | where ConsentFull has "offline_access"
+  | where ConsentFull has_any ("Mail.Read", "Mail.ReadWrite", "Mail.Send", "MailboxSettings.ReadWrite")
+  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope "]" *
+  // Exact scope membership. has/has_any above is a cheap term-indexed pre-filter, but
+  // term matching tokenizes "Mail.Read" to mail/read and would over-match scopes like
+  // Mail.ReadBasic. Split the parsed scope string and require the exact scope names.
+  | extend GrantScopes = split(GrantScope, " ")
+  | where set_has_element(GrantScopes, "offline_access")
+  | where set_has_element(GrantScopes, "Mail.Read")
+      or set_has_element(GrantScopes, "Mail.ReadWrite")
+      or set_has_element(GrantScopes, "Mail.Send")
+      or set_has_element(GrantScopes, "MailboxSettings.ReadWrite")
+  // End-user (delegated) consent only. Tenant-wide admin consent for all users
+  // surfaces as ConsentType "AllPrincipals" and is scoped out here on purpose.
+  | where GrantConsentType != "AllPrincipals"
+  | extend GrantInitiatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend GrantInitiatedByAadUserId = tostring(InitiatedBy.user.id)
+  | extend GrantIpAddress = iff(isnotempty(tostring(InitiatedBy.user.ipAddress)), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
+  | extend GrantUserAgent = tostring(iff(AdditionalDetails[0].key =~ "User-Agent", AdditionalDetails[0].value, ""))
+  | extend Name = tostring(split(GrantInitiatedByUserPrincipalName, '@')[0]), UPNSuffix = tostring(split(GrantInitiatedByUserPrincipalName, '@')[1])
+  | project TimeGenerated, GrantConsentType, GrantScope, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, AppDisplayName, ServicePrincipalId, GrantIpAddress, GrantUserAgent, OperationName, ConsentFull, CorrelationId, Name, UPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAadUserId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppDisplayName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: GrantIpAddress
+version: 1.0.0
+kind: Scheduled
