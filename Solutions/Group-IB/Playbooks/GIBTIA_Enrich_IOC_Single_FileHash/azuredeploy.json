@@ -1,0 +1,514 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GIBTIA_Enrich_IOC_Single_FileHash",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "GIBUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "GIB TI portal login (email)."
+            }
+        },
+        "GIBApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "GIB TI personal API token."
+            }
+        }
+    },
+    "variables": {
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "tags": {
+                "hidden-SentinelTemplateName": "GIBTIA_Enrich_IOC_Single_FileHash",
+                "hidden-SentinelTemplateVersion": "2.0"
+            },
+            "metadata": {
+                "title": "Group-IB TI - Enrich single file hash entity with IOC context",
+                "description": "Entity-triggered playbook. Run it against a single file hash entity from the incident investigation graph or the entity page to retrieve IOC context from Group-IB Threat Intelligence and post the result as an incident comment.",
+                "prerequisites": [
+                    "A Group-IB Threat Intelligence subscription with API access.",
+                    "A Log Analytics workspace connected to Microsoft Sentinel."
+                ],
+                "postDeployment": [
+                    "1. Authorize the Microsoft Sentinel API connection.",
+                    "2. Assign the Microsoft Sentinel Responder role to the playbook's managed identity so it can add incident comments.",
+                    "3. Set the GIBUsername and GIBApiKey parameters.",
+                    "4. Run it from an incident's investigation graph or from the entity page using Run playbook. Entity-triggered playbooks cannot be attached to automation rules.",
+                    "5. When run outside an incident the enrichment still executes, but there is no incident to comment on - the result is visible in the Logic App run history."
+                ],
+                "lastUpdateTime": "2026-09-02T00:00:00.000Z",
+                "entities": [
+                    "filehash"
+                ],
+                "tags": [
+                    "Group-IB",
+                    "Enrichment"
+                ],
+                "releaseNotes": [
+                    {
+                        "version": "2.0",
+                        "title": "Rebuilt for the current Group-IB TI API",
+                        "notes": [
+                            "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
+                        ]
+                    }
+                ],
+                "support": {
+                    "tier": "community"
+                },
+                "author": {
+                    "name": "Group-IB"
+                }
+            },
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GIBUsername": {
+                            "defaultValue": "[parameters('GIBUsername')]",
+                            "type": "String"
+                        },
+                        "GIBApiKey": {
+                            "defaultValue": "[parameters('GIBApiKey')]",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/entity/@{encodeURIComponent('FileHash')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Segments": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Segments",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Initialize_Chunks": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Chunks",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Segments": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Chunk": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Chunk",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Chunks": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_PartNum": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PartNum",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Chunk": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Get_Granted_Collections": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://tap.group-ib.com/api/v2/user/granted_collections",
+                                "headers": {
+                                    "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                    "Accept": "application/json",
+                                    "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-ioc; logic-app)"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_PartNum": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Select_Granted_Set": {
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@coalesce(body('Get_Granted_Collections'), json('[]'))",
+                                "select": "@item()?['collection']"
+                            },
+                            "runAfter": {
+                                "Get_Granted_Collections": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
+                        },
+                        "Search_Hash": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://tap.group-ib.com/api/v2/search",
+                                "queries": {
+                                    "q": "@{triggerBody()?['Entity']?['properties']?['Value']}"
+                                },
+                                "headers": {
+                                    "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                    "Accept": "application/json",
+                                    "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-ioc; logic-app)"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            },
+                            "runAfter": {
+                                "Select_Granted_Set": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Filter_Matches_Hash": {
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@coalesce(body('Search_Hash'), json('[]'))",
+                                "where": "@and(greater(coalesce(item()?['count'], 0), 0), contains(body('Select_Granted_Set'), item()?['apiPath']))"
+                            },
+                            "runAfter": {
+                                "Search_Hash": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
+                        },
+                        "Append_Hash_Header": {
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Segments",
+                                "value": "<b>Hash (@{triggerBody()?['Entity']?['properties']?['Algorithm']}): @{triggerBody()?['Entity']?['properties']?['Value']}</b><br>@{if(equals(length(body('Filter_Matches_Hash')), 0), 'No matches in collections available to this account.', concat('Matches in ', length(body('Filter_Matches_Hash')), ' granted collection(s):'))}<br>"
+                            },
+                            "runAfter": {
+                                "Filter_Matches_Hash": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "For_Each_Match_Hash": {
+                            "type": "Foreach",
+                            "foreach": "@body('Filter_Matches_Hash')",
+                            "operationOptions": "Sequential",
+                            "actions": {
+                                "Fetch_Match_Hash": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "uri": "@{concat(items('For_Each_Match_Hash')?['link'], '&limit=3')}",
+                                        "headers": {
+                                            "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                            "Accept": "application/json",
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-ioc; logic-app)"
+                                        }
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Select_Match_Entries_Hash": {
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@coalesce(body('Fetch_Match_Hash')?['items'], json('[]'))",
+                                        "select": "@string(item())"
+                                    },
+                                    "runAfter": {
+                                        "Fetch_Match_Hash": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    }
+                                },
+                                "Append_Match_Hash": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Segments",
+                                        "value": "&nbsp;&nbsp;&middot; <b>@{items('For_Each_Match_Hash')?['label']}</b> &mdash; @{items('For_Each_Match_Hash')?['count']} match(es)@{if(greater(length(body('Select_Match_Entries_Hash')), 0), concat(':<pre>', join(body('Select_Match_Entries_Hash'), '<br>'), '</pre>'), '<br>')}"
+                                    },
+                                    "runAfter": {
+                                        "Select_Match_Entries_Hash": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_Hash_Header": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Pack_Segments": {
+                            "type": "Foreach",
+                            "foreach": "@variables('Segments')",
+                            "operationOptions": "Sequential",
+                            "actions": {
+                                "Condition_Segment_Fits": {
+                                    "type": "If",
+                                    "expression": {
+                                        "lessOrEquals": [
+                                            "@add(length(variables('Chunk')), length(items('Pack_Segments')))",
+                                            29000
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_To_Chunk": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Chunk",
+                                                "value": "@items('Pack_Segments')"
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_Flush_NonEmpty": {
+                                                "type": "If",
+                                                "expression": {
+                                                    "greater": [
+                                                        "@length(variables('Chunk'))",
+                                                        0
+                                                    ]
+                                                },
+                                                "actions": {
+                                                    "Flush_Chunk": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "Chunks",
+                                                            "value": "@variables('Chunk')"
+                                                        },
+                                                        "runAfter": {}
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {}
+                                                },
+                                                "runAfter": {}
+                                            },
+                                            "Start_New_Chunk": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Chunk",
+                                                    "value": "@if(greater(length(items('Pack_Segments')), 29000), concat(substring(items('Pack_Segments'), 0, 28950), '<br>[record truncated — see Group-IB portal]'), items('Pack_Segments'))"
+                                                },
+                                                "runAfter": {
+                                                    "Condition_Flush_NonEmpty": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Match_Hash": [
+                                    "Succeeded",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            }
+                        },
+                        "Flush_Final_Chunk": {
+                            "type": "If",
+                            "expression": {
+                                "greater": [
+                                    "@length(variables('Chunk'))",
+                                    0
+                                ]
+                            },
+                            "actions": {
+                                "Append_Final_Chunk": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Chunks",
+                                        "value": "@variables('Chunk')"
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Pack_Segments": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Condition_Has_Incident": {
+                            "type": "If",
+                            "expression": {
+                                "greater": [
+                                    "@length(coalesce(triggerBody()?['IncidentArmID'], ''))",
+                                    0
+                                ]
+                            },
+                            "actions": {
+                                "Post_Comments": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('Chunks')",
+                                    "operationOptions": "Sequential",
+                                    "actions": {
+                                        "Increment_PartNum": {
+                                            "type": "IncrementVariable",
+                                            "inputs": {
+                                                "name": "PartNum",
+                                                "value": 1
+                                            },
+                                            "runAfter": {}
+                                        },
+                                        "Add_comment_to_incident": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                    "message": "<p><b>Group-IB TI &mdash; IOC Cross-Collection Enrichment@{if(greater(length(variables('Chunks')), 1), concat(' (part ', string(variables('PartNum')), ' of ', string(length(variables('Chunks'))), ')'), '')}</b><br><i>(searches across all collections granted to the integration's API key; fetches first 3 records per matched collection)</i><br><br>@{items('Post_Comments')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            },
+                                            "runAfter": {
+                                                "Increment_PartNum": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Flush_Final_Chunk": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName": "[variables('azuresentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
