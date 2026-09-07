@@ -1,0 +1,58 @@
+id: 28ce9655-f35f-4733-af43-8266b39a87f1
+name: Malicious Email Campaigns by Recipient URL Clicks
+description: |
+  This query ranks malicious inbound email campaigns by how many recipients clicked a URL in them, rather than by campaign size.
+description-detailed: |
+  Microsoft Defender for Office 365 groups related malicious messages into campaigns through EmailClusterId. This query ranks those campaigns over the last 30 days by the number of recipient URL clicks they attracted, using Advanced hunting in Microsoft Defender XDR, and flags campaigns that carried QR codes. Ranking by clicks rather than by message volume answers a different question from campaign size: a small campaign that reached mailboxes and was clicked represents realised risk, whereas a large campaign that was blocked at delivery did not. For triage that inverts the priority order, because the campaigns worth investigating first are the ones users actually engaged with. Messages are de-duplicated to the latest record per message and recipient, and phishing simulation and SecOps mailbox traffic are excluded so internal exercises do not inflate the ranking.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailUrlInfo
+  - UrlClickEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query ranks malicious inbound email campaigns from the last 30 days by recipient URL clicks, not by size.
+  //A small campaign that reached mailboxes and got clicked is realised risk; a large one blocked at delivery is not,
+  //so ranking by engagement inverts the triage order compared with ranking by message volume.
+  //Campaigns carrying QR codes are flagged, since the URL is not visible to the user or to link inspection.
+  //Phishing simulation and SecOps mailbox traffic are excluded so internal exercises do not inflate the ranking.
+  let ClicksByCluster = UrlClickEvents
+      | where Timestamp > ago(30d)
+      | join kind=inner (EmailEvents | where Timestamp > ago(30d) | where EmailClusterId > 0 | distinct NetworkMessageId, EmailClusterId) on NetworkMessageId
+      | summarize UrlClicks = count() by EmailClusterId;
+  let QrClusters = EmailUrlInfo
+      | where Timestamp > ago(30d)
+      | where UrlLocation == "QRCode"
+      | join kind=inner (EmailEvents | where Timestamp > ago(30d) | where EmailClusterId > 0 | distinct NetworkMessageId, EmailClusterId) on NetworkMessageId
+      | summarize QrMessages = dcount(NetworkMessageId) by EmailClusterId;
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound" and isnotempty(ThreatTypes) and EmailClusterId > 0
+  | where OrgLevelPolicy !in ("Phishing simulation", "SecOps Mailbox")
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | summarize Messages = count(),
+              Recipients = dcount(RecipientEmailAddress),
+              SenderDomains = dcount(SenderFromDomain),
+              SampleSenderDomains = make_set(SenderFromDomain, 5),
+              ThreatTypesRaw = make_set(ThreatTypes, 50),
+              SampleSubjects = make_set(Subject, 5),
+              FirstSeen = min(Timestamp),
+              LastSeen = max(Timestamp)
+          by EmailClusterId
+  | join kind=inner (ClicksByCluster) on EmailClusterId
+  | where UrlClicks > 0
+  | join kind=leftouter (QrClusters) on EmailClusterId
+  | extend CarriedQrCode = iif(coalesce(QrMessages, 0) > 0, "QR code", "")
+  | extend ThreatMix = array_sort_asc(set_union(split(strcat_array(ThreatTypesRaw, ", "), ", "), dynamic([])))
+  | top 20 by UrlClicks
+  | project ['Email Cluster ID']=EmailClusterId, ['URL Clicks']=UrlClicks, ['Messages']=Messages,
+            ['Recipients']=Recipients, ['Sender Domains']=SenderDomains,
+            ['Sample Sender Domains']=SampleSenderDomains, ['Threat Mix']=ThreatMix,
+            ['QR Code']=CarriedQrCode, ['Sample Subjects']=SampleSubjects,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0
