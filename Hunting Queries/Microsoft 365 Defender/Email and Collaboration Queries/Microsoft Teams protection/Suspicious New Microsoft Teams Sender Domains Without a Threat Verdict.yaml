@@ -1,0 +1,53 @@
+id: bb9fd713-fc62-4380-930f-91490bbbeb78
+name: Suspicious New Microsoft Teams Sender Domains Without a Threat Verdict
+description: |
+  This query surfaces external Microsoft Teams sender domains that carry no threat verdict yet but are sending low-reputation URLs or unusual volume.
+description-detailed: |
+  This query surfaces external Microsoft Teams sender domains that have no threat verdict at all over the last 30 days, but which are either sending messages containing URLs on low-reputation top level domains or showing unusual message volume, using Advanced hunting in Microsoft Defender XDR. Results are split by conversation type and include first and last seen. These are the senders that have slipped past detection: by definition nothing has fired on them, so they will never appear in a threat-based view. A new domain that skews toward one to one chats is an early social-engineering signal, since attackers open a private conversation before the lure is delivered. Messages are de-duplicated to the latest record per message, and only inbound external threads are counted.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - MessageUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query surfaces external Microsoft Teams sender domains with NO threat verdict over the last 30 days that are
+  //still sending low-reputation URLs or unusual volume. Nothing has fired on these senders, so they never appear in a
+  //threat-based view. A new domain skewing to 1:1 chats is an early social-engineering signal.
+  //Messages are de-duplicated to the latest record per message; only inbound external threads are counted.
+  let suspTlds = dynamic(["top","xyz","click","link","shop","online","site","live","icu","cyou","sbs","rest","quest","cfd","bond","buzz","fun","space","monster","work","tk","ml","ga","cf","gq","dev","app","zip","mov","info","win","loan","men","stream","country"]);
+  let suspUrlMsgs = MessageUrlInfo
+      | where Timestamp > ago(30d)
+      | where isnotempty(UrlDomain)
+      | extend Tld = tostring(split(UrlDomain, ".")[-1])
+      | where Tld in (suspTlds)
+      | distinct TeamsMessageId;
+  MessageEvents
+  | where Timestamp > ago(30d)
+  | summarize arg_max(Timestamp, *) by TeamsMessageId
+  | where IsExternalThread == 1 and IsOwnedThread == 0
+  | extend SenderDomain = tolower(tostring(split(SenderEmailAddress, "@")[1]))
+  | where isnotempty(SenderDomain)
+  | extend ConvType = case(isnotempty(GroupId), "Channel",
+                           array_length(todynamic(RecipientDetails)) > 1, "Group chat",
+                           "1:1 chat")
+  | extend HasSuspUrl = TeamsMessageId in (suspUrlMsgs)
+  | summarize TeamsMessages = count(), Senders = dcount(SenderEmailAddress),
+              OneToOne = countif(ConvType == "1:1 chat"),
+              GroupChat = countif(ConvType == "Group chat"),
+              ChannelMsgs = countif(ConvType == "Channel"),
+              ThreatMessages = countif(isnotempty(ThreatTypes)),
+              LowRepUrlMessages = countif(HasSuspUrl),
+              FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by SenderDomain
+  | where ThreatMessages == 0
+  | where LowRepUrlMessages > 0 or TeamsMessages >= 5
+  | order by LowRepUrlMessages desc, TeamsMessages desc
+  | take 20
+  | project ['Sender Domain']=SenderDomain, ['Teams Messages']=TeamsMessages, ['Distinct Senders']=Senders,
+            ['1:1 Chat']=OneToOne, ['Group Chat']=GroupChat, ['Channel']=ChannelMsgs,
+            ['Low-Rep URL Messages']=LowRepUrlMessages, ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

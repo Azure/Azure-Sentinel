@@ -1,0 +1,57 @@
+id: 4f859dbb-68cf-48d3-812b-7dd19f11e495
+name: External Microsoft Teams Sender Domain Risk
+description: |
+  This query ranks external Microsoft Teams sender domains by threat volume, split by conversation type, with threat rate and low-reputation URL counts.
+description-detailed: |
+  This query ranks external Microsoft Teams sender domains by the number of messages carrying a threat over the last 30 days, using Advanced hunting in Microsoft Defender XDR. For each domain it returns the split across conversation types (one to one chat, group chat, channel), the breakdown by threat type, the threat rate, a count of messages carrying URLs on low-reputation top level domains, and first and last seen. Conversation shape is the signal that repays attention: legitimate partner domains tend to spread across channels and group chats, whereas social-engineering senders skew heavily toward one to one chats where there are no colleagues present to challenge the request. A domain that is new in the period, skews to one to one, or shows a high threat rate on low volume is the anomaly worth reviewing. Messages are de-duplicated to the latest record per message, and only inbound external threads are counted.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - MessageUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query ranks external Microsoft Teams sender domains by threat volume over the last 30 days, split by
+  //conversation type, with threat-type breakdown, threat rate and a count of messages carrying low-reputation URLs.
+  //Senders skewing to 1:1 chats are notable because there are no colleagues in the conversation to challenge the request.
+  //Messages are de-duplicated to the latest record per message; only inbound external threads are counted.
+  let suspTlds = dynamic(["top","xyz","click","link","shop","online","site","live","icu","cyou","sbs","rest","quest","cfd","bond","buzz","fun","space","monster","work","tk","ml","ga","cf","gq","dev","app","zip","mov","info","win","loan","men","stream","country"]);
+  let suspUrlMsgs = MessageUrlInfo
+      | where Timestamp > ago(30d)
+      | where isnotempty(UrlDomain)
+      | extend Tld = tostring(split(UrlDomain, ".")[-1])
+      | where Tld in (suspTlds)
+      | distinct TeamsMessageId;
+  MessageEvents
+  | where Timestamp > ago(30d)
+  | summarize arg_max(Timestamp, *) by TeamsMessageId
+  | where IsExternalThread == 1 and IsOwnedThread == 0
+  | extend SenderDomain = tolower(tostring(split(SenderEmailAddress, "@")[1]))
+  | where isnotempty(SenderDomain)
+  | extend ConvType = case(isnotempty(GroupId), "Channel",
+                           array_length(todynamic(RecipientDetails)) > 1, "Group chat",
+                           "1:1 chat")
+  | extend HasSuspUrl = TeamsMessageId in (suspUrlMsgs)
+  | summarize TeamsMessages = count(), Senders = dcount(SenderEmailAddress),
+              OneToOne = countif(ConvType == "1:1 chat"),
+              GroupChat = countif(ConvType == "Group chat"),
+              ChannelMsgs = countif(ConvType == "Channel"),
+              ThreatMessages = countif(isnotempty(ThreatTypes)),
+              Malware = countif(ThreatTypes has "Malware"),
+              Phish = countif(ThreatTypes has "Phish"),
+              Spam = countif(ThreatTypes has "Spam"),
+              LowRepUrlMessages = countif(HasSuspUrl),
+              FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by SenderDomain
+  | where ThreatMessages > 0
+  | extend ThreatRatePct = round(100.0 * ThreatMessages / TeamsMessages, 1)
+  | top 20 by ThreatMessages desc
+  | project ['Sender Domain']=SenderDomain, ['Teams Messages']=TeamsMessages, ['Distinct Senders']=Senders,
+            ['1:1 Chat']=OneToOne, ['Group Chat']=GroupChat, ['Channel']=ChannelMsgs,
+            ['Threat Messages']=ThreatMessages, Malware, Phish, Spam,
+            ['Threat Rate %']=ThreatRatePct, ['Low-Rep URL Messages']=LowRepUrlMessages,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

@@ -1,0 +1,41 @@
+id: 9a0669b6-abc4-4006-ac14-13bf798c999e
+name: URL Domains Triggering Microsoft Teams Safety Tips
+description: |
+  This query lists the URL domains appearing in Microsoft Teams messages that triggered a safety-tip warning, with each domain's warning rate.
+description-detailed: |
+  This query lists the URL domains that appeared in Microsoft Teams messages which triggered a URL safety-tip warning over the last 30 days, using Advanced hunting in Microsoft Defender XDR, alongside the total number of Teams messages each domain appeared in and the share of those that carried a warning. Where the companion sender-focused query answers who is sending risky links, this one answers which infrastructure is behind them, which is the form an analyst can act on: domains can be blocked, searched for across email, and matched against threat intelligence, whereas a sender identity is disposable. A domain with a warning rate at or near 100 percent is almost never incidental.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - MessageUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists URL domains appearing in Microsoft Teams messages that triggered a safety-tip warning over the
+  //last 30 days, with each domain's total message appearances and warning rate.
+  //Domains are the actionable artefact: they can be blocked, pivoted on across email, and matched to threat
+  //intelligence, whereas a sender identity is disposable. A warning rate near 100% is rarely incidental.
+  let WarnedMessages = MessageEvents
+      | where Timestamp > ago(30d)
+      | where SafetyTip == "URLMessageWarning"
+      | distinct TeamsMessageId;
+  let DomainTotals = MessageUrlInfo
+      | where Timestamp > ago(30d)
+      | where isnotempty(UrlDomain)
+      | summarize TotalMessages = dcount(TeamsMessageId) by UrlDomain;
+  MessageUrlInfo
+  | where Timestamp > ago(30d)
+  | where isnotempty(UrlDomain)
+  | where TeamsMessageId in (WarnedMessages)
+  | summarize WarningMessages = dcount(TeamsMessageId), FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by UrlDomain
+  | join kind=leftouter (DomainTotals) on UrlDomain
+  | extend WarningPct = round(100.0 * WarningMessages / TotalMessages, 1)
+  | top 20 by WarningMessages desc
+  | project ['URL Domain']=UrlDomain, ['Warning Messages']=WarningMessages,
+            ['Total Teams Messages']=TotalMessages, ['Warning %']=WarningPct,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

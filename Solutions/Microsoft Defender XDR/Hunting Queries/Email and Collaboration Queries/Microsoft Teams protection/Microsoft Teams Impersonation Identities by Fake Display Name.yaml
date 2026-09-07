@@ -1,0 +1,37 @@
+id: 7614cfa2-0fa4-446c-9f03-f0980d67ee20
+name: Microsoft Teams Impersonation Identities by Fake Display Name
+description: |
+  This query groups Microsoft Teams impersonation detections by the fake display name and sender domain to expose bulk campaigns behind rotating addresses.
+description-detailed: |
+  This query groups Microsoft Teams impersonation detections over the last 30 days by the fake display name, the sender domain and the impersonation type, using Advanced hunting in Microsoft Defender XDR, and returns the number of distinct sending addresses used behind each identity along with the number of users targeted and first and last seen. Grouping this way is the point. Attackers rotate through many sending addresses while keeping one convincing display name, so ranking by individual address scatters a single campaign across many low-count rows and hides it. Counting distinct sender addresses per display name makes bulk activity obvious, and a high address count against a small number of detections usually indicates an actor cycling identities to stay under per-sender thresholds.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query groups Microsoft Teams impersonation detections over the last 30 days by fake display name, sender
+  //domain and impersonation type, with the count of distinct sending addresses behind each identity.
+  //Attackers rotate sending addresses under one display name, so per-address ranking scatters a single campaign
+  //into many low-count rows. Distinct Sender Addresses is what reveals the bulk activity.
+  CloudAppEvents
+  | where Timestamp > ago(30d)
+  | where ActionType == "TeamsImpersonationDetected"
+  | extend RD = parse_json(RawEventData)
+  | extend ImpersonationType = tostring(RD.ImpersonationType),
+           FakeDisplayName   = tostring(RD.Sender.DisplayName),
+           FakeSenderAddress = tostring(RD.Sender.UPN),
+           TargetUser        = tostring(RD.UserId)
+  | extend FakeSenderDomain = tostring(split(FakeSenderAddress, "@")[1])
+  | summarize Detections = count(), SenderAddresses = dcount(FakeSenderAddress),
+              Targets = dcount(TargetUser), FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by FakeDisplayName, FakeSenderDomain, ImpersonationType
+  | top 20 by Detections desc
+  | project ['Fake Display Name']=FakeDisplayName, ['Sender Domain']=FakeSenderDomain,
+            ['Impersonation Type']=ImpersonationType, ['Distinct Sender Addresses']=SenderAddresses,
+            ['Detections']=Detections, ['Targeted Users']=Targets,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0
