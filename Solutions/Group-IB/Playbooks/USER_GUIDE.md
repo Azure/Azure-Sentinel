@@ -113,7 +113,7 @@ The `GIBTIA_IndicatorProcessor_v2` playbook is the central receiving point for a
 
 2. Click **"Build your own template in the editor"**.
 
-3. Open the file `Playbooks/azuredeploy-GIBTIA_IndicatorProcessor_v2.json` from this repository. Select all the content and copy it.
+3. Open the file `Playbooks/GIBTIA_IndicatorProcessor_v2/azuredeploy.json` from this repository. Select all the content and copy it.
 
 4. In the Azure Portal editor, delete any existing content and paste the copied JSON. Click **Save**.
 
@@ -170,7 +170,7 @@ The `GIBTIA_IOC_Primary_Updated` playbook polls the `ioc/primary/updated` Group-
 
 1. Azure Portal → **"Deploy a custom template"** → **"Build your own template in the editor"**.
 
-2. Paste the content of `Playbooks/azuredeploy-GIBTIA_IOC_Primary_Updated.json`. Click **Save**.
+2. Paste the content of `Playbooks/GIBTIA_IOC_Primary_Updated/azuredeploy.json`. Click **Save**.
 
 3. Fill in parameters:
 
@@ -187,7 +187,6 @@ The `GIBTIA_IOC_Primary_Updated` playbook polls the `ioc/primary/updated` Group-
    | `FixedConfidence`                | `-1`                             | Set to a value between 0–100 to apply a fixed confidence to all indicators. Used when neither `UseAdmiraltyConfidence` nor `UseRiskScoreAsConfidence` supplies a value. Leave at `-1` to omit confidence entirely. |
    | `UseAdmiraltyConfidence`       | `false`                          | Set to `true` to derive STIX confidence by parsing `evaluation.admiraltyCode` (e.g. `"C3"`) via the Admiralty Code translation tables (`reliability: A=100, B=80, C=60, D=40, E=20, F=0`; `credibility: 1=100, 2=80, 3=60, 4=40, 5=20, 6=0`) and emitting `(reliability + credibility) / 2`. **Highest precedence** — falls through to `UseRiskScoreAsConfidence` / `FixedConfidence` when `admiraltyCode` is missing, wrong length, or contains a letter/digit outside the lookup table. The other evaluation fields (`admiraltyCode`, `credibility`, `reliability`, `TLP`, `TTL`) are always surfaced when present: `admiraltyCode`/`credibility`/`reliability` appear in the `Tags` column as `admiralty:C3`/`credibility:60`/`reliability:60`, the per-entry/item-level `riskScore` appears as `risk-score:<n>` regardless of confidence mode, `TLP` becomes `object_marking_refs`, and `TTL` (in days) drives `ValidUntil` instead of the 90-day fallback. |
    | `IndicatorProcessorPlaybookName` | `GIBTIA_IndicatorProcessor_v2`   | Must match the adapter name exactly                                        |
-   | `WorkspaceId`                    | Your workspace GUID              | For MSI query calls                                                        |
    | `WorkspaceName`                  | Your workspace name              | For constructing the ARM query URL                                         |
 
 4. Click **Review + create** → **Create**.
@@ -305,19 +304,19 @@ Each additional indicator collector follows the same deployment pattern. Deploy 
 
 | File | Collection | Indicator types | Max `LimitPerPortion` |
 |---|---|---|---|
-| `azuredeploy-GIBTIA_Malware_cnc.json` | `malware/cnc` | IP, domain, URL | **1000** |
-| `azuredeploy-GIBTIA_Malware_config.json` | `malware/config` | IP, domain, URL | **100** |
-| `azuredeploy-GIBTIA_Attacks_phishing.json` | `attacks/phishing_group` | IP, domain, URL | **1000** |
-| `azuredeploy-GIBTIA_Attacks_phishing_kit.json` | `attacks/phishing_kit` | Email | **1000** |
-| `azuredeploy-GIBTIA_Attacks_ddos.json` | `attacks/ddos` | IP | **5000** |
-| `azuredeploy-GIBTIA_Attacks_deface.json` | `attacks/deface` | URL | **100** |
-| `azuredeploy-GIBTIA_Compromised_BankCard.json` | `compromised/bank_card_group` | (context — no indicators) | **500** |
-| `azuredeploy-GIBTIA_Compromised_MaskedCard.json` | `compromised/masked_card` | (context — no indicators) | **500** |
-| `azuredeploy-GIBTIA_Suspicious_ip_tor_node.json` | `suspicious_ip/tor_node` | IP | **100** |
-| `azuredeploy-GIBTIA_Suspicious_ip_open_proxy.json` | `suspicious_ip/open_proxy` | IP | **5000** |
-| `azuredeploy-GIBTIA_Suspicious_ip_socks_proxy.json` | `suspicious_ip/socks_proxy` | IP | **5000** |
-| `azuredeploy-GIBTIA_Suspicious_ip_scanner.json` | `suspicious_ip/scanner` | IP | **5000** |
-| `azuredeploy-GIBTIA_Suspicious_ip_vpn.json` | `suspicious_ip/vpn` | IP | **100** |
+| `GIBTIA_Malware_cnc/azuredeploy.json` | `malware/cnc` | IP, domain, URL | **1000** |
+| `GIBTIA_Malware_config/azuredeploy.json` | `malware/config` | IP, domain, URL | **100** |
+| `GIBTIA_Attacks_phishing/azuredeploy.json` | `attacks/phishing_group` | IP, domain, URL | **1000** |
+| `GIBTIA_Attacks_phishing_kit/azuredeploy.json` | `attacks/phishing_kit` | Email | **1000** |
+| `GIBTIA_Attacks_ddos/azuredeploy.json` | `attacks/ddos` | IP | **5000** |
+| `GIBTIA_Attacks_deface/azuredeploy.json` | `attacks/deface` | URL | **100** |
+| `GIBTIA_Compromised_BankCard/azuredeploy.json` | `compromised/bank_card_group` | (context — no indicators) | **500** |
+| `GIBTIA_Compromised_MaskedCard/azuredeploy.json` | `compromised/masked_card` | (context — no indicators) | **500** |
+| `GIBTIA_Suspicious_ip_tor_node/azuredeploy.json` | `suspicious_ip/tor_node` | IP | **100** |
+| `GIBTIA_Suspicious_ip_open_proxy/azuredeploy.json` | `suspicious_ip/open_proxy` | IP | **5000** |
+| `GIBTIA_Suspicious_ip_socks_proxy/azuredeploy.json` | `suspicious_ip/socks_proxy` | IP | **5000** |
+| `GIBTIA_Suspicious_ip_scanner/azuredeploy.json` | `suspicious_ip/scanner` | IP | **5000** |
+| `GIBTIA_Suspicious_ip_vpn/azuredeploy.json` | `suspicious_ip/vpn` | IP | **100** |
 
 ---
 
@@ -351,18 +350,18 @@ Context playbooks write full intelligence records to Log Analytics custom tables
 
 | File | Collection | Custom table | Max `LimitPerPortion` |
 |---|---|---|---|
-| `azuredeploy-GIBTIA_APT_Threats.json` | `apt/threat` | `GIBAPTThreat_CL` | **10** |
-| `azuredeploy-GIBTIA_APT_ThreatActor.json` | `apt/threat_actor` | `GIBAPTThreatActor_CL` | **100** |
-| `azuredeploy-GIBTIA_HI_Threat.json` | `hi/threat` | `GIBHIThreat_CL` | **10** |
-| `azuredeploy-GIBTIA_HI_Threat_Actor.json` | `hi/threat_actor` | `GIBHIThreatActor_CL` | **100** |
-| `azuredeploy-GIBTIA_HI_Open_Threats.json` | `hi/open_threats` | `GIBHIOpenThreat_CL` | **100** |
-| `azuredeploy-GIBTIA_Malware_Targeted_Malware.json` | `malware/malware` | `GIBMalwareReport_CL` | **100** |
-| `azuredeploy-GIBTIA_Compromised_account.json` | `compromised/account_group` | `GIBCompromisedAccount_CL` | **500** |
-| `azuredeploy-GIBTIA_Compromised_BreachedDB.json` | `compromised/breacheddb` | `GIBCompromisedBreachedDB_CL` | **100** |
-| `azuredeploy-GIBTIA_Compromised_SPD.json` | `compromised/spd` | `GIBCompromisedSPD_CL` | **500** |
-| `azuredeploy-GIBTIA_OSI_Vulnerability.json` | `osi/vulnerability` | `GIBOSIVulnerability_CL` | **200** |
-| `azuredeploy-GIBTIA_OSI_PublicLeak.json` | `osi/public_leak` | `GIBOSIPublicLeak_CL` | **5** (size-driven, not the API's 100 — records are full text dumps) |
-| `azuredeploy-GIBTIA_OSI_GitLeak.json` | `osi/git_repository` | `GIBOSIGitRepository_CL` | **100** |
+| `GIBTIA_APT_Threats/azuredeploy.json` | `apt/threat` | `GIBAPTThreat_CL` | **10** |
+| `GIBTIA_APT_ThreatActor/azuredeploy.json` | `apt/threat_actor` | `GIBAPTThreatActor_CL` | **100** |
+| `GIBTIA_HI_Threat/azuredeploy.json` | `hi/threat` | `GIBHIThreat_CL` | **10** |
+| `GIBTIA_HI_Threat_Actor/azuredeploy.json` | `hi/threat_actor` | `GIBHIThreatActor_CL` | **100** |
+| `GIBTIA_HI_Open_Threats/azuredeploy.json` | `hi/open_threats` | `GIBHIOpenThreat_CL` | **100** |
+| `GIBTIA_Malware_Targeted_Malware/azuredeploy.json` | `malware/malware` | `GIBMalwareReport_CL` | **100** |
+| `GIBTIA_Compromised_account/azuredeploy.json` | `compromised/account_group` | `GIBCompromisedAccount_CL` | **500** |
+| `GIBTIA_Compromised_BreachedDB/azuredeploy.json` | `compromised/breacheddb` | `GIBCompromisedBreachedDB_CL` | **100** |
+| `GIBTIA_Compromised_SPD/azuredeploy.json` | `compromised/spd` | `GIBCompromisedSPD_CL` | **500** |
+| `GIBTIA_OSI_Vulnerability/azuredeploy.json` | `osi/vulnerability` | `GIBOSIVulnerability_CL` | **200** |
+| `GIBTIA_OSI_PublicLeak/azuredeploy.json` | `osi/public_leak` | `GIBOSIPublicLeak_CL` | **5** (size-driven, not the API's 100 — records are full text dumps) |
+| `GIBTIA_OSI_GitLeak/azuredeploy.json` | `osi/git_repository` | `GIBOSIGitRepository_CL` | **100** |
 
 ---
 
@@ -378,7 +377,7 @@ Both playbooks are triggered by Sentinel incident webhook events and write their
 **Deploying `GIBTIA_Enrich_WHOIS`:**
 
 1. Azure Portal → **"Deploy a custom template"** → **"Build your own template in the editor"**.
-2. Paste `Playbooks/azuredeploy-GIBTIA_Enrich_WHOIS.json` → Save.
+2. Paste `Playbooks/GIBTIA_Enrich_WHOIS/azuredeploy.json` → Save.
 3. Fill parameters:
 
    | Parameter       | Value                        |
@@ -397,7 +396,7 @@ Both playbooks are triggered by Sentinel incident webhook events and write their
 **Deploying `GIBTIA_Enrich_IOC`:**
 
 1. Azure Portal → **"Deploy a custom template"** → **"Build your own template in the editor"**.
-2. Paste `Playbooks/azuredeploy-GIBTIA_Enrich_IOC.json` → Save.
+2. Paste `Playbooks/GIBTIA_Enrich_IOC/azuredeploy.json` → Save.
 3. Fill parameters:
 
    | Parameter       | Value                             |
@@ -415,7 +414,7 @@ Both playbooks are triggered by Sentinel incident webhook events and write their
 **Deploying `GIBTIA_Score_IP`:** *(optional — IP risk-scoring enrichment)*
 
 1. Azure Portal → **"Deploy a custom template"** → **"Build your own template in the editor"**.
-2. Paste `Playbooks/azuredeploy-GIBTIA_Score_IP.json` → Save.
+2. Paste `Playbooks/GIBTIA_Score_IP/azuredeploy.json` → Save.
 3. Fill parameters (`PlaybookName` = `GIBTIA_Score_IP`, `UserName` = your Azure AD email, `GIBUsername` / `GIBApiKey` = Group-IB credentials). No `WorkspaceName` — this playbook makes no Log Analytics calls.
 4. Review + create → Create.
 5. Authorize the `azuresentinel-GIBTIA_Score_IP` API connection (as above).
@@ -484,7 +483,7 @@ This is per playbook. There are 26 collectors, and changing one does not change 
 Three things to know before you change it:
 
 - **A redeploy silently reverts it.** The trigger lives inside the ARM template
-  (`resources[].properties.definition`), so redeploying `azuredeploy-GIBTIA_<Name>.json`
+  (`resources[].properties.definition`), so redeploying `GIBTIA_<Name>/azuredeploy.json`
   overwrites your change and restores the hourly schedule. Nothing warns you. If a
   non-default schedule matters to you, edit the `frequency` / `interval` values in the
   template and deploy that, rather than clicking in the portal.
@@ -1271,7 +1270,7 @@ The three enrichers above are **incident-triggered**: they enrich *every* matchi
 | `GIBTIA_Enrich_WHOIS_Single_IP` | Enrich_WHOIS | IP |
 | `GIBTIA_Enrich_WHOIS_Single_Domain` | Enrich_WHOIS | Domain (DNS) |
 
-Templates: `Playbooks/azuredeploy-GIBTIA_<name>.json`. **Deploy, authorize the `azuresentinel-<PlaybookName>` connection, assign roles, and enable them exactly like the bulk enrichers** ([§4.8](#48-deploy-enrichment-playbooks), [§4.9](#49-assign-roles-for-enrichment-playbooks)): **Microsoft Sentinel Contributor** on all seven, plus **Log Analytics Reader** on the two `Enrich_WHOIS_Single_*` (they query `ThreatIntelIndicators`; the two use the `WorkspaceName` parameter). Score_IP and IOC single variants need no Log Analytics role.
+Templates: `Playbooks/GIBTIA_<Name>/azuredeploy.json`. **Deploy, authorize the `azuresentinel-<PlaybookName>` connection, assign roles, and enable them exactly like the bulk enrichers** ([§4.8](#48-deploy-enrichment-playbooks), [§4.9](#49-assign-roles-for-enrichment-playbooks)): **Microsoft Sentinel Contributor** on all seven, plus **Log Analytics Reader** on the two `Enrich_WHOIS_Single_*` (they query `ThreatIntelIndicators`; the two use the `WorkspaceName` parameter). Score_IP and IOC single variants need no Log Analytics role.
 
 **How an analyst runs one:**
 

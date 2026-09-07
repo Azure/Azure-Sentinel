@@ -63,7 +63,7 @@ The 29 workflows break down as:
 | **Context collectors** | 14 | `GIBTIA_APT_Threats`, `GIBTIA_OSI_Vulnerability`, `GIBTIA_HI_*`, `GIBTIA_Compromised_BankCard`, `GIBTIA_Compromised_BreachedDB`, … — hourly recurrence, write raw records to Log Analytics custom tables |
 | **Enrichment playbooks** | 3 | `GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`, `GIBTIA_Score_IP` — triggered by Sentinel incident webhook, post enrichment as incident comments |
 
-> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/azuredeploy-GIBTIA_Score_IP.json`).
+> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/GIBTIA_Score_IP/azuredeploy.json`).
 
 See [§A. Full workflow catalog](#a-full-workflow-catalog) at the bottom of this guide for the complete list with collection slugs and destination tables.
 
@@ -77,7 +77,7 @@ See [§A. Full workflow catalog](#a-full-workflow-catalog) at the bottom of this
 | ------------------------------------ | ------------------------------------------------------ | ------------------------------------------- |
 | Resources to manage                  | 1 Logic App + 1 plan + 1 storage account               | 30 Logic Apps                               |
 | IAM (Managed Identity role)          | **1 assignment** on the shared MSI                     | 30 assignments (one per Logic App)          |
-| Workflow count                       | 30 (includes `GIBTIA_Score_IP`, `GIBTIA_Compromised_BreachedDB`)   | 30 (`Score_IP` now shipped as `azuredeploy-GIBTIA_Score_IP.json`)                |
+| Workflow count                       | 30 (includes `GIBTIA_Score_IP`, `GIBTIA_Compromised_BreachedDB`)   | 30 (`Score_IP` now shipped as `GIBTIA_Score_IP/azuredeploy.json`)                |
 | Cost model                           | Fixed (App Service plan, even when idle)               | Per-action billing                          |
 | Predictability under high IOC volume | More predictable — no surprise per-action spend        | Variable — bills scale with execution count |
 | Deployment cadence                   | Single zip deploy / VS Code push                       | 30 separate ARM template deploys            |
@@ -835,6 +835,6 @@ Triggered by Sentinel incident webhook (not recurrence); post enrichment as inci
 |---|---|---|---|
 | `GIBTIA_Enrich_WHOIS` | Sentinel incident | Per-entity WHOIS via GIB + check `ThreatIntelIndicators` for known matches | Yes |
 | `GIBTIA_Enrich_IOC` | Sentinel incident | Cross-collection search via `/api/v2/search`, filtered by `granted_collections`; posts hits-per-collection summary | Yes |
-| `GIBTIA_Score_IP` | Sentinel incident | Batched POST to `/api/v2/scoring`; posts each IP's GIB risk score (0–100) | Also available for Consumption: `Playbooks/azuredeploy-GIBTIA_Score_IP.json` |
+| `GIBTIA_Score_IP` | Sentinel incident | Batched POST to `/api/v2/scoring`; posts each IP's GIB risk score (0–100) | Also available for Consumption: `Playbooks/GIBTIA_Score_IP/azuredeploy.json` |
 
 All shared tracking lives in `GIBCollectionTracking_CL` filtered by `CollectionName_s`.
