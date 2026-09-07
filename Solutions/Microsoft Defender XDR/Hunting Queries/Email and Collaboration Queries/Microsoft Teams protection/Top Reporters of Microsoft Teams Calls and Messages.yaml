@@ -1,0 +1,39 @@
+id: 2324aae0-6628-4842-aa36-ae5bf13f3400
+name: Top Reporters of Microsoft Teams Calls and Messages
+description: |
+  This query lists the users who reported the most Microsoft Teams calls and messages, split by content type, to surface actively targeted people.
+description-detailed: |
+  This query lists the top 20 users who reported Microsoft Teams calls and messages to Microsoft over the last 30 days, using Advanced hunting in Microsoft Defender XDR, with the count of Teams calls and Teams messages reported separately, and the first and last time each user reported. Splitting calls from messages per reporter is the point: a user reporting several Teams calls in a short window is a strong indicator of being actively targeted by helpdesk impersonation and voice phishing, which message-only reporting views do not reveal. The submitter email is included because display names alone do not disambiguate users.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists the top 20 users who reported Microsoft Teams calls and messages over the last 30 days, counting calls
+  //and messages separately per reporter, with the reporting window. A user reporting several Teams calls in a short window
+  //is a strong sign of being actively targeted, and voice phishing is often layered onto Teams helpdesk impersonation so
+  //that malicious instructions never enter the chat log.
+  //Background: Microsoft Threat Intelligence, "Impersonating IT support: how threat actors turn a remote session into
+  //enterprise-wide access" (2 September 2026)
+  //https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/
+  CloudAppEvents
+  | where Timestamp > ago(30d)
+  | extend RD = parse_json(RawEventData)
+  | extend RecordType = tostring(RD.RecordType), SubmissionContentType = tostring(RD.SubmissionContentType)
+  | where RecordType == "29" and SubmissionContentType in ("ChatMessage", "TeamsCall")
+  //Exact match, because a graded submission also emits a UserSubmissionTriage record under the same SubmissionId.
+  | where ActionType == "UserSubmission"
+  | extend ReportedBy = tostring(RD.SubmitterDisplayName), ReportedByEmail = tostring(RD.UserId)
+  | where isnotempty(ReportedBy) and ReportedByEmail has "@"
+  | summarize ['Teams Calls Reported'] = countif(SubmissionContentType == "TeamsCall"),
+              ['Teams Messages Reported'] = countif(SubmissionContentType == "ChatMessage"),
+              ['Total Reported'] = count(),
+              ['First Reported'] = min(Timestamp),
+              ['Last Reported'] = max(Timestamp)
+      by ['Reported By'] = ReportedBy, ['Reported By Email'] = ReportedByEmail
+  | top 20 by ['Total Reported']
+version: 1.0.0
