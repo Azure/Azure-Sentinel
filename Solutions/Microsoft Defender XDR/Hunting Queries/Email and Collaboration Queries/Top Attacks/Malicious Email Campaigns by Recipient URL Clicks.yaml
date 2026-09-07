@@ -1,9 +1,9 @@
 id: af3477a3-22f8-45a3-aa01-069d40ba4bd3
 name: Malicious Email Campaigns by Recipient URL Clicks
 description: |
-  This query ranks malicious inbound email campaigns by how many recipients clicked a URL in them, rather than by campaign size.
+  This query ranks malicious inbound email campaigns by the number of URL clicks they attracted and by how many distinct users clicked, rather than by campaign size.
 description-detailed: |
-  Microsoft Defender for Office 365 groups related malicious messages into campaigns through EmailClusterId. This query ranks those campaigns over the last 30 days by the number of recipient URL clicks they attracted, using Advanced hunting in Microsoft Defender XDR, and flags campaigns that carried QR codes. Ranking by clicks rather than by message volume answers a different question from campaign size: a small campaign that reached mailboxes and was clicked represents realised risk, whereas a large campaign that was blocked at delivery did not. For triage that inverts the priority order, because the campaigns worth investigating first are the ones users actually engaged with. Messages are de-duplicated to the latest record per message and recipient, and phishing simulation and SecOps mailbox traffic are excluded so internal exercises do not inflate the ranking.
+  Microsoft Defender for Office 365 groups related malicious messages into campaigns through EmailClusterId. This query ranks those campaigns over the last 30 days by the number of recipient URL clicks they attracted, using Advanced hunting in Microsoft Defender XDR, and flags campaigns that carried QR codes. Both the total number of clicks and the number of distinct users behind them are returned, so one repeat clicker is not mistaken for broad engagement. Ranking by clicks rather than by message volume answers a different question from campaign size: a small campaign that reached mailboxes and was clicked represents realised risk, whereas a large campaign that was blocked at delivery did not. For triage that inverts the priority order, because the campaigns worth investigating first are the ones users actually engaged with. Messages are de-duplicated to the latest record per message and recipient, and phishing simulation and SecOps mailbox traffic are excluded so internal exercises do not inflate the ranking.
 requiredDataConnectors:
 - connectorId: MicrosoftThreatProtection
   dataTypes:
@@ -23,7 +23,7 @@ query: |
   let ClicksByCluster = UrlClickEvents
       | where Timestamp > ago(30d)
       | join kind=inner (EmailEvents | where Timestamp > ago(30d) | where EmailClusterId > 0 | distinct NetworkMessageId, EmailClusterId) on NetworkMessageId
-      | summarize UrlClicks = count() by EmailClusterId;
+      | summarize UrlClicks = count(), ClickingUsers = dcount(AccountUpn) by EmailClusterId;
   let QrClusters = EmailUrlInfo
       | where Timestamp > ago(30d)
       | where UrlLocation == "QRCode"
@@ -50,7 +50,8 @@ query: |
   | extend CarriedQrCode = iif(coalesce(QrMessages, 0) > 0, "QR code", "")
   | extend ThreatMix = array_sort_asc(set_union(split(strcat_array(ThreatTypesRaw, ", "), ", "), dynamic([])))
   | top 20 by UrlClicks
-  | project ['Email Cluster ID']=EmailClusterId, ['URL Clicks']=UrlClicks, ['Messages']=Messages,
+  | project ['Email Cluster ID']=EmailClusterId, ['URL Clicks']=UrlClicks, ['Clicking Users']=ClickingUsers,
+            ['Messages']=Messages,
             ['Recipients']=Recipients, ['Sender Domains']=SenderDomains,
             ['Sample Sender Domains']=SampleSenderDomains, ['Threat Mix']=ThreatMix,
             ['QR Code']=CarriedQrCode, ['Sample Subjects']=SampleSubjects,
