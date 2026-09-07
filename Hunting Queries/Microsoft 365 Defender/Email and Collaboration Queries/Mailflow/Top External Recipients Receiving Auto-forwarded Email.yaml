@@ -1,0 +1,31 @@
+id: db98ab11-e0c2-4ece-9b31-1131bbdd7647
+name: Top External Recipients Receiving Auto-forwarded Email (Mailbox Rule and SMTP)
+description: |
+  This query lists the top external recipients receiving automatically forwarded email, by forwarding type, using the EmailEvents table.
+description-detailed: |
+  Auto-forwarding to an external recipient is a common data-exfiltration technique after mailbox compromise. This query ranks the external recipient addresses receiving auto-forwarded mail, split by forwarding type (mailbox rule versus SMTP forwarding), with the count of forwarded messages and the distinct internal forwarding users. External addresses receiving high volumes from one or more internal users are worth investigating.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Outbound" and isnotempty(ForwardingInformation)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend FwdInfo = parse_json(ForwardingInformation)
+  | extend ForwardingType = tostring(FwdInfo.ForwardingType),
+           ForwardingUser = tostring(FwdInfo.ForwardingUser)
+  | summarize ForwardedMessages = count(),
+              ForwardingUsers = dcount(ForwardingUser)
+      by RecipientEmailAddress, ForwardingType
+  | top 20 by ForwardedMessages
+version: 1.0.0

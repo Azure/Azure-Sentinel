@@ -1,0 +1,131 @@
+Parser:
+  Title: Okta V2 Authentication ASIM ingestion-time parser
+  Version: '0.4.1'
+  LastUpdated: 'Aug 31, 2026'
+Product:
+  Name: Okta
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+Author: Microsoft
+Description: |
+  Normalizes Okta sign-in events from the OktaV2_CL raw-table shape into the
+  native ASimAuthenticationEventLogs table during ingestion.
+ParserName: _ASim_Authentication_OktaV2
+DCRType: Standard
+InputStream: Custom-OktaV2_CL
+SourceRawTable: OktaV2_CL
+TargetASIMTable: ASimAuthenticationEventLogs
+ParserFilterQuery: |
+  source
+  | where EventOriginalType in ("user.session.start", "user.session.end")
+ParserQuery: |
+  source
+  | where EventOriginalType in ("user.session.start", "user.session.end")
+  | extend EventResultDetails = iif(
+      OriginalOutcomeResult in ("FAILURE", "SKIPPED", "DENY"),
+      case(
+          EventOriginalResultDetails == "LOCKED_OUT",                      "User locked",
+          EventOriginalResultDetails == "INVALID_CREDENTIALS",             "Incorrect password",
+          EventOriginalResultDetails == "UNKNOWN_USER",                    "No such user",
+          EventOriginalResultDetails == "VERIFICATION_ERROR",              "Incorrect key",
+          EventOriginalResultDetails == "SSO_AUTHENTICATION_FAILURE",      "Logon violates policy",
+          EventOriginalResultDetails == "PASSWORD_EXPIRED",                "Password expired",
+          EventOriginalResultDetails == "USER_ACCOUNT_EXPIRED",            "Account expired",
+          EventOriginalResultDetails == "DEL_AUTH_TIMEOUT",                "Session expired",
+          EventOriginalResultDetails == "PASSWORD_BASED_LOGIN_DISALLOWED", "Logon violates policy",
+          "Other"),
+      "")
+  | extend SrcDeviceType = case(
+      OriginalClientDevice == "Computer", "Computer",
+      OriginalClientDevice == "Mobile",   "Mobile Device",
+      OriginalClientDevice == "Tablet",   "Mobile Device",
+      "Other")
+  | extend
+      Type               = "OktaV2_CL",
+      EventProduct       = "Okta",
+      EventSchema        = "Authentication",
+      EventVendor        = "Okta",
+      EventCount         = toint(1),
+      EventSchemaVersion = "0.1.3",
+      EventStartTime     = TimeGenerated,
+      EventEndTime       = TimeGenerated,
+      EventType          = iif(EventOriginalType endswith "start", "Logon", "Logoff"),
+      ActorUserIdType    = "OktaId"
+  | extend
+      ActorUsername = iif(isnotempty(ActorUsername), ActorUsername, OriginalActorAlternateId),
+      EventResult   = iif(isnotempty(EventResult), EventResult,
+          case(
+              OriginalOutcomeResult in ("SUCCESS", "ALLOW"),           "Success",
+              OriginalOutcomeResult in ("FAILURE", "SKIPPED", "DENY"), "Failure",
+              "Partial"))
+  | extend
+      TargetSessionId  = ActorSessionId,
+      TargetUserId     = ActorUserId,
+      TargetUsername   = ActorUsername,
+      TargetUserIdType = ActorUserIdType,
+      TargetUserType   = case(ActorUserType == "System Principal", "System", ActorUserType)
+  | extend ActorUserType = TargetUserType
+  | extend
+      TargetUsernameType = (case(
+          TargetUsername contains "@",  "UPN",
+          TargetUsername contains "\\", "Windows",
+          (TargetUsername has "CN=" or TargetUsername has "OU=" or TargetUsername has "DC="), "DN",
+          isempty(TargetUsername), "",
+          "Simple")),
+      ActorUsernameType = (case(
+          ActorUsername contains "@",  "UPN",
+          ActorUsername contains "\\", "Windows",
+          (ActorUsername has "CN=" or ActorUsername has "OU=" or ActorUsername has "DC="), "DN",
+          isempty(ActorUsername), "",
+          "Simple"))
+  | extend
+      User   = TargetUsername,
+      Dvc    = EventVendor,
+      IpAddr = SrcIpAddr
+  | project
+      TimeGenerated,
+      EventOriginalType,
+      EventOriginalResultDetails,
+      EventOriginalUid,
+      EventResultDetails,
+      SrcDeviceType,
+      Type,
+      EventProduct,
+      EventSchema,
+      EventVendor,
+      EventCount,
+      EventSchemaVersion,
+      EventStartTime,
+      EventEndTime,
+      EventType,
+      TargetSessionId,
+      TargetUserId,
+      TargetUsername,
+      TargetUserType,
+      TargetUserIdType,
+      SrcIpAddr,
+      ActorSessionId,
+      ActorUserId,
+      ActorUsername,
+      ActorUserType,
+      ActorUserIdType,
+      EventResult,
+      SrcGeoRegion,
+      SrcGeoCity,
+      SrcGeoCountry,
+      SrcDvcOs,
+      SrcDvcId,
+      SrcDvcIdType,
+      DvcAction,
+      TargetUsernameType,
+      ActorUsernameType,
+      User,
+      Dvc,
+      IpAddr
+Changes:
+  - Version: '0.4.1'
+    Date: 'Aug 31, 2026'
+    Changes:
+      - Initial ingestion-time publication sample converted from ASimAuthenticationOktaV2; targets ASimAuthenticationEventLogs.
+ 
