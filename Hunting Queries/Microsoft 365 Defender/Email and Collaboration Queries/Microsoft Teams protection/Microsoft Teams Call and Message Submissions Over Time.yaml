@@ -1,0 +1,31 @@
+id: 6dcfd16d-d9f0-45d1-a9d3-cb08fbf8465b
+name: Microsoft Teams Call and Message Submissions Over Time
+description: |
+  This query trends Microsoft Teams call and message submissions over time, split by content type and by whether a user or an admin reported them.
+description-detailed: |
+  This query trends Microsoft Teams call and message submissions over the last 30 days, using Advanced hunting in Microsoft Defender XDR, split into four series: Teams calls and Teams messages, each reported by a user or submitted by an admin. A rise in Teams calls reported by users while message reporting stays flat is the shape worth investigating, because voice phishing is commonly layered onto Teams helpdesk impersonation so that malicious instructions are spoken rather than typed and never appear in the chat log.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query trends Microsoft Teams call and message submissions over the last 30 days, split by content type and reporter.
+  //A rise in reported Teams calls against flat message reporting is the shape to investigate, because voice phishing is often
+  //layered onto Teams helpdesk impersonation so that malicious instructions never enter the chat log.
+  //Background: Microsoft Threat Intelligence, "Impersonating IT support: how threat actors turn a remote session into
+  //enterprise-wide access" (2 September 2026)
+  //https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/
+  CloudAppEvents
+  | where Timestamp > ago(30d)
+  | extend RD = parse_json(RawEventData)
+  | extend RecordType = tostring(RD.RecordType), SubmissionContentType = tostring(RD.SubmissionContentType)
+  | where RecordType == "29" and SubmissionContentType in ("ChatMessage", "TeamsCall")
+  | extend SubmissionType = iif(SubmissionContentType == "TeamsCall", "Teams Call", "Teams Message"),
+           Reporter = iif(ActionType startswith "AdminSubmission", "Admin", "User")
+  | summarize Submissions = count() by bin(Timestamp, 1d), ['Submission Type'] = strcat(SubmissionType, " (", Reporter, ")")
+  | render timechart
+version: 1.0.0

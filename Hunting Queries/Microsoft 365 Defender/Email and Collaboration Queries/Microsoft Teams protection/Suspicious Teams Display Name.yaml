@@ -3,8 +3,9 @@ name: Suspicious Teams Display Name
 description: |
   This query looks for Teams messages from an external user with a suspicious display name.
 description-detailed: |
-  This query looks for Teams messages from an external user with a suspicious display name.
+  This query looks for Teams messages from an external user with a suspicious display name, over the last 30 days.
   Threat actors may attempt to socially engineer a user by using display names such as IT Support or Help Desk to establish trust.
+  Senders operating from throwaway .onmicrosoft.com tenants are included because a newly created tenant is a common way to obtain a plausible-looking identity at no cost, and a reason column states why each sender was flagged. Results are aggregated per sender with the share of their messages that carried a threat, so a sender with few messages but a high threat rate is not buried beneath high-volume noise.
 requiredDataConnectors:
 - connectorId: MicrosoftThreatProtection
   dataTypes:
@@ -14,8 +15,29 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let SuspiciousDisplayNames = pack_array("Microsoft  Security", "Help Desk", "Help Desk Team", "Help Desk IT", "Microsoft Security", "IT Support", "Helpdesk");
+  //This query surfaces external Microsoft Teams senders whose display name impersonates IT support or helpdesk, and
+  //senders operating from throwaway .onmicrosoft.com tenants, ranked by how many of their messages carried a threat.
+  //Messages are de-duplicated to the latest record per message.
+  let SuspiciousDisplayNamePattern = @"(?i)help ?desk|helpdesk|it ?support|service ?desk|it team|administrator|sys ?admin|security|microsoft|maintenance|support|update|verif|account|password|mfa";
   MessageEvents
+  | where Timestamp > ago(30d)
+  | summarize arg_max(Timestamp, *) by TeamsMessageId
   | where IsExternalThread == 1 and IsOwnedThread == 0
-  | where SenderDisplayName has_any (SuspiciousDisplayNames)
-version: 1.0.0
+  | extend SenderDomain = tolower(tostring(split(SenderEmailAddress, "@")[1]))
+  | extend IsOnMicrosoft = SenderDomain endswith ".onmicrosoft.com"
+  | extend SuspName = SenderDisplayName matches regex SuspiciousDisplayNamePattern
+  | where IsOnMicrosoft or SuspName
+  | summarize TeamsMessages = count(), ThreatMessages = countif(isnotempty(ThreatTypes)),
+              FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by SenderDisplayName, SenderEmailAddress, SenderDomain, IsOnMicrosoft, SuspName
+  | extend WhyFlagged = case(IsOnMicrosoft and SuspName, "Throwaway .onmicrosoft tenant and helpdesk-style display name",
+                             IsOnMicrosoft, "Throwaway .onmicrosoft tenant",
+                             "Helpdesk or IT-style display name")
+  | extend ThreatPct = round(100.0 * ThreatMessages / TeamsMessages, 1)
+  | sort by ThreatMessages desc, TeamsMessages desc
+  | take 20
+  | project ['Sender Display Name']=SenderDisplayName, ['Sender Address']=SenderEmailAddress,
+            ['Sender Domain']=SenderDomain, ['Why Flagged']=WhyFlagged, ['Teams Messages']=TeamsMessages,
+            ['Threat Messages']=ThreatMessages, ['Threat %']=ThreatPct,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.1
