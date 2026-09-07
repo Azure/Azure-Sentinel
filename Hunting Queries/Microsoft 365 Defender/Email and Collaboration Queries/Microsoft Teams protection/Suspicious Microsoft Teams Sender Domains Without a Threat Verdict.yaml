@@ -1,9 +1,9 @@
-id: a0443864-5206-4030-9eb0-a70a7718dbb0
-name: Suspicious New Microsoft Teams Sender Domains Without a Threat Verdict
+id: bb9fd713-fc62-4380-930f-91490bbbeb78
+name: Suspicious Microsoft Teams Sender Domains Without a Threat Verdict
 description: |
   This query surfaces external Microsoft Teams sender domains that carry no threat verdict yet but are sending low-reputation URLs or unusual volume.
 description-detailed: |
-  This query surfaces external Microsoft Teams sender domains that have no threat verdict at all over the last 30 days, but which are either sending messages containing URLs on low-reputation top level domains or showing unusual message volume, using Advanced hunting in Microsoft Defender XDR. Results are split by conversation type and include first and last seen. These are the senders that have slipped past detection: by definition nothing has fired on them, so they will never appear in a threat-based view. A new domain that skews toward one to one chats is an early social-engineering signal, since attackers open a private conversation before the lure is delivered. Messages are de-duplicated to the latest record per message, and only inbound external threads are counted.
+  This query surfaces external Microsoft Teams sender domains that have no threat verdict at all over the last 30 days, but which are either sending messages containing URLs on low-reputation top level domains or showing unusual message volume, using Advanced hunting in Microsoft Defender XDR. Results are split by conversation type and include first and last seen. These are the senders that have slipped past detection: by definition nothing has fired on them, so they will never appear in a threat-based view. A domain that skews toward one to one chats is an early social-engineering signal, since attackers open a private conversation before the lure is delivered. First and last seen are returned so an analyst can judge whether a domain is genuinely new to the environment. Messages are de-duplicated to the latest record per message, and only inbound external threads are counted.
 requiredDataConnectors:
 - connectorId: MicrosoftThreatProtection
   dataTypes:
@@ -16,7 +16,8 @@ relevantTechniques:
 query: |
   //This query surfaces external Microsoft Teams sender domains with NO threat verdict over the last 30 days that are
   //still sending low-reputation URLs or unusual volume. Nothing has fired on these senders, so they never appear in a
-  //threat-based view. A new domain skewing to 1:1 chats is an early social-engineering signal.
+  //threat-based view. A domain skewing to 1:1 chats is an early social-engineering signal, and First/Last Seen let an
+  //analyst judge whether it is genuinely new to the environment.
   //Messages are de-duplicated to the latest record per message; only inbound external threads are counted.
   let suspTlds = dynamic(["top","xyz","click","link","shop","online","site","live","icu","cyou","sbs","rest","quest","cfd","bond","buzz","fun","space","monster","work","tk","ml","ga","cf","gq","dev","app","zip","mov","info","win","loan","men","stream","country"]);
   let suspUrlMsgs = MessageUrlInfo
@@ -27,7 +28,9 @@ query: |
       | distinct TeamsMessageId;
   MessageEvents
   | where Timestamp > ago(30d)
-  | summarize arg_max(Timestamp, *) by TeamsMessageId
+  | where isnotempty(TeamsMessageId)
+  //Only the columns used below are carried through the de-duplication, to keep the shuffle cost down.
+  | summarize arg_max(Timestamp, IsExternalThread, IsOwnedThread, SenderEmailAddress, GroupId, RecipientDetails, ThreatTypes) by TeamsMessageId
   | where IsExternalThread == 1 and IsOwnedThread == 0
   | extend SenderDomain = tolower(tostring(split(SenderEmailAddress, "@")[1]))
   | where isnotempty(SenderDomain)
