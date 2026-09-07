@@ -1,0 +1,65 @@
+id: 99ae4d06-d352-4926-a1d7-9c28e25b1313
+name: PRODAFT USTA - TI map URL to Syslog
+description: |
+  'Identifies a match in Syslog data from any malicious URL indicator ingested from PRODAFT
+  USTA IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+  - connectorId: PRODAFTUstaIoCUploadIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelIndicators
+  // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malicious URLs", etc.)
+  | where SourceSystem startswith "PRODAFT USTA"
+  // ObservableKey is a STIX kv pair ("url:value") - take the type before the colon
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where IndicatorType == "url"
+  | extend Url = ObservableValue
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+  | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
+  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
+  | join kind=innerunique (
+    Syslog
+    | where TimeGenerated >= ago(dt_lookBack)
+    // Pull the first URL out of the free-text message; rows without one drop out of the join
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
+    | extend Syslog_TimeGenerated = TimeGenerated
+  ) on Url
+  // non-expiring indicators are allowed above, so they must survive this filter too
+  | where isempty(ValidUntil) or Syslog_TimeGenerated < ValidUntil
+  | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend IndicatorTags = tostring(parse_json(Data).labels)
+  | project timestamp = Syslog_TimeGenerated, Description, IndicatorTags, Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url, HostIP
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: HostIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled
