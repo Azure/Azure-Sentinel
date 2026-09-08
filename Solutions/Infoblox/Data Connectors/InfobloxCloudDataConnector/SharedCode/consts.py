@@ -60,8 +60,11 @@ SOURCES = {
 AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id", "")
 AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret", "")
 AZURE_TENANT_ID = os.environ.get("Azure_Tenant_Id", "")
-WORKSPACE_KEY = os.environ.get("Workspace_Key", "")
 WORKSPACE_ID = os.environ.get("Workspace_Id", "")
+
+# AAD token scope for the Log Ingestion API, derived by the ARM template from environment().portal
+# (e.g. "https://monitor.azure.com/.default" on Azure Public, "https://monitor.azure.us/.default" on Gov Cloud).
+SCOPE = os.environ.get("Scope", "https://monitor.azure.com/.default")
 
 LOG_LEVEL = os.environ.get("LogLevel", "INFO")
 
@@ -71,6 +74,93 @@ UPLOAD_SENTINEL_INDICATORS_URL = (
     "https://sentinelus.azure-api.net/{}/threatintelligence:upload-indicators"
     "?api-version=2022-07-01"
 )
+
+# *Log Ingestion API (DCE/DCR) related constants
+# Replaces the legacy HTTP Data Collector API (Workspace_Id/Workspace_Key + HMAC signing, EOL 2026-09-14).
+# A single DCE hosts every DCR for this connector (one DCE, max DCRs per DCE - no per-DCE fan-out needed).
+DCE_ENDPOINT = os.environ.get("Dce_Endpoint", "")
+
+DCR_ATP_IMMUTABLE_ID = os.environ.get("Dcr_Atp_ImmutableId", "")
+DCR_DNS_IMMUTABLE_ID = os.environ.get("Dcr_Dns_ImmutableId", "")
+DCR_GEO_IMMUTABLE_ID = os.environ.get("Dcr_Geo_ImmutableId", "")
+DCR_INFOBLOX_WEB_CAT_IMMUTABLE_ID = os.environ.get("Dcr_InfobloxWebCat_ImmutableId", "")
+DCR_INFORANK_IMMUTABLE_ID = os.environ.get("Dcr_Inforank_ImmutableId", "")
+DCR_MALWARE_ANALYSIS_V3_IMMUTABLE_ID = os.environ.get("Dcr_MalwareAnalysisV3_ImmutableId", "")
+DCR_NAMESERVER_IMMUTABLE_ID = os.environ.get("Dcr_Nameserver_ImmutableId", "")
+DCR_NAMESERVER_MATCHES_IMMUTABLE_ID = os.environ.get("Dcr_NameserverMatches_ImmutableId", "")
+DCR_PTR_IMMUTABLE_ID = os.environ.get("Dcr_Ptr_ImmutableId", "")
+DCR_RPZ_FEEDS_IMMUTABLE_ID = os.environ.get("Dcr_RpzFeeds_ImmutableId", "")
+DCR_RPZ_FEEDS_RECORDS_IMMUTABLE_ID = os.environ.get("Dcr_RpzFeedsRecords_ImmutableId", "")
+DCR_THREAT_ACTOR_IMMUTABLE_ID = os.environ.get("Dcr_ThreatActor_ImmutableId", "")
+DCR_TLD_RISK_IMMUTABLE_ID = os.environ.get("Dcr_TldRisk_ImmutableId", "")
+DCR_WHITELIST_IMMUTABLE_ID = os.environ.get("Dcr_Whitelist_ImmutableId", "")
+DCR_WHOIS_IMMUTABLE_ID = os.environ.get("Dcr_Whois_ImmutableId", "")
+
+# table_key (as used by SharedCode.sentinel.ingest_logs) -> {endpoint, immutable_id, stream}
+# The "Atp" DCR carries two streams (dossier_atp_CL summary + dossier_atp_threat_CL per-threat rows),
+# so both "atp" and "atp_threat" share DCR_ATP_IMMUTABLE_ID but target different stream names.
+DCR_STREAMS = {
+    "atp": {"endpoint": DCE_ENDPOINT, "immutable_id": DCR_ATP_IMMUTABLE_ID, "stream": "Custom-DossierAtp"},
+    "atp_threat": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_ATP_IMMUTABLE_ID,
+        "stream": "Custom-DossierAtpThreat",
+    },
+    "dns": {"endpoint": DCE_ENDPOINT, "immutable_id": DCR_DNS_IMMUTABLE_ID, "stream": "Custom-DossierDns"},
+    "geo": {"endpoint": DCE_ENDPOINT, "immutable_id": DCR_GEO_IMMUTABLE_ID, "stream": "Custom-DossierGeo"},
+    "infoblox_web_cat": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_INFOBLOX_WEB_CAT_IMMUTABLE_ID,
+        "stream": "Custom-DossierInfobloxWebCat",
+    },
+    "inforank": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_INFORANK_IMMUTABLE_ID,
+        "stream": "Custom-DossierInforank",
+    },
+    "malware_analysis_v3": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_MALWARE_ANALYSIS_V3_IMMUTABLE_ID,
+        "stream": "Custom-DossierMalwareAnalysisV3",
+    },
+    "nameserver": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_NAMESERVER_IMMUTABLE_ID,
+        "stream": "Custom-DossierNameserver",
+    },
+    "nameserver_matches": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_NAMESERVER_MATCHES_IMMUTABLE_ID,
+        "stream": "Custom-DossierNameserverMatches",
+    },
+    "ptr": {"endpoint": DCE_ENDPOINT, "immutable_id": DCR_PTR_IMMUTABLE_ID, "stream": "Custom-DossierPtr"},
+    "rpz_feeds": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_RPZ_FEEDS_IMMUTABLE_ID,
+        "stream": "Custom-DossierRpzFeeds",
+    },
+    "rpz_feeds_records": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_RPZ_FEEDS_RECORDS_IMMUTABLE_ID,
+        "stream": "Custom-DossierRpzFeedsRecords",
+    },
+    "threat_actor": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_THREAT_ACTOR_IMMUTABLE_ID,
+        "stream": "Custom-DossierThreatActor",
+    },
+    "tld_risk": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_TLD_RISK_IMMUTABLE_ID,
+        "stream": "Custom-DossierTldRisk",
+    },
+    "whitelist": {
+        "endpoint": DCE_ENDPOINT,
+        "immutable_id": DCR_WHITELIST_IMMUTABLE_ID,
+        "stream": "Custom-DossierWhitelist",
+    },
+    "whois": {"endpoint": DCE_ENDPOINT, "immutable_id": DCR_WHOIS_IMMUTABLE_ID, "stream": "Custom-DossierWhois"},
+}
 
 
 # *Infoblox related constants
@@ -99,11 +189,10 @@ FIELDS = (
 CONFIDENCE_THRESHOLD = int(os.environ.get("Confidence_Threshold", "80"))
 THREAT_LEVEL = int(os.environ.get("Threat_Level", "80"))
 FILE_NAME_PREFIX_COMPLETED = "infoblox_completed"
-FAILED_INDICATOR_FILE_PREFIX = "infoblox_failed"
-FAILED_INDICATORS_TABLE_NAME = "Infoblox_Failed_Indicators"
 UNEXPECTED_ERROR_MSG = "Unexpected error : Error-{}"
 HTTP_ERROR_MSG = "HTTP error : Error-{}"
 DATE_TIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+DCR_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 # *checkpoint related constants
 CONN_STRING = os.environ.get("Connection_String", "")
@@ -120,7 +209,6 @@ LOGS_STARTS_WITH = "Infoblox"
 HISTORICAL_I_TO_S_FUNCTION_NAME = "InfobloxHistoricalToAzureStorage"
 CURRENT_I_TO_S_FUNCTION_NAME = "InfobloxCurrentToAzureStorage"
 INDICATOR_FUNCTION_NAME = "ThreatIndicators"
-FAILED_INDICATOR_FUNCTION_NAME = "FailedThreatIndicators"
 
 # *ParseRawIndicatorsData consts
 PARSE_RAW_JSON_DATA_FUNCTION_NAME = "InfoBloxParseRawJsonData"

@@ -22,7 +22,6 @@ class DossierListSources(Utils):
                 {"AzureClientId": consts.AZURE_CLIENT_ID},
                 {"AzureClientSecret": consts.AZURE_CLIENT_SECRET},
                 {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"API_Token": consts.API_TOKEN},
             ]
         )
@@ -43,14 +42,14 @@ class DossierListSources(Utils):
         )
         client = LogsQueryClient(credential)
         query = """let dummyschema = datatable"""
-        query += """(TimeGenerated:datetime, params_type_s:string, params_target_s:string, Count:int)[];"""
+        query += """(TimeGenerated:datetime, params_type:string, params_target:string, Count:int)[];"""
         for val in consts.SOURCES.get(ioc_type):
             query += f"""let {val}_count =
                 union isfuzzy=true
                 dummyschema,
                 dossier_{val}_CL
                 | where TimeGenerated >= ago(24h)
-                | where params_type_s =="{ioc_type}" and params_target_s =="{ioc_val}"
+                | where params_type =="{ioc_type}" and params_target =="{ioc_val}"
                 | count
                 | project {val}_count = Count
                 ;\n"""

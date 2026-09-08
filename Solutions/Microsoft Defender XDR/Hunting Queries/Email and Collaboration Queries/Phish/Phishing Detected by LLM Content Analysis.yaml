@@ -1,0 +1,26 @@
+id: 945a8419-d3ec-41ba-a4b3-c37303bd9458
+name: Phishing Detected by LLM Content Analysis
+description: |
+  This query lists inbound phishing messages that Microsoft Defender for Office 365 detected using LLM (Language AI) content analysis, using the EmailEvents table.
+description-detailed: |
+  Microsoft Defender for Office 365 uses Language AI (LLM) content analysis to detect phishing and business email compromise from the content of a message. This query lists the most recent inbound emails classified as Phish where LLM content analysis contributed to the detection, so analysts can see what this newer detection method is catching and triage the messages.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // OrgLevelPolicy exclusions drop phishing-simulation and SecOps-mailbox deliveries; remove them to include those.
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where ThreatTypes has "Phish" and tostring(DetectionMethods) has "LLM content analysis"
+  | project Timestamp, SenderFromAddress, RecipientEmailAddress, Subject, ThreatTypes, DetectionMethods, NetworkMessageId
+  | top 100 by Timestamp desc
+version: 1.0.0

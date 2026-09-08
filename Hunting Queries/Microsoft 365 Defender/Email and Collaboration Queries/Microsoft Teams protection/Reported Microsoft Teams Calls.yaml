@@ -1,0 +1,43 @@
+id: 27cb923c-8d66-4caa-b52b-bce52e51d585
+name: Reported Microsoft Teams Calls
+description: |
+  This query lists Microsoft Teams calls that users reported to Microsoft, with the reporting user, to surface suspected voice phishing.
+description-detailed: |
+  This query lists Microsoft Teams calls that users reported to Microsoft over the last 30 days, using Advanced hunting in Microsoft Defender XDR. It returns who reported the call, the reported calling party and its domain, and the submission state. Teams helpdesk impersonation is frequently paired with a voice call so that malicious instructions and URLs are spoken rather than typed, which keeps them out of the chat log entirely. A user-reported call is therefore one of the earliest first-party signals available for that intrusion pattern, and it is invisible to message-based hunting. Repeat reports naming the same calling party are the rows to investigate first.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists Microsoft Teams calls that users reported to Microsoft over the last 30 days, with the reporting
+  //user, the reported calling party and the submission state.
+  //Reported calls matter because voice phishing is often layered onto Teams helpdesk impersonation so that malicious
+  //instructions never enter the chat log. Background: Microsoft Threat Intelligence, "Impersonating IT support: how threat
+  //actors turn a remote session into enterprise-wide access" (2 September 2026)
+  //https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/
+  CloudAppEvents
+  | where Timestamp > ago(30d)
+  | extend RD = parse_json(RawEventData)
+  | extend RecordType = tostring(RD.RecordType), SubmissionContentType = tostring(RD.SubmissionContentType)
+  | where RecordType == "29" and SubmissionContentType == "TeamsCall"
+  //Exact match, because a graded submission also emits a UserSubmissionTriage record under the same SubmissionId.
+  | where ActionType in ("UserSubmission", "AdminSubmission")
+  | extend ReportedBy = tostring(RD.SubmitterDisplayName),
+           ReportedByEmail = tostring(RD.UserId),
+           ReportedCaller = tostring(RD.P2Sender),
+           ReportedCallerDomain = tostring(RD.P2SenderDomain),
+           SubmissionState = tostring(RD.SubmissionState),
+           Reporter = iif(ActionType == "AdminSubmission", "Admin", "User")
+  | project Timestamp,
+            ['Teams Call Reported By']=ReportedBy,
+            ['Reported By Email']=ReportedByEmail,
+            ['Reported Caller']=ReportedCaller,
+            ['Reported Caller Domain']=ReportedCallerDomain,
+            ['Reporter Type']=Reporter,
+            ['Teams Call Submission State']=SubmissionState
+  | sort by Timestamp desc
+version: 1.0.0

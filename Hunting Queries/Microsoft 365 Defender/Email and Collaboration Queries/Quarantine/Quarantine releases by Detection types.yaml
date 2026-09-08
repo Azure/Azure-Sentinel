@@ -15,23 +15,27 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let totalQuery = EmailPostDeliveryEvents
-  | where Action == "Quarantine release"
-  | join kind=inner (EmailEvents | where DeliveryLocation == "Quarantine") on NetworkMessageId
-  | extend MDO_detection = parse_json(DetectionMethods1)
+  //Per detection technology: the share of its quarantined emails that were later released from quarantine.
+  //Release % = released / quarantined for that detection technology. A high rate flags a detector that may be
+  //over-flagging legitimate mail. Detectors with fewer than 10 quarantined emails are excluded so the rate is
+  //statistically meaningful rather than driven by one or two messages.
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where DeliveryLocation == "Quarantine"
+  | extend MDO_detection = parse_json(DetectionMethods)
   | extend FirstDetection = iif(isempty(MDO_detection), "Clean", tostring(bag_keys(MDO_detection)[0]))
   | extend FirstSubcategory = iif(FirstDetection != "Clean" and array_length(MDO_detection[FirstDetection]) > 0, strcat(FirstDetection, ": ", tostring(MDO_detection[FirstDetection][0])), "No Detection (clean)")
   | where FirstSubcategory contains "Malware" or FirstSubcategory contains "Phish" or FirstSubcategory contains "Spam"
-  | count;
-  EmailPostDeliveryEvents
-  | where Action == "Quarantine release"
-  | join kind=inner (EmailEvents | where DeliveryLocation == "Quarantine") on NetworkMessageId
-  | extend MDO_detection = parse_json(DetectionMethods1)
-  | extend FirstDetection = iif(isempty(MDO_detection), "Clean", tostring(bag_keys(MDO_detection)[0]))
-  | extend FirstSubcategory = iif(FirstDetection != "Clean" and array_length(MDO_detection[FirstDetection]) > 0, strcat(FirstDetection, ": ", tostring(MDO_detection[FirstDetection][0])), "No Detection (clean)")
-  | where FirstSubcategory contains "Malware" or FirstSubcategory contains "Phish" or FirstSubcategory contains "Spam"
-  | summarize count_messages = count() by FirstSubcategory
-  | project FirstSubcategory, count_messages
-  | order by count_messages desc
-  | render piechart
-version: 1.0.0
+  | join kind=leftouter (
+      EmailPostDeliveryEvents
+      | where Timestamp > ago(30d)
+      | where Action == "Quarantine release"
+      | distinct NetworkMessageId
+      | extend ReleasedFlag = "yes"
+    ) on NetworkMessageId
+  | summarize Quarantined = dcount(NetworkMessageId), Released = dcountif(NetworkMessageId, ReleasedFlag == "yes") by FirstSubcategory
+  | where Quarantined >= 10
+  | extend ReleaseRate = round(Released * 100.0 / Quarantined, 2)
+  | project ['Detection Type']=FirstSubcategory, ['Quarantined Emails']=Quarantined, ['Released']=Released, ['Release %']=ReleaseRate
+  | order by ['Release %'] desc
+version: 1.1.0
