@@ -1,0 +1,60 @@
+id: 79583816-3c48-5508-9557-9229676acb14
+name: Silverfort - MfaRequestGeneration Incident
+description: |
+  Detects Silverfort MFA Request Generation (MFA Bombing) incidents. Silverfort describes this incident type as: Detects repeated denied MFA prompts. May indicate attacker coercing user approval.
+severity: High
+requiredDataConnectors:
+  - connectorId: SilverfortAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1621
+query: |-
+  CommonSecurityLog
+  | where DeviceVendor has 'Silverfort'
+  | where DeviceProduct has 'Admin Console'
+  | where DeviceEventClassID == "NewIncident"
+  | where Message has "MfaRequestGeneration"
+  | extend IncidentData = parse_json(replace('^""|""$', '', Message))
+  | extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))
+  | extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))
+  | extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))
+  | extend UserName = coalesce(
+      tostring(IncidentData.data.users[0].samAccountName),
+      tostring(IncidentData.data.users[0].upn),
+      tostring(IncidentData.data.users[0].displayName),
+      tostring(IncidentData.users[0].displayName)
+  )
+  | extend SourceHost = coalesce(
+      tostring(IncidentData.data.sources[0].displayName),
+      tostring(IncidentData.sources[0].displayName)
+  )
+  | extend DestinationHost = coalesce(
+      tostring(IncidentData.data.destinations[0].displayName),
+      tostring(IncidentData.destinations[0].displayName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationHost
+customDetails:
+  IncidentId: IncidentId
+  IncidentKind: IncidentKind
+  IncidentSummary: IncidentSummary
+queryPeriod: 15m
+queryFrequency: 15m
+triggerOperator: gt
+triggerThreshold: 0
+version: 1.0.0
+kind: Scheduled
