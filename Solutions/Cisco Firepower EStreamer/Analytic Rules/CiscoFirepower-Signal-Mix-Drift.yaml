@@ -1,0 +1,47 @@
+id: 6ff65bb5-53bd-4ffb-a62a-25ea71c04eed
+name: Cisco Firepower - SnortML signal mix drift
+description: |
+  Detects a material increase in the proportion of SnortML GID 411 events compared with the preceding seven-day baseline.
+  This is a detection-quality regression signal, not evidence that an individual event is malicious. Investigate collector,
+  sensor, model, policy, and traffic changes before modifying response automation. ML-only events must not trigger automatic containment.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let FirepowerEvents = materialize(
+    CommonSecurityLog
+    | where TimeGenerated >= ago(8d)
+    | where DeviceVendor =~ "Cisco"
+    | where DeviceProduct has_any ("Firepower", "Secure Firewall", "FTD", "NGFW")
+    | extend Combined = strcat(tostring(Message), " ", tostring(AdditionalExtensions), " ", tostring(Activity), " ", tostring(DeviceEventClassID), " ", tostring(column_ifexists("FlexString1", "")), " ", tostring(column_ifexists("FlexString2", "")), " ", tostring(column_ifexists("DeviceCustomString1", "")), " ", tostring(column_ifexists("DeviceCustomString2", "")), " ", tostring(column_ifexists("DeviceCustomString3", "")))
+    | extend ParsedGid = toint(extract(@"(?i)(?:gid|generator[\s_-]?id)[\s:=]*(\d+)", 1, Combined))
+    | extend IsMlOnly = ParsedGid == 411 or Combined has "is_ml_only"
+  );
+  let Recent = FirepowerEvents
+    | where TimeGenerated >= ago(1h)
+    | summarize RecentTotal=count(), RecentMl=countif(IsMlOnly)
+    | extend RecentRatio=iff(RecentTotal == 0, 0.0, todouble(RecentMl) / RecentTotal);
+  let Baseline = FirepowerEvents
+    | where TimeGenerated between (ago(8d) .. ago(1d))
+    | summarize BaselineTotal=count(), BaselineMl=countif(IsMlOnly)
+    | extend BaselineRatio=iff(BaselineTotal == 0, 0.0, todouble(BaselineMl) / BaselineTotal);
+  Recent
+  | extend JoinKey=1
+  | join kind=inner (Baseline | extend JoinKey=1) on JoinKey
+  | where RecentTotal >= 20 and BaselineTotal >= 100
+  | where RecentRatio >= 0.25 and RecentRatio >= (BaselineRatio * 2.0)
+  | project TimeGenerated=now(), RecentTotal, RecentMl, RecentRatio, BaselineTotal, BaselineMl, BaselineRatio,
+      DriftMultiple=round(RecentRatio / iff(BaselineRatio == 0.0, 0.0001, BaselineRatio), 2)
+version: 1.0.0
+kind: Scheduled
