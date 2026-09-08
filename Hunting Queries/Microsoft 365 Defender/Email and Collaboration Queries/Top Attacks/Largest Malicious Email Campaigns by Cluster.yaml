@@ -1,0 +1,34 @@
+id: cb73a6da-421d-4596-92e5-0984e02ece9e
+name: Largest Malicious Email Campaigns by Cluster
+description: |
+  This query surfaces the largest malicious inbound email campaigns, clustered by EmailClusterId, with one row per attack wave, using the EmailEvents table.
+description-detailed: |
+  Microsoft Defender for Office 365 groups related malicious messages into campaigns via EmailClusterId. This query returns the top campaigns by message volume, deduplicated to the latest record per message and recipient, with the number of messages and recipients, distinct sender domains, the mix of threat types, and sample subjects, so analysts can quickly triage the biggest attack waves.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound" and isnotempty(ThreatTypes) and EmailClusterId > 0
+  | where OrgLevelPolicy !in ("Phishing simulation", "SecOps Mailbox")
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | summarize Messages = count(),
+              Recipients = dcount(RecipientEmailAddress),
+              SenderDomains = dcount(SenderFromDomain),
+              ThreatTypesRaw = make_set(ThreatTypes, 50),
+              SampleSubjects = make_set(Subject, 5),
+              FirstSeen = min(Timestamp),
+              LastSeen = max(Timestamp)
+          by EmailClusterId
+  | extend ThreatMix = array_sort_asc(set_union(split(strcat_array(ThreatTypesRaw, ", "), ", "), dynamic([])))
+  | top 20 by Messages
+  | project ['Email Cluster ID']=EmailClusterId, ['Messages']=Messages, ['Recipients']=Recipients, ['Sender Domains']=SenderDomains, ['Threat Mix']=ThreatMix, ['Sample Subjects']=SampleSubjects, ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

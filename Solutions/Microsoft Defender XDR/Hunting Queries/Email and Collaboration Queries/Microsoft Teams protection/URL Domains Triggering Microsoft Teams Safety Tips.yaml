@@ -1,0 +1,44 @@
+id: cbe5f6bc-bf97-434d-a12b-6f137a7effb1
+name: URL Domains Triggering Microsoft Teams Safety Tips
+description: |
+  This query lists the URL domains appearing in Microsoft Teams messages that triggered a safety-tip warning, with each domain's warning rate.
+description-detailed: |
+  This query lists the URL domains that appeared in Microsoft Teams messages which triggered a URL safety-tip warning over the last 30 days, using Advanced hunting in Microsoft Defender XDR, alongside the total number of Teams messages each domain appeared in and the share of those that carried a warning. The safety tip is raised on the message rather than on an individual link, so where a warned message carried several URLs the warning cannot be attributed to a single domain; the rate here is the share of messages containing this domain that also carried a URL safety tip for any URL in that message. Where the companion sender-focused query answers who is sending risky links, this one answers which infrastructure is behind them, which is the form an analyst can act on: domains can be blocked, searched for across email, and matched against threat intelligence, whereas a sender identity is disposable. A domain with a warning rate at or near 100 percent is almost never incidental.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - MessageUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists URL domains appearing in Microsoft Teams messages that triggered a safety-tip warning over the
+  //last 30 days, with each domain's total message appearances and warning rate.
+  //Domains are the actionable artefact: they can be blocked, pivoted on across email, and matched to threat
+  //intelligence, whereas a sender identity is disposable. A warning rate near 100% is rarely incidental.
+  //The safety tip is a message-level signal, so where a warned message carried several URLs the tip cannot be
+  //attributed to one domain. The rate below is the share of messages containing this domain that also carried a URL
+  //safety tip for any URL in that message.
+  let WarnedMessages = MessageEvents
+      | where Timestamp > ago(30d)
+      | where SafetyTip == "URLMessageWarning"
+      | distinct TeamsMessageId;
+  let DomainTotals = MessageUrlInfo
+      | where Timestamp > ago(30d)
+      | where isnotempty(UrlDomain)
+      | summarize TotalMessages = dcount(TeamsMessageId) by UrlDomain;
+  MessageUrlInfo
+  | where Timestamp > ago(30d)
+  | where isnotempty(UrlDomain)
+  | where TeamsMessageId in (WarnedMessages)
+  | summarize WarningMessages = dcount(TeamsMessageId), FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by UrlDomain
+  | join kind=leftouter (DomainTotals) on UrlDomain
+  | extend WarningPct = round(100.0 * WarningMessages / TotalMessages, 1)
+  | top 20 by WarningMessages desc
+  | project ['URL Domain']=UrlDomain, ['Messages With a URL Safety Tip']=WarningMessages,
+            ['Total Teams Messages']=TotalMessages, ['Messages With a URL Safety Tip %']=WarningPct,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

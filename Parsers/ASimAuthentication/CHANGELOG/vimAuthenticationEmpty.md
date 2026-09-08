@@ -1,5 +1,9 @@
 # Changelog for vimAuthenticationEmpty.yaml
 
+## Version 1.0.0
+
+- (2026-08-06) Added EntityKey, AdditionalIds, and AdditionalEntities columns for entity querying
+
 ## Version 0.3.0
 
 - (2026-04-06) Change SrcPortNumber type from string to int to align with documentation - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)

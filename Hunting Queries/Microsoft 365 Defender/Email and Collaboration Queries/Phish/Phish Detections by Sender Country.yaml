@@ -1,0 +1,28 @@
+id: b47d1de3-041a-406b-9d99-ffc7749b00f2
+name: Phish Detections by Sender Country
+description: |
+  This query summarises inbound email phishing detections by the sender IP address country, derived from the sender IPv4 address.
+description-detailed: |
+  This query summarises inbound email phishing detections in Microsoft Defender for Office 365 by the sender IP address country, derived from the sender IPv4 address using geo_info_from_ip_address.
+  Messages are de-duplicated to the latest record per NetworkMessageId and recipient, and deliveries to the SecOps mailbox and by the phishing simulation system are excluded.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where ThreatTypes has "Phish" and isnotempty(SenderIPv4)
+  | extend GeoInfo = geo_info_from_ip_address(SenderIPv4)
+  | extend Country = tostring(GeoInfo.country)
+  | summarize count() by Country
+  | project Country, ['Phish Emails'] = count_
+  | sort by ['Phish Emails'] desc
+version: 1.0.0

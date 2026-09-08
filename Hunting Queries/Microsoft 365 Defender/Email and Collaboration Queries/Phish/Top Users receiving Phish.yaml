@@ -16,11 +16,14 @@ relevantTechniques:
   - T1566
 query: |
   EmailEvents
-  //| where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
-  | where ThreatTypes has "Phish" and EmailDirection == "Inbound"
-  | summarize count() by RecipientEmailAddress
-  | sort by count_
-  | top 15 by count_
-  //| render columnchart // Uncomment to display as a column graph
-  //| render piechart // Uncomment to display as a piechart
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound"
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | summarize TotalEmailCount = count(), PhishEmailCount = countif(ThreatTypes has "Phish") by RecipientEmailAddress
+  | extend Bad_Traffic_Percentage_Inbound = todouble(round(PhishEmailCount / todouble(TotalEmailCount) * 100, 2))
+  | where PhishEmailCount != 0
+  | top 15 by PhishEmailCount
+  | project ['Recipient'] = RecipientEmailAddress, ['Phish Emails'] = PhishEmailCount, ['Total Inbound'] = TotalEmailCount, ['Bad Traffic %'] = Bad_Traffic_Percentage_Inbound
 version: 1.0.0
