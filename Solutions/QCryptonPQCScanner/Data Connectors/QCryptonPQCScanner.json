@@ -1,0 +1,113 @@
+{
+  "id": "QCryptonPQCScanner",
+  "title": "QCrypton PQC Scanner",
+  "publisher": "QCrypton, Inc",
+  "descriptionMarkdown": "The **QCrypton PQC Scanner** connector ingests post-quantum cryptography readiness findings from your Azure environment into Microsoft Sentinel. Findings include Key Vault key posture (RSA/ECC vs. PQ-hybrid), TLS certificate signature algorithms on public endpoints, Storage Account and App Service TLS configuration, and CMK provenance. Deploy the QCrypton PQC Scanner container into your subscription; it enumerates via Azure Resource Graph and writes to the `PQReadiness_CL` custom table via a Data Collection Rule (DCR).",
+  "additionalRequirementBanner": "This data connector depends on the `PQReadiness_CL` custom log table being provisioned in your Log Analytics workspace. The provisioning ARM template is included in this solution package and runs automatically at solution install time.",
+  "graphQueries": [
+    {
+      "metricName": "Total PQ readiness findings",
+      "legend": "PQReadiness_CL",
+      "baseQuery": "PQReadiness_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All quantum-vulnerable findings in the last 24h",
+      "query": "PQReadiness_CL\n| where TimeGenerated > ago(24h)\n| where QuantumPosture == 'vulnerable'\n| project TimeGenerated, ResourceName, AssetKind, Algorithm, PostureReason, RiskScore\n| order by RiskScore desc"
+    },
+    {
+      "description": "Vulnerable Key Vault keys grouped by subscription",
+      "query": "PQReadiness_CL\n| where AssetKind == 'kv-key' and QuantumPosture == 'vulnerable'\n| summarize count() by SubscriptionId, Algorithm"
+    },
+    {
+      "description": "TLS certs expiring after 2030 still using classical signatures",
+      "query": "PQReadiness_CL\n| where AssetKind in ('tls-cert', 'kv-cert') and QuantumPosture == 'vulnerable'\n| where ExpiresOn > datetime(2030-01-01)\n| project ResourceName, AssetIdentifier, SignatureAlgorithm, ExpiresOn, RiskScore"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "PQReadiness_CL",
+      "lastDataReceivedQuery": "PQReadiness_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "PQReadiness_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(1h)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": { "write": true, "read": true, "delete": true }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": { "action": true }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Azure subscription reader + Key Vault reader + Monitoring Metrics Publisher",
+        "description": "The QCrypton PQC Scanner container-app managed identity requires **Reader** at each target subscription scope (to enumerate resources via Azure Resource Graph), **Key Vault Reader** on the vaults to be scanned, and **Monitoring Metrics Publisher** on the Data Collection Rule (DCR) to write findings via the Logs Ingestion API."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Solution template — automatic provisioning",
+      "description": "Installing this solution provisions the `PQReadiness_CL` custom table, the Data Collection Endpoint (DCE), and the Data Collection Rule (DCR) automatically. After deployment, capture the following values from the deployment outputs — you will pass them to the QCrypton PQC Scanner container in the next step:\n\n- **`dceEndpoint`** — logs ingestion URL of the provisioned DCE\n- **`dcrImmutableId`** — immutable ID of the provisioned DCR\n- **`customTable`** — always `PQReadiness_CL`\n\nFind them under **Deployments → this deployment → Outputs** in the Azure portal.",
+      "instructions": []
+    },
+    {
+      "title": "2. Deploy the QCrypton PQC Scanner container",
+      "description": "Deploy the scanner container into a resource group in the same subscription (or one federated to the target subscription via managed identity). See [github.com/gunjanmj/qcrypton-shopline/tree/main/pqc-scanner-azure](https://github.com/gunjanmj/qcrypton-shopline/tree/main/pqc-scanner-azure) for the Bicep template. Grant the container's managed identity **Reader** at each target subscription scope, **Key Vault Reader** on target vaults, and **Monitoring Metrics Publisher** on the Data Collection Rule (DCR) provisioned in step 1.\n\nWhen configuring the container, set these environment variables using the values from step 1:\n\n- `DCE_ENDPOINT` = the `dceEndpoint` output\n- `DCR_IMMUTABLE_ID` = the `dcrImmutableId` output\n- `DCR_STREAM_NAME` = `Custom-PQReadiness_CL`\n- `TARGET_WORKSPACE_ID` = the Workspace ID shown below",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": ["WorkspaceId"],
+            "label": "Workspace ID"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "3. Verify ingestion",
+      "description": "After the container has run at least once (default cadence: hourly), verify data is arriving:\n\n```kql\nPQReadiness_CL\n| summarize count(), LastSeen = max(TimeGenerated) by AssetKind\n```\n\nIf no rows return within 60 minutes, check the container logs for authentication errors against the DCE endpoint. The connector's **Status** on this page will flip to **Connected** once findings land in `PQReadiness_CL`.",
+      "instructions": []
+    }
+  ],
+  "metadata": {
+    "id": "9c3d6f4a-2b1e-4a7c-9d2e-6f4b8a1c3d5e",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "solution",
+      "name": "QCryptonPQCScanner"
+    },
+    "author": {
+      "name": "QCrypton, Inc."
+    },
+    "support": {
+      "tier": "Partner",
+      "name": "QCrypton, Inc.",
+      "email": "support@qcryptonapp.com",
+      "link": "https://www.qcrypton.com/contact.html"
+    }
+  }
+}

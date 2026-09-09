@@ -1,0 +1,35 @@
+id: 8a1c4f2d-2b3a-4e5f-9c1d-1a2b3c4d5e6f
+name: Quantum-vulnerable key detected in Key Vault
+description: |
+  A key in Azure Key Vault has been classified as quantum-vulnerable (RSA or elliptic-curve).
+  These key types are broken by Shor's algorithm on a sufficiently large fault-tolerant quantum computer.
+  Rotate to a PQ-hybrid key (ML-KEM, ML-DSA) or plan migration before the harvest-now-decrypt-later
+  window closes for long-lived data.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: QCryptonPQCScanner
+    dataTypes:
+      - PQReadiness_CL
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1565
+query: |
+  PQReadiness_CL
+  | where TimeGenerated > ago(1h)
+  | where AssetKind == "kv-key"
+  | where QuantumPosture == "vulnerable"
+  | extend AlgorithmDetail = strcat(Algorithm, iif(isnotnull(KeySize), strcat("-", tostring(KeySize)), ""))
+  | project TimeGenerated, ResourceName, AssetIdentifier, AlgorithmDetail, PostureReason, RiskScore, SubscriptionId, ResourceGroup
+  | order by RiskScore desc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: AssetIdentifier
+version: 1.0.0
+kind: Scheduled
