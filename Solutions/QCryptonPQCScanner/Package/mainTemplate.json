@@ -1,0 +1,146 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "3.0.0.0",
+  "metadata": {
+    "author": "QCrypton, Inc",
+    "comments": "Solution template for QCrypton PQC Scanner (Sentinel Content Hub)"
+  },
+  "parameters": {
+    "location": { "type": "string", "defaultValue": "[resourceGroup().location]" },
+    "workspace": { "type": "string" },
+    "workspace-location": { "type": "string", "defaultValue": "[resourceGroup().location]" }
+  },
+  "variables": {
+    "solutionId": "qcrypton.pqc-scanner-sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "_solutionName": "QCrypton PQC Scanner",
+    "_solutionVersion": "1.0.0",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "customTableName": "PQReadiness_CL",
+    "dcrName": "[concat('dcr-pqc-scanner-', uniqueString(resourceGroup().id))]",
+    "dceName": "[concat('dce-pqc-scanner-', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": { "publicNetworkAccess": "Enabled" }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspace'), '/', variables('customTableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('customTableName')]",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "ResourceId", "type": "string" },
+            { "name": "ResourceType", "type": "string" },
+            { "name": "ResourceName", "type": "string" },
+            { "name": "SubscriptionId", "type": "string" },
+            { "name": "ResourceGroup", "type": "string" },
+            { "name": "Location", "type": "string" },
+            { "name": "AssetKind", "type": "string" },
+            { "name": "AssetIdentifier", "type": "string" },
+            { "name": "Algorithm", "type": "string" },
+            { "name": "KeySize", "type": "int" },
+            { "name": "Curve", "type": "string" },
+            { "name": "SignatureAlgorithm", "type": "string" },
+            { "name": "QuantumPosture", "type": "string" },
+            { "name": "PostureReason", "type": "string" },
+            { "name": "RiskScore", "type": "int" },
+            { "name": "ExpiresOn", "type": "datetime" },
+            { "name": "Metadata", "type": "string" }
+          ]
+        },
+        "retentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('customTableName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-PQReadiness_CL": {
+            "columns": [
+              { "name": "TimeGenerated", "type": "datetime" },
+              { "name": "ResourceId", "type": "string" },
+              { "name": "ResourceType", "type": "string" },
+              { "name": "ResourceName", "type": "string" },
+              { "name": "SubscriptionId", "type": "string" },
+              { "name": "ResourceGroup", "type": "string" },
+              { "name": "Location", "type": "string" },
+              { "name": "AssetKind", "type": "string" },
+              { "name": "AssetIdentifier", "type": "string" },
+              { "name": "Algorithm", "type": "string" },
+              { "name": "KeySize", "type": "int" },
+              { "name": "Curve", "type": "string" },
+              { "name": "SignatureAlgorithm", "type": "string" },
+              { "name": "QuantumPosture", "type": "string" },
+              { "name": "PostureReason", "type": "string" },
+              { "name": "RiskScore", "type": "int" },
+              { "name": "ExpiresOn", "type": "datetime" },
+              { "name": "Metadata", "type": "string" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "pqcWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": ["Custom-PQReadiness_CL"],
+            "destinations": ["pqcWorkspace"],
+            "transformKql": "source",
+            "outputStream": "Custom-PQReadiness_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "[variables('_solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "[variables('_solutionName')]",
+        "publisherDisplayName": "QCrypton, Inc",
+        "descriptionHtml": "<p>Post-quantum cryptography readiness for Azure environments. Emits findings to Log Analytics; ships with 5 analytics rules, a workbook, a data connector, and a Teams-notification playbook.</p>",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutionId')]",
+        "id": "[variables('_solutionId')]",
+        "support": {
+          "name": "QCrypton, Inc",
+          "tier": "Partner",
+          "email": "support@qcryptonapp.com",
+          "link": "https://www.qcrypton.com/contact.html"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "dceEndpoint": { "type": "string", "value": "[reference(variables('dceName')).logsIngestion.endpoint]" },
+    "dcrImmutableId": { "type": "string", "value": "[reference(variables('dcrName')).immutableId]" },
+    "customTable": { "type": "string", "value": "[variables('customTableName')]" }
+  }
+}

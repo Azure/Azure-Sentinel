@@ -1,0 +1,32 @@
+id: 5e4d3c2b-1a9f-4e8d-7c6b-5a4d3f2e1c0b
+name: Certificate expiring after 2030 still uses classical signature
+description: |
+  A TLS or Key Vault certificate has an expiry date after 2030-01-01 and is signed with a
+  quantum-vulnerable classical algorithm. Long-lived certificates are the primary harvest-now-
+  decrypt-later risk vector. Reissue with a PQ-hybrid signature or shorten validity window.
+severity: High
+requiredDataConnectors:
+  - connectorId: QCryptonPQCScanner
+    dataTypes:
+      - PQReadiness_CL
+queryFrequency: P1D
+queryPeriod: P1D
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+query: |
+  PQReadiness_CL
+  | where TimeGenerated > ago(1d)
+  | where AssetKind in ("tls-cert", "kv-cert")
+  | where QuantumPosture == "vulnerable"
+  | where isnotnull(ExpiresOn) and ExpiresOn > datetime(2030-01-01)
+  | project TimeGenerated, ResourceName, AssetIdentifier, SignatureAlgorithm, ExpiresOn, RiskScore, SubscriptionId, ResourceGroup
+  | order by ExpiresOn desc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: AssetIdentifier
+version: 1.0.0
+kind: Scheduled
