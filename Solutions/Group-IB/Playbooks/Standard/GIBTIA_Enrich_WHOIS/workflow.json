@@ -1,0 +1,397 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "Microsoft_Sentinel_incident": {
+        "type": "ApiConnectionWebhook",
+        "inputs": {
+          "body": {
+            "callback_url": "@{listCallbackUrl()}"
+          },
+          "host": {
+            "connection": {
+              "referenceName": "azuresentinel"
+            }
+          },
+          "path": "/incident-creation"
+        }
+      }
+    },
+    "actions": {
+      "Initialize_Segments": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "Segments",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Initialize_Chunks": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "Chunks",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Segments": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Initialize_Chunk": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "Chunk",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Chunks": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Initialize_PartNum": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "PartNum",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Chunk": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Filter_IP_Entities": {
+        "type": "Query",
+        "inputs": {
+          "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+          "where": "@equals(item()?['kind'], 'Ip')"
+        },
+        "runAfter": {
+          "Initialize_PartNum": [
+            "Succeeded"
+          ]
+        }
+      },
+      "For_Each_IP": {
+        "type": "Foreach",
+        "foreach": "@body('Filter_IP_Entities')",
+        "operationOptions": "Sequential",
+        "actions": {
+          "WHOIS_IP": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "https://tap.group-ib.com/api/v2/utils/graph/ip",
+              "queries": {
+                "ip": "@{items('For_Each_IP')?['properties']?['address']}"
+              },
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-whois; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "TI_Lookup_IP": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{concat('https://management.azure.com/subscriptions/', appsetting('WORKFLOWS_SUBSCRIPTION_ID'), '/resourceGroups/', appsetting('WORKFLOWS_RESOURCE_GROUP_NAME'), '/providers/microsoft.operationalinsights/workspaces/', appsetting('WorkspaceName'), '/query?api-version=2017-10-01')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "query": "ThreatIntelIndicators | where Pattern has 'ipv4-addr:value' and Pattern has '@{replace(coalesce(items('For_Each_IP')?['properties']?['address'], ''), '''', '''''')}' | where ValidUntil > now() | project Labels, Confidence | take 1"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://management.azure.com/"
+              }
+            },
+            "runAfter": {}
+          },
+          "Append_IP_Section": {
+            "type": "AppendToArrayVariable",
+            "inputs": {
+              "name": "Segments",
+              "value": "<b>IP: @{items('For_Each_IP')?['properties']?['address']}</b><br>GIB TI: @{if(greater(length(coalesce(body('TI_Lookup_IP')?['tables']?[0]?['rows'], json('[]'))), 0), concat(string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[0]), ' | confidence: ', string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[1])), 'Not in GIB ThreatIntelIndicators')}<br>WHOIS: @{coalesce(body('WHOIS_IP')?['whois_summary']?['asn'], 'n/a')} | @{coalesce(body('WHOIS_IP')?['whois_summary']?['isp'], 'n/a')} | Country: @{coalesce(body('WHOIS_IP')?['whois_summary']?['country'], 'n/a')} | Range: @{coalesce(body('WHOIS_IP')?['start'], 'n/a')} – @{coalesce(body('WHOIS_IP')?['end'], 'n/a')}<br><br>"
+            },
+            "runAfter": {
+              "WHOIS_IP": [
+                "Succeeded",
+                "Failed"
+              ],
+              "TI_Lookup_IP": [
+                "Succeeded",
+                "Failed"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Filter_IP_Entities": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Filter_Domain_Entities": {
+        "type": "Query",
+        "inputs": {
+          "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+          "where": "@equals(item()?['kind'], 'DnsResolution')"
+        },
+        "runAfter": {
+          "For_Each_IP": [
+            "Succeeded",
+            "Skipped",
+            "Failed"
+          ]
+        }
+      },
+      "For_Each_Domain": {
+        "type": "Foreach",
+        "foreach": "@body('Filter_Domain_Entities')",
+        "operationOptions": "Sequential",
+        "actions": {
+          "WHOIS_Domain": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "https://tap.group-ib.com/api/v2/utils/graph/domain",
+              "queries": {
+                "domain": "@{items('For_Each_Domain')?['properties']?['domainName']}"
+              },
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-whois; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "TI_Lookup_Domain": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{concat('https://management.azure.com/subscriptions/', appsetting('WORKFLOWS_SUBSCRIPTION_ID'), '/resourceGroups/', appsetting('WORKFLOWS_RESOURCE_GROUP_NAME'), '/providers/microsoft.operationalinsights/workspaces/', appsetting('WorkspaceName'), '/query?api-version=2017-10-01')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "query": "ThreatIntelIndicators | where Pattern has 'domain-name:value' and Pattern has '@{replace(coalesce(items('For_Each_Domain')?['properties']?['domainName'], ''), '''', '''''')}' | where ValidUntil > now() | project Labels, Confidence | take 1"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://management.azure.com/"
+              }
+            },
+            "runAfter": {}
+          },
+          "Append_Domain_Section": {
+            "type": "AppendToArrayVariable",
+            "inputs": {
+              "name": "Segments",
+              "value": "<b>Domain: @{items('For_Each_Domain')?['properties']?['domainName']}</b><br>GIB TI: @{if(greater(length(coalesce(body('TI_Lookup_Domain')?['tables']?[0]?['rows'], json('[]'))), 0), concat(string(body('TI_Lookup_Domain')?['tables'][0]?['rows'][0]?[0]), ' | confidence: ', string(body('TI_Lookup_Domain')?['tables'][0]?['rows'][0]?[1])), 'Not in GIB ThreatIntelIndicators')}<br>WHOIS: registered @{coalesce(body('WHOIS_Domain')?['created_at'], 'n/a')} | updated @{coalesce(body('WHOIS_Domain')?['updated_at'], 'n/a')} | zone: @{coalesce(body('WHOIS_Domain')?['zone'], 'n/a')}<br><br>"
+            },
+            "runAfter": {
+              "WHOIS_Domain": [
+                "Succeeded",
+                "Failed"
+              ],
+              "TI_Lookup_Domain": [
+                "Succeeded",
+                "Failed"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Filter_Domain_Entities": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Pack_Segments": {
+        "type": "Foreach",
+        "foreach": "@variables('Segments')",
+        "operationOptions": "Sequential",
+        "actions": {
+          "Condition_Segment_Fits": {
+            "type": "If",
+            "expression": {
+              "lessOrEquals": [
+                "@add(length(variables('Chunk')), length(items('Pack_Segments')))",
+                29000
+              ]
+            },
+            "actions": {
+              "Append_To_Chunk": {
+                "type": "AppendToStringVariable",
+                "inputs": {
+                  "name": "Chunk",
+                  "value": "@items('Pack_Segments')"
+                },
+                "runAfter": {}
+              }
+            },
+            "else": {
+              "actions": {
+                "Condition_Flush_NonEmpty": {
+                  "type": "If",
+                  "expression": {
+                    "greater": [
+                      "@length(variables('Chunk'))",
+                      0
+                    ]
+                  },
+                  "actions": {
+                    "Flush_Chunk": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "Chunks",
+                        "value": "@variables('Chunk')"
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {}
+                },
+                "Start_New_Chunk": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "Chunk",
+                    "value": "@if(greater(length(items('Pack_Segments')), 29000), concat(substring(items('Pack_Segments'), 0, 28950), '<br>[record truncated — see Group-IB portal]'), items('Pack_Segments'))"
+                  },
+                  "runAfter": {
+                    "Condition_Flush_NonEmpty": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "runAfter": {
+          "For_Each_Domain": [
+            "Succeeded",
+            "Skipped",
+            "Failed"
+          ]
+        }
+      },
+      "Flush_Final_Chunk": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(variables('Chunk'))",
+            0
+          ]
+        },
+        "actions": {
+          "Append_Final_Chunk": {
+            "type": "AppendToArrayVariable",
+            "inputs": {
+              "name": "Chunks",
+              "value": "@variables('Chunk')"
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Pack_Segments": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Post_Comments": {
+        "type": "Foreach",
+        "foreach": "@variables('Chunks')",
+        "operationOptions": "Sequential",
+        "actions": {
+          "Increment_PartNum": {
+            "type": "IncrementVariable",
+            "inputs": {
+              "name": "PartNum",
+              "value": 1
+            },
+            "runAfter": {}
+          },
+          "Add_comment_to_incident": {
+            "type": "ApiConnection",
+            "inputs": {
+              "body": {
+                "incidentArmId": "@triggerBody()?['object']?['id']",
+                "message": "<p><b>Group-IB TI — WHOIS &amp; Indicator Enrichment@{if(greater(length(variables('Chunks')), 1), concat(' (part ', string(variables('PartNum')), ' of ', string(length(variables('Chunks'))), ')'), '')}</b><br><br>@{items('Post_Comments')}</p>"
+              },
+              "host": {
+                "connection": {
+                  "referenceName": "azuresentinel"
+                }
+              },
+              "method": "post",
+              "path": "/Incidents/Comment"
+            },
+            "runAfter": {
+              "Increment_PartNum": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Flush_Final_Chunk": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}
