@@ -1,7 +1,7 @@
 id: 01191239-274e-43c9-b154-3a042692af06
 name: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
 description: |
-  'This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+  'This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and configured before you use this Rule.'
 severity: Medium
 status: Available 
 tags:
@@ -31,7 +31,8 @@ query: |
   let maxSummarizedTime = toscalar (
     union isfuzzy=true 
         (
-        DNS_Summarized_Logs_ip_CL 
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL") 
         | where EventTime_t >= min_t
         | summarize max_TimeGenerated=max(EventTime_t)
         | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)
@@ -45,7 +46,8 @@ query: |
   let summarizationexist = materialize(
     union isfuzzy=true 
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > ago(1d) 
         | project v = int(2)
         ),
@@ -97,7 +99,8 @@ query: |
         | project-away exists, maxv, sum*
         ),
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
         | project-rename
             SrcIpAddr=SrcIpAddr_s,
@@ -140,5 +143,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Anomaly] Potential DGA (Domain Generation Algorithm) originating from client IP: '{{SrcIpAddr}}' has been detected."
   alertDescriptionFormat: "Client has been identified with high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). This client is found to be communicating with multiple Domains which do not exist.\n\nBaseline Domain or DNS query count from this client: '{{baseline}}'\n\nCurrent Domain or DNS query count from this client: '{{Total}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
