@@ -1,8 +1,12 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.1.9
+
+- (2026-09-10) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+
 ## Version 0.1.8
 
-- (2026-08-31) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+- (2026-08-17) SentinelOne Singularity Alerts - AlertEvent ASIM Parser - [PR #14927](https://github.com/Azure/Azure-Sentinel/pull/14927)
 
 ## Version 0.1.7
 

@@ -1,0 +1,315 @@
+{
+  "name": "SalesforceMktCloudConnector",
+  "apiVersion": "2025-09-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "SalesforceMktCloudConnector",
+      "title": "Salesforce Marketing Cloud (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "Collects audit events and security events from the Salesforce Marketing Cloud [Audit Trail API](https://developer.salesforce.com/docs/marketing/marketing-cloud/references/mc_rest_audit?meta=Summary). Provides visibility into user activities, system changes, and login events.",
+      "graphQueriesTableName": "SalesforceMarketingCloudAuditEvents",
+      "graphQueries": [
+        {
+          "metricName": "Total Audit Events logs received",
+          "legend": "Audit Events",
+          "baseQuery": "SalesforceMarketingCloudAuditEvents"
+        },
+        {
+          "metricName": "Total Security Events logs received",
+          "legend": "Security Events",
+          "baseQuery": "SalesforceMarketingCloudSecurityEvents"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All Audit Events - sorted by time",
+          "query": "SalesforceMarketingCloudAuditEvents\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Audit Events - summarize by operation",
+          "query": "SalesforceMarketingCloudAuditEvents\n| summarize count() by OperationName\n| sort by count_ desc"
+        },
+        {
+          "description": "All Security Events - sorted by time",
+          "query": "SalesforceMarketingCloudSecurityEvents\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Security Events - failed logins",
+          "query": "SalesforceMarketingCloudSecurityEvents\n| where LoginStatusName != \"Successful\"\n| sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "SalesforceMarketingCloudAuditEvents",
+          "lastDataReceivedQuery": "SalesforceMarketingCloudAuditEvents\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "SalesforceMarketingCloudSecurityEvents",
+          "lastDataReceivedQuery": "SalesforceMarketingCloudSecurityEvents\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Salesforce Marketing Cloud API access",
+            "description": "Access to the Salesforce Marketing Cloud API through an Installed Package is required."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect Salesforce Marketing Cloud to Microsoft Sentinel",
+          "description": "Follow the [Salesforce Marketing Cloud documentation](https://developer.salesforce.com/docs/marketing/marketing-cloud/guide/install-packages.html) to create an Installed Package with the **Data | Tracking Event | Read** permission scope. Note your tenant-specific REST API and Auth base URLs from the Installed Packages section in Setup."
+        },
+        {
+          "title": "Manage Salesforce Connections",
+          "description": "Add, view, and delete Salesforce connections",
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Connector Alias",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Salesforce Base URL",
+                    "columnValue": "properties.addOnAttributes.apiUrl"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.addOnAttributes.dataType"
+                  },
+                  {
+                    "columnName": "Package Type",
+                    "columnValue": "properties.addOnAttributes.packageType"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Configure API Connection",
+                "subtitle": "Connect to Salesforce to ingest data",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "title": "Base Configuration",
+                    "description": "Configure your Salesforce API connection",
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connection Alias",
+                          "placeholder": "Production or Sandbox",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": { "required": true }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Enter a unique alias to identify this Salesforce connection. **Important**: Use different aliases for each domain. To update an existing connection, use the same alias or delete and create with the same alias. To replace a connection, delete the old one and create a new one with a new alias.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Query interval (in minutes)",
+                          "name": "queryWindow",
+                          "options": [
+                            { "key": "5", "text": "5" },
+                            { "key": "10", "text": "10" },
+                            { "key": "15", "text": "15" },
+                            { "key": "20", "text": "20" },
+                            { "key": "30", "text": "30" },
+                            { "key": "60", "text": "60" }
+                          ],
+                          "placeholder": "Select interval (e.g., 10)",
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "REST API Base URL",
+                          "placeholder": "Example, https://{subdomain}.rest.marketingcloudapis.com",
+                          "type": "url",
+                          "name": "salesforceBaseUrl",
+                          "validations": { "required": true }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Enter your tenant-specific REST API Base URL without trailing slash (Example, https://{subdomain}.rest.marketingcloudapis.com). Find it in the Installed Packages section in Setup.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Auth Base URL",
+                          "placeholder": "Example, https://{subdomain}.auth.marketingcloudapis.com",
+                          "type": "url",
+                          "name": "authBaseUrl",
+                          "validations": { "required": true }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Include your subdomain in the Auth Base URL. This is different from your REST API Base URL.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data Types",
+                          "name": "selectedDataTypes",
+                          "options": [
+                            { "key": "AuditEvents", "text": "Audit Events - user activities and system changes" },
+                            { "key": "SecurityEvents", "text": "Security Events - login attempts and authentication" }
+                          ],
+                          "placeholder": "Select data types to collect...",
+                          "isMultiSelect": true,
+                          "defaultAllSelected": true,
+                          "required": true
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "title": "API Credentials",
+                    "description": "Configure Installed Package credentials for API access",
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": { "content": "### Installed Package Credentials" }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Select the type of Installed Package you created in Marketing Cloud. **Enhanced Package** uses the OAuth 2.0 client credentials flow against the `/v2/token` endpoint. **Legacy Package** uses the `/v1/requestToken` endpoint. Both require the Consumer Key (Client Id) and Consumer Secret from your Installed Package.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "title": "Package Type",
+                    "description": "Select the Installed Package type and enter its credentials",
+                    "instructions": [
+                      {
+                        "type": "Radio",
+                        "parameters": {
+                          "title": "Package Type",
+                          "name": "packageType",
+                          "validations": { "required": true },
+                          "options": [
+                            {
+                              "label": "Enhanced Package",
+                              "value": "enhanced",
+                              "instructions": [
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Consumer Key",
+                                    "placeholder": "Enter Installed Package Consumer Key (Client Id)",
+                                    "type": "text",
+                                    "name": "clientId",
+                                    "validations": { "required": true }
+                                  }
+                                },
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Consumer Secret",
+                                    "placeholder": "Enter Installed Package Consumer Secret (Client Secret)",
+                                    "type": "password",
+                                    "name": "clientSecret",
+                                    "validations": { "required": true }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "label": "Legacy Package",
+                              "value": "legacy",
+                              "instructions": [
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Consumer Key",
+                                    "placeholder": "Enter Installed Package Consumer Key (Client Id)",
+                                    "type": "text",
+                                    "name": "clientId",
+                                    "validations": { "required": true }
+                                  }
+                                },
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Consumer Secret",
+                                    "placeholder": "Enter Installed Package Consumer Secret (Client Secret)",
+                                    "type": "password",
+                                    "name": "clientSecret",
+                                    "validations": { "required": true }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

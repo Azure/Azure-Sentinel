@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.3       | 25-08-2026                     | Fixed the SentinelOne parser to restore ActivityType and CCF records while preserving SentinelOne V2 alerts |
 | 3.1.2       | 17-08-2026                     | Fix V2 parser type mismatch and fallback.   |
 | 3.1.1       | 10-08-2026                     | Advanced **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** from Public Preview to Global Availability and added the **AlertDescription** field to the alerts stream |
 | 3.1.0       | 01-07-2026                     | Added new **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** (ingests alerts via the GraphQL API) |

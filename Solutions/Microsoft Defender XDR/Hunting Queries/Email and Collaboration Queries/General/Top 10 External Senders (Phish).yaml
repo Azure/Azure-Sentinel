@@ -17,10 +17,15 @@ relevantTechniques:
 query: |
   EmailEvents
   | where EmailDirection == "Inbound"
+  // Exclude phishing-simulation and SecOps mailbox traffic so they do not skew the ranking
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
   | where ThreatTypes has "Phish"
   //| where SenderFromAddress !contains ".yourdomain.com"
+  // De-duplicate each delivery (NetworkMessageId + recipient) before counting so re-scanned messages are counted once
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
   | summarize count() by SenderFromAddress
   | sort by count_ desc
   | top 10 by count_
   | render piechart
-version: 1.0.0
+version: 1.1.0
