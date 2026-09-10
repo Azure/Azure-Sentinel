@@ -8,16 +8,20 @@
             "1. User should have an outlook mail account in order to use this playbook."
         ],
         "postDeployment": [
-            "**a. Authorize connections**",
+            "**a. Log ingestion**",
+            "This playbook writes to Log Analytics through the Logs Ingestion API using its own system-assigned managed identity. The data collection endpoint, the data collection rule, the destination tables and the Monitoring Metrics Publisher role assignment are all created by this template, so ingestion needs no manual authorization.",
+            "If you ran an earlier version of this playbook, its tables were created by the retired HTTP Data Collector API and must be converted once per workspace before the first run:",
+            "az monitor log-analytics workspace table migrate --resource-group <resource-group> --workspace-name <workspace> --table-name <Table>_CL",
+            "This conversion cannot be undone. The playbook README lists every table it writes.",
+            "**b. Authorize connections**",
             "Once deployment is complete, authorize each connection.",
-            "1. Go to your logic app → API connections → Select azureloganalyticsdatacollector connection resource",
+            "1. Go to your logic app → API connections → Select a connection resource",
             "2. Go to General → Edit API connection",
-            "3. Enter Workspace ID and Workspace Key of your log analytics workspace.",
-            "4. Click Authorize",
-            "5. Sign in",
-            "6. Click Save",
-            "7. Repeat steps for other connections",
-            "**b. Assign Role to add comment in incident**",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**c. Assign Role to add comment in incident**",
             "Assign role to this playbook.",
             "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add",
             "2.Add role assignment",
@@ -26,7 +30,7 @@
             "5.Members: select managed identity for assigned access to and add your logic app as member",
             "6.Click on review+assign"
         ],
-        "lastUpdateTime": "2025-05-09T00:00:00Z",
+        "lastUpdateTime": "2026-09-10T00:00:00Z",
         "entities": [
             "ip",
             "dnsresolution"
@@ -92,9 +96,10 @@
     },
     "variables": {
         "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
-        "OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]"
+        "OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]",
+        "DataCollectionEndpointName": "[concat(parameters('PlaybookName'), '-dce')]",
+        "DataCollectionRuleName": "[concat(parameters('PlaybookName'), '-dcr')]"
     },
     "resources": [
         {
@@ -119,6 +124,14 @@
                         },
                         "email_id": {
                             "defaultValue": "[trim(parameters('EmailId'))]",
+                            "type": "String"
+                        },
+                        "dataCollectionEndpoint": {
+                            "defaultValue": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))).logsIngestion.endpoint]",
+                            "type": "String"
+                        },
+                        "dcrImmutableId": {
+                            "defaultValue": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))).immutableId]",
                             "type": "String"
                         }
                     },
@@ -502,19 +515,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_Object_From_Fingerprints_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('fingerprints_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_Object_From_Fingerprints_Data'))), '['), outputs('Compose_Object_From_Fingerprints_Data'), createArray(outputs('Compose_Object_From_Fingerprints_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('fingerprints_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Fingerprints_Data_From_Request_Data": {
@@ -582,19 +594,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Open_Ports_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('open_ports_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Top_Open_Ports_Data'))), '['), outputs('Compose_An_Object_From_Top_Open_Ports_Data'), createArray(outputs('Compose_An_Object_From_Top_Open_Ports_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('open_ports_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Open_Ports_Data_From_Request_Body": {
@@ -662,19 +673,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Pdns_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('pdns_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Top_Pdns_Data'))), '['), outputs('Compose_An_Object_From_Top_Pdns_Data'), createArray(outputs('Compose_An_Object_From_Top_Pdns_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('pdns_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_PDNS_Data_From_Request_Body": {
@@ -2897,19 +2907,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{outputs('Compose_Whois_Object_To_Add_IP_Address_Property')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('whois_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(outputs('Compose_Whois_Object_To_Add_IP_Address_Property'))), '['), outputs('Compose_Whois_Object_To_Add_IP_Address_Property'), createArray(outputs('Compose_Whois_Object_To_Add_IP_Address_Property')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('whois_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Condition_To_Ingest_Insights_Data_If_It_Is_Not_Null": {
@@ -2981,19 +2990,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Insights_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('insights_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Insights_Data'))), '['), outputs('Compose_An_Object_From_Insights_Data'), createArray(outputs('Compose_An_Object_From_Insights_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('insights_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Country_Code_From_Data": {
@@ -3061,19 +3069,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{variables('indicator_object')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('indicators_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(variables('indicator_object'))), '['), variables('indicator_object'), createArray(variables('indicator_object')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('indicators_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Set_Indicator_Object_Value_For_IP": {
@@ -5548,11 +5555,6 @@
                                     }
                                 }
                             },
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "azuremonitorlogs": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                                 "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
@@ -5581,9 +5583,10 @@
             "apiVersion": "2017-07-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))]"
             ]
         },
         {
@@ -5598,20 +5601,6 @@
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "kind": "V1",
-            "properties": {
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
                 }
             }
         },
@@ -5641,6 +5630,832 @@
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
                 }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DataCollectionEndpointName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Ingestion endpoint for Team Cymru Scout playbook logs.",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Insights_Data_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Insights_Data_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "message_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rank_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "rating_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Investigated_IPs_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Investigated_IPs_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Fingerprints_Data_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Fingerprints_Data_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "signature_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "signature_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Open_Ports_Data_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Open_Ports_Data_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_text_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "service_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Pdns_Data_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Pdns_Data_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "css_color_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Whois_Data_Incident_Based_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Whois_Data_Incident_Based_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "about_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_role_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "abuse_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_role_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "as_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asn_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "cc_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "cidr_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_by_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_lower_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_router_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "modified_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "net_handle_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "net_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_role_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DataCollectionRuleName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]",
+                "streamDeclarations": {
+                    "Custom-Summary_Details_Top_Fingerprints_Data_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "signature",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Open_Ports_Data_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "service",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Pdns_Data_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "css_color",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Whois_Data_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "about_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "abuse_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asn_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "cc",
+                                "type": "string"
+                            },
+                            {
+                                "name": "cidr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_by_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_lower_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_router_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "modified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "net_handle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_role",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Insights_Data_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "message",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rank",
+                                "type": "real"
+                            },
+                            {
+                                "name": "rating",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Investigated_IPs_Incident_Based": {
+                        "columns": [
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+                            "name": "TeamCymruScoutLogAnalytics"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Fingerprints_Data_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), signature_g = tostring(signature), signature_s = tostring(signature), type_s = tostring(type)",
+                        "outputStream": "Custom-Summary_Details_Top_Fingerprints_Data_Incident_Based_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Open_Ports_Data_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), protocol_d = toreal(protocol), protocol_text_s = tostring(protocol_text), service_s = tostring(service)",
+                        "outputStream": "Custom-Summary_Details_Top_Open_Ports_Data_Incident_Based_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Pdns_Data_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, css_color_s = tostring(css_color), domain_s = tostring(domain), event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen)",
+                        "outputStream": "Custom-Summary_Details_Top_Pdns_Data_Incident_Based_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Whois_Data_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, about_contact_address_s = tostring(about_contact_address), about_contact_city_s = tostring(about_contact_city), about_contact_country_s = tostring(about_contact_country), about_contact_email_s = tostring(about_contact_email), about_contact_person_s = tostring(about_contact_person), about_contact_phone_s = tostring(about_contact_phone), about_contact_role_s = tostring(about_contact_role), abuse_contact_id_s = tostring(abuse_contact_id), address_s = tostring(address), admin_contact_address_s = tostring(admin_contact_address), admin_contact_city_s = tostring(admin_contact_city), admin_contact_country_s = tostring(admin_contact_country), admin_contact_email_s = tostring(admin_contact_email), admin_contact_id_s = tostring(admin_contact_id), admin_contact_person_s = tostring(admin_contact_person), admin_contact_phone_s = tostring(admin_contact_phone), admin_contact_role_s = tostring(admin_contact_role), as_name_s = tostring(as_name), asn_d = toreal(asn), bgp_asn_d = toreal(bgp_asn), bgp_asn_name_s = tostring(bgp_asn_name), cc_s = tostring(cc), cidr_s = tostring(cidr), city_s = tostring(city), description_s = tostring(description), ip_s = tostring(ip), mnt_by_email_s = tostring(mnt_by_email), mnt_lower_email_s = tostring(mnt_lower_email), mnt_router_email_s = tostring(mnt_router_email), modified_s = tostring(modified), net_handle_s = tostring(net_handle), net_name_s = tostring(net_name), org_address_s = tostring(org_address), org_city_s = tostring(org_city), org_country_s = tostring(org_country), org_email_s = tostring(org_email), org_id_s = tostring(org_id), org_name_s = tostring(org_name), org_phone_s = tostring(org_phone), tech_contact_address_s = tostring(tech_contact_address), tech_contact_city_s = tostring(tech_contact_city), tech_contact_country_s = tostring(tech_contact_country), tech_contact_email_s = tostring(tech_contact_email), tech_contact_id_s = tostring(tech_contact_id), tech_contact_person_s = tostring(tech_contact_person), tech_contact_phone_s = tostring(tech_contact_phone), tech_contact_role_s = tostring(tech_contact_role)",
+                        "outputStream": "Custom-Whois_Data_Incident_Based_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Insights_Data_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, ip_s = tostring(ip), message_s = tostring(message), rank_d = toreal(rank), rating_s = tostring(rating)",
+                        "outputStream": "Custom-Insights_Data_Incident_Based_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Investigated_IPs_Incident_Based"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, type_s = tostring(type), value_s = tostring(value)",
+                        "outputStream": "Custom-Investigated_IPs_Incident_Based_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, parameters('PlaybookName'), 'MonitoringMetricsPublisher')]",
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules/', variables('DataCollectionRuleName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             }
         }
     ]
