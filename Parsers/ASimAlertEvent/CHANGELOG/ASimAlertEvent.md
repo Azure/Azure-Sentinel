@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.1.9
+
+- (2026-09-09) AWS GuardDuty - AlertEvent ASIM Parser - [PR #15079](https://github.com/Azure/Azure-Sentinel/pull/15079)
+
 ## Version 0.1.8
 
 - (2026-08-17) SentinelOne Singularity Alerts - AlertEvent ASIM Parser - [PR #14927](https://github.com/Azure/Azure-Sentinel/pull/14927)
