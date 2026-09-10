@@ -1,12 +1,12 @@
 id: 7caa1c03-d20b-42f2-ac95-5232f6e570da
-name:  PAC high severity
+name: PAC high severity
 description: |
-  'High severity  alerts found by Prancer.'
+  'High severity PAC/pentest findings found by Prancer.'
 severity: High
 requiredDataConnectors:
 - connectorId: PrancerLogData
   dataTypes:
-    - prancer_CL
+    - PrancerFindings_CL
 queryFrequency: 5h
 queryPeriod: 5h
 triggerOperator: gt
@@ -19,27 +19,29 @@ tactics:
 relevantTechniques:
   - T1595
 query: |
- union prancer_CL
-  | where data_data_resourceID_s contains 'Microsoft.Compute' and severity_s == 'High'
+  // Pentest/PAC findings carry request/response and CVE/CVSS context under Payload.alert/Payload.message,
+  // which PrancerFindings already derives - no per-rule parse_json/mv-expand needed here.
+  PrancerFindings
+  | where Severity == 'High'
   | project
-      Name = name_s,
-      Severity = severity_s,
-      Description = data_alert_description_s,
-      URL = data_alert_url_s,
-      Resource = data_data_resourceID_s,
-      Config_ID = data_data_configId_s,
-      Collection = data_data_applicationName_s,
-      MITRE = data_alert_mitreId_s,
-      Company = companyName_s,
-      Solution = data_alert_solution_s,
-      WASC_ID = data_alert_wascid_s,
-      CWE_ID = data_alert_cweid_s,
-      Evidence = data_alert_evidence_s,
-      Request_Header = data_data_requestHeader_s,
-      Request_Body = data_data_requestBody_s,
-      Response_Header = data_data_responseHeader_s,
-      Response_Body = data_data_responseBody_s,
-      Other_Data = data_alert_other_s
+      Finding_ID = FindingId,
+      Name = Title,
+      Severity,
+      URL = ResourceUrl,
+      Resource = ResourceID,
+      Config_ID = ConfigId,
+      Collection = ApplicationName,
+      MITRE = MitreIds,
+      Company = CompanyName,
+      Solution = AlertSolution,
+      CWE_ID = CweId,
+      Evidence = AlertEvidence,
+      Request_Header = RequestHeader,
+      Request_Body = RequestBody,
+      Response_Header = ResponseHeader,
+      Response_Body = ResponseBody
+customDetails:
+  UniqueFindingId: Finding_ID
 entityMappings:
   - entityType: AzureResource
     fieldMappings:
@@ -50,11 +52,22 @@ entityMappings:
       - identifier: Url
         columnName: URL
 alertDetailsOverride:
-  alertDisplayNameFormat: "{{data_data_message_s}}"  
-  alertDescriptionFormat: "{{data_data_description_s}}"
-  alertSeverityColumnName: "{{data_data_severity_s}}"
+  alertDisplayNameFormat: "{{Name}}"
+  alertDescriptionFormat: "{{Name}} - {{Evidence}}"
+  alertSeverityColumnName: Severity
   alertDynamicProperties:
     - alertProperty: RemediationSteps
-      value: data_data_remediation_description_s
-version: 1.0.2
+      value: Solution
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+version: 2.1.0
 kind: Scheduled

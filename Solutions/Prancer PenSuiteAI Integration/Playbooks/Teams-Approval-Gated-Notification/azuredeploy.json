@@ -1,0 +1,530 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Prancer-Teams-Approval-Gated-Notification",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook resource."
+      }
+    },
+    "Location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the Logic App and its API connections. Required (no default) since this playbook is nested inside the packaged solution's mainTemplate.json, where a resource-group-derived default would fall outside the range ARM-TTK's Location check recognizes as exempt."
+      }
+    },
+    "TeamsGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft 365 Group (Team) ID that owns the target channel for the adaptive card approval post."
+      }
+    },
+    "TeamsChannelId": {
+      "type": "string",
+      "metadata": {
+        "description": "Teams channel ID the approval adaptive card is posted to."
+      }
+    },
+    "ApprovalTimeout": {
+      "type": "string",
+      "defaultValue": "PT4H",
+      "metadata": {
+        "description": "ISO 8601 duration. If no Approve/Reject response is received within this window, the playbook escalates to FallbackEscalationRecipient instead of taking any action."
+      }
+    },
+    "FallbackEscalationRecipient": {
+      "type": "string",
+      "defaultValue": "secops-oncall@REPLACE-ME.example.com",
+      "metadata": {
+        "description": "Email address notified if the Teams approval card times out unaddressed."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]",
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('TeamsConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/teams')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('Office365ConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('Location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PrancerTeamsApprovalGatedNotification",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkflowTrustClass": "human-approval-gated"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "TeamsGroupId": {
+              "type": "String",
+              "defaultValue": "[parameters('TeamsGroupId')]"
+            },
+            "TeamsChannelId": {
+              "type": "String",
+              "defaultValue": "[parameters('TeamsChannelId')]"
+            },
+            "ApprovalTimeout": {
+              "type": "String",
+              "defaultValue": "[parameters('ApprovalTimeout')]"
+            },
+            "FallbackEscalationRecipient": {
+              "type": "String",
+              "defaultValue": "[parameters('FallbackEscalationRecipient')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident_trigger": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_IncidentArmId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IncidentArmId",
+                    "type": "string",
+                    "value": "@{triggerBody()?['object']?['id']}"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_CrownJewels": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "CrownJewels",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Crown_Jewels'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_IncidentArmId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_KillChain": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "KillChain",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Kill_Chain'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_CrownJewels": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_RiskScore": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "RiskScore",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Risk_Score'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_KillChain": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_Confidence": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Confidence",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Confidence'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_RiskScore": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_ResourceUrl": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ResourceUrl",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['URL'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_Confidence": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "CrownJewels_non_empty": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('CrownJewels')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_approval_adaptive_card": {
+                  "type": "Compose",
+                  "inputs": {
+                    "type": "AdaptiveCard",
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "text": "Prancer SwarmHack: crown-jewel-reaching finding needs review"
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          {
+                            "title": "KillChain",
+                            "value": "@{variables('KillChain')}"
+                          },
+                          {
+                            "title": "CrownJewels",
+                            "value": "@{variables('CrownJewels')}"
+                          },
+                          {
+                            "title": "RiskScore",
+                            "value": "@{variables('RiskScore')}"
+                          },
+                          {
+                            "title": "Confidence",
+                            "value": "@{variables('Confidence')}"
+                          },
+                          {
+                            "title": "ResourceUrl",
+                            "value": "@{variables('ResourceUrl')}"
+                          },
+                          {
+                            "title": "Follow-up action",
+                            "value": "Manual remediation triage (TODO: no automated remediation action is executed by this playbook - see readme)"
+                          }
+                        ]
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "type": "Action.Submit",
+                        "title": "Approve",
+                        "data": {
+                          "action": "approve"
+                        }
+                      },
+                      {
+                        "type": "Action.Submit",
+                        "title": "Reject",
+                        "data": {
+                          "action": "reject"
+                        }
+                      }
+                    ]
+                  },
+                  "runAfter": {}
+                },
+                "Post_adaptive_card_and_wait_for_a_response": {
+                  "type": "ApiConnectionWebhook",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['teams']['connectionId']"
+                      }
+                    },
+                    "body": {
+                      "notificationUrl": "@{listCallbackUrl()}",
+                      "body": {
+                        "recipient": {
+                          "groupId": "@{parameters('TeamsGroupId')}",
+                          "channelId": "@{parameters('TeamsChannelId')}"
+                        },
+                        "messageBody": "@{string(outputs('Compose_approval_adaptive_card'))}",
+                        "shouldUpdateCard": true,
+                        "updateMessage": "This approval request has been processed - see the incident comment for the outcome."
+                      }
+                    },
+                    "path": "/flowbot/actions/adaptivecard/notification/recipienttype/group",
+                    "queries": {
+                      "responseMode": "PostAndWait"
+                    }
+                  },
+                  "limit": {
+                    "timeout": "@{parameters('ApprovalTimeout')}"
+                  },
+                  "runAfter": {
+                    "Compose_approval_adaptive_card": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Parse_approval_response": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Post_adaptive_card_and_wait_for_a_response')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "submitActionId": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "responder": {
+                          "type": "object",
+                          "properties": {
+                            "displayName": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Post_adaptive_card_and_wait_for_a_response": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Log_approval_decision_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@variables('IncidentArmId')",
+                      "message": "Teams approval-card decision: @{toUpper(coalesce(body('Parse_approval_response')?['data']?['action'], 'unknown'))} by @{coalesce(body('Parse_approval_response')?['responder']?['displayName'], body('Parse_approval_response')?['responder']?['email'], 'unknown responder')} at @{utcNow()}. No remediation action was executed by this playbook - this is an audit log entry only. CrownJewels: @{variables('CrownJewels')} / RiskScore: @{variables('RiskScore')} / Confidence: @{variables('Confidence')}."
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Parse_approval_response": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Escalate_to_fallback_on_timeout_or_failure": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "To": "@{parameters('FallbackEscalationRecipient')}",
+                      "Subject": "[Prancer] UNADDRESSED crown-jewel approval request - incident @{variables('IncidentArmId')}",
+                      "Body": "<p>A Teams approval card for a crown-jewel-reaching SwarmHack finding was not addressed within @{parameters('ApprovalTimeout')}.</p><p><b>KillChain:</b> @{variables('KillChain')}<br/><b>CrownJewels:</b> @{variables('CrownJewels')}<br/><b>RiskScore:</b> @{variables('RiskScore')}<br/><b>Confidence:</b> @{variables('Confidence')}<br/><b>ResourceUrl:</b> @{variables('ResourceUrl')}</p><p>Please review the incident directly in Microsoft Sentinel.</p>",
+                      "Importance": "High"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/v2/Mail"
+                  },
+                  "runAfter": {
+                    "Post_adaptive_card_and_wait_for_a_response": [
+                      "TimedOut",
+                      "Failed",
+                      "Skipped"
+                    ]
+                  }
+                },
+                "Log_escalation_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@variables('IncidentArmId')",
+                      "message": "Teams approval card for this crown-jewel-reaching finding was not addressed within @{parameters('ApprovalTimeout')}; escalated by email to @{parameters('FallbackEscalationRecipient')} at @{utcNow()}. No remediation action was executed by this playbook."
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Escalate_to_fallback_on_timeout_or_failure": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Add_no_CrownJewels_comment_to_incident_(V3)": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@variables('IncidentArmId')",
+                        "message": "No Crown_Jewels custom detail was present (or it was empty) on this incident; the approval-gated Teams notification was not triggered."
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    },
+                    "runAfter": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_ResourceUrl": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/teams')]"
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "connectionName": "[variables('Office365ConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}

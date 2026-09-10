@@ -1,0 +1,92 @@
+id: 1d060727-32ff-4c0d-b3ca-ba997df48f2b
+name: Crown-jewel blast radius forces severity escalation
+description: |
+  'Force-escalates SwarmHack findings where CrownJewels contains a high-confidence sensitive target/asset
+  identification (confidence >= 0.8 on at least one CrownJewels entry) to High - Sentinel''s analytic-rule
+  Severity has no tier above High, so escalation targets the ceiling rather than a "Critical" value the
+  platform does not accept - overriding the nominal Severity - correcting for the case where Severity
+  scores the entry vulnerability rather than the value of what SwarmHack actually identified as reachable.
+  Only fires when the nominal Severity is not already High. NOTE: validated against real production
+  CrownJewels data (2026-08-11) - the real per-entry shape is {category, value, confidence, context} (e.g.
+  category="asrep_roast_target_list"), NOT the {name, type} asset-taxonomy shape ({domain_controller,
+  key_vault, ...}) originally assumed in the design ADR. This rule was corrected to use the real shape; the
+  category value space is not yet fully characterized against production data (only one category observed
+  so far), so the escalation trigger uses the per-entry `confidence` field rather than a category allowlist
+  that would need a larger, verified category taxonomy.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - CredentialAccess
+  - Impact
+relevantTechniques:
+  - T1003
+  - T1552
+query: |
+  // Escalation threshold uses the per-entry `confidence` field on real CrownJewelSIEM objects
+  // ({category, value, confidence, context} - confirmed against real production data 2026-08-11).
+  // A fixed asset-type-taxonomy allowlist ({domain_controller, key_vault, ...}) is NOT used here since
+  // real `category` values observed so far (e.g. "asrep_roast_target_list") don't match that taxonomy and
+  // the full category value space isn't yet characterized. Cheap equality/isnotempty filters (DeviceProduct,
+  // CrownJewels, Severity != High) run before parse_json/mv-expand so rows already at the Severity ceiling never pay
+  // the json-parse cost.
+  let ConfidenceThreshold = 0.8;
+  PrancerFindings
+  | where DeviceProduct == 'swarmhack'
+  | where isnotempty(CrownJewels)
+  | where Severity != 'High'
+  | extend CrownJewelEntries = parse_json(CrownJewels)
+  | mv-expand CrownJewelEntry = CrownJewelEntries
+  | extend
+      CrownJewelCategory = tostring(CrownJewelEntry.category),
+      CrownJewelConfidence = todouble(CrownJewelEntry.confidence),
+      CrownJewelContext = tostring(CrownJewelEntry.context)
+  | where CrownJewelConfidence >= ConfidenceThreshold
+  | summarize
+      HighConfidenceCategories = make_set(CrownJewelCategory, 20),
+      HighConfidenceContexts = make_set(CrownJewelContext, 20),
+      MaxCrownJewelConfidence = max(CrownJewelConfidence)
+    by FindingId, ConfigId, CustomerId, CompanyName, Title, OriginalSeverity = Severity, RiskScore, Confidence,
+       ResourceID, KillChain, CrownJewels, TimeGenerated
+  | extend
+      EscalatedSeverity = 'High',
+      EscalationReason = strcat(
+          'Nominal severity ', OriginalSeverity, ' escalated to High: CrownJewels identifies high-confidence (>=',
+          tostring(ConfidenceThreshold), ') target(s) - ', tostring(HighConfidenceCategories), ': ',
+          tostring(HighConfidenceContexts))
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+customDetails:
+  UniqueFindingId: FindingId
+  OriginalSeverity: OriginalSeverity
+  RiskScore: RiskScore
+  Confidence: Confidence
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Crown-jewel escalation: {{Title}}"
+  alertDescriptionFormat: "{{EscalationReason}}"
+  alertSeverityColumnName: EscalatedSeverity
+version: 1.0.0
+kind: Scheduled

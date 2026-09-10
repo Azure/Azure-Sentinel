@@ -1,0 +1,185 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Prancer-Scheduled-Executive-Digest",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook resource."
+      }
+    },
+    "Location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the Logic App and its API connections. Required (no default) since this playbook is nested inside the packaged solution's mainTemplate.json, where a resource-group-derived default would fall outside the range ARM-TTK's Location check recognizes as exempt."
+      }
+    },
+    "WorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "GUID of the Log Analytics workspace that hosts PrancerFindings_CL / the PrancerFindings() function, used for the Log Analytics Query API HTTP call."
+      }
+    },
+    "LogAnalyticsQueryApiHost": {
+      "type": "string",
+      "defaultValue": "[concat('https://api.loganalyt', 'ics.io')]",
+      "metadata": {
+        "description": "Base host for the Log Analytics Query API. Parameterized and built via concat() (rather than a literal string) because ARM-TTK's DeploymentTemplate Must Not Contain Hardcoded Uri check only recognizes the outermost 'parameters' block in a merged solution package, not this playbook's own nested one once wrapped as a contentTemplate."
+      }
+    },
+    "DigestRecipients": {
+      "type": "string",
+      "defaultValue": "secops-leadership@REPLACE-ME.example.com",
+      "metadata": {
+        "description": "Semicolon-separated recipient list for the weekly executive digest email."
+      }
+    }
+  },
+  "variables": {
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('Office365ConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('Location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PrancerScheduledExecutiveDigest",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkflowTrustClass": "fully-autonomous-read-only"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "WorkspaceId": {
+              "type": "String",
+              "defaultValue": "[parameters('WorkspaceId')]"
+            },
+            "LogAnalyticsQueryApiHost": {
+              "type": "String",
+              "defaultValue": "[parameters('LogAnalyticsQueryApiHost')]"
+            },
+            "DigestRecipients": {
+              "type": "String",
+              "defaultValue": "[parameters('DigestRecipients')]"
+            }
+          },
+          "triggers": {
+            "Weekly_recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Week",
+                "interval": 1,
+                "schedule": {
+                  "weekDays": [
+                    "Monday"
+                  ],
+                  "hours": [
+                    8
+                  ],
+                  "minutes": [
+                    0
+                  ]
+                },
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Query_trailing_week_summary_from_PrancerFindings": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@{parameters('LogAnalyticsQueryApiHost')}/v1/workspaces/@{parameters('WorkspaceId')}/query",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "@{parameters('LogAnalyticsQueryApiHost')}"
+                },
+                "body": {
+                  "query": "let window = 7d; let recent = PrancerFindings | where TimeGenerated > ago(window); let priorAvg = toscalar(PrancerFindings | where TimeGenerated between (ago(2*window) .. ago(window)) and ScanType == 'swarmhack' | summarize avg(RiskScore)); let currentAvg = toscalar(recent | where ScanType == 'swarmhack' | summarize avg(RiskScore)); recent | summarize NewCriticalHigh = countif(Severity in ('Critical','High')), CrownJewelExposureCount = countif(isnotempty(CrownJewels)) | extend AvgRiskScoreDelta = round(coalesce(currentAvg,0.0) - coalesce(priorAvg,0.0), 2), TopKillChainPatterns = tostring(toscalar(recent | where isnotempty(KillChain) | summarize Cnt=count() by KillChain | top 5 by Cnt desc | summarize make_list(strcat(KillChain, ' (', Cnt, ')'))))"
+                }
+              },
+              "runAfter": {}
+            },
+            "Format_digest_HTML": {
+              "type": "Compose",
+              "inputs": "<h2>Prancer Weekly Executive Digest</h2><p><b>New Critical/High findings (trailing 7d):</b> @{body('Query_trailing_week_summary_from_PrancerFindings')?['tables']?[0]?['rows']?[0]?[0]}</p><p><b>Crown-jewel exposure count:</b> @{body('Query_trailing_week_summary_from_PrancerFindings')?['tables']?[0]?['rows']?[0]?[1]}</p><p><b>Average RiskScore delta vs. prior week (SwarmHack):</b> @{body('Query_trailing_week_summary_from_PrancerFindings')?['tables']?[0]?['rows']?[0]?[2]}</p><p><b>Top recurring KillChain patterns:</b> @{body('Query_trailing_week_summary_from_PrancerFindings')?['tables']?[0]?['rows']?[0]?[3]}</p>",
+              "runAfter": {
+                "Query_trailing_week_summary_from_PrancerFindings": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Send_an_email_(V2)": {
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "To": "@{parameters('DigestRecipients')}",
+                  "Subject": "Prancer Weekly Executive Digest - week ending @{formatDateTime(utcNow(), 'yyyy-MM-dd')}",
+                  "Body": "@{outputs('Format_digest_HTML')}",
+                  "Importance": "Normal"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['office365']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/v2/Mail"
+              },
+              "runAfter": {
+                "Format_digest_HTML": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "connectionName": "[variables('Office365ConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}

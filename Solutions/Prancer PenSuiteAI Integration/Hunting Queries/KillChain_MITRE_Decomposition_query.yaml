@@ -1,0 +1,54 @@
+id: f8884b08-1f75-4752-a8b4-b584e6cad921
+name: Kill chain stage-by-stage MITRE decomposition (all chains)
+description: |
+  Companion hunting query to the KillChain_MITRE_Decomposition analytic rule: decomposes every SwarmHack
+  KillChain (not just deep/dangerous ones) into its individual stages for free-form analyst review, one
+  row per stage, without the rule's deep-chain/dangerous-technique pre-filter. VALIDATION NOTE (2026-08-11):
+  live production KillChain values observed so far are a flat scan-level execution-mode string ("full"), not
+  a per-finding path - this query is safe (runs cleanly against real data) but returns one degenerate
+  single-stage row per finding today rather than a real multi-stage breakdown, until SwarmHack populates a
+  richer per-finding value.
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1003
+  - T1558
+  - T1649
+  - T1550
+query: |
+  // Cheap filters (DeviceProduct, isnotempty(KillChain)) run before split()/mv-expand/extract() since
+  // this query has no pre-filter narrowing rows the way the companion analytic rule does.
+  let DangerousTechniqueMarkers = dynamic([
+      'Mimikatz', 'DCSync', 'Golden Ticket', 'Silver Ticket', 'Kerberoast',
+      'ADCS ESC1', 'ADCS ESC2', 'ADCS ESC8', 'NTDS.dit', 'Pass-the-Hash', 'Pass the Hash'
+  ]);
+  PrancerFindings
+  | where DeviceProduct == 'swarmhack'
+  | where isnotempty(KillChain)
+  | extend KillChainStages = split(KillChain, '->')
+  | extend StageCount = array_length(KillChainStages)
+  | mv-expand with_itemindex = StageIndex KillChainStages
+  | extend Stage = trim(' ', tostring(KillChainStages))
+  | extend
+      StageTactic = trim(' ', extract(@'^(.*?)\s+(?:via|to)\s+.*$', 1, Stage)),
+      StageDetail = trim(' ', extract(@'^.*?\s+(?:via|to)\s+(.*)$', 1, Stage))
+  | extend StageIsDangerous = Stage has_any (DangerousTechniqueMarkers)
+  | project
+      FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, RiskScore, Confidence,
+      StageCount, StageIndex, StageTactic, StageDetail, StageIsDangerous, ResourceID, KillChain, TimeGenerated
+  | order by FindingId asc, StageIndex asc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+customDetails:
+  FindingId: FindingId
+  StageIndex: StageIndex
+  StageTactic: StageTactic
+version: 1.0.0
