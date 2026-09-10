@@ -882,6 +882,7 @@ all_schemas_parameters = {
     {
 		"ipaddr_has_any_prefix" : "DvcIpAddr",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "hostname_has_any" : "DvcHostname",
 		"username_has_any" : "Username",
@@ -896,6 +897,7 @@ all_schemas_parameters = {
     {
 		"actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
 		"eventtype_in" : "EventType",
@@ -908,6 +910,7 @@ all_schemas_parameters = {
     "Authentication" : 
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",
         "eventtype_in" : "EventType",
@@ -921,6 +924,7 @@ all_schemas_parameters = {
     "AlertEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
         "ipaddr_has_any_prefix" : "DvcIpAddr",
@@ -935,6 +939,7 @@ all_schemas_parameters = {
     "DhcpEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
@@ -945,6 +950,7 @@ all_schemas_parameters = {
     "Dns" : 
     {
         "disabled" : "",
+        "pack" : "",
         "domain_has_any" : "Domain",
         "eventtype" : "EventType",
         "endtime" : "EventEndTime",
@@ -958,6 +964,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "eventtype_in" : "EventType",
         "endtime" : "EventEndTime",
         "srcfilepath_has_any" : "SrcFilePath",
@@ -970,6 +977,7 @@ all_schemas_parameters = {
     "NetworkSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "dstipaddr_has_any_prefix" : "DstIpAddr",
         "dstportnumber" : "DstPortNumber",
         "dvcaction" : "DvcAction",
@@ -988,6 +996,7 @@ all_schemas_parameters = {
 		"commandline_has_any" : "CommandLine",
 		"commandline_has_any_ip_prefix" : "CommandLine",
 		"disabled" : "",
+		"pack" : "",
 		"dvchostname_has_any" : "DvcHostname",
 		"dvcipaddr_has_any_prefix" : "DvcIpAddr",
 		"dvcname_has_any" : "",
@@ -1003,6 +1012,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "dvchostname_has_any" : "DvcHostname",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
@@ -1015,6 +1025,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
         "srcipaddr_has_any_prefix" : "SrcIpAddr",
@@ -1024,6 +1035,7 @@ all_schemas_parameters = {
     "WebSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",
