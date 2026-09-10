@@ -1,0 +1,55 @@
+id: 37f3d0f5-8ac3-46a3-9b27-a4fd082b6348
+name: Suspicious Microsoft Teams Callers by Impersonation-Style Identity
+description: |
+  This query surfaces Microsoft Teams callers whose display name or address impersonates IT support, and calls placed from throwaway tenants.
+description-detailed: |
+  This query surfaces Microsoft Teams callers whose display name or address matches common IT support, helpdesk, security or account-maintenance impersonation themes over the last 30 days, using Advanced hunting in Microsoft Defender XDR. Each caller is classified by origin: a throwaway .onmicrosoft.com tenant, an external domain, or the organisation's own tenant. The organisation's accepted domains are derived from inbound mail recipients rather than a hard-coded tenant identifier, so the query is portable to any tenant without editing. Helpdesk impersonation over a Teams call is a common opening move because the malicious instructions are spoken and never appear in a chat log, making the caller identity itself one of the few durable artefacts available for hunting.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query surfaces Microsoft Teams callers whose display name or address impersonates IT support, helpdesk,
+  //security or account maintenance, over the last 30 days, and flags calls placed from throwaway tenants.
+  //Origin is derived from the organisation's own accepted domains (inbound mail recipients), not a tenant-id anchor,
+  //so no editing is needed to run it in any tenant.
+  //Background: Microsoft Threat Intelligence, "Impersonating IT support: how threat actors turn a remote session into
+  //enterprise-wide access" (2 September 2026)
+  //https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/
+  let suspRegex = @"(?i)help ?desk|helpdesk|it ?support|service ?desk|sys ?admin|administrator|security|microsoft|google|apple|amazon|paypal|support|update|verif|account|password|mfa|maintenance";
+  let ownDomains = toscalar(EmailEvents
+      | where Timestamp > ago(30d)
+      | where EmailDirection == "Inbound"
+      | extend RecipientDomain = tolower(tostring(split(RecipientEmailAddress, "@")[1]))
+      | where isnotempty(RecipientDomain)
+      | summarize make_set(RecipientDomain, 200));
+  CloudAppEvents
+  | where Timestamp > ago(30d)
+  | where ActionType == "CallParticipantDetail"
+  | extend R = parse_json(RawEventData)
+  | extend CallId = tostring(R.CallId), JoinTime = todatetime(R.JoinTime), Attendees = R.Attendees
+  | where isnotempty(CallId) and isnotempty(JoinTime)
+  | summarize Attendees = take_any(Attendees), JoinTime = min(JoinTime) by CallId
+  | mv-expand Attendee = Attendees
+  | extend CallerAddress = tolower(tostring(Attendee.UPN)), CallerName = tostring(Attendee.DisplayName)
+  | where isnotempty(CallerAddress)
+  | extend CallerDomain = tostring(split(CallerAddress, "@")[1])
+  | extend SuspName = CallerName matches regex suspRegex or CallerAddress matches regex suspRegex
+  | where SuspName or CallerDomain endswith ".onmicrosoft.com"
+  | extend Origin = case(CallerDomain endswith ".onmicrosoft.com", "External (.onmicrosoft throwaway)",
+                         set_has_element(ownDomains, CallerDomain), "Own tenant",
+                         "External")
+  | summarize CallsPlaced = dcount(CallId), FirstSeen = min(JoinTime), LastSeen = max(JoinTime)
+      by CallerName, CallerAddress, CallerDomain, Origin
+  | extend OriginRank = case(Origin == "External (.onmicrosoft throwaway)", 0, Origin == "External", 1, 2)
+  | sort by OriginRank asc, CallsPlaced desc
+  | take 20
+  | project ['Teams Caller Display Name']=CallerName, ['Teams Caller Address']=CallerAddress,
+            ['Caller Domain']=CallerDomain, ['Origin']=Origin, ['Teams Calls Placed']=CallsPlaced,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.10      | 09-09-2026                     | Updated the Okta **Data Connector** to retrieve up to 1000 events per page, throttle initial and paginated requests, and handle HTTP 429 responses using rate-limit-aware retries. |
 | 3.1.9       | 30-07-2026                     | Update KQL queries of Okta **Analytics rules** <br> Updated Azure Gov button image link. |
 | 3.1.8       | 10-07-2026                     | Update **Analytic rule** and **Hunting Queries** for Okta SSO.|
 | 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |

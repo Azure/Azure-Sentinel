@@ -16,11 +16,15 @@ relevantTechniques:
   - T1566
 query: |
   //This query visualises total inbound emails with Spam detections summarizing the data by the top 10 email sender P2 domain (SenderFromDomain).
-  EmailEvents 
-  | where ThreatTypes has "Spam" and EmailDirection =="Inbound"
-  | where Timestamp > ago(30d) // last 30 days by default, replace 30d with the desired period
-  | summarize count() by SenderFromDomain
-  | sort by count_ desc 
-  | take 10
-  // | render piechart // Uncomment this line to render as a graph
-version: 1.0.0
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | where EmailDirection == "Inbound"
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | summarize TotalEmailCount = count(), SpamEmailCount = countif(ThreatTypes has "Spam") by SenderFromDomain
+  | extend Bad_Traffic_Percentage_Inbound = round(100.0 * SpamEmailCount / TotalEmailCount, 2)
+  | where SpamEmailCount != 0
+  | top 10 by SpamEmailCount
+  | project SenderFromDomain, SpamEmailCount, TotalEmailCount, Bad_Traffic_Percentage_Inbound
+version: 1.1.0
