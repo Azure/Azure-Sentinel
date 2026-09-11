@@ -184,6 +184,7 @@
 | Playbook Name		| Please provide a playbook name, if needed |
 | Workspace ID		| Please provide Log Analytics Workspace ID |
 | Function App Name		| Please provide the VMRay enrichment function app name |
+| Whitelisted URL Domains	| Optional. Comma-separated list of domains whose URLs are never submitted to VMRay, e.g. `microsoft.com,google.com`. Matching is case-insensitive and subdomains of a listed domain are also skipped. Leave empty to submit every URL. |
 
 - Once you provide the above values, please click on `Review + create` button.
 

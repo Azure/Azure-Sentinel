@@ -4,12 +4,15 @@
   "metadata": {
     "title": "VMRay URL Analyis",
     "description": "Submits a url or set of urls associated with an incident to VMRay for Analyis.",
-    "prerequisites": "VMRay API Key.",
-    "prerequisitesDeployTemplateFile": "../VMRay/FunctionApp/azuredeploy.json",
+    "prerequisites": "VMRay API Key. The VMRay Enrichment Function App deployed to the same resource group as this playbook.",
+    "prerequisitesDeployTemplateFile": "../CustomConnector/VMRayEnrichment_FunctionAppConnector/azuredeploy.json",
     "postDeploymentSteps": [
-      "None"
+      "Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace, so it can add incident comments and upload threat indicators.",
+      "Grant the Microsoft Sentinel service principal ('Azure Security Insights') the 'Microsoft Sentinel Automation Contributor' role on this resource group, so the playbook can be run from an incident. Microsoft Sentinel -> Automation -> Manage playbook permissions does this for you.",
+      "Optionally set the 'WhitelistedURLDomains' parameter to a comma-separated list of domains that should never be submitted to VMRay (e.g. microsoft.com,google.com). Subdomains of a listed domain are also skipped.",
+      "Attach the playbook to an automation rule if you want it to run automatically on incident creation."
     ],
-    "lastUpdateTime": "2025-02-20T00:00:00.000Z",
+    "lastUpdateTime": "2026-08-13T00:00:00.000Z",
     "entities": [
       "url"
     ],
@@ -43,6 +46,13 @@
       "type": "string",
       "metadata": {
         "description": "Name of the FunctionApp"
+      }
+    },
+    "WhitelistedURLDomains": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Optional comma-separated list of domains whose URLs are never submitted to VMRay, e.g. 'microsoft.com,google.com'. Matching is case-insensitive and also skips subdomains of a listed domain (up to four labels deep). Leave empty to submit every URL."
       }
     }
   },
@@ -84,14 +94,18 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "Indicator_Expiration_In_Days": {
-                "defaultValue": "30",
-                "type": "String"
+              "defaultValue": "30",
+              "type": "String"
+            },
+            "Whitelisted_URL_Domains": {
+              "defaultValue": "",
+              "type": "String"
             },
             "$connections": {
-                "type": "Object",
-                "defaultValue": {}
+              "type": "Object",
+              "defaultValue": {}
             }
-        },
+          },
           "triggers": {
             "Microsoft_Sentinel_incident": {
               "type": "ApiConnectionWebhook",
@@ -111,7 +125,7 @@
           "actions": {
             "Entities_-_Get_URLs": {
               "runAfter": {
-                "Sorted_VMRay_VTIS": [
+                "URL_Whitelist": [
                   "Succeeded"
                 ]
               },
@@ -127,15 +141,104 @@
                 "path": "/entities/url"
               }
             },
+            "Select_URL_Hosts": {
+              "runAfter": {
+                "Entities_-_Get_URLs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@coalesce(body('Entities_-_Get_URLs')?['URLs'], json('[]'))",
+                "select": {
+                  "url": "@item()?['url']",
+                  "hostRaw": "@if(empty(coalesce(item()?['url'], '')), '', first(split(first(split(first(split(if(contains(coalesce(item()?['url'], ''), '://'), split(coalesce(item()?['url'], ''), '://')[1], coalesce(item()?['url'], '')), '/')), '?')), '#')))"
+                }
+              }
+            },
+            "Normalize_URL_Hosts": {
+              "runAfter": {
+                "Select_URL_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Select_URL_Hosts')",
+                "select": {
+                  "url": "@item()?['url']",
+                  "host": "@toLower(trim(first(split(last(split(coalesce(item()?['hostRaw'], ''), '@')), ':'))))"
+                }
+              }
+            },
+            "Filter_Whitelisted_URLs": {
+              "runAfter": {
+                "Normalize_URL_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@body('Normalize_URL_Hosts')",
+                "where": "@and(not(empty(item()?['host'])), empty(intersection(variables('url_whitelist'), createArray(item()?['host'], join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 2))), '.'), join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 3))), '.'), join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 4))), '.')))))"
+              }
+            },
+            "Comment_If_All_URLs_Were_Whitelisted": {
+              "runAfter": {
+                "Filter_Whitelisted_URLs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Normalize_URL_Hosts'))",
+                      0
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@length(body('Filter_Whitelisted_URLs'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Add_whitelist_comment_to_incident": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p class=\"editor-paragraph\">VMRay: all @{length(body('Normalize_URL_Hosts'))} URL(s) on this incident matched the configured domain whitelist and were not submitted for analysis.</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
             "For_each_URL": {
-              "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+              "foreach": "@body('Filter_Whitelisted_URLs')",
               "actions": {
                 "UplaodURL": {
                   "type": "Function",
                   "inputs": {
                     "body": {
                       "url": "@items('For_each_URL')['url']",
-                      "tags": ["url_submission_logic_app"]
+                      "tags": [
+                        "url_submission_logic_app"
+                      ]
                     },
                     "function": {
                       "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/UplaodURL')]"
@@ -147,11 +250,13 @@
                     "For_each_submission": {
                       "foreach": "@body('UplaodURL')?['vmray_submission']",
                       "actions": {
-                        "Set_Submission_Status": {
-                          "type": "SetVariable",
+                        "Stagger_Poll_Start": {
+                          "type": "Wait",
                           "inputs": {
-                            "name": "submission_status",
-                            "value": false
+                            "interval": {
+                              "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 110), 1)",
+                              "unit": "Second"
+                            }
                           }
                         },
                         "Wait_untill_submission_is_completed": {
@@ -183,19 +288,8 @@
                             },
                             "Check_if_submission_is_completed": {
                               "actions": {
-                                "Set_Submission_Status_to_True": {
-                                  "type": "SetVariable",
-                                  "inputs": {
-                                    "name": "submission_status",
-                                    "value": true
-                                  }
-                                },
                                 "GetVMRaySample": {
-                                  "runAfter": {
-                                    "Set_Submission_Status_to_True": [
-                                      "Succeeded"
-                                    ]
-                                  },
+                                  "runAfter": {},
                                   "type": "Function",
                                   "inputs": {
                                     "body": {
@@ -208,33 +302,30 @@
                                 },
                                 "Check_If_Sample_Verdict_is_Suspicious_or_Malicious": {
                                   "actions": {
-                                    "Set_Submission_Report_Variable": {
-                                      "type": "SetVariable",
-                                      "inputs": {
-                                        "name": "submission_report",
-                                        "value": [
-                                          {
-                                            "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
-                                            "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
-                                            "Classification": "@body('GetVMRaySample')['sample_classifications']",
-                                            "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
-                                            "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
-                                            "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
-                                            "Sample ID": "@body('GetVMRaySample')['sample_id']",
-                                            "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
-                                          }
-                                        ]
-                                      }
+                                    "Compose_Submission_Report": {
+                                      "type": "Compose",
+                                      "inputs": [
+                                        {
+                                          "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
+                                          "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
+                                          "Classification": "@body('GetVMRaySample')['sample_classifications']",
+                                          "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
+                                          "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
+                                          "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
+                                          "Sample ID": "@body('GetVMRaySample')['sample_id']",
+                                          "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
+                                        }
+                                      ]
                                     },
                                     "Create_HTML_table": {
                                       "runAfter": {
-                                        "Set_Submission_Report_Variable": [
+                                        "Compose_Submission_Report": [
                                           "Succeeded"
                                         ]
                                       },
                                       "type": "Table",
                                       "inputs": {
-                                        "from": "@variables('submission_report')",
+                                        "from": "@outputs('Compose_Submission_Report')",
                                         "format": "HTML"
                                       }
                                     },
@@ -259,10 +350,84 @@
                                         "path": "/Incidents/Comment"
                                       }
                                     },
+                                    "Delay_Before_Comment_Retry": {
+                                      "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                          "Failed"
+                                        ]
+                                      },
+                                      "type": "Wait",
+                                      "inputs": {
+                                        "interval": {
+                                          "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 20), 5)",
+                                          "unit": "Second"
+                                        }
+                                      }
+                                    },
+                                    "Get_existing_comments": {
+                                      "runAfter": {
+                                        "Delay_Before_Comment_Retry": [
+                                          "Succeeded"
+                                        ]
+                                      },
+                                      "type": "Http",
+                                      "inputs": {
+                                        "method": "GET",
+                                        "uri": "@{concat('https://management.azure.com', triggerBody()?['object']?['id'], '/comments?api-version=2023-02-01')}",
+                                        "authentication": {
+                                          "type": "ManagedServiceIdentity",
+                                          "audience": "https://management.azure.com"
+                                        }
+                                      }
+                                    },
+                                    "Post_comment_only_if_missing": {
+                                      "runAfter": {
+                                        "Get_existing_comments": [
+                                          "Succeeded"
+                                        ]
+                                      },
+                                      "type": "If",
+                                      "expression": {
+                                        "and": [
+                                          {
+                                            "equals": [
+                                              "@contains(string(coalesce(body('Get_existing_comments')?['value'], json('[]'))), string(body('GetVMRaySubmission')['submission_id']))",
+                                              false
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Retry_add_comment_to_incident": {
+                                          "type": "ApiConnection",
+                                          "inputs": {
+                                            "host": {
+                                              "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                              }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                                              "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_each_URL')?['url'],'https://',''),'http://','')}</p><p class=\"editor-paragraph\">@{body('Create_HTML_table')}@{body('Create_HTML_table_2')}</p>"
+                                            },
+                                            "path": "/Incidents/Comment"
+                                          }
+                                        }
+                                      },
+                                      "else": {
+                                        "actions": {}
+                                      }
+                                    },
                                     "GetVMRayIOCs": {
                                       "runAfter": {
                                         "Add_comment_to_incident_(V3)": [
-                                          "Succeeded"
+                                          "Succeeded",
+                                          "Failed"
+                                        ],
+                                        "Post_comment_only_if_missing": [
+                                          "Succeeded",
+                                          "Skipped"
                                         ]
                                       },
                                       "type": "Function",
@@ -329,33 +494,30 @@
                                   },
                                   "else": {
                                     "actions": {
-                                      "Set_Submission_Report_Variable_01": {
-                                        "type": "SetVariable",
-                                        "inputs": {
-                                          "name": "submission_report",
-                                          "value": [
-                                            {
-                                              "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
-                                              "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
-                                              "Classification": "@body('GetVMRaySample')['sample_classifications']",
-                                              "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
-                                              "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
-                                              "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
-                                              "Sample ID": "@body('GetVMRaySample')['sample_id']",
-                                              "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
-                                            }
-                                          ]
-                                        }
+                                      "Compose_Submission_Report_1": {
+                                        "type": "Compose",
+                                        "inputs": [
+                                          {
+                                            "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
+                                            "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
+                                            "Classification": "@body('GetVMRaySample')['sample_classifications']",
+                                            "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
+                                            "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
+                                            "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
+                                            "Sample ID": "@body('GetVMRaySample')['sample_id']",
+                                            "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
+                                          }
+                                        ]
                                       },
                                       "Create_HTML_table_1": {
                                         "runAfter": {
-                                          "Set_Submission_Report_Variable_01": [
+                                          "Compose_Submission_Report_1": [
                                             "Succeeded"
                                           ]
                                         },
                                         "type": "Table",
                                         "inputs": {
-                                          "from": "@variables('submission_report')",
+                                          "from": "@outputs('Compose_Submission_Report_1')",
                                           "format": "HTML"
                                         }
                                       },
@@ -378,6 +540,75 @@
                                             "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_each_URL')?['url'],'https://',''),'http://','')}<br>@{body('Create_HTML_table_1')}@{body('Create_HTML_table_2')}</p>"
                                           },
                                           "path": "/Incidents/Comment"
+                                        }
+                                      },
+                                      "Delay_Before_Comment_Retry_1": {
+                                        "runAfter": {
+                                          "Add_comment_to_incident_(V3)_1": [
+                                            "Failed"
+                                          ]
+                                        },
+                                        "type": "Wait",
+                                        "inputs": {
+                                          "interval": {
+                                            "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 20), 5)",
+                                            "unit": "Second"
+                                          }
+                                        }
+                                      },
+                                      "Get_existing_comments_1": {
+                                        "runAfter": {
+                                          "Delay_Before_Comment_Retry_1": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "Http",
+                                        "inputs": {
+                                          "method": "GET",
+                                          "uri": "@{concat('https://management.azure.com', triggerBody()?['object']?['id'], '/comments?api-version=2023-02-01')}",
+                                          "authentication": {
+                                            "type": "ManagedServiceIdentity",
+                                            "audience": "https://management.azure.com"
+                                          }
+                                        }
+                                      },
+                                      "Post_comment_only_if_missing_1": {
+                                        "runAfter": {
+                                          "Get_existing_comments_1": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "If",
+                                        "expression": {
+                                          "and": [
+                                            {
+                                              "equals": [
+                                                "@contains(string(coalesce(body('Get_existing_comments_1')?['value'], json('[]'))), string(body('GetVMRaySubmission')['submission_id']))",
+                                                false
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Retry_add_comment_to_incident_1": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                              "host": {
+                                                "connection": {
+                                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                              },
+                                              "method": "post",
+                                              "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_each_URL')?['url'],'https://',''),'http://','')}<br>@{body('Create_HTML_table_1')}@{body('Create_HTML_table_2')}</p>"
+                                              },
+                                              "path": "/Incidents/Comment"
+                                            }
+                                          }
+                                        },
+                                        "else": {
+                                          "actions": {}
                                         }
                                       }
                                     }
@@ -412,96 +643,33 @@
                                     }
                                   }
                                 },
-                                "Set_VTIS": {
+                                "Select_VTIs": {
                                   "runAfter": {
                                     "vmrayenrichcox-GetVMRayVTIs": [
                                       "Succeeded"
                                     ]
                                   },
-                                  "type": "SetVariable",
+                                  "type": "Select",
                                   "inputs": {
-                                    "name": "sample_vtis",
-                                    "value": "@body('vmrayenrichcox-GetVMRayVTIs')['threat_indicators']"
+                                    "from": "@coalesce(body('vmrayenrichcox-GetVMRayVTIs')?['threat_indicators'], json('[]'))",
+                                    "select": {
+                                      "Severity": "@item()?['score']",
+                                      "Category": "@item()?['category']",
+                                      "Operation": "@item()?['operation']",
+                                      "Classifications": "@item()?['classifications']"
+                                    }
                                   }
                                 },
                                 "Create_HTML_table_2": {
                                   "runAfter": {
-                                    "Set_variable": [
+                                    "Select_VTIs": [
                                       "Succeeded"
                                     ]
                                   },
                                   "type": "Table",
                                   "inputs": {
-                                    "from": "@reverse(variables('sorted_vmray_vtis'))",
+                                    "from": "@reverse(sort(body('Select_VTIs'), 'Severity'))",
                                     "format": "HTML"
-                                  }
-                                },
-                                "For_each_VTI": {
-                                  "foreach": "@variables('sample_vtis')",
-                                  "actions": {
-                                    "Compose": {
-                                      "type": "Compose",
-                                      "inputs": {
-                                        "Severity": "@items('For_each_VTI')?['score']",
-                                        "Category": "@items('For_each_VTI')?['category']",
-                                        "Operation": "@items('For_each_VTI')?['operation']",
-                                        "Classifications": "@items('For_each_VTI')?['classifications']"
-                                      }
-                                    },
-                                    "Append_to_array_variable": {
-                                      "runAfter": {
-                                        "Compose": [
-                                          "Succeeded"
-                                        ]
-                                      },
-                                      "type": "AppendToArrayVariable",
-                                      "inputs": {
-                                        "name": "vmray_vtis",
-                                        "value": "@outputs('Compose')"
-                                      }
-                                    }
-                                  },
-                                  "runAfter": {
-                                    "Set_variable_2": [
-                                      "Succeeded"
-                                    ]
-                                  },
-                                  "type": "Foreach"
-                                },
-                                "Set_variable": {
-                                  "runAfter": {
-                                    "For_each_VTI": [
-                                      "Succeeded"
-                                    ]
-                                  },
-                                  "type": "SetVariable",
-                                  "inputs": {
-                                    "name": "sorted_vmray_vtis",
-                                    "value": "@sort(variables('vmray_vtis'), 'Severity')"
-                                  }
-                                },
-                                "Set_variable_1": {
-                                  "runAfter": {
-                                    "Set_VTIS": [
-                                      "Succeeded"
-                                    ]
-                                  },
-                                  "type": "SetVariable",
-                                  "inputs": {
-                                    "name": "vmray_vtis",
-                                    "value": "@null"
-                                  }
-                                },
-                                "Set_variable_2": {
-                                  "runAfter": {
-                                    "Set_variable_1": [
-                                      "Succeeded"
-                                    ]
-                                  },
-                                  "type": "SetVariable",
-                                  "inputs": {
-                                    "name": "sorted_vmray_vtis",
-                                    "value": "@null"
                                   }
                                 }
                               },
@@ -527,11 +695,11 @@
                             }
                           },
                           "runAfter": {
-                            "Set_Submission_Status": [
+                            "Stagger_Poll_Start": [
                               "Succeeded"
                             ]
                           },
-                          "expression": "@equals(variables('submission_status'),true)",
+                          "expression": "@equals(coalesce(body('GetVMRaySubmission')?['submission_finished'], false), true)",
                           "limit": {
                             "count": 60,
                             "timeout": "PT1H"
@@ -554,7 +722,7 @@
                         "inputs": {
                           "host": {
                             "connection": {
-                              "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                             }
                           },
                           "method": "post",
@@ -581,85 +749,26 @@
                 }
               },
               "runAfter": {
-                "Entities_-_Get_URLs": [
+                "Filter_Whitelisted_URLs": [
                   "Succeeded"
                 ]
               },
-              "type": "Foreach"
-            },
-            "SubmissionReportforTable": {
-              "runAfter": {
-                "check_submission_status": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "submission_report",
-                    "type": "array"
-                  }
-                ]
+              "type": "Foreach",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 5
+                }
               }
             },
-            "check_submission_status": {
+            "URL_Whitelist": {
               "runAfter": {},
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
                   {
-                    "name": "submission_status",
-                    "type": "boolean",
-                    "value": false
-                  }
-                ]
-              }
-            },
-            "Sample_VTIS": {
-              "runAfter": {
-                "SubmissionReportforTable": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "sample_vtis",
-                    "type": "array"
-                  }
-                ]
-              }
-            },
-            "VMRay_VTIS": {
-              "runAfter": {
-                "Sample_VTIS": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "vmray_vtis",
-                    "type": "array"
-                  }
-                ]
-              }
-            },
-            "Sorted_VMRay_VTIS": {
-              "runAfter": {
-                "VMRay_VTIS": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "sorted_vmray_vtis",
-                    "type": "array"
+                    "name": "url_whitelist",
+                    "type": "array",
+                    "value": "@if(empty(trim(coalesce(parameters('Whitelisted_URL_Domains'), ''))), json('[]'), split(replace(toLower(trim(parameters('Whitelisted_URL_Domains'))), ' ', ''), ','))"
                   }
                 ]
               }
@@ -668,6 +777,9 @@
           "outputs": {}
         },
         "parameters": {
+          "Whitelisted_URL_Domains": {
+            "value": "[parameters('WhitelistedURLDomains')]"
+          },
           "$connections": {
             "value": {
               "azuresentinel": {
