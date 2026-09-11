@@ -1,5 +1,9 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.2.0
+
+- (2026-09-11) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+
 ## Version 0.1.9
 
 - (2026-09-09) AWS GuardDuty - AlertEvent ASIM Parser - [PR #15079](https://github.com/Azure/Azure-Sentinel/pull/15079)
