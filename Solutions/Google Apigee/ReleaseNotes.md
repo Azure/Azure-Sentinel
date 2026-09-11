@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.1.2       | 10-09-2026                     | Preserved `jsonPayload` in the `ProtoPayload` column. |
+| 3.1.2       | 10-09-2026                     | Routed Apigee logs through a custom input stream to preserve `jsonPayload` in `ProtoPayload`. |
 | 3.1.1       | 20-08-2025                     | Moving Google Apigee **CCF Data Connector** to GA					 |
 | 3.1.0       | 20-05-2025                     | Migrated the Function app connector to **CCF Data Connector** and Updated the **Parser** |
 | 3.1.0       | 28-02-2025                     | Added new CCP **Data Connector** to the Solution                                 |
