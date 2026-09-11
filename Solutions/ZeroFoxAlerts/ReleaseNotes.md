@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
 |-------------|--------------------------------|--------------------------------------------------------------|
+| 3.0.1       | 08-09-2026                     | Fixed **Data Connector** DCR transform, which wrote to columns the table does not declare or read fields from the wrong path, leaving them permanently null. `severity` now lands in `severity_d`; `timestamp_t` is now populated; `entity_term_s`, `entity_account_s`, `entity_email_receiver_id_s` are read from their top-level fields; entity/asset entity-group columns are read from the nested `entity_group` object; and `tags_s`, `asset_term_s`, `protected_locations_s`, `darkweb_term_s`, `business_network_s` are serialised from their complex API types. |
 | 3.0.0       | 01-04-2026                     | Added **Data Connectors** for ZeroFox's Alerts.              |
