@@ -1,0 +1,252 @@
+Parser:
+  Title: AWS GuardDuty Alert Event ASIM ingestion-time parser
+  Version: '0.1.0'
+  LastUpdated: Sep 11, 2026
+Product:
+  Name: AWS GuardDuty
+Normalization:
+  Schema: AlertEvent
+  Version: '1.0.0'
+Author: Microsoft
+Description: |
+  Normalizes AWS GuardDuty findings from the AWSGuardDuty raw-table shape
+  into the native ASimAlertEventLogs table during ingestion.
+  Uses the default pack=false behavior, leaving AdditionalFields as an empty bag.
+ParserName: ASimAlertEventAWSGuardDuty
+DCRType: Workspace
+InputStream: none
+SourceRawTable: AWSGuardDuty
+TargetASIMTable: ASimAlertEventLogs
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "AWSGuardDuty"
+  | extend ActivityTypeParts = split(ActivityType, "/")
+  | extend
+      ThreatPurpose = tostring(split(tostring(ActivityTypeParts[0]), ":")[0]),
+      ActivityResourceType = tostring(split(tostring(ActivityTypeParts[0]), ":")[1]),
+      ThreatName = tostring(split(tostring(ActivityTypeParts[1]), ".")[0]),
+      ActionType = tostring(ServiceDetails.action.actionType),
+      IsArchived = tobool(ServiceDetails.archived),
+      OriginalUserType = tostring(ResourceDetails.accessKeyDetails.userType)
+  | extend
+      ResourceType = iif(isnotempty(tostring(ResourceDetails.resourceType)), tostring(ResourceDetails.resourceType),
+          ActivityResourceType),
+      DvcIpAddr = iif(isnotempty(tostring(ResourceDetails.instanceDetails.networkInterfaces[0].privateIpAddress)), tostring(ResourceDetails.instanceDetails.networkInterfaces[0].privateIpAddress),
+          iif(isnotempty(tostring(ServiceDetails.action.networkConnectionAction.remoteIpDetails.ipAddressV4)), tostring(ServiceDetails.action.networkConnectionAction.remoteIpDetails.ipAddressV4),
+          iif(isnotempty(tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4)), tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4),
+          tostring(ServiceDetails.action.portProbeAction.portProbeDetails[0].remoteIpDetails.ipAddressV4)))),
+      DvcHostname = iif(isnotempty(tostring(ResourceDetails.containerDetails.name)), tostring(ResourceDetails.containerDetails.name),
+          iif(isnotempty(tostring(ResourceDetails.kubernetesDetails.kubernetesWorkloadDetails.name)), tostring(ResourceDetails.kubernetesDetails.kubernetesWorkloadDetails.name),
+          iif(isnotempty(tostring(ResourceDetails.ecsClusterDetails.name)), tostring(ResourceDetails.ecsClusterDetails.name),
+          iif(isnotempty(tostring(ResourceDetails.eksClusterDetails.name)), tostring(ResourceDetails.eksClusterDetails.name),
+          iif(isnotempty(tostring(ResourceDetails.lambdaDetails.functionName)), tostring(ResourceDetails.lambdaDetails.functionName),
+          iif(isnotempty(tostring(ResourceDetails.rdsDbInstanceDetails.dbInstanceIdentifier)), tostring(ResourceDetails.rdsDbInstanceDetails.dbInstanceIdentifier),
+          iif(isnotempty(tostring(ResourceDetails.rdsLimitlessDbDetails.dbShardGroupIdentifier)), tostring(ResourceDetails.rdsLimitlessDbDetails.dbShardGroupIdentifier),
+          tostring(ResourceDetails.s3BucketDetails[0].name)))))))),
+      DvcId = iif(isnotempty(tostring(ResourceDetails.instanceDetails.instanceId)), tostring(ResourceDetails.instanceDetails.instanceId),
+          iif(isnotempty(tostring(ResourceDetails.containerDetails.id)), tostring(ResourceDetails.containerDetails.id),
+          iif(isnotempty(tostring(ResourceDetails.kubernetesDetails.kubernetesWorkloadDetails.uid)), tostring(ResourceDetails.kubernetesDetails.kubernetesWorkloadDetails.uid),
+          iif(isnotempty(tostring(ResourceDetails.ecsClusterDetails.arn)), tostring(ResourceDetails.ecsClusterDetails.arn),
+          iif(isnotempty(tostring(ResourceDetails.eksClusterDetails.arn)), tostring(ResourceDetails.eksClusterDetails.arn),
+          iif(isnotempty(tostring(ResourceDetails.lambdaDetails.functionArn)), tostring(ResourceDetails.lambdaDetails.functionArn),
+          iif(isnotempty(tostring(ResourceDetails.rdsDbInstanceDetails.dbInstanceArn)), tostring(ResourceDetails.rdsDbInstanceDetails.dbInstanceArn),
+          iif(isnotempty(tostring(ResourceDetails.rdsLimitlessDbDetails.dbShardGroupArn)), tostring(ResourceDetails.rdsLimitlessDbDetails.dbShardGroupArn),
+          tostring(ResourceDetails.s3BucketDetails[0].arn))))))))),
+      Username = iif(isnotempty(tostring(ResourceDetails.accessKeyDetails.userName)), tostring(ResourceDetails.accessKeyDetails.userName),
+          iif(isnotempty(tostring(ResourceDetails.kubernetesDetails.kubernetesUserDetails.username)), tostring(ResourceDetails.kubernetesDetails.kubernetesUserDetails.username),
+          tostring(ResourceDetails.rdsDbUserDetails.user))),
+      UserId = iif(isnotempty(tostring(ResourceDetails.accessKeyDetails.principalId)), tostring(ResourceDetails.accessKeyDetails.principalId),
+          iif(isnotempty(tostring(ResourceDetails.accessKeyDetails.accessKeyId)), tostring(ResourceDetails.accessKeyDetails.accessKeyId),
+          tostring(ResourceDetails.kubernetesDetails.kubernetesUserDetails.uid)))
+  | extend
+      EventCount = iif(isnotnull(toint(ServiceDetails.count)), toint(ServiceDetails.count),
+          int(1)),
+      EventEndTime = TimeGenerated,
+      EventType = "Alert",
+      EventSubType = case(
+        ThreatPurpose =~ "Policy", "Policy Violation",
+        ThreatPurpose =~ "Behavior", "Anomaly",
+        tolower(ThreatPurpose) in ("recon", "pentest"), "Suspicious Activity",
+        "Threat"
+      ),
+      EventSeverity = case(
+        Severity >= 7, "High",
+        Severity >= 4, "Medium",
+        Severity > 0, "Low",
+        "Informational"
+      ),
+      EventOriginalSeverity = tostring(Severity),
+      EventVendor = "AWS",
+      EventProduct = "GuardDuty",
+      EventSchema = "AlertEvent",
+      EventSchemaVersion = "1.0.0",
+      AlertStatus = case(isnull(IsArchived), "", IsArchived, "Closed", "Active"),
+      AlertOriginalStatus = case(isnull(IsArchived), "", IsArchived, "Archived", "Active"),
+      AlertVerdict = "",
+      DetectionMethod = "Intrusion Detection",
+      RuleName = ActivityType,
+      RuleDescription = Description,
+      DvcIdType = iif(isnotempty(DvcId), "Other", ""),
+      DvcAction = case(
+        ActionType =~ "AWS_API_CALL", "Execute",
+        ActionType =~ "NETWORK_CONNECTION", "Connect",
+        ActionType =~ "PORT_PROBE", "Scan",
+        ActionType =~ "DNS_REQUEST", "Query",
+        ActionType
+      ),
+      DvcOriginalAction = ActionType,
+      DvcScope = AccountId,
+      UserScope = AccountId,
+      UserScopeId = AccountId,
+      UsernameType = iif(isnotempty(Username), "Simple", ""),
+      UserIdType = iif(isnotempty(UserId), "AWSId", ""),
+      UserType = case(
+        tolower(OriginalUserType) in ("root", "admin"), "Admin",
+        tolower(OriginalUserType) in ("role", "assumedrole", "federateduser", "awsservice"), "Service Principal",
+        OriginalUserType =~ "IAMUser", "Regular",
+        isnotempty(OriginalUserType), "Other",
+        ""
+      ),
+      IndicatorType = case(
+        ResourceType =~ "AccessKey", "User",
+        isnotempty(ResourceType), "Cloud Resource",
+        ""
+      ),
+      IndicatorAssociation = case(
+        tostring(ServiceDetails.resourceRole) =~ "TARGET", "Targeted",
+        tostring(ServiceDetails.resourceRole) =~ "ACTOR", "Associated",
+        ""
+      ),
+      ThreatCategory = case(
+        ThreatPurpose =~ "Cryptocurrency", "Cryptominer",
+        ThreatPurpose =~ "Trojan", "Trojan",
+        ThreatPurpose =~ "Policy", "Security Policy Violation",
+        "Unknown"
+      ),
+      ThreatOriginalCategory = ThreatPurpose,
+      ThreatFirstReportedTime = TimeCreated,
+      ThreatLastReportedTime = TimeGenerated,
+      ThreatIsActive = iif(isnull(IsArchived), bool(null), not(IsArchived)),
+      ThreatRiskLevel = iif((Severity >= 1 and Severity <= 10), toint(Severity * 10), int(null)),
+      ThreatOriginalRiskLevel = tostring(Severity),
+      AttackTactics = case(
+        ThreatPurpose =~ "CredentialAccess", "Credential Access",
+        ThreatPurpose =~ "DefenseEvasion", "Defense Evasion",
+        ThreatPurpose =~ "Discovery", "Discovery",
+        ThreatPurpose =~ "Execution", "Execution",
+        ThreatPurpose =~ "Exfiltration", "Exfiltration",
+        ThreatPurpose =~ "Impact", "Impact",
+        ThreatPurpose =~ "InitialAccess", "Initial Access",
+        ThreatPurpose =~ "Persistence", "Persistence",
+        ThreatPurpose =~ "PrivilegeEscalation", "Privilege Escalation",
+        ThreatPurpose =~ "Recon", "Reconnaissance",
+        ""
+      ),
+      AttackTechniques = "",
+      AttackRemediationSteps = "",
+      AdditionalFields = parse_json('{}')
+  | project-rename
+      EventStartTime = TimeCreated,
+      EventUid = Id,
+      EventMessage = Description,
+      AlertName = Title,
+      EventOriginalType = ActivityType,
+      EventProductVersion = SchemaVersion,
+      EventOriginalUid = Arn,
+      DvcScopeId = AccountId,
+      DvcZone = Region,
+      EventOriginalSubType = ResourceType
+  | extend
+      AlertId = EventUid,
+      AlertDescription = EventMessage,
+      Rule = RuleName,
+      Dvc = iif(isnotempty(DvcHostname), DvcHostname,
+          iif(isnotempty(DvcId), DvcId,
+          DvcIpAddr)),
+      Hostname = DvcHostname,
+      IpAddr = DvcIpAddr,
+      User = Username,
+      DvcEntityKey = "",
+      FileEntityKey = "",
+      ProcessEntityKey = "",
+      UserEntityKey = "",
+      UserAdditionalIds = parse_json('[]'),
+      AdditionalEntities = parse_json('[]')
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventType,
+      EventSubType,
+      EventUid,
+      EventMessage,
+      EventOriginalType,
+      EventOriginalSubType,
+      EventOriginalSeverity,
+      EventOriginalUid,
+      EventProductVersion,
+      EventSeverity,
+      EventVendor,
+      EventProduct,
+      EventSchema,
+      EventSchemaVersion,
+      AlertId,
+      AlertName,
+      AlertDescription,
+      AlertStatus,
+      AlertOriginalStatus,
+      AlertVerdict,
+      DetectionMethod,
+      Rule,
+      RuleName,
+      RuleDescription,
+      Dvc,
+      DvcIpAddr,
+      IpAddr,
+      DvcHostname,
+      Hostname,
+      DvcId,
+      DvcIdType,
+      DvcAction,
+      DvcOriginalAction,
+      DvcScope,
+      DvcScopeId,
+      DvcZone,
+      DvcEntityKey,
+      Username,
+      User,
+      UsernameType,
+      UserId,
+      UserIdType,
+      UserType,
+      OriginalUserType,
+      UserScope,
+      UserScopeId,
+      UserEntityKey,
+      UserAdditionalIds,
+      FileEntityKey,
+      ProcessEntityKey,
+      AdditionalEntities,
+      IndicatorType,
+      IndicatorAssociation,
+      ThreatName,
+      ThreatCategory,
+      ThreatOriginalCategory,
+      ThreatFirstReportedTime,
+      ThreatLastReportedTime,
+      ThreatIsActive,
+      ThreatRiskLevel,
+      ThreatOriginalRiskLevel,
+      AttackTactics,
+      AttackTechniques,
+      AttackRemediationSteps,
+      AdditionalFields
+Changes:
+  - Version: '0.1.0'
+    Date: Sep 11, 2026
+    Changes:
+      - Initial ingestion-time parser converted from ASimAlertEventAWSGuardDuty and targeting ASimAlertEventLogs.
