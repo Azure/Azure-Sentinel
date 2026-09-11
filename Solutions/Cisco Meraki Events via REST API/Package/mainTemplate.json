@@ -47,11 +47,11 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Cisco Meraki Events via REST API",
-    "_solutionVersion": "3.2.0",
+    "_solutionVersion": "3.2.1",
     "solutionId": "azuresentinel.azure-sentinel-solution-ciscomerakinativepoller",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.2.0",
+    "dataConnectorCCPVersion": "3.2.1",
     "_dataConnectorContentIdConnectorDefinition1": "CiscoMerakiConnector",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "CiscoMerakiConnectorConnections",
@@ -118,7 +118,7 @@
                   "id": "CiscoMerakiConnector",
                   "title": "Cisco Meraki Events (using REST API) (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, and wireless Air Marshal (rogue access point) events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+                  "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes, API Requests, and File Scanned detections) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, wireless Air Marshal (rogue access point) events, and File Scanned events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
                   "graphQueries": [
                     {
                       "metricName": "Total Organization logs received",
@@ -151,9 +151,14 @@
                       "baseQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
                     },
                     {
-                      "metricName": "Total Security/IDS events received",
-                      "legend": "Cisco Meraki Security Events (ASimNetworkSessionLogs)",
+                      "metricName": "Total Security events received",
+                      "legend": "Cisco Meraki Security Events excluding File Scanned (ASimNetworkSessionLogs)",
                       "baseQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
+                    },
+                    {
+                      "metricName": "Total File Scanned events received",
+                      "legend": "Cisco Meraki File Scanned Events",
+                      "baseQuery": "CiscoMerakiFileScannedEvents_CL"
                     }
                   ],
                   "sampleQueries": [
@@ -195,7 +200,11 @@
                     },
                     {
                       "description": "Get IDS alerts from last 24 hours",
-                      "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'Notable'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+                      "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'IDS Alert'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get file scanned events from last 24 hours",
+                      "query": "CiscoMerakiFileScannedEvents_CL | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventType, FileType, Uri, Action, Disposition, SourceIp, DestinationIp, FileHash\n | order by TimeGenerated desc"
                     },
                     {
                       "description": "Get configuration changes from last 24 hours",
@@ -205,7 +214,7 @@
                   "dataTypes": [
                     {
                       "name": "CiscoMerakiOrganizations",
-                      "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     },
                     {
                       "name": "CiscoMerakiNetworkClients",
@@ -213,7 +222,7 @@
                     },
                     {
                       "name": "CiscoMerakiOrganizationNetworks",
-                      "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     },
                     {
                       "name": "CiscoMerakiAirMarshalEvents",
@@ -225,11 +234,15 @@
                     },
                     {
                       "name": "ASimAuditEventLogs",
-                      "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(90d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     },
                     {
                       "name": "ASimNetworkSessionLogs",
                       "lastDataReceivedQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "CiscoMerakiFileScannedEvents",
+                      "lastDataReceivedQuery": "CiscoMerakiFileScannedEvents_CL\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -390,6 +403,10 @@
                                         {
                                           "key": "ASimNetworkSessionLogs",
                                           "text": "Security Events / IDS (ASIM Network Session)"
+                                        },
+                                        {
+                                          "key": "CiscoMerakiFileScannedEvents",
+                                          "text": "File Scanned Events"
                                         }
                                       ],
                                       "placeholder": "Select data types to collect...",
@@ -721,6 +738,10 @@
                         "type": "string"
                       },
                       {
+                        "name": "queryString",
+                        "type": "string"
+                      },
+                      {
                         "name": "operationId",
                         "type": "string"
                       },
@@ -785,6 +806,10 @@
                         "type": "string"
                       },
                       {
+                        "name": "adminName",
+                        "type": "string"
+                      },
+                      {
                         "name": "adminId",
                         "type": "string"
                       },
@@ -803,6 +828,22 @@
                       {
                         "name": "networkName",
                         "type": "string"
+                      },
+                      {
+                        "name": "ssidName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ssidNumber",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventStartTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "eventEndTime",
+                        "type": "datetime"
                       },
                       {
                         "name": "page",
@@ -925,7 +966,75 @@
                         "type": "boolean"
                       },
                       {
-                        "name": "idsEventType",
+                        "name": "eventProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventVendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventSchemaVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventCount",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "Custom-CiscoMerakiFileScannedEvents_CL": {
+                    "columns": [
+                      {
+                        "name": "ts",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "eventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "deviceMac",
+                        "type": "string"
+                      },
+                      {
+                        "name": "clientMac",
+                        "type": "string"
+                      },
+                      {
+                        "name": "srcIp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "destIp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "uri",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fileType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "disposition",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fileHash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fileSizeBytes",
+                        "type": "long"
+                      },
+                      {
+                        "name": "message",
                         "type": "string"
                       },
                       {
@@ -1004,7 +1113,7 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Microsoft-ASimWebSessionLogs",
-                    "transformKql": "source | extend TimeGenerated = ts , HttpRequestMethod = ['method'] , HttpUserAgent = ['userAgent'] , SrcUserId = ['adminId'] , SrcIpAddr = ['sourceIp'] , DstHostname = ['host'] , UrlOriginal = strcat(tostring(['host']), tostring(['path'])) , EventOriginalResultDetails = ['operationId'] , EventResultDetails = tostring(['responseCode']) , EventProductVersion = case(isempty(['version']), '1', tostring(['version'])) , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventType = ['eventType'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) , Dvc = ['dvc'] , EventOriginalType = ['eventOriginalType'] , SrcUserIdType = ['srcUserIdType'] , EventResult = case(toint(['responseCode']) >= 200 and toint(['responseCode']) <= 299, 'Success', 'Failure') , EventSeverity = iff(toint(['responseCode']) >= 200 and toint(['responseCode']) <= 299, 'Informational', 'Low') | project TimeGenerated , HttpRequestMethod , HttpUserAgent , SrcUserId , SrcIpAddr , DstHostname , UrlOriginal , EventOriginalResultDetails , EventResultDetails , EventProductVersion , EventProduct , EventVendor , EventType , EventSchemaVersion , EventCount , Dvc , EventOriginalType , SrcUserIdType , EventResult , EventSeverity"
+                    "transformKql": "source | extend TimeGenerated = ts , HttpRequestMethod = ['method'] , HttpUserAgent = ['userAgent'] , SrcUserId = ['adminId'] , SrcIpAddr = ['sourceIp'] , DstHostname = ['host'] , UrlOriginal = iff(isnotempty(['queryString']), strcat(tostring(['host']), tostring(['path']), '?', tostring(['queryString'])), strcat(tostring(['host']), tostring(['path']))) , EventOriginalResultDetails = ['operationId'] , EventResultDetails = tostring(['responseCode']) , EventProductVersion = case(isempty(['version']), '1', tostring(['version'])) , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventType = ['eventType'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) , Dvc = ['dvc'] , EventOriginalType = ['eventOriginalType'] , SrcUserIdType = ['srcUserIdType'] , EventResult = case(toint(['responseCode']) >= 200 and toint(['responseCode']) <= 299, 'Success', 'Failure') , EventSeverity = iff(toint(['responseCode']) >= 200 and toint(['responseCode']) <= 299, 'Informational', 'Low') | project TimeGenerated , HttpRequestMethod , HttpUserAgent , SrcUserId , SrcIpAddr , DstHostname , UrlOriginal , EventOriginalResultDetails , EventResultDetails , EventProductVersion , EventProduct , EventVendor , EventType , EventSchemaVersion , EventCount , Dvc , EventOriginalType , SrcUserIdType , EventResult , EventSeverity"
                   },
                   {
                     "streams": [
@@ -1014,7 +1123,7 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Microsoft-ASimAuditEventLogs",
-                    "transformKql": "source | extend TimeGenerated = ts , ActorUsername = ['adminEmail'] , ActorUserId = ['adminId'] , ObjectId = ['networkId'] , OldValue = ['oldValue'] , NewValue = ['newValue'] , Object = ['networkName'] , Operation = strcat(['page'], '/', ['label']) , EventType = case(isempty(['oldValue']), 'Create', isempty(['newValue']), 'Delete', 'Set') , EventResult = ['eventResult'] , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventSeverity = ['eventSeverity'] , ActorUsernameType = ['actorUsernameType'] , ActorUserType = ['actorUserType'] , ActorUserIdType = ['actorUserIdType'] , ObjectType = ['objectType'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) | project TimeGenerated , ActorUsername , ActorUserId , ObjectId , OldValue , NewValue , Object , Operation , EventType , EventResult , EventProduct , EventVendor , EventSeverity , ActorUsernameType , ActorUserType , ActorUserIdType , ObjectType , EventSchemaVersion , EventCount"
+                    "transformKql": "source | extend TimeGenerated = ts , ActorUsername = coalesce(['adminEmail'], ['adminName']) , ActorUserId = ['adminId'] , ObjectId = ['networkId'] , OldValue = ['oldValue'] , NewValue = ['newValue'] , Object = coalesce(['networkName'], ['ssidName'], tostring(['ssidNumber'])) , Operation = strcat(['page'], '/', ['label']) , EventType = case(isempty(['oldValue']), 'Create', isempty(['newValue']), 'Delete', 'Set') , EventResult = ['eventResult'] , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventSeverity = ['eventSeverity'] , ActorUsernameType = ['actorUsernameType'] , ActorUserType = ['actorUserType'] , ActorUserIdType = ['actorUserIdType'] , ObjectType = ['objectType'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) | project TimeGenerated , ActorUsername , ActorUserId , ObjectId , OldValue , NewValue , Object , Operation , EventType , EventResult , EventProduct , EventVendor , EventSeverity , ActorUsernameType , ActorUserType , ActorUserIdType , ObjectType , EventSchemaVersion , EventCount"
                   },
                   {
                     "streams": [
@@ -1024,9 +1133,119 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Microsoft-ASimNetworkSessionLogs",
-                    "transformKql": "source | extend TimeGenerated = ts , EventOriginalType = ['eventType'] , DvcMacAddr = ['deviceMac'] , SrcMacAddr = ['clientMac'] , SrcIpAddr = tostring(split(['srcIp'], ':')[0]) , DstIpAddr = tostring(split(['destIp'], ':')[0]) , NetworkProtocol = case(['protocol'] == 'tcp/ip', 'TCP', ['protocol'] == 'udp/ip', 'UDP', ['protocol']) , EventOriginalSeverity = ['priority'] , EventMessage = ['message'] , RuleName = ['ruleId'] , SrcHostname = ['clientName'] , ThreatName = ['signature'] , ThreatCategory = ['classification'] , EventSeverity = case(['priority'] == '0', 'High', ['priority'] == '1', 'Medium', ['priority'] == '2', 'Low', 'Informational') , EventResult = iff(['blocked'] == true, 'Failure', 'Success') , EventType = ['idsEventType'] , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) | project TimeGenerated , EventOriginalType , DvcMacAddr , SrcMacAddr , SrcIpAddr , DstIpAddr , NetworkProtocol , EventOriginalSeverity , EventMessage , RuleName , SrcHostname , ThreatName , ThreatCategory , EventSeverity , EventResult , EventType , EventProduct , EventVendor , EventSchemaVersion , EventCount"
+                    "transformKql": "source | where tostring(['eventType']) != 'File Scanned' | extend TimeGenerated = ts , EventOriginalType = ['eventType'] , DvcMacAddr = ['deviceMac'] , SrcMacAddr = ['clientMac'] , SrcIpAddr = tostring(split(['srcIp'], ':')[0]) , DstIpAddr = tostring(split(['destIp'], ':')[0]) , NetworkProtocol = case(['protocol'] == 'tcp/ip', 'TCP', ['protocol'] == 'udp/ip', 'UDP', ['protocol']) , EventOriginalSeverity = ['priority'] , EventMessage = ['message'] , RuleName = ['ruleId'] , SrcHostname = ['clientName'] , ThreatName = ['signature'] , ThreatCategory = ['classification'] , EventSeverity = case(['priority'] == '0', 'High', ['priority'] == '1', 'Medium', ['priority'] == '2', 'Low', 'Informational') , EventResult = iff(['blocked'] == true, 'Failure', 'Success') , EventType = ['eventType'] , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) | project TimeGenerated , EventOriginalType , DvcMacAddr , SrcMacAddr , SrcIpAddr , DstIpAddr , NetworkProtocol , EventOriginalSeverity , EventMessage , RuleName , SrcHostname , ThreatName , ThreatCategory , EventSeverity , EventResult , EventType , EventProduct , EventVendor , EventSchemaVersion , EventCount"
+                  },
+                  {
+                    "streams": [
+                      "Custom-CiscoMerakiFileScannedEvents_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-CiscoMerakiFileScannedEvents_CL",
+                    "transformKql": "source | where tostring(['eventType']) == 'File Scanned' | extend TimeGenerated = ts , EventType = ['eventType'] , DeviceMac = ['deviceMac'] , ClientMac = ['clientMac'] , SourceIp = ['srcIp'] , DestinationIp = ['destIp'] , Uri = ['uri'] , FileType = ['fileType'] , Disposition = ['disposition'] , Action = ['action'] , FileHash = ['fileHash'] , FileSizeBytes = tolong(['fileSizeBytes']) , EventMessage = ['message'] , EventProduct = ['eventProduct'] , EventVendor = ['eventVendor'] , EventSchemaVersion = ['eventSchemaVersion'] , EventCount = toint(['eventCount']) | project TimeGenerated , EventType , DeviceMac , ClientMac , SourceIp , DestinationIp , Uri , FileType , Disposition , Action , FileHash , FileSizeBytes , EventMessage , EventProduct , EventVendor , EventSchemaVersion , EventCount"
                   }
                 ]
+              }
+            },
+            {
+              "name": "CiscoMerakiFileScannedEvents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CiscoMerakiFileScannedEvents_CL",
+                  "description": "The CiscoMerakiFileScannedEvents table contains Cisco Meraki appliance file scanning detections, including the file URI, disposition, action, size, and hash information for evaluated files.",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Cisco Meraki event type for the file scan result."
+                    },
+                    {
+                      "name": "DeviceMac",
+                      "type": "string",
+                      "description": "MAC address of the Meraki appliance associated with the event."
+                    },
+                    {
+                      "name": "ClientMac",
+                      "type": "string",
+                      "description": "Client MAC address associated with the file scan."
+                    },
+                    {
+                      "name": "SourceIp",
+                      "type": "string",
+                      "description": "Source IP address for the file transfer or request."
+                    },
+                    {
+                      "name": "DestinationIp",
+                      "type": "string",
+                      "description": "Destination IP address for the file transfer or request."
+                    },
+                    {
+                      "name": "Uri",
+                      "type": "string",
+                      "description": "URI or URL evaluated by the file scan engine."
+                    },
+                    {
+                      "name": "FileType",
+                      "type": "string",
+                      "description": "Detected or classified file type."
+                    },
+                    {
+                      "name": "Disposition",
+                      "type": "string",
+                      "description": "Threat disposition returned by the file scanning engine."
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string",
+                      "description": "Action taken against the scanned file."
+                    },
+                    {
+                      "name": "FileHash",
+                      "type": "string",
+                      "description": "Hash value of the downloaded or scanned file."
+                    },
+                    {
+                      "name": "FileSizeBytes",
+                      "type": "long",
+                      "description": "File size in bytes."
+                    },
+                    {
+                      "name": "EventMessage",
+                      "type": "string",
+                      "description": "Raw event message for the file scan result."
+                    },
+                    {
+                      "name": "EventProduct",
+                      "type": "string",
+                      "description": "Product name reported in the event."
+                    },
+                    {
+                      "name": "EventVendor",
+                      "type": "string",
+                      "description": "Vendor name reported in the event."
+                    },
+                    {
+                      "name": "EventSchemaVersion",
+                      "type": "string",
+                      "description": "Schema version for the event."
+                    },
+                    {
+                      "name": "EventCount",
+                      "type": "string",
+                      "description": "Event count value for the source record."
+                    }
+                  ]
+                }
               }
             },
             {
@@ -1406,7 +1625,7 @@
           "id": "CiscoMerakiConnector",
           "title": "Cisco Meraki Events (using REST API) (via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, and wireless Air Marshal (rogue access point) events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+          "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes, API Requests, and File Scanned detections) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, wireless Air Marshal (rogue access point) events, and File Scanned events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
           "graphQueries": [
             {
               "metricName": "Total Organization logs received",
@@ -1439,9 +1658,14 @@
               "baseQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
             },
             {
-              "metricName": "Total Security/IDS events received",
-              "legend": "Cisco Meraki Security Events (ASimNetworkSessionLogs)",
+              "metricName": "Total Security events received",
+              "legend": "Cisco Meraki Security Events excluding File Scanned (ASimNetworkSessionLogs)",
               "baseQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
+            },
+            {
+              "metricName": "Total File Scanned events received",
+              "legend": "Cisco Meraki File Scanned Events",
+              "baseQuery": "CiscoMerakiFileScannedEvents_CL"
             }
           ],
           "sampleQueries": [
@@ -1483,7 +1707,11 @@
             },
             {
               "description": "Get IDS alerts from last 24 hours",
-              "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'Notable'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+              "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'IDS Alert'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+            },
+            {
+              "description": "Get file scanned events from last 24 hours",
+              "query": "CiscoMerakiFileScannedEvents_CL | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventType, FileType, Uri, Action, Disposition, SourceIp, DestinationIp, FileHash\n | order by TimeGenerated desc"
             },
             {
               "description": "Get configuration changes from last 24 hours",
@@ -1493,7 +1721,7 @@
           "dataTypes": [
             {
               "name": "CiscoMerakiOrganizations",
-              "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             },
             {
               "name": "CiscoMerakiNetworkClients",
@@ -1501,7 +1729,7 @@
             },
             {
               "name": "CiscoMerakiOrganizationNetworks",
-              "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             },
             {
               "name": "CiscoMerakiAirMarshalEvents",
@@ -1513,11 +1741,15 @@
             },
             {
               "name": "ASimAuditEventLogs",
-              "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(90d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             },
             {
               "name": "ASimNetworkSessionLogs",
               "lastDataReceivedQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "CiscoMerakiFileScannedEvents",
+              "lastDataReceivedQuery": "CiscoMerakiFileScannedEvents_CL\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1678,6 +1910,10 @@
                                 {
                                   "key": "ASimNetworkSessionLogs",
                                   "text": "Security Events / IDS (ASIM Network Session)"
+                                },
+                                {
+                                  "key": "CiscoMerakiFileScannedEvents",
+                                  "text": "File Scanned Events"
                                 }
                               ],
                               "placeholder": "Select data types to collect...",
@@ -2193,7 +2429,7 @@
                   "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/organizations/',parameters('organizationId'),'/configurationChanges')]",
                   "httpMethod": "GET",
                   "rateLimitQPS": 2,
-                  "queryWindowInMin": 5,
+                  "queryWindowInMin": 129600,
                   "queryTimeFormat": "UnixTimestamp",
                   "retryCount": 3,
                   "timeoutInSeconds": 30,
@@ -2292,8 +2528,7 @@
                 },
                 "addOnAttributes": {
                   "organization": "[[parameters('organizationId')]",
-                  "dataType": "Security Events (IDS)",
-                  "idsEventType": "Notable",
+                  "dataType": "Security Events",
                   "eventProduct": "Meraki",
                   "eventVendor": "Cisco",
                   "eventSchemaVersion": "0.1.1",
@@ -2301,6 +2536,66 @@
                 }
               },
               "condition": "[[contains(parameters('selectedDataTypes'), 'ASimNetworkSessionLogs')]"
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','CiscoMerakiFileScannedEvents' , uniqueString(parameters('organizationId')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiKey')]",
+                  "ApiKeyName": "X-Cisco-Meraki-API-Key"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/organizations/',parameters('organizationId'),'/appliance/security/events')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 2,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestamp",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "perPage": "1000"
+                  },
+                  "startTimeAttributeName": "t0",
+                  "endTimeAttributeName": "t1"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderTokenJsonPath": "Link",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "perPage"
+                },
+                "connectorDefinitionName": "CiscoMerakiConnector",
+                "dataType": "CiscoMerakiFileScannedEvents",
+                "dcrConfig": {
+                  "streamName": "Custom-CiscoMerakiFileScannedEvents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "organization": "[[parameters('organizationId')]",
+                  "dataType": "File Scanned Events",
+                  "eventProduct": "Meraki",
+                  "eventVendor": "Cisco",
+                  "eventType": "File Scanned",
+                  "eventSchemaVersion": "0.1.1",
+                  "eventCount": "1"
+                }
+              },
+              "condition": "[[contains(parameters('selectedDataTypes'), 'CiscoMerakiFileScannedEvents')]"
             }
           ]
         },
@@ -2322,7 +2617,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_CiscoMerakiOrganizationsAliasFunction Data Parser with template version 3.2.0",
+        "description": "parser_CiscoMerakiOrganizationsAliasFunction Data Parser with template version 3.2.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -2454,7 +2749,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_CiscoMerakiOrganizationNetworksAliasFunction Data Parser with template version 3.2.0",
+        "description": "parser_CiscoMerakiOrganizationNetworksAliasFunction Data Parser with template version 3.2.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -2586,7 +2881,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_CiscoMerakiNetworkClientsAliasFunction Data Parser with template version 3.2.0",
+        "description": "parser_CiscoMerakiNetworkClientsAliasFunction Data Parser with template version 3.2.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject3').parserVersion3]",
@@ -2718,7 +3013,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_CiscoMerakiAirMarshalEventsAliasFunction Data Parser with template version 3.2.0",
+        "description": "parser_CiscoMerakiAirMarshalEventsAliasFunction Data Parser with template version 3.2.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject4').parserVersion4]",
@@ -2846,7 +3141,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.2.0",
+        "version": "3.2.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cisco Meraki Events via REST API",
