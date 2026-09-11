@@ -1,5 +1,9 @@
 # Changelog for vimNetworkSessionCiscoMeraki.yaml
 
+## Version 1.3.0
+
+- (2026-09-11) Improved LogType parsing and filtering, added current firewall and IDS event variants, and restricted output to ASIM fields.
+
 ## Version 1.2.2
 
 - (2025-06-26) CiscoMerakiNetworkParserFix - [PR #12418](https://github.com/Azure/Azure-Sentinel/pull/12418)
