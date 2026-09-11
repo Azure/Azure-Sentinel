@@ -1,5 +1,9 @@
 # Changelog for imWebSession.yaml
 
+## Version 0.6.6
+
+- (2026-08-26) Add parser for Cloudflare One logs. - [PR #14982](https://github.com/Azure/Azure-Sentinel/pull/14982)
+
 ## Version 0.6.5
 
 - (2026-06-11) Add parser for AWS Web Application Firewall (WAF) logs. - [PR #14496](https://github.com/Azure/Azure-Sentinel/pull/14496)

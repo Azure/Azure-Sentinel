@@ -1,0 +1,443 @@
+Parser:
+  Title: Web Session ASIM parser for Cloudflare One
+  Version: '0.1.0'
+  LastUpdated: Aug 26, 2026
+Product:
+  Name: Cloudflare One
+Normalization:
+  Schema: 'WebSession'
+  Version: '0.2.7'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cloudflare Documentation
+  Link: https://developers.cloudflare.com/logs/logpush/logpush-job/datasets
+Description: |
+  This ASIM parser supports normalizing the Cloudflare One Web Session activities ingested in 'CloudflareV2_CL' table to the ASIM Web Session normalized schema. We only support the schema of the table updated on Apr 22, 2026.
+ParserName: ASimWebSessionCloudflareOne
+EquivalentBuiltInParser: _ASim_WebSession_CloudflareOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false    
+ParserQuery: |
+    let parser = (
+        disabled:bool = false
+        , pack:bool = false
+    )
+    {
+        let CloudflareBase = (
+            CloudflareV2_CL
+            | where not(disabled)
+            | extend
+                EventOriginalType = case(
+                    // sinkhole_http_logs. SinkholeID is a unique field for sinkhole events
+                    isnotempty(SinkholeID)
+                        and (
+                            isnotempty(URL)
+                            or isnotempty(URI)
+                        )
+                        , "sinkhole_http_logs"
+                    // gateway_http. Unique combination of available fields indicating gateway_http
+                    , (
+                        isnotempty(RequestID)
+                        or isnotempty(RegistrationID)
+                    )
+                        and isnotempty(URL)
+                        , "gateway_http"
+                    // firewall_events. Kind is a unique field for firewall events
+                    , isnotempty(ClientRequestPath)
+                        and Kind =~ "firewall"
+                        , "firewall_events"
+                    // http_requests. ClientRequestURI is a unique field for http_requests, also needed for Web Session
+                    , isnotempty(ClientRequestURI)
+                        , "http_requests"
+                    , ""
+                )
+            | where EventOriginalType in (
+                "gateway_http"
+                , "http_requests"
+                , "firewall_events"
+                , "sinkhole_http_logs"
+            )
+        );
+        let GatewayHttp = (
+            CloudflareBase
+            | where EventOriginalType == "gateway_http"
+            | extend
+                EventStartTime = coalesce(todatetime(Datetime), TimeGenerated)
+                , SrcIpAddr = SourceIP
+                , SrcPortNumber = toint(SourcePort)
+                , DstIpAddr = DestinationIP
+                , DstPortNumber = toint(DestinationPort)
+                , Url = URL
+                , HttpHost = HTTPHost
+                , HttpRequestMethod = HTTPMethod
+                , tmpHttpVersion = HTTPVersion
+                , HttpUserAgent = UserAgent
+                , HttpReferrer = Referer
+                , tmpHttpCode = toint(HTTPStatusCode)
+                , DvcOriginalAction = Action
+                , EventOriginalUid = coalesce(RequestID, SessionID)
+                , EventType = "HTTPsession"
+                , SrcUsername = Email
+                , RuleName = PolicyName
+                , UrlCategory = iff(
+                    array_length(todynamic(CategoryNames)) > 0
+                    , strcat_array(todynamic(CategoryNames), ", ")
+                    , ""
+                )
+            | extend
+                EventEndTime = EventStartTime
+                , AdditionalFields = iff(pack
+                    , bag_pack(
+                         "ApplicationNames", ApplicationNames
+                        , "SourceIPCountryCode", SourceIPCountryCode
+                        , "DestinationIPCountryCode", DestinationIPCountryCode
+                        , "DeviceID", DeviceID
+                        , "DeviceName", DeviceName
+                        , "FileInfo", FileInfo
+                        , "ProxyEndpoint", ProxyEndpoint
+                        , "RegistrationID", RegistrationID
+                        , "SourceInternalIP", SourceInternalIP
+                        , "RequestID", RequestID
+                        , "SessionID", SessionID
+                        , "UserID", UserID
+                        , "VirtualNetworkID", VirtualNetworkID
+                        , "VirtualNetworkName", VirtualNetworkName
+                        , "IsIsolated", IsIsolated
+                        , "Quarantined", Quarantined
+                        , "RedirectTargetURI", RedirectTargetURI
+                        , "UntrustedCertificateAction", UntrustedCertificateAction
+                        , "BlockedFileHash", BlockedFileHash
+                        , "BlockedFileName", BlockedFileName
+                        , "BlockedFileReason", BlockedFileReason
+                        , "DownloadedFileNames", DownloadedFileNames
+                        , "UploadedFileNames", UploadedFileNames
+                        , "DownloadMatchedDlpProfiles", DownloadMatchedDlpProfiles
+                        , "UploadMatchedDlpProfiles", UploadMatchedDlpProfiles
+                    )
+                    , dynamic({})
+                )
+        );
+        let HttpRequests = (
+            CloudflareBase
+            | where EventOriginalType == "http_requests"
+            | extend
+                EventStartTime = coalesce(
+                    todatetime(EdgeStartTimestamp)
+                    , todatetime(Datetime)
+                    , TimeGenerated
+                )
+                , SrcIpAddr = ClientIP
+                , SrcPortNumber = toint(ClientSrcPort)
+                , DstIpAddr = OriginIP
+                , DstPortNumber = toint(OriginPort)
+                , Url = ClientRequestURI
+                , HttpHost = ClientRequestHost
+                , HttpRequestMethod = ClientRequestMethod
+                , tmpHttpVersion = ClientRequestProtocol
+                , HttpUserAgent = ClientRequestUserAgent
+                , HttpReferrer = ClientRequestReferer
+                , tmpHttpCode = case(
+                    toint(EdgeResponseStatus) > 0, toint(EdgeResponseStatus)
+                    , toint(OriginResponseStatus) > 0, toint(OriginResponseStatus)
+                    , int(null)
+                )
+                , DvcOriginalAction = SecurityAction
+                , EventOriginalUid = RayID
+                , EventType = "WebServerSession"
+                , SrcUsername = ""
+                , RuleName = SecurityRuleDescription
+                , UrlCategory = ""
+            | extend
+                EventEndTime = coalesce(todatetime(EdgeEndTimestamp), EventStartTime)
+                , AdditionalFields = iff(
+                    pack
+                    , bag_pack(
+                         "SecurityActions", SecurityActions
+                        , "SecurityRuleIDs", SecurityRuleIDs
+                        , "SecuritySources", SecuritySources
+                        , "WAFAttackScore", WAFAttackScore
+                        , "WAFRCEAttackScore", WAFRCEAttackScore
+                        , "WAFSQLiAttackScore", WAFSQLiAttackScore
+                        , "WAFXSSAttackScore", WAFXSSAttackScore
+                        , "BotScore", BotScore
+                        , "BotScoreSrc", BotScoreSrc
+                        , "BotTags", BotTags
+                        , "Cookies", Cookies
+                        , "BotDetectionTags", BotDetectionTags
+                        , "BotDetectionIDs", BotDetectionIDs
+                        , "JA3Hash", JA3Hash
+                        , "JA4", JA4
+                        , "LeakedCredentialCheckResult", LeakedCredentialCheckResult
+                        , "ContentScanObjResults", ContentScanObjResults
+                        , "ContentScanObjTypes", ContentScanObjTypes
+                        , "RequestHeaders", RequestHeaders
+                        , "CacheCacheStatus", CacheCacheStatus
+                        , "ClientCountry", ClientCountry
+                        , "ClientCity", ClientCity
+                        , "ClientRegionCode", ClientRegionCode
+                        , "ClientIPClass", ClientIPClass
+                        , "ClientSSLProtocol", ClientSSLProtocol
+                        , "ClientXRequestedWith", ClientXRequestedWith
+                        , "ClientMTLSAuthStatus", ClientMTLSAuthStatus
+                        , "ClientMTLSAuthCertFingerprint", ClientMTLSAuthCertFingerprint
+                        , "EdgeRequestHost", EdgeRequestHost
+                        , "EdgeResponseContentType", EdgeResponseContentType
+                        , "EdgeColoCode", EdgeColoCode
+                        , "EdgePathingOp", EdgePathingOp
+                        , "EdgePathingSrc", EdgePathingSrc
+                        , "EdgePathingStatus", EdgePathingStatus
+                        , "EdgeServerIP", EdgeServerIP
+                        , "OriginResponseStatus", OriginResponseStatus
+                        , "OriginSSLProtocol", OriginSSLProtocol
+                        , "ZoneName", ZoneName
+                        , "WorkerScriptName", WorkerScriptName
+                    )
+                    , dynamic({})
+                )
+        );
+        let FirewallEvents = (
+            CloudflareBase
+            | where EventOriginalType == "firewall_events"
+            | extend
+                EventStartTime = coalesce(todatetime(Datetime), TimeGenerated)
+                , SrcIpAddr = ClientIP
+                , SrcPortNumber = toint(ClientSrcPort)
+                , DstIpAddr = OriginIP
+                , DstPortNumber = toint(OriginPort)
+                , Url = strcat(ClientRequestPath, ClientRequestQuery)
+                , HttpHost = ClientRequestHost
+                , HttpRequestMethod = ClientRequestMethod
+                , tmpHttpVersion = ClientRequestProtocol
+                , HttpUserAgent = ClientRequestUserAgent
+                , HttpReferrer = iff(
+                    isempty(ClientRefererHost), ""
+                    , strcat(
+                        ClientRefererScheme, "://"
+                        , ClientRefererHost
+                        , ClientRefererPath
+                        , ClientRefererQuery
+                    )
+                )
+                , tmpHttpCode = case(
+                    toint(EdgeResponseStatus) > 0, toint(EdgeResponseStatus)
+                    , toint(OriginResponseStatus) > 0, toint(OriginResponseStatus)
+                    , int(null)
+                )
+                , DvcOriginalAction = Action
+                , EventOriginalUid = RayID
+                , EventType = "WebServerSession"
+                , SrcUsername = ""
+                , RuleName = Description
+                , UrlCategory = ""
+            | extend
+                EventEndTime = EventStartTime
+                , AdditionalFields = iff(
+                    pack
+                    , bag_pack(
+                          "Ref", Ref
+                        , "RuleID", RuleID
+                        , "Source", Source
+                        , "MatchIndex", MatchIndex
+                        , "Metadata", Metadata
+                        , "LeakedCredentialCheckResult", LeakedCredentialCheckResult
+                        , "ContentScanObjResults", ContentScanObjResults
+                        , "ContentScanObjTypes", ContentScanObjTypes
+                        , "ClientCountry", ClientCountry
+                        , "EdgeColoCode", EdgeColoCode
+                        , "OriginResponseStatus", OriginResponseStatus
+                        , "RayID", RayID
+                        , "OriginatorRayID", OriginatorRayID
+                        , "ZoneName", ZoneName
+                    )
+                    , dynamic({})
+                )
+        );
+        let SinkholeHttp = (
+            CloudflareBase
+            | where EventOriginalType == "sinkhole_http_logs"
+            | extend
+                EventStartTime = coalesce(todatetime(Timestamp), TimeGenerated)
+                , SrcIpAddr = SrcAddr
+                , SrcPortNumber = int(null)
+                , DstIpAddr = DestAddr
+                , DstPortNumber = int(null)
+                , Url = case(
+                    isnotempty(URI), URI
+                    , URL
+                )
+                , HttpHost = Host
+                , HttpRequestMethod = Method
+                , tmpHttpVersion = ""
+                , HttpUserAgent = UserAgent
+                , HttpReferrer = Referrer
+                , tmpHttpCode = int(null)
+                , DvcOriginalAction = ""
+                , EventOriginalUid = SinkholeID
+                , EventType = "WebServerSession"
+                , SrcUsername = Username
+                , RuleName = ""
+                , UrlCategory = ""
+            | extend
+                EventEndTime = EventStartTime
+                , AdditionalFields = iff(
+                    pack
+                    , bag_pack(
+                         "AccountID", AccountID
+                        , "Body", Body
+                        , "BodyLength", BodyLength
+                        , "Headers", Headers
+                        , "R2Path", R2Path
+                    )
+                    , dynamic({})
+                )
+        );
+        union
+            GatewayHttp, HttpRequests, FirewallEvents, SinkholeHttp
+        | extend
+              EventProduct = "Cloudflare One"
+            , HttpVersion = case(
+                isempty(tmpHttpVersion), ""
+                , tmpHttpVersion in~ ("HTTP/2", "HTTP/2.0", "2", "2.0"), "2.0"
+                , tmpHttpVersion in~ ("HTTP/3", "HTTP/3.0", "3", "3.0"), "3.0"
+                , tmpHttpVersion startswith "HTTP/", substring(tmpHttpVersion, 5)
+                , tmpHttpVersion
+            )
+            , DvcAction = case(
+                DvcOriginalAction in~ (
+                    "allow" // gateway_http, http_requests, firewall_events
+                    , "isolate" // gateway_http
+                    , "override" // gateway_http
+                    , "safesearch" // gateway_http
+                    , "scan" // gateway_http
+                    , "noscan" // gateway_http
+                    , "redirect" // gateway_http
+                    , "bypass" // gateway_http, http_requests, firewall_events
+                    , "log" // http_requests, firewall_events
+                    , "skip" // http_requests
+                    , "rewrite" // http_requests
+                    , "challengesolved" // http_requests, firewall_events
+                    , "challengebypassed" // http_requests, firewall_events
+                    , "jschallengesolved" // http_requests, firewall_events
+                    , "jschallengebypassed" // http_requests, firewall_events
+                    , "managedchallengenoninteractivesolved" // http_requests, firewall_events
+                    , "managedchallengeinteractivesolved" // http_requests, firewall_events
+                    , "managedchallengebypassed" // http_requests, firewall_events
+                    , "precursorinterstitialpagebypassed" // http_requests, firewall_events
+                    , "precursorinterstitialpagesolved" // http_requests, firewall_events
+                )
+                    , "Allow"
+                , DvcOriginalAction in~ (
+                    "block" // gateway_http, http_requests, firewall_events
+                    , "quarantine" // gateway_http
+                    , "challenge" // http_requests, firewall_events
+                    , "jschallenge" // http_requests, firewall_events
+                    , "managedchallenge" // http_requests, firewall_events
+                    , "precursorinterstitialpageissued" // http_requests, firewall_events
+                )
+                    , "Deny"
+                , DvcOriginalAction in~ (
+                    "connectionclose" // http_requests, firewall_events
+                    , "forceconnectionclose" // http_requests
+                )
+                    , "Drop"
+                , ""
+            )
+            , EventResultDetails = iff(
+                isnotnull(tmpHttpCode) and tmpHttpCode > 0, tostring(tmpHttpCode)
+                , ""
+            )
+        | extend
+            // Deny, Drop = Low; otherwise Informational.
+            EventSeverity = iff(
+                DvcAction in ("Deny", "Drop")
+                , "Low"
+                , "Informational"
+            )
+            , EventResult = case(
+                // Success: <400, Failure: >=400
+                DvcAction in ("Deny", "Drop")
+                    , "Failure"
+                , isnotnull(tmpHttpCode) and tmpHttpCode >= 100 and tmpHttpCode < 400
+                    , "Success"
+                , isnotnull(tmpHttpCode) and tmpHttpCode >= 400
+                    , "Failure"
+                , DvcAction == "Allow"
+                    , "Success"
+                , "NA"
+            )
+            , SrcUsernameType = case(
+                SrcUsername contains "@", "UPN"
+                , SrcUsername contains @"\", "Windows"
+                , isnotempty(SrcUsername), "Simple"
+                , ""
+            )
+            , EventUid = _ItemId
+            , EventCount = int(1)
+            , EventVendor = "Cloudflare"
+            , EventSchema = "WebSession"
+            , EventSchemaVersion = "0.2.7"
+            , Dvc = EventProduct
+        | extend
+            Src = SrcIpAddr
+            , Dst = case(
+                isnotempty(DstIpAddr), DstIpAddr
+                , isnotempty(HttpHost), HttpHost
+                , ""
+            )
+            , IpAddr = SrcIpAddr
+            , User = SrcUsername
+            , Rule = RuleName
+        | project
+            TimeGenerated
+            , Type
+            , EventCount
+            , EventStartTime
+            , EventEndTime
+            , EventType
+            , EventOriginalType
+            , EventResult
+            , EventResultDetails
+            , HttpStatusCode = EventResultDetails
+            , EventSeverity
+            , EventProduct
+            , EventVendor
+            , EventSchema
+            , EventSchemaVersion
+            , EventUid
+            , EventOriginalUid
+            , Dvc
+            , DvcAction
+            , DvcOriginalAction
+            , Src
+            , SrcIpAddr
+            , SrcPortNumber
+            , SrcUsername
+            , SrcUsernameType
+            , Dst
+            , DstIpAddr
+            , DstPortNumber
+            , IpAddr
+            , User
+            , Url
+            , UrlCategory
+            , HttpRequestMethod
+            , HttpVersion
+            , HttpHost
+            , HttpReferrer
+            , HttpUserAgent
+            , Rule
+            , RuleName
+            , AdditionalFields
+    };
+    parser(
+        disabled = disabled
+        , pack = pack
+    )
