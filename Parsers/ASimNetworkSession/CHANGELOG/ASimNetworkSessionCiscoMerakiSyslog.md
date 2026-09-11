@@ -2,7 +2,7 @@
 
 ## Version 1.3.0
 
-- (2026-09-11) Improved LogType parsing and filtering, added current firewall event coverage, and restricted output to ASIM fields.
+- (2026-09-11) Improved LogType parsing and filtering, added current firewall event coverage, and restricted output to ASIM fields - [PR #15108](https://github.com/Azure/Azure-Sentinel/pull/15108)
 
 ## Version 1.2.2
 
