@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                            |
 |-------------|--------------------------------|-------------------------------------------------------------------------------|
+| 3.1.1       | 24-08-2026                     | Adding Analytic Rule to comply with MISA requirements                         |
 | 3.1.0       | 26-05-2026                     | Updated to use LogIngestion instead of the deprecated HTTP Data Collector API |
 | 3.0.3       | 05-05-2025                     | Use Flex Consumption plan to hold Data Connector                              |
 | 3.0.2       | 30-09-2024                     | Show mitre attack ids and link to detection rule page                         |
