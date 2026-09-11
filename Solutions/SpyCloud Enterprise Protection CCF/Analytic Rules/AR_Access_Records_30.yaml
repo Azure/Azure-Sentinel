@@ -1,5 +1,5 @@
-id: ead4deed-9d48-4646-aee0-6b46c2dd1ae6
-name: SpyCloud infostealer malware credential exposure
+id: cd8ec49c-b654-49be-b040-e552b8eba7c8
+name: SpyCloud identity access record exposure
 # The '#DONT_CORR#' prefix on the description below is functional, not documentation.
 # Microsoft Sentinel reads it to disable Microsoft Defender XDR incident correlation for
 # incidents raised by this rule. Without it, each hourly alert is merged into the previously
@@ -7,9 +7,10 @@ name: SpyCloud infostealer malware credential exposure
 # creation, so remediation would run once and then silently stop. Do not remove it.
 description: |
   #DONT_CORR#
-  'Identifies credentials harvested by infostealer malware on a compromised device. This
-  exposure may indicate an actively compromised endpoint with associated command-and-control
-  risk.'
+  'Identifies exposure of identity access material such as session cookies, OAuth tokens,
+  or SSO credentials. This material can grant direct account access without a password,
+  so it bypasses password resets and single-factor controls. Revoking active sessions is
+  the primary containment action.'
 severity: High
 requiredDataConnectors:
   - connectorId: SpyCloudEnterpriseProtectionCCF
@@ -21,35 +22,35 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - CredentialAccess
-  - CommandAndControl
+  - DefenseEvasion
 relevantTechniques:
-  - T1555
-  - T1071
+  - T1539
+  - T1528
+  - T1550
 query: |
   // Human-readable constant for the severity threshold used below
-  let severityThreshold = 25;
+  let severityThreshold = 30;
   SpyCloudBreachWatchlistV2_CL
   | where Severity == severityThreshold
   | extend AccountName = Username, AccountEmail = Email, HostName = UserHostName,
       AccountUpn = iff(isnotempty(Email), Email, Username),
       // Under AlertPerResult every row becomes its own alert, so mv-expand on IPAddresses
-      // would raise one alert per IP for the same machine and isolate it repeatedly.
-      // Take the first address instead.
+      // would raise one alert per IP for the same identity. Take the first address instead.
       IPAddress = tostring(IPAddresses[0])
-  // One alert per infected machine. InfectedMachineId is populated on every malware record,
-  // so it is a reliable dedupe key; without this a machine seen several times in the same
-  // window raises duplicate alerts and is acted on more than once. Deduplication is per rule
-  // execution, so a machine reappearing in a later window correctly raises a new alert.
-  | summarize arg_max(TimeGenerated, *) by InfectedMachineId
+  // One alert per exposed identity. Session revocation acts per user, so a user appearing
+  // several times in the same window would otherwise be revoked repeatedly. Deduplication is
+  // per rule execution, so a reappearance in a later window correctly raises a new alert.
+  | summarize arg_max(TimeGenerated, *) by AccountUpn
   | project TimeGenerated, DocumentId, SourceId, SpyCloudPublishDate, AccountEmail,
-      AccountName, AccountUpn, HostName, InfectedMachineId, InfectedTime, UserOS,
-      IPAddress
+      AccountName, AccountUpn, HostName, TargetDomain, TargetUrl, AccountType, PasswordType,
+      InfectedMachineId, InfectedTime, UserOS, IPAddress
 eventGroupingSettings:
   aggregationKind: AlertPerResult
-# Keeps each machine distinguishable in the incident list. The MDE automation rule
-# matches IncidentTitle with Contains, so the base display name must stay intact here.
+# Keeps each identity distinguishable in the incident list. The session revocation
+# automation rule matches IncidentTitle with Contains, so the base display name must
+# stay intact here.
 alertDetailsOverride:
-  alertDisplayNameFormat: SpyCloud infostealer malware credential exposure - {{HostName}}
+  alertDisplayNameFormat: SpyCloud identity access record exposure - {{AccountUpn}}
 customDetails:
   DocumentID: DocumentId
   SpyCloudPublishDate: SpyCloudPublishDate
