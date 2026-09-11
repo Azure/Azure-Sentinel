@@ -8,18 +8,24 @@
             "1. Make sure that the TeamCymruScoutCreateIncidentAndNotify playbook is deployed before deploying the TeamCymruScoutLiveInvestigation playbook."
         ],
         "postDeployment": [
-            "**a. Authorize connections**",
+            "**a. Log ingestion**",
+            "This playbook writes to Log Analytics through the Logs Ingestion API using its own system-assigned managed identity. The data collection endpoint, the data collection rule, the destination tables and the Monitoring Metrics Publisher role assignment are all created by this template, so ingestion needs no manual authorization.",
+            "If you ran an earlier version of this playbook, its tables were created by the retired HTTP Data Collector API and must be converted once per workspace before the first run:",
+            "az monitor log-analytics workspace table migrate --resource-group <resource-group> --workspace-name <workspace> --table-name <Table>_CL",
+            "This conversion cannot be undone. The playbook README lists every table it writes.",
+            "**b. Authorize connections**",
             "Once deployment is complete, authorize each connection.",
-            "1. Go to your logic app → API connections → Select azureloganalyticsdatacollector connection resource",
+            "1. Go to your logic app → API connections → Select a connection resource",
             "2. Go to General → Edit API connection",
-            "3. Enter Workspace ID and Workspace Key of your log analytics workspace.",
-            "4. Click Authorize",
-            "5. Sign in",
-            "6. Click Save",
-            "7. Repeat steps for other connections"
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
         ],
-        "lastUpdateTime": "2024-08-13T11:30:09.145Z",
-        "entities": ["IP"],
+        "lastUpdateTime": "2026-09-10T00:00:00Z",
+        "entities": [
+            "IP"
+        ],
         "tags": [
             "Team Cymru Scout",
             "Live Investigation",
@@ -82,7 +88,8 @@
     },
     "variables": {
         "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+        "DataCollectionEndpointName": "[concat(parameters('PlaybookName'), '-dce')]",
+        "DataCollectionRuleName": "[concat(parameters('PlaybookName'), '-dcr')]"
     },
     "resources": [
         {
@@ -103,6 +110,14 @@
                         },
                         "username": {
                             "defaultValue": "[trim(parameters('UserName'))]",
+                            "type": "String"
+                        },
+                        "dataCollectionEndpoint": {
+                            "defaultValue": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))).logsIngestion.endpoint]",
+                            "type": "String"
+                        },
+                        "dcrImmutableId": {
+                            "defaultValue": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))).immutableId]",
                             "type": "String"
                         }
                     },
@@ -247,7 +262,7 @@
                                                             }
                                                         },
                                                         "method": "post",
-                                                        "body": "@{variables('ip_indicators_table_name')}_CL\n| where TimeGenerated \u003e= ago(90d)",
+                                                        "body": "@{variables('ip_indicators_table_name')}_CL\n| where TimeGenerated >= ago(90d)",
                                                         "path": "/queryData",
                                                         "queries": {
                                                             "subscriptions": "[subscription().subscriptionId]",
@@ -446,19 +461,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip']}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('proto_by_ip_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip'])), '['), body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip'], createArray(body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip']))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('proto_by_ip_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -655,19 +669,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{variables('top_asns_data_obj')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('top_asns_by_ip_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(variables('top_asns_data_obj'))), '['), variables('top_asns_data_obj'), createArray(variables('top_asns_data_obj')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('top_asns_by_ip_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Top_Asns_Data_Object": {
@@ -757,19 +770,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_Object_From_Top_Certs_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('certs_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_Object_From_Top_Certs_Data'))), '['), outputs('Compose_Object_From_Top_Certs_Data'), createArray(outputs('Compose_Object_From_Top_Certs_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('certs_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -962,19 +974,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{variables('top_country_codes_data_obj')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('top_country_codes_by_ip_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(variables('top_country_codes_data_obj'))), '['), variables('top_country_codes_data_obj'), createArray(variables('top_country_codes_data_obj')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('top_country_codes_by_ip_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Top_Country_Codes_Data_Object": {
@@ -1064,19 +1075,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_Object_From_Fingerprints_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('fingerprints_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_Object_From_Fingerprints_Data'))), '['), outputs('Compose_Object_From_Fingerprints_Data'), createArray(outputs('Compose_Object_From_Fingerprints_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('fingerprints_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -1132,19 +1142,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Open_Ports_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('open_ports_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Top_Open_Ports_Data'))), '['), outputs('Compose_An_Object_From_Top_Open_Ports_Data'), createArray(outputs('Compose_An_Object_From_Top_Open_Ports_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('open_ports_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -1200,19 +1209,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Pdns_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('pdns_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Top_Pdns_Data'))), '['), outputs('Compose_An_Object_From_Top_Pdns_Data'), createArray(outputs('Compose_An_Object_From_Top_Pdns_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('pdns_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -1410,19 +1418,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{variables('top_services_data_obj')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('top_services_by_ip_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(variables('top_services_data_obj'))), '['), variables('top_services_data_obj'), createArray(variables('top_services_data_obj')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('top_services_by_ip_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Top_Services_Data_Object": {
@@ -1642,19 +1649,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{variables('top_tags_data_obj')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('top_tags_by_ip_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(variables('top_tags_data_obj'))), '['), variables('top_tags_data_obj'), createArray(variables('top_tags_data_obj')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('top_tags_by_ip_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 },
                                                 "Set_Top_Tags_Data_Object": {
@@ -4049,19 +4055,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{variables('summary_table_data')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('summary_details_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(variables('summary_table_data'))), '['), variables('summary_table_data'), createArray(variables('summary_table_data')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('summary_details_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Send_Identity_Data_To_Log_Analytics_Table": {
@@ -4070,19 +4075,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{outputs('Compose_Identity_Object_To_Add_IP_Address_Property')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('identity_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(outputs('Compose_Identity_Object_To_Add_IP_Address_Property'))), '['), outputs('Compose_Identity_Object_To_Add_IP_Address_Property'), createArray(outputs('Compose_Identity_Object_To_Add_IP_Address_Property')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('identity_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Send_Whois_Data_To_Log_Analytics_Workspace": {
@@ -4091,19 +4095,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{outputs('Compose_Whois_Object_To_Add_IP_Address_Property')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('whois_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(outputs('Compose_Whois_Object_To_Add_IP_Address_Property'))), '['), outputs('Compose_Whois_Object_To_Add_IP_Address_Property'), createArray(outputs('Compose_Whois_Object_To_Add_IP_Address_Property')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('whois_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Set_Summary_Details_Data_Object": {
@@ -4192,19 +4195,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@{variables('indicator_object')}",
+                                                "method": "POST",
+                                                "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('ip_indicators_table_name'), '_CL?api-version=2023-01-01')}",
+                                                "body": "@if(equals(first(string(variables('indicator_object'))), '['), variables('indicator_object'), createArray(variables('indicator_object')))",
                                                 "headers": {
-                                                    "Log-Type": "@variables('ip_indicators_table_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         },
                                         "Condition_To_Ingest_Insights_Data_If_It_Is_Not_Null": {
@@ -4276,19 +4278,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Insights_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('insights_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Insights_Data'))), '['), outputs('Compose_An_Object_From_Insights_Data'), createArray(outputs('Compose_An_Object_From_Insights_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('insights_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4298,8 +4299,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -4345,19 +4345,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Communication_Peers_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('communication_peers_data_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Communication_Peers_Data'))), '['), outputs('Compose_An_Object_From_Communication_Peers_Data'), createArray(outputs('Compose_An_Object_From_Communication_Peers_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('communication_peers_data_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4367,8 +4366,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -4396,19 +4394,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Main_PDNS_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('main_pdns_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Main_PDNS_Data'))), '['), outputs('Compose_An_Object_From_Main_PDNS_Data'), createArray(outputs('Compose_An_Object_From_Main_PDNS_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('main_pdns_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4418,8 +4415,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -4447,19 +4443,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Main_Open_Ports_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('main_opn_ports_data_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Main_Open_Ports_Data'))), '['), outputs('Compose_An_Object_From_Main_Open_Ports_Data'), createArray(outputs('Compose_An_Object_From_Main_Open_Ports_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('main_opn_ports_data_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4469,8 +4464,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -4498,19 +4492,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Main_Fingerprints_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('main_fingerprints_data_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Main_Fingerprints_Data'))), '['), outputs('Compose_An_Object_From_Main_Fingerprints_Data'), createArray(outputs('Compose_An_Object_From_Main_Fingerprints_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('main_fingerprints_data_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4520,8 +4513,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -4549,19 +4541,18 @@
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
+                                                    "type": "Http",
                                                     "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@{outputs('Compose_An_Object_From_Main_X509_Data')}",
+                                                        "method": "POST",
+                                                        "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('main_x509_data_table_name'), '_CL?api-version=2023-01-01')}",
+                                                        "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Main_X509_Data'))), '['), outputs('Compose_An_Object_From_Main_X509_Data'), createArray(outputs('Compose_An_Object_From_Main_X509_Data')))",
                                                         "headers": {
-                                                            "Log-Type": "@variables('main_x509_data_table_name')"
+                                                            "Content-Type": "application/json"
                                                         },
-                                                        "path": "/api/logs"
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "audience": "https://monitor.azure.com"
+                                                        }
                                                     }
                                                 }
                                             },
@@ -4571,8 +4562,7 @@
                                                 ]
                                             },
                                             "else": {
-                                                "actions": {
-                                                }
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -5276,19 +5266,18 @@
                                                         "Succeeded"
                                                     ]
                                                 },
-                                                "type": "ApiConnection",
+                                                "type": "Http",
                                                 "inputs": {
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "body": "@{outputs('Compose_An_Object_From_Array_Of_Ips')}",
+                                                    "method": "POST",
+                                                    "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('domain_details_table_name'), '_CL?api-version=2023-01-01')}",
+                                                    "body": "@if(equals(first(string(outputs('Compose_An_Object_From_Array_Of_Ips'))), '['), outputs('Compose_An_Object_From_Array_Of_Ips'), createArray(outputs('Compose_An_Object_From_Array_Of_Ips')))",
                                                     "headers": {
-                                                        "Log-Type": "@variables('domain_details_table_name')"
+                                                        "Content-Type": "application/json"
                                                     },
-                                                    "path": "/api/logs"
+                                                    "authentication": {
+                                                        "type": "ManagedServiceIdentity",
+                                                        "audience": "https://monitor.azure.com"
+                                                    }
                                                 }
                                             },
                                             "Terminate_Due_To_Successfully_Ingested_Domain_Data": {
@@ -5323,19 +5312,18 @@
                                                         "Succeeded"
                                                     ]
                                                 },
-                                                "type": "ApiConnection",
+                                                "type": "Http",
                                                 "inputs": {
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "body": "@{variables('indicator_object')}",
+                                                    "method": "POST",
+                                                    "uri": "@{concat(parameters('dataCollectionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/Custom-', variables('domain_indicators_table_name'), '_CL?api-version=2023-01-01')}",
+                                                    "body": "@if(equals(first(string(variables('indicator_object'))), '['), variables('indicator_object'), createArray(variables('indicator_object')))",
                                                     "headers": {
-                                                        "Log-Type": "@variables('domain_indicators_table_name')"
+                                                        "Content-Type": "application/json"
                                                     },
-                                                    "path": "/api/logs"
+                                                    "authentication": {
+                                                        "type": "ManagedServiceIdentity",
+                                                        "audience": "https://monitor.azure.com"
+                                                    }
                                                 }
                                             }
                                         },
@@ -5867,8 +5855,7 @@
                             }
                         },
                         "Initialize_User_Name": {
-                            "runAfter": {
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -5915,8 +5902,7 @@
                             }
                         },
                         "Initialize_Start_Date": {
-                            "runAfter": {
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -5929,8 +5915,7 @@
                             }
                         },
                         "Initialize_End_Date": {
-                            "runAfter": {
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -6183,8 +6168,7 @@
                                 ]
                             },
                             "else": {
-                                "actions": {
-                                }
+                                "actions": {}
                             },
                             "expression": {
                                 "and": [
@@ -6225,11 +6209,6 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                                 "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
-                            },
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
                             }
                         }
                     }
@@ -6249,7 +6228,8 @@
             "apiVersion": "2017-07-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))]"
             ]
         },
         {
@@ -6260,25 +6240,2549 @@
             "kind": "V1",
             "properties": {
                 "displayName": "[variables('AzuremonitorlogsConnectionName')]",
-                "customParameterValues": {
-                },
+                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                 }
             }
         },
         {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DataCollectionEndpointName')]",
             "location": "[resourceGroup().location]",
-            "kind": "V1",
+            "kind": "Linux",
             "properties": {
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                "description": "Ingestion endpoint for Team Cymru Scout playbook logs.",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
                 }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Communication_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Communication_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_max_port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "local_min_port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "local_tags_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_top_services_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_unique_ports_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_max_port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_min_port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_tags_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_top_services_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_unique_ports_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "proto_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "proto_text_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Domain_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Domain_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "query_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "summary_comms_total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Fingerprints_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Fingerprints_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "active_days_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "distinct_ips_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "fingerprint_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "fingerprint_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Identity_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Identity_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "as_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "net_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "reverse_hostnames_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Insights_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Insights_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "message_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rank_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "rating_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Live_Investigation_Domain_Indicators_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Live_Investigation_Domain_Indicators_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Live_Investigation_IP_Indicators_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Live_Investigation_IP_Indicators_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Open_Ports_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Open_Ports_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "banner_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "banner_sha1_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_text_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "service_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/PDNS_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "PDNS_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "active_days_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "distinct_ips_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "domain_created_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_expires_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "nameservers_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "registrar_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "root_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tld_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Proto_By_IP_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Proto_By_IP_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data_dates_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_proto_by_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_protocols_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "request_id_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "size_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "bgp_asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asname_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "geo_ip_cc_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "insights_insights_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "insights_overall_rating_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "insights_total_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "open_ports_unique_ports_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "pdns_total_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "reverse_hostnames_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "whois_as_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "whois_net_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_name_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Certs_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Certs_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "common_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer_common_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "md5_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "not_after_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "not_before_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "self_signed_b",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "sha1_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subject_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "valid_days_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Fingerprints_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Fingerprints_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "signature_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "signature_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Open_Ports_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Open_Ports_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_text_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "service_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Summary_Details_Top_Pdns_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Summary_Details_Top_Pdns_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "css_color_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event_count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Top_Asns_By_IP_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Top_Asns_By_IP_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data_datasets_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_dates_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "request_id_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "size_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Top_Country_Codes_By_IP_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Top_Country_Codes_By_IP_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data_datasets_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_dates_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "request_id_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "size_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Top_Services_By_IP_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Top_Services_By_IP_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data_datasets_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_dates_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "request_id_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "size_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Top_Tags_By_IP_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Top_Tags_By_IP_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data_datasets_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data_dates_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "request_id_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "size_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "total_d",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/Whois_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Whois_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "about_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "about_contact_role_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "abuse_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "admin_contact_role_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "as_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asn_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asn_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "cc_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "cidr_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_by_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_lower_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mnt_router_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "modified_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "net_handle_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "net_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "org_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_address_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_city_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_country_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_email_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_person_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_phone_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tech_contact_role_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/X509_Data_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "X509_Data_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "altnames_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "as_info_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "common_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "count_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "country_codes_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer_common_name_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "md5_g",
+                            "type": "guid"
+                        },
+                        {
+                            "name": "not_after_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "not_before_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port_d",
+                            "type": "real"
+                        },
+                        {
+                            "name": "self_signed_b",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "serial_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha1_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subject_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "validity_period_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DataCollectionRuleName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DataCollectionEndpointName'))]",
+                "streamDeclarations": {
+                    "Custom-Proto_By_IP_Data": {
+                        "columns": [
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "request_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Top_Asns_By_IP_Data": {
+                        "columns": [
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "request_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Certs_Data": {
+                        "columns": [
+                            {
+                                "name": "common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer_common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "md5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_after",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_before",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "self_signed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "valid_days",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Top_Country_Codes_By_IP_Data": {
+                        "columns": [
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "request_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Fingerprints_Data": {
+                        "columns": [
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "signature",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Open_Ports_Data": {
+                        "columns": [
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "service",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details_Top_Pdns_Data": {
+                        "columns": [
+                            {
+                                "name": "css_color",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Top_Services_By_IP_Data": {
+                        "columns": [
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "request_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Top_Tags_By_IP_Data": {
+                        "columns": [
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "request_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-Summary_Details": {
+                        "columns": [
+                            {
+                                "name": "bgp_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "geo_ip_cc",
+                                "type": "string"
+                            },
+                            {
+                                "name": "insights",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "open_ports",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "pdns",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "whois",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-Identity_Data": {
+                        "columns": [
+                            {
+                                "name": "as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Whois_Data": {
+                        "columns": [
+                            {
+                                "name": "about_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "about_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "abuse_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "admin_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asn_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "cc",
+                                "type": "string"
+                            },
+                            {
+                                "name": "cidr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_by_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_lower_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mnt_router_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "modified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "net_handle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tech_contact_role",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Live_Investigation_IP_Indicators": {
+                        "columns": [
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Insights_Data": {
+                        "columns": [
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "message",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rank",
+                                "type": "real"
+                            },
+                            {
+                                "name": "rating",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Communication_Data": {
+                        "columns": [
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "local",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "proto",
+                                "type": "real"
+                            },
+                            {
+                                "name": "proto_text",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-PDNS_Data": {
+                        "columns": [
+                            {
+                                "name": "active_days",
+                                "type": "real"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "distinct_ips",
+                                "type": "real"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain_created",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain_expires",
+                                "type": "string"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "nameservers",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "registrar",
+                                "type": "string"
+                            },
+                            {
+                                "name": "root",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tld",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Open_Ports_Data": {
+                        "columns": [
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "banner",
+                                "type": "string"
+                            },
+                            {
+                                "name": "banner_sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "service",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-Fingerprints_Data": {
+                        "columns": [
+                            {
+                                "name": "active_days",
+                                "type": "real"
+                            },
+                            {
+                                "name": "distinct_ips",
+                                "type": "real"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "fingerprint",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-X509_Data": {
+                        "columns": [
+                            {
+                                "name": "altnames",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer_common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "md5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_after",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_before",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "self_signed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "serial",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "validity_period",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-Domain_Data": {
+                        "columns": [
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "query",
+                                "type": "string"
+                            },
+                            {
+                                "name": "summary",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-Live_Investigation_Domain_Indicators": {
+                        "columns": [
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+                            "name": "TeamCymruScoutLogAnalytics"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-Proto_By_IP_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, data_dates_s = tostring(data.dates), data_proto_by_date_s = tostring(data.proto_by_date), data_protocols_s = tostring(data.protocols), end_date_s = tostring(end_date), ip_s = tostring(ip), request_id_g = tostring(request_id), size_d = toreal(size), start_date_s = tostring(start_date), total_d = toreal(total)",
+                        "outputStream": "Custom-Proto_By_IP_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Top_Asns_By_IP_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, data_datasets_s = tostring(data.datasets), data_dates_s = tostring(data.dates), end_date_s = tostring(end_date), ip_s = tostring(ip), request_id_g = tostring(request_id), size_d = toreal(size), start_date_s = tostring(start_date), total_d = toreal(total)",
+                        "outputStream": "Custom-Top_Asns_By_IP_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Certs_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, common_name_s = tostring(common_name), first_seen_s = tostring(first_seen), ip_s = tostring(ip), issuer_common_name_s = tostring(issuer_common_name), issuer_s = tostring(issuer), last_seen_s = tostring(last_seen), md5_g = tostring(md5), not_after_s = tostring(not_after), not_before_s = tostring(not_before), port_d = toreal(port), self_signed_b = tobool(self_signed), sha1_s = tostring(sha1), sha256_s = tostring(sha256), subject_s = tostring(subject), valid_days_d = toreal(valid_days)",
+                        "outputStream": "Custom-Summary_Details_Top_Certs_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Top_Country_Codes_By_IP_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, data_datasets_s = tostring(data.datasets), data_dates_s = tostring(data.dates), end_date_s = tostring(end_date), ip_s = tostring(ip), request_id_g = tostring(request_id), size_d = toreal(size), start_date_s = tostring(start_date), total_d = toreal(total)",
+                        "outputStream": "Custom-Top_Country_Codes_By_IP_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Fingerprints_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), signature_g = tostring(signature), signature_s = tostring(signature), type_s = tostring(type)",
+                        "outputStream": "Custom-Summary_Details_Top_Fingerprints_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Open_Ports_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), protocol_d = toreal(protocol), protocol_text_s = tostring(protocol_text), service_s = tostring(service)",
+                        "outputStream": "Custom-Summary_Details_Top_Open_Ports_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details_Top_Pdns_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, css_color_s = tostring(css_color), domain_s = tostring(domain), event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen)",
+                        "outputStream": "Custom-Summary_Details_Top_Pdns_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Top_Services_By_IP_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, data_datasets_s = tostring(data.datasets), data_dates_s = tostring(data.dates), end_date_s = tostring(end_date), ip_s = tostring(ip), request_id_g = tostring(request_id), size_d = toreal(size), start_date_s = tostring(start_date), total_d = toreal(total)",
+                        "outputStream": "Custom-Top_Services_By_IP_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Top_Tags_By_IP_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, data_datasets_s = tostring(data.datasets), data_dates_s = tostring(data.dates), end_date_s = tostring(end_date), ip_s = tostring(ip), request_id_g = tostring(request_id), size_d = toreal(size), start_date_s = tostring(start_date), total_d = toreal(total)",
+                        "outputStream": "Custom-Top_Tags_By_IP_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Summary_Details"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, bgp_asn_d = toreal(bgp_asn), bgp_asname_s = tostring(bgp_asname), end_date_s = tostring(end_date), geo_ip_cc_s = tostring(geo_ip_cc), insights_insights_s = tostring(insights.insights), insights_overall_rating_s = tostring(insights.overall_rating), insights_total_d = toreal(insights.total), ip_s = tostring(ip), open_ports_unique_ports_d = toreal(open_ports.unique_ports), pdns_total_d = toreal(pdns.total), start_date_s = tostring(start_date), tags_s = tostring(tags), total_d = toreal(total), whois_as_name_s = tostring(whois.as_name), whois_asn_d = toreal(whois.asn), whois_net_name_s = tostring(whois.net_name), whois_org_name_s = tostring(whois.org_name)",
+                        "outputStream": "Custom-Summary_Details_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Identity_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, as_name_s = tostring(as_name), asn_d = toreal(asn), ip_s = tostring(ip), net_name_s = tostring(net_name), org_name_s = tostring(org_name)",
+                        "outputStream": "Custom-Identity_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Whois_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, about_contact_address_s = tostring(about_contact_address), about_contact_city_s = tostring(about_contact_city), about_contact_country_s = tostring(about_contact_country), about_contact_email_s = tostring(about_contact_email), about_contact_person_s = tostring(about_contact_person), about_contact_phone_s = tostring(about_contact_phone), about_contact_role_s = tostring(about_contact_role), abuse_contact_id_s = tostring(abuse_contact_id), address_s = tostring(address), admin_contact_address_s = tostring(admin_contact_address), admin_contact_city_s = tostring(admin_contact_city), admin_contact_country_s = tostring(admin_contact_country), admin_contact_email_s = tostring(admin_contact_email), admin_contact_id_s = tostring(admin_contact_id), admin_contact_person_s = tostring(admin_contact_person), admin_contact_phone_s = tostring(admin_contact_phone), admin_contact_role_s = tostring(admin_contact_role), as_name_s = tostring(as_name), asn_d = toreal(asn), bgp_asn_d = toreal(bgp_asn), bgp_asn_name_s = tostring(bgp_asn_name), cc_s = tostring(cc), cidr_s = tostring(cidr), city_s = tostring(city), description_s = tostring(description), ip_s = tostring(ip), mnt_by_email_s = tostring(mnt_by_email), mnt_lower_email_s = tostring(mnt_lower_email), mnt_router_email_s = tostring(mnt_router_email), modified_s = tostring(modified), net_handle_s = tostring(net_handle), net_name_s = tostring(net_name), org_address_s = tostring(org_address), org_city_s = tostring(org_city), org_country_s = tostring(org_country), org_email_s = tostring(org_email), org_id_s = tostring(org_id), org_name_s = tostring(org_name), org_phone_s = tostring(org_phone), tech_contact_address_s = tostring(tech_contact_address), tech_contact_city_s = tostring(tech_contact_city), tech_contact_country_s = tostring(tech_contact_country), tech_contact_email_s = tostring(tech_contact_email), tech_contact_id_s = tostring(tech_contact_id), tech_contact_person_s = tostring(tech_contact_person), tech_contact_phone_s = tostring(tech_contact_phone), tech_contact_role_s = tostring(tech_contact_role)",
+                        "outputStream": "Custom-Whois_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Live_Investigation_IP_Indicators"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, type_s = tostring(type), value_s = tostring(value)",
+                        "outputStream": "Custom-Live_Investigation_IP_Indicators_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Insights_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, ip_s = tostring(ip), message_s = tostring(message), rank_d = toreal(rank), rating_s = tostring(rating)",
+                        "outputStream": "Custom-Insights_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Communication_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), local_as_info_s = tostring(local.as_info), local_country_codes_s = tostring(local.country_codes), local_ip_s = tostring(local.ip), local_max_port_d = toreal(local.max_port), local_min_port_d = toreal(local.min_port), local_tags_s = tostring(local.tags), local_top_services_s = tostring(local.top_services), local_unique_ports_d = toreal(local.unique_ports), peer_as_info_s = tostring(peer.as_info), peer_country_codes_s = tostring(peer.country_codes), peer_ip_s = tostring(peer.ip), peer_max_port_d = toreal(peer.max_port), peer_min_port_d = toreal(peer.min_port), peer_top_services_s = tostring(peer.top_services), peer_unique_ports_d = toreal(peer.unique_ports), proto_d = toreal(proto), proto_text_s = tostring(proto_text)",
+                        "outputStream": "Custom-Communication_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-PDNS_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, active_days_d = toreal(active_days), as_info_s = tostring(as_info), country_codes_s = tostring(country_codes), distinct_ips_d = toreal(distinct_ips), domain_created_s = tostring(domain_created), domain_expires_s = tostring(domain_expires), domain_s = tostring(domain), event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), nameservers_s = tostring(nameservers), registrar_s = tostring(registrar), root_s = tostring(root), tld_s = tostring(tld), type_s = tostring(type)",
+                        "outputStream": "Custom-PDNS_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Open_Ports_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, as_info_s = tostring(as_info), banner_s = tostring(banner), banner_sha1_s = tostring(banner_sha1), country_codes_s = tostring(country_codes), event_count_d = toreal(event_count), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), protocol_d = toreal(protocol), protocol_text_s = tostring(protocol_text), service_s = tostring(service), tags_s = tostring(tags)",
+                        "outputStream": "Custom-Open_Ports_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Fingerprints_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, active_days_d = toreal(active_days), distinct_ips_d = toreal(distinct_ips), event_count_d = toreal(event_count), fingerprint_g = tostring(fingerprint), fingerprint_s = tostring(fingerprint), first_seen_s = tostring(first_seen), ip_s = tostring(ip), last_seen_s = tostring(last_seen), port_d = toreal(port), type_s = tostring(type)",
+                        "outputStream": "Custom-Fingerprints_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-X509_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, altnames_s = tostring(altnames), as_info_s = tostring(as_info), common_name_s = tostring(common_name), count_d = toreal(count), country_codes_s = tostring(country_codes), first_seen_s = tostring(first_seen), ip_s = tostring(ip), issuer_common_name_s = tostring(issuer_common_name), issuer_s = tostring(issuer), last_seen_s = tostring(last_seen), md5_g = tostring(md5), not_after_s = tostring(not_after), not_before_s = tostring(not_before), port_d = toreal(port), self_signed_b = tobool(self_signed), serial_s = tostring(serial), sha1_s = tostring(sha1), sha256_s = tostring(sha256), subject_s = tostring(subject), tags_s = tostring(tags), validity_period_s = tostring(validity_period)",
+                        "outputStream": "Custom-X509_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Domain_Data"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, as_info_s = tostring(as_info), country_codes_s = tostring(country_codes), ip_s = tostring(ip), query_s = tostring(query), summary_comms_total_d = toreal(summary.comms_total)",
+                        "outputStream": "Custom-Domain_Data_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-Live_Investigation_Domain_Indicators"
+                        ],
+                        "destinations": [
+                            "TeamCymruScoutLogAnalytics"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated, type_s = tostring(type), value_s = tostring(value)",
+                        "outputStream": "Custom-Live_Investigation_Domain_Indicators_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, parameters('PlaybookName'), 'MonitoringMetricsPublisher')]",
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules/', variables('DataCollectionRuleName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DataCollectionRuleName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             }
         }
     ]
