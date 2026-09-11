@@ -1,4 +1,7 @@
 # Changelog for imDns.yaml
+## Version 0.5.4
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
 
 ## Version 0.5.3
 
