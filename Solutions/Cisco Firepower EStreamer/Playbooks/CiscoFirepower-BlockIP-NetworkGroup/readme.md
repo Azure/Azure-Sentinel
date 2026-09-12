@@ -5,6 +5,7 @@
 This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions.
+0. **Gate/Prove:** if the incident title/description indicates **ML-only** (SnortML / GID 411 / `is_ml_only`) without signature or dual-signal corroboration, the playbook comments on the incident and **cancels** - it does **not** call FMC BlockIP. Machine-learning confidence is not treated as a classic signature true positive.
 1. For the IPs we check if they are already selected for the Network Group object
 2. For the IPs not already selected for the Network Group object, add it so it gets blocked
 3. Comment is added to Microsoft Sentinel incident<br>
@@ -29,7 +30,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCiscoFirepower-BlockIP-NetworkGroup%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCiscoFirepower-BlockIP-NetworkGroup%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCiscoFirepower-BlockIP-NetworkGroup%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (ex:CiscoFirepower-BlockIP-NetworkGroup)
@@ -49,3 +50,4 @@ Once deployment is complete, you will need to authorize each connection.
 ### b. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
+3. **Do not** attach this auto-contain playbook to ML-only analytics (SnortML GID 411). Attach it only to signature-high or signature+ML corroboration incidents. Use the Teams HITL playbook when an analyst must review an ML-only alert.

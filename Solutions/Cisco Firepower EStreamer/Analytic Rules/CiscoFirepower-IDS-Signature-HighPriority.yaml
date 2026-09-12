@@ -1,0 +1,76 @@
+id: a1c9e026-9bb7-4c42-a3a1-83faa3ca26a6
+name: Cisco Firepower - IDS signature high priority classification
+description: |
+  'Detects classic Cisco Firepower / Snort-family signature hits (Generator ID not equal to SnortML GID 411)
+  with high-priority classifications commonly associated with malware C2, privilege gain, or network trojans.
+  These events are stronger signature true-positive candidates than ML-only (GID 411) paths and may justify
+  gated remediation after analyst or policy review - prefer HITL Gate/Prove over ungated BlockIP automation.
+  Pair with "Cisco Firepower - SnortML GID 411 ML-only high alert" and "Cisco Firepower - Signature and ML corroboration".'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1071
+  - T1203
+query: |
+  let HighPriorityClassifications = dynamic([
+      "A Network Trojan was Detected",
+      "A Network Trojan was detected",
+      "Successful Administrator Privilege Gain",
+      "Successful User Privilege Gain",
+      "Attempted Administrator Privilege Gain",
+      "Attempted User Privilege Gain",
+      "Known malware command and control traffic",
+      "Malware Command and Control Activity Detected",
+      "Known malicious file or file based exploit",
+      "Known client side exploit attempt",
+      "Large Scale Information Leak"
+  ]);
+  CommonSecurityLog
+  | where DeviceVendor =~ "Cisco"
+  | where DeviceProduct has_any ("Firepower", "Secure Firewall", "FTD", "NGFW")
+  | extend Combined = strcat(
+      tostring(Message), " ",
+      tostring(AdditionalExtensions), " ",
+      tostring(Activity), " ",
+      tostring(DeviceEventClassID), " ",
+      tostring(column_ifexists("FlexString1", "")), " ",
+      tostring(column_ifexists("FlexString2", "")), " ",
+      tostring(column_ifexists("DeviceCustomString1", "")), " ",
+      tostring(column_ifexists("DeviceCustomString2", "")), " ",
+      tostring(column_ifexists("DeviceCustomString3", "")), " ",
+      tostring(DeviceAction)
+    )
+  | extend ParsedGid = toint(extract(@"(?i)(?:gid|generator[\s_-]?id)[\s:=]*(\d+)", 1, Combined))
+  | where ParsedGid != 411 or isnull(ParsedGid)
+  | where not(Combined has_any ("SnortML", "snortml", "is_ml_only"))
+  | where Combined has_any (HighPriorityClassifications)
+      or Activity has_any (HighPriorityClassifications)
+  | extend HostCustomEntity = DeviceName, SrcIpCustomEntity = SourceIP, DstIpCustomEntity = DestinationIP
+  | project TimeGenerated, DeviceName, SourceIP, DestinationIP, DestinationPort, Activity, DeviceAction,
+      DeviceEventClassID, Message, AdditionalExtensions, HostCustomEntity, SrcIpCustomEntity, DstIpCustomEntity
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpCustomEntity
+version: 1.0.2
+kind: Scheduled
