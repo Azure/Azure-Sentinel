@@ -1,0 +1,175 @@
+Parser:
+  Title: Registry Event ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: "0.1.0"
+  LastUpdated: Sep 01, 2026
+Product:
+  Name: CrowdStrike Falcon Data Replicator
+Normalization:
+  Schema: RegistryEvent
+  Version: "0.1.3"
+References:
+  - Title: ASIM Registry Schema
+    Link: https://aka.ms/ASimRegistryEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  Parser for CrowdStrike Falcon Data Replicator logs, posted by the Microsoft developed CrowdStrike API Data Connector (via Codeless Connector Framework), to the ASIM Registry Event schema.
+ParserName: ASimRegistryEventCrowdStrikeFalconDataReplicator
+EquivalentBuiltInParser: _ASim_RegistryEvent_CrowdStrikeFalconDataReplicator
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool 
+    Default: false
+ParserQuery: |
+  let parser = (
+        disabled: bool=false
+        , pack: bool=false
+  )
+  {
+      let EventTypeLookup = datatable(RegOperationType: string, EventType: string)
+          [
+              "1", "RegistryValueSet"
+              , "2", "RegistryValueDeleted"
+              , "3", "RegistryKeyCreated"
+              , "4", "RegistryKeyDeleted"
+              , "5", "RegistryValueSet"
+              , "6", "RegistryKeyCreated"
+              , "7", "RegistryKeyRenamed"
+              // , "8", "Other"
+              // , "9", "Other"
+              , "101", "RegistryValueSet"
+              , "102", "RegistryValueDeleted"
+          ]
+      ;
+      let RegistryValueTypeLookup = datatable(RegType: string, RegistryValueType: string)
+          [
+              "0", "Reg_None"
+              , "1", "Reg_Sz"
+              , "2", "Reg_Expand_Sz"
+              , "3", "Reg_Binary"
+              , "4", "Reg_Dword"
+              , "5", "Reg_Dword_Big_Endian"
+              , "6", "Reg_Link"
+              , "7", "Reg_Multi_Sz"
+              , "8", "Reg_Resource_List"
+              , "9", "Reg_Full_Resource_Descriptor"
+              , "10", "Reg_Resource_Requirements_List"
+              , "11", "Reg_Qword"
+          ]
+      ;
+      CrowdStrike_Registry_Events_CL
+      | where not(disabled)
+      | extend
+          EventStartTime = unixtime_milliseconds_todatetime(ContextTimeStamp * 1000)
+          , EventEndTime = unixtime_milliseconds_todatetime(timestamp)
+          , RegistryKey = replace_string(
+              replace_string(
+                  RegObjectName
+                  , @'\REGISTRY\MACHINE'
+                  , 'HKEY_LOCAL_MACHINE'
+              )
+              , @'\REGISTRY\USER'
+              , 'HKEY_USERS'
+          )
+          , RegistryValueData = case(
+              isnotempty(RegStringValue), RegStringValue
+              , isnotempty(RegNumericValue), tostring(RegNumericValue)
+              , isnotempty(RegBinaryValue), RegBinaryValue
+              , ""
+          )
+      | lookup EventTypeLookup on RegOperationType
+      | project-rename 
+          DvcIpAddr = aip
+          , DvcId = aid
+          , EventOriginalType = name
+          , EventOriginalUid = CrowdStrikeId
+          , EventUid = _ItemId
+          , EventProductVersion = ConfigBuild
+          , ActingProcessId = ContextProcessId
+          , RegistryValue = RegValueName
+          , ActorUsername = UserName
+          , EventSubType = event_simpleName
+          , EventOriginalSubType = RegOperationType
+      | lookup RegistryValueTypeLookup on RegType
+      | extend
+          DvcIdType = "Other"
+          , DvcOs = case(
+              event_platform == "Win", "Windows"
+              , event_platform == "Mac", "Macintosh"
+              , event_platform == "Lin", "Linux"
+              , ""
+          )
+          , RegistryPreviousKey = iff(EventType == "RegistryKeyRenamed", RegistryKey, "")
+          , ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", "")
+          , AdditionalFields = iff (
+              pack
+              , bag_pack(
+                  "cid", cid
+                  , "ConfigStateHash", ConfigStateHash
+                  , "TreeId", TreeId
+                  , "OciContainerId", OciContainerId
+                  , "TokenType", TokenType
+                  , "AuthenticationId", AuthenticationId
+                  , "RegClassificationFlags", RegClassificationFlags
+                  , "RegClassificationIndex", RegClassificationIndex
+                  , "Entitlements", Entitlements
+                  , "EffectiveTransmissionClass", EffectiveTransmissionClass
+                  , "BoundingLimitCount", BoundingLimitCount
+                  , "BoundingLimitDuration", BoundingLimitDuration
+                  , "ContextThreadId", ContextThreadId
+              )
+          , dynamic({})
+          )
+      //Mandatory fields and Alias's
+      | extend
+          EventCount = int(1)
+          , EventSchemaVersion = "0.1.3"
+          , EventSchema = "RegistryEvent"
+          , EventVendor = "CrowdStrike"
+          , EventProduct = "Falcon Data Replicator"
+          , EventResult = "Success"
+          , EventSeverity = "Informational"
+          , Dvc = DvcId
+          , User = iff(isnotempty(ActorUsername), ActorUsername, "")
+      | project
+          TimeGenerated
+          , Type
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventResult
+          , EventSeverity
+          , EventCount
+          , EventSchema
+          , EventSchemaVersion
+          , EventVendor
+          , EventProduct
+          , EventOriginalType
+          , EventOriginalUid
+          , EventUid
+          , EventProductVersion
+          , DvcIpAddr
+          , DvcId
+          , DvcIdType
+          , DvcOs
+          , RegistryKey
+          , RegistryValue
+          , RegistryValueData
+          , RegistryValueType
+          , RegistryPreviousKey
+          , ActingProcessId
+          , ActorUsername
+          , ActorUsernameType
+          , AdditionalFields
+          , Dvc
+          , User
+          , EventSubType
+          , EventOriginalSubType
+    };
+  parser(
+    disabled = disabled
+    , pack = pack
+  )
