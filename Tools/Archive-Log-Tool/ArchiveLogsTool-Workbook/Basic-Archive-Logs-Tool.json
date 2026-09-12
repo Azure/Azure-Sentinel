@@ -103,12 +103,21 @@
         "style": "tabs",
         "links": [
           {
+            "id": "4f22e250-0e78-4acb-82d9-eee067e32315",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Bulk Update",
+            "subTarget": "BulkUpdate",
+            "preText": "Tab",
+            "style": "link"
+          },
+          {
             "id": "dff67182-9d46-405c-bfbd-f4e92a8cabc8",
             "cellValue": "Tab",
             "linkTarget": "parameter",
             "linkLabel": "Archive",
             "subTarget": "Archive",
-            "preText": "Archive",
+            "preText": "Tab",
             "style": "link"
           },
           {
@@ -132,7 +141,180 @@
           {
             "type": 1,
             "content": {
-              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.",
+              "json": "## Bulk-update table retention or plan for any number of tables\n\nSelect a subscription and workspace at the top of the workbook, then use the **Tables to update** dropdown below. It's a live, multi-select list sourced from Azure Resource Graph (`Microsoft.OperationalInsights/workspaces/tables`), so it always shows every table in the workspace -- not just tables that happened to ingest data recently -- and there's no 20-item cap: select a handful of tables or use **Select all** to target the entire workspace.\n\n**Why a generated script, and not a single click?** The Log Analytics [Tables - Update API](https://learn.microsoft.com/rest/api/loganalytics/tables/update) and the Workbooks [ARM Action link](https://learn.microsoft.com/azure/azure-monitor/visualize/workbooks-link-actions) both operate on **one table per call**; there's no documented bulk/batch endpoint for table settings, and the stable Workbooks ARM Action can't loop over an array of selected resources (that capability -- **View Repeater** / **Data Repeater** -- exists only in the [Workbooks preview experience](https://learn.microsoft.com/azure/azure-monitor/visualize/workbooks-preview) and doesn't yet have a published JSON authoring schema). To reliably update many tables in one pass regardless of count, this tab generates one CLI/PowerShell command per selected table below -- copy all of them into [Azure Cloud Shell](https://portal.azure.com/#cloudshell/) (or a terminal signed in with `az login` / `Connect-AzAccount`) and run them together.",
+              "style": "info"
+            },
+            "name": "text - bulk-intro"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "1684c985-7065-4caa-a575-4f255933d7db",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AllTables",
+                  "label": "Tables to update (select any number, including 'Select all')",
+                  "type": 2,
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "\"",
+                  "delimiter": ",",
+                  "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend TableName = tostring(coalesce(properties.tableName, name))\n| project value = TableName, label = TableName\n| order by value asc",
+                  "crossComponentResources": [
+                    "{Subscription}"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "selectAllValue": "$ALL$",
+                    "showDefault": false
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "cd15cac4-42e3-4393-925e-2898491900a8",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "DesiredRetentionInDays",
+                  "label": "New interactive (hot) retention, days: 4-730, or -1 to reset to workspace default",
+                  "type": 1,
+                  "isRequired": true,
+                  "value": "-1"
+                },
+                {
+                  "id": "b11d3328-9877-4d82-99a8-2f95478063f9",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "DesiredTotalRetentionInDays",
+                  "label": "New total retention, days: 4-730 or 1095/1460/1826/2191/2556/2922/3288/3653/4018/4383, or -1 to reset to the retention value above",
+                  "type": 1,
+                  "isRequired": true,
+                  "value": "-1"
+                },
+                {
+                  "id": "098d463e-9867-4d44-bb1e-4df1f0e14d67",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "DesiredPlan",
+                  "label": "New table plan",
+                  "type": 2,
+                  "isRequired": true,
+                  "jsonData": "[{\"value\":\"Analytics\",\"label\":\"Analytics\",\"selected\":true},{\"value\":\"Basic\",\"label\":\"Basic\"}]",
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "queryType": 0
+                },
+                {
+                  "id": "43cf2c32-c448-4ef5-987b-a186754b4552",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ScriptFormat",
+                  "label": "Generate script for",
+                  "type": 2,
+                  "isRequired": true,
+                  "jsonData": "[{\"value\":\"cli\",\"label\":\"Azure CLI (Bash)\",\"selected\":true},{\"value\":\"pwsh\",\"label\":\"Azure PowerShell\"}]",
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "queryType": 0
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.resourcegraph/resources"
+            },
+            "name": "parameters - bulk"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
+              "size": 0,
+              "title": "All tables in this workspace (reference -- current settings)",
+              "exportFieldName": "DataType",
+              "exportParameterName": "DataType",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ]
+            },
+            "customWidth": "100",
+            "name": "query - tablelist-bulk"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "print sub = extract(@\"subscriptions/(.+)\", 1, \"{Subscription}\")\n| extend selected = dynamic([{AllTables}])\n| mv-expand Table = selected to typeof(string)\n| project Table, Command = strcat(\n    \"az monitor log-analytics workspace table update\",\n    \" --subscription \", sub,\n    \" --resource-group \", \"{resourceGroup}\",\n    \" --workspace-name \", \"{WorkspaceName}\",\n    \" --name \", Table,\n    \" --retention-time \", \"{DesiredRetentionInDays}\",\n    \" --total-retention-time \", \"{DesiredTotalRetentionInDays}\",\n    \" --plan \", \"{DesiredPlan}\")",
+              "size": 0,
+              "title": "Generated Azure CLI commands - one per selected table (no count limit)",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "conditionalVisibility": {
+                "parameterName": "ScriptFormat",
+                "comparison": "isEqualTo",
+                "value": "cli"
+              }
+            },
+            "customWidth": "100",
+            "name": "query - bulk-cli"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "print sub = extract(@\"subscriptions/(.+)\", 1, \"{Subscription}\")\n| extend selected = dynamic([{AllTables}])\n| mv-expand Table = selected to typeof(string)\n| project Table, Command = strcat(\n    \"Update-AzOperationalInsightsTable\",\n    \" -SubscriptionId \", sub,\n    \" -ResourceGroupName \", \"{resourceGroup}\",\n    \" -WorkspaceName \", \"{WorkspaceName}\",\n    \" -TableName \", Table,\n    \" -RetentionInDays \", \"{DesiredRetentionInDays}\",\n    \" -TotalRetentionInDays \", \"{DesiredTotalRetentionInDays}\",\n    \" -Plan \", \"{DesiredPlan}\")",
+              "size": 0,
+              "title": "Generated Azure PowerShell commands - one per selected table (no count limit)",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "conditionalVisibility": {
+                "parameterName": "ScriptFormat",
+                "comparison": "isEqualTo",
+                "value": "pwsh"
+              }
+            },
+            "customWidth": "100",
+            "name": "query - bulk-pwsh"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### Notes\n- `--retention-time` / `-RetentionInDays` and `--total-retention-time` / `-TotalRetentionInDays` accept `-1` to reset that value to the workspace default. Valid custom ranges and the Analytics/Basic/Auxiliary plan rules are documented in [Manage data retention in a Log Analytics workspace](https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure).\n- A table's **plan** can only be changed about once per week; if a selected table was recently changed, that table's command will fail until the cooldown ends. See [Manage tables in a Log Analytics workspace](https://learn.microsoft.com/azure/azure-monitor/logs/manage-logs-tables).\n- For very large batches (hundreds of tables), run the commands in smaller chunks to avoid Azure Resource Manager request throttling.\n- For single-table changes with a guided, click-to-run experience, use the **Archive** or **Basic** tabs instead.",
+              "style": "info"
+            },
+            "name": "text - bulk-footer"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "BulkUpdate"
+      },
+      "name": "Bulk Update"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.\r\n\r\nFor changing many tables at once, use the **Bulk Update** tab instead.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -146,22 +328,19 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| project DataType, Quantity, QuantityUnit, TimeGenerated, ResourceUri\r\n| order by DataType asc",
+              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
               "size": 0,
-              "title": "Tables Found in Workspace",
-              "timeContext": {
-                "durationMs": 604800000
-              },
+              "title": "Tables Found in Workspace (all tables, via Azure Resource Graph)",
               "exportFieldName": "DataType",
               "exportParameterName": "DataType",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
               "crossComponentResources": [
-                "{Workspace}"
+                "{Subscription}"
               ]
             },
             "customWidth": "50",
-            "name": "query - 1"
+            "name": "query - tablelist-archive-primary"
           },
           {
             "type": 3,
@@ -188,7 +367,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2021-12-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-07-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
               "size": 1,
               "title": "Retention for {DataType}",
               "queryType": 12,
@@ -201,19 +380,19 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2021-12-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-07-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
               "size": 1,
               "title": "Retention for {DataType2}",
               "queryType": 12,
               "sortBy": []
             },
             "customWidth": "50",
-            "name": "query - 1"
+            "name": "query - 1b"
           },
           {
             "type": 1,
             "content": {
-              "json": "The body below will be how the retention settings are changed when calling the API.\r\nretentionInDays is the total amount of days that the data in the workspace is in 'hot' tier.\r\ntotalRetentionInDays is the total amount of days that the data will be kept in the workspace.\r\n\r\nTo calculate the number of days that the data will be in archive, take the totalRetentionInDays and subtract retentionInDays from it. The remainder is the number of days in archive.\r\n\r\nNote: setting the retentionInDays to 'null' will set or keep the retention of the workspace as the retention value that is already set.\r\n\r\n",
+              "json": "The body below will be how the retention settings are changed when calling the API.\r\nretentionInDays is the total amount of days that the data in the workspace is in 'hot' tier (allowed: 4-730).\r\ntotalRetentionInDays is the total amount of days that the data will be kept in the workspace (allowed: 4-730, or 1095/1460/1826/2191/2556/2922/3288/3653/4018/4383).\r\n\r\nTo calculate the number of days that the data will be in archive, take the totalRetentionInDays and subtract retentionInDays from it. The remainder is the number of days in archive.\r\n\r\nNote: setting retentionInDays to 'null' applies the workspace's current retention period.\r\n\r\nSource: Manage data retention in a Log Analytics workspace - https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -266,12 +445,12 @@
               "style": "warning"
             },
             "customWidth": "50",
-            "name": "text - 5"
+            "name": "text - 5b"
           },
           {
             "type": 1,
             "content": {
-              "json": "Clicking the Update Retenion button will run the API that will update the retention of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
+              "json": "Clicking the Update Retention button will run the API that will update the retention of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -294,7 +473,7 @@
                   "style": "primary",
                   "linkIsContextBlade": true,
                   "armActionContext": {
-                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2021-12-01-preview",
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01",
                     "headers": [],
                     "params": [],
                     "body": "{APIBody}",
@@ -320,7 +499,7 @@
                   "style": "primary",
                   "linkIsContextBlade": true,
                   "armActionContext": {
-                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}?api-version=2021-12-01-preview",
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}?api-version=2025-07-01",
                     "headers": [],
                     "params": [],
                     "body": "{APIBody}",
@@ -351,7 +530,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.",
+              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.\r\n\r\nFor changing many tables at once, use the **Bulk Update** tab instead.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -365,27 +544,25 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| project DataType, Quantity, QuantityUnit, TimeGenerated, ResourceUri\r\n| order by DataType asc",
+              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
               "size": 0,
-              "title": "Tables Found in Workspace",
-              "timeContext": {
-                "durationMs": 604800000
-              },
+              "title": "Tables Found in Workspace (all tables, via Azure Resource Graph)",
               "exportFieldName": "DataType",
               "exportParameterName": "DataType",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
               "crossComponentResources": [
-                "{Workspace}"
+                "{Subscription}"
               ]
             },
-            "name": "query - 1"
+            "customWidth": "50",
+            "name": "query - tablelist-basic-primary"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2021-12-01-preview\",\"urlParams\":[{\"key\":\"\",\"value\":\"\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01\",\"urlParams\":[{\"key\":\"\",\"value\":\"\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
               "size": 1,
               "title": "Retention for {DataType}",
               "queryType": 12,
@@ -396,7 +573,7 @@
           {
             "type": 1,
             "content": {
-              "json": "The body below will be how the retention settings are changed when calling the API.\r\nretentionInDays is the total amount of days that the data in the workspace is in 'hot' tier.\r\ntotalRetentionInDays is the total amount of days that the data will be kept in the workspace.\r\n\r\nTo calculate the number of days that the data will be in archive, take the totalRetentionInDays and subtract retentionInDays from it. The remainder is the number of days in archive.\r\n\r\nNote: setting the retentionInDays to 'null' will set or keep the retention of the workspace as the retention value that is already set.\r\n\r\n",
+              "json": "The Table Plan can be set to Analytics or Basic.\r\n\r\nNote: The Table Plan can only be changed once per week (per table).\r\n\r\nSource: Manage tables in a Log Analytics workspace - https://learn.microsoft.com/azure/azure-monitor/logs/manage-logs-tables",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -444,7 +621,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Clicking the Update Retenion button will run the API that will update the retention of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
+              "json": "Clicking the Update Plan button will run the API that will update the plan of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -472,7 +649,7 @@
                     "params": [
                       {
                         "key": "api-version",
-                        "value": "2021-12-01-preview"
+                        "value": "2025-07-01"
                       }
                     ],
                     "body": "{APIBody}",
