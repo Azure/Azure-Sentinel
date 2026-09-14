@@ -15,12 +15,15 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  EmailEvents 
-  //| where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
-  | where ThreatTypes has 'Phish' 
-  | project Timestamp, DT=parse_json(DetectionMethods) 
-  | evaluate bag_unpack(DT) 
-  | summarize count() by Phish=tostring(column_ifexists('Phish', ''))
-  | sort by count_ desc
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where DetectionMethods has "Phish"
+  | mv-expand PhishMethod = parse_json(DetectionMethods).Phish to typeof(string)
+  | where isnotempty(PhishMethod)
+  | summarize Count = count() by PhishMethod
+  | sort by Count desc
   | render piechart
-version: 1.0.0
+version: 1.1.0

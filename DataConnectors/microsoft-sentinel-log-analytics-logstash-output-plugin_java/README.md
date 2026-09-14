@@ -3,8 +3,9 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.  
 
-Plugin version: v2.5.0  
-Released on: 2026-08-04  
+Plugin version: v2.5.1
+
+Released on: 2026-09-10
 
 This plugin is currently in development and is free to use. We request and appreciate feedback from users.  
 
@@ -19,7 +20,7 @@ This plugin is currently in development and is free to use. We request and appre
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.  
 
-The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.5.0-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.5.1-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
 
 If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 
@@ -114,6 +115,19 @@ Add the `microsoft-sentinel-log-analytics-logstash-output-plugin` block to the `
 | `dcr_id` | The immutable ID of your Data Collection Rule |  
 | `stream_name` | The stream name from your DCR (e.g., `Custom-MyTableRawData_CL`) |  
 
+`data_collection_endpoint` must use HTTPS and must match the selected
+`azure_cloud`:
+
+| Azure cloud | Required endpoint host suffix |
+|---|---|
+| `AzurePublicCloud` | `.ingest.monitor.azure.com` |
+| `AzureUSGovernment` | `.ingest.monitor.azure.us` |
+| `AzureChinaCloud` | `.ingest.monitor.azure.cn` |
+| `AzureGermanyCloud` | `.ingest.monitor.azure.de` |
+
+User information, ports other than 443, non-root paths, query strings, and fragments
+are not accepted in the endpoint URL.
+
 ---
 
 ### Authentication Examples
@@ -150,7 +164,7 @@ When running on an Azure VM with a system-assigned managed identity, omit `clien
 
 #### Option 3: Client Secret + Sovereign Cloud
 
-To authenticate against a sovereign cloud, add `azure_cloud`. Supported values: `AzurePublicCloud` (default), `AzureUSGovernment`, `AzureChinaCloud`, `AzureGermanyCloud`.  
+To authenticate against a sovereign cloud, add `azure_cloud`. Supported values: `AzurePublicCloud` (default), `AzureUSGovernment`, `AzureChinaCloud`, `AzureGermanyCloud`. The plugin uses this value for both the Microsoft Entra authority and the Azure Monitor Logs Ingestion token audience.
 
     output {
       microsoft-sentinel-log-analytics-logstash-output-plugin {
@@ -252,8 +266,11 @@ Proxy URLs use the format `[http://][user:password@]host:port`. The scheme is op
       }
     }
 
-Security note: if your proxy requires credentials, store them in the Logstash KeyStore rather than placing them in plaintext in the configuration file.  
-Note: Only HTTP forward proxies are supported. HTTPS destination traffic is tunneled through the proxy using HTTP CONNECT.  
+Security note: if your proxy requires credentials, store them in the Logstash KeyStore rather than placing them in plaintext in the configuration file.
+
+## Troubleshooting upload failures
+
+Starting with version 2.5.1, Azure Monitor upload failure logs include the inner HTTP status, Azure service error code and message, `x-ms-request-id`, `x-ms-client-request-id`, and the SDK-reported failed-log count. Event payloads and failed event contents are not written to the logs.
 
 ## Known issues
  

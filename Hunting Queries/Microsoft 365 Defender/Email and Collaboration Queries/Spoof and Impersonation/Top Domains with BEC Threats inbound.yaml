@@ -14,15 +14,25 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  EmailEvents
+  // Partner BEC: domains we email heavily (outbound volume) that also send us threats (inbound).
+  // The ratio is inbound threat emails per 100 outbound emails to the domain, so it can exceed 100.
+  let EmailDeduped = EmailEvents
+      | where Timestamp > ago(30d)
+      | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+      | summarize arg_max(Timestamp, *) by Key;
+  EmailDeduped
   | where EmailDirection == "Outbound"
   | project RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
   | summarize count() by RecipientDomain
   | project OutboundCount=count_, RecipientDomain, SenderFromDomain=RecipientDomain
-  | join (EmailEvents | where EmailDirection == "Inbound" and isempty(ThreatTypes)==false) on SenderFromDomain
-  | summarize max(OutboundCount),count() by SenderFromDomain
+  | join (
+      EmailDeduped
+      | where EmailDirection == "Inbound" and isnotempty(ThreatTypes)
+    ) on SenderFromDomain
+  | summarize max(OutboundCount), count() by SenderFromDomain
   | project SenderFromDomain, OutboundEmails=max_OutboundCount, IncomingEmailsWithThreats=count_
-  | sort by OutboundEmails
-version: 1.0.0
+  | extend InboundThreatsPer100Outbound = round(100.0 * IncomingEmailsWithThreats / OutboundEmails, 2)
+  | top 15 by OutboundEmails
+version: 1.1.0
 
 

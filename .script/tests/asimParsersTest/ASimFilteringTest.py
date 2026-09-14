@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 import os
 
@@ -7,6 +8,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Remove the script's directory from sys.path to avoid importing local malicious modules. 
 if script_dir in sys.path:
     sys.path.remove(script_dir)
+
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -61,7 +71,6 @@ failure_messages = {
     'Authentication': "This single failure is because only two values exist in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be partial as only 'Logon' or 'Logoff' events may exists. Ignoring this error.",
     'Dns': "This single failure is because only one value exist in 'EventType' field in 'Dns' schema. 'Dns' is a special case where 'EventType' validations could be 'Query' only. Ignoring this error."
 }
-
 def attempt_to_connect():
     try:
             credential = DefaultAzureCredential()
@@ -293,15 +302,10 @@ def main():
         sys.stdout.flush()  # Explicitly flush stdout
 
     for PARSER_FILE_NAME in modified_yaml_files:
-        # Use regular expression to extract SchemaName from the parser filename
-        SchemaNameMatch = re.search(r'ASim(\w+)/', PARSER_FILE_NAME)
-        if SchemaNameMatch:
-            SchemaName = SchemaNameMatch.group(1)
-        else:
-            SchemaName = None
+        SchemaName = extract_schema_name(PARSER_FILE_NAME)
+        parser_filename = os.path.basename(PARSER_FILE_NAME)
         # Check if changed file is a union parser. If Yes, skip the file
-        is_empty_parser = os.path.basename(PARSER_FILE_NAME).startswith('vim') and PARSER_FILE_NAME.endswith('Empty.yaml')
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')) or is_empty_parser:
+        if is_union_parser(parser_filename, SchemaName) or is_empty_parser(parser_filename):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
@@ -878,6 +882,7 @@ all_schemas_parameters = {
     {
 		"ipaddr_has_any_prefix" : "DvcIpAddr",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "hostname_has_any" : "DvcHostname",
 		"username_has_any" : "Username",
@@ -892,6 +897,7 @@ all_schemas_parameters = {
     {
 		"actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
 		"eventtype_in" : "EventType",
@@ -904,6 +910,7 @@ all_schemas_parameters = {
     "Authentication" : 
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",
         "eventtype_in" : "EventType",
@@ -917,6 +924,7 @@ all_schemas_parameters = {
     "AlertEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
         "ipaddr_has_any_prefix" : "DvcIpAddr",
@@ -931,6 +939,7 @@ all_schemas_parameters = {
     "DhcpEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
@@ -941,6 +950,7 @@ all_schemas_parameters = {
     "Dns" : 
     {
         "disabled" : "",
+        "pack" : "",
         "domain_has_any" : "Domain",
         "eventtype" : "EventType",
         "endtime" : "EventEndTime",
@@ -954,6 +964,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "eventtype_in" : "EventType",
         "endtime" : "EventEndTime",
         "srcfilepath_has_any" : "SrcFilePath",
@@ -966,6 +977,7 @@ all_schemas_parameters = {
     "NetworkSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "dstipaddr_has_any_prefix" : "DstIpAddr",
         "dstportnumber" : "DstPortNumber",
         "dvcaction" : "DvcAction",
@@ -984,6 +996,7 @@ all_schemas_parameters = {
 		"commandline_has_any" : "CommandLine",
 		"commandline_has_any_ip_prefix" : "CommandLine",
 		"disabled" : "",
+		"pack" : "",
 		"dvchostname_has_any" : "DvcHostname",
 		"dvcipaddr_has_any_prefix" : "DvcIpAddr",
 		"dvcname_has_any" : "",
@@ -999,6 +1012,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "dvchostname_has_any" : "DvcHostname",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
@@ -1011,6 +1025,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
         "srcipaddr_has_any_prefix" : "SrcIpAddr",
@@ -1020,6 +1035,7 @@ all_schemas_parameters = {
     "WebSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",

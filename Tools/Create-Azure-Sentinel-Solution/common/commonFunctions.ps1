@@ -1001,7 +1001,7 @@ function GetPlaybookDataMetadata($file, $contentToImport, $contentResourceDetail
     $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
     $fileName = Split-path -Parent $file | Split-Path -leaf
-    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger") { 
+    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger" -or $fileName.ToLower() -eq "incident-trigger-logingestionapi" -or $fileName.ToLower() -eq "alert-trigger-logingestionapi") { 
         $parentPath = Split-Path $file -Parent; 
         $fileName = (Split-Path $parentPath -Parent | Split-Path -leaf) + "-" + $fileName; 
     }

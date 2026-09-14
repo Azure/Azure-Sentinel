@@ -15,13 +15,17 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  EmailEvents 
-  //| where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
-  | where ThreatTypes has "Phish" and EmailDirection == "Inbound"
-  | summarize count() by SenderFromDomain
-  | sort by count_
-  | top 15 by count_
-  //| render columnchart // Uncomment to display as a column graph
-  //| render piechart // Uncomment to display as a piechart
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | where EmailDirection == "Inbound"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend PhishConf = tostring(parse_json(ConfidenceLevel).Phish)
+  | summarize TotalEmailCount = count(), PhishEmailCount = countif(ThreatTypes has "Phish"), Phish_High = countif(ThreatTypes has "Phish" and PhishConf == "High"), Phish_Normal = countif(ThreatTypes has "Phish" and PhishConf == "Normal") by SenderFromDomain
+  | extend Bad_Traffic_Percentage_Inbound = todouble(round(PhishEmailCount / todouble(TotalEmailCount) * 100, 2))
+  | where PhishEmailCount != 0
+  | top 15 by PhishEmailCount
+  | project ['Sender Domain'] = SenderFromDomain, ['Phish Emails'] = PhishEmailCount, ['Phish (High)'] = Phish_High, ['Phish (Normal)'] = Phish_Normal, ['Total Inbound'] = TotalEmailCount, ['Bad Traffic %'] = Bad_Traffic_Percentage_Inbound
 version: 1.0.0
 
