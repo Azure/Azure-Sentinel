@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                              |
 |-------------|--------------------------------|-----------------------------------------------------------------|
+| 3.0.6       | 10-09-2026                     | Fix DCR transformKql (use replace/pack so Connect can create the data collection rule) |
 | 3.0.5       | 28-08-2026                     | Ingest Feedly IoCs into native **ThreatIntelIndicators** (SourceSystem=Feedly) |
 | 3.0.4       | 16-02-2026                     | Migrate to CCF connector |
 | 3.0.3       | 28-11-2023                     | Added missing python packages to the  **Data Connector**        |
