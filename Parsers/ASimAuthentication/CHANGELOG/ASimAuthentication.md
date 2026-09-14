@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.20
+
+- (2026-09-07) Add the Alibaba Cloud ActionTrail Authentication parser.
+
 ## Version 0.2.19
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication parser.

@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.17
+
+- (2026-09-07) Add the Alibaba Cloud ActionTrail Authentication filtering parser.  - [PR #](https://github.com/Azure/Azure-Sentinel/pull/)
+
 ## Version 0.3.16
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication filtering parser.

@@ -1,0 +1,265 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Alibaba Cloud ActionTrail
+  Version: '0.1.0'
+  LastUpdated: Sep 14, 2026
+Product:
+  Name: Alibaba Cloud ActionTrail
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Alibaba Cloud ActionTrail Documentation
+  Link: https://www.alibabacloud.com/help/en/actiontrail
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports filtering and normalizing Alibaba Cloud ActionTrail interactive sign-in activity to the ASIM Authentication normalized schema, adding filtering parameters for improved query performance.
+Exceptions:
+- Field: DvcAction
+  Warning: Missing recommended field
+  Exception: Not available in the data source.
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in the data source. Device is the API endpoint.
+- Field: TargetDomain
+  Warning: Missing recommended field
+  Exception: Not available in the data source.
+- Field: TargetHostname
+  Warning: Missing recommended field
+  Exception: Not available in the data source.
+ParserName: vimAuthenticationAlibabaCloudActionTrail
+EquivalentBuiltInParser: _Im_Authentication_AlibabaCloudActionTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Covers ConsoleSignin (RAM/root account console logon) and Login (CloudSSO directory
+  // authentication) events only. LoginToAccount (CloudSSO account/role selection, no fresh
+  // credential check) and STS AssumeRole/AssumeRoleWithOIDC (role assumption, overwhelmingly
+  // automated/service traffic) are out of scope for Authentication.
+  let vimAuthenticationAlibabaCloudActionTrail = (
+      starttime: datetime = datetime(null)
+      , endtime: datetime = datetime(null)
+      , srcipaddr_has_any_prefix: dynamic = dynamic([])
+      , srchostname_has_any: dynamic = dynamic([]) // SrcHostname is not populated by this source
+      , username_has_any: dynamic = dynamic([])
+      , targetappname_has_any: dynamic = dynamic([])
+      , eventtype_in: dynamic = dynamic([])
+      , eventresult: string = '*'
+      , eventresultdetails_in: dynamic = dynamic([])
+      , disabled: bool = false
+      , pack: bool = false
+  ) {
+      AliCloudActionTrailLogs_CL
+      | where not(disabled)
+      | where eventName in ("ConsoleSignin", "Login")
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | extend
+          _ErrorCode = trim(@'"', errorCode)
+          , _TargetUsername = tostring(userIdentity.userName)
+          , _TargetAppName = case(
+              serviceName in ("AasSub", "AasCustomer"), "Alibaba Cloud Console"
+              , serviceName == "CloudSSO", "CloudSSO"
+              , serviceName
+          )
+      | extend
+          _EventResult = iff(isempty(_ErrorCode) and isempty(errorMessage), "Success", "Failure")
+          , _EventResultDetails = case(
+              isempty(_ErrorCode) and isempty(errorMessage), ""
+              , _ErrorCode == "Authentication.Failed", "Incorrect password"
+              , _ErrorCode == "AuthenticationFailed.UsernameOrPassword", "No such user or password"
+              , "Other"
+          )
+      | where array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(sourceIpAddress, srcipaddr_has_any_prefix)
+      | where array_length(username_has_any) == 0 or _TargetUsername has_any (username_has_any)
+      | where array_length(targetappname_has_any) == 0 or _TargetAppName has_any (targetappname_has_any)
+      | where array_length(eventtype_in) == 0 or "Logon" in (eventtype_in)
+      | where eventresult == '*' or eventresult == _EventResult
+      | where array_length(eventresultdetails_in) == 0 or _EventResultDetails in (eventresultdetails_in)
+      | extend
+          _UserIdentityType = tostring(userIdentity.type)
+          , _TargetUserId = tostring(userIdentity.principalId)
+          , _MfaAuthenticated = tostring(userIdentity.sessionContext.attributes.mfaAuthenticated)
+          // ConsoleSignin == additionalEventData.loginType
+          // Login (CloudSSO) == requestParameters.LoginMethod
+          , _LoginMethodRaw = case(
+              isnotempty(tostring(additionalEventData.loginType)), tostring(additionalEventData.loginType)
+              , isnotempty(tostring(requestParameters.LoginMethod)), tostring(requestParameters.LoginMethod)
+              , ""
+          )
+          // sourceIpAddress can also hold a hostname (e.g. cloudmonitor.aliyuncs.com)
+          , _SrcIsIp = ipv4_is_match(sourceIpAddress, "0.0.0.0/0") or ipv6_is_match(sourceIpAddress, "::/0")
+          , _DvcHasDomain = eventSource has "."
+          , _SuspiciousLogin = tostring(additionalEventData.suspiciousLogin)
+      | extend
+          EventCount = int(1)
+          , EventStartTime = TimeGenerated
+          , EventEndTime = TimeGenerated
+          , EventVendor = "Alibaba Cloud"
+          , EventProduct = "ActionTrail"
+          , EventSchema = "Authentication"
+          , EventSchemaVersion = "1.0.0"
+          , EventType = "Logon"
+          , EventSubType = "Interactive"
+          , EventResult = _EventResult
+          , EventResultDetails = _EventResultDetails
+          , EventOriginalResultDetails = case(isnotempty(_ErrorCode), _ErrorCode, isnotempty(errorMessage), errorMessage, "")
+          , EventMessage = errorMessage
+          , EventSeverity = iff(isnotempty(_ErrorCode) or isnotempty(errorMessage), "Low", "Informational")
+          , EventOriginalSubType = eventCategory
+          , EventUid = _ItemId
+          , LogonMethod = iff(_MfaAuthenticated == "true", "Multi factor authentication", "Other")
+          , LogonProtocol = "HTTPS"
+          , Dvc = case(isnotempty(eventSource), eventSource, isnotempty(serviceName), serviceName, "ActionTrail")
+          , DvcFQDN = iff(_DvcHasDomain, eventSource, "")
+          , DvcHostname = iff(_DvcHasDomain, tostring(split(eventSource, ".")[0]), "")
+          , DvcDomain = iff(_DvcHasDomain, substring(eventSource, indexof(eventSource, ".") + 1), "")
+          , DvcDomainType = iff(_DvcHasDomain, "FQDN", "")
+          // assumed-role principalId/userName are "<roleId-or-roleName>:<sessionName>"
+          // sessionName identifies the human who assumed the role.
+          , TargetUserId = iff(_UserIdentityType == "assumed-role", tostring(split(_TargetUserId, ":")[0]), _TargetUserId)
+          , TargetUserIdType = iff(isnotempty(_TargetUserId), "Other", "")
+          , TargetUsername = iff(_UserIdentityType == "assumed-role", tostring(split(_TargetUsername, ":")[-1]), _TargetUsername)
+          , TargetUserType = case(
+              _UserIdentityType == "root-account", "Admin"
+              , _UserIdentityType in ("ram-user", "cloudsso-user", "saml-user", "oidc-user", "assumed-role"), "Regular"
+              , "Other"
+          )
+          , TargetOriginalUserType = _UserIdentityType
+          , TargetUserScopeId = tostring(userIdentity.accountId)
+          , TargetAppName = _TargetAppName
+          , TargetAppType = iff(isnotempty(serviceName), "Service", "")
+          , SrcIpAddr = iff(_SrcIsIp, sourceIpAddress, "")
+          , SrcFQDN = iff(not(_SrcIsIp) and sourceIpAddress has ".", sourceIpAddress, "")
+          , TargetRiskLevel = toint(case(_SuspiciousLogin == "true", 100, _SuspiciousLogin == "false", 0, int(null)))
+          , TargetOriginalRiskLevel = _SuspiciousLogin
+      | extend
+          Application = TargetAppName
+          , LogonTarget = TargetAppName
+          , Dst = TargetAppName
+          , IpAddr = SrcIpAddr
+          , Src = SrcIpAddr
+          , User = iff(isnotempty(TargetUsername), TargetUsername, TargetUserId)
+          , TargetUsernameType = case(isempty(TargetUsername), "", TargetUsername has "@", "UPN", "Simple")
+      | project-rename
+          EventOriginalUid = eventId
+          , EventOriginalType = eventType
+          , EventProductVersion = eventVersion
+          , HttpUserAgent = userAgent
+      | extend
+          AdditionalFields = iff(
+              pack
+              , pack(
+                  "loginMethodRaw", _LoginMethodRaw
+                  , "mfaChecked", tostring(additionalEventData.mfaChecked)
+                  , "isMFAChecked", tostring(additionalEventData.isMFAChecked)
+                  , "mfaAuthenticatedRequestParam", tostring(requestParameters.MFAAuthenticated)
+                  , "loginAccount", tostring(additionalEventData.loginAccount)
+                  , "serviceName", serviceName
+                  , "requestId", requestId
+                  , "acsRegion", acsRegion
+                  , "isGlobal", isGlobal
+                  , "additionalEventData", additionalEventData
+                  , "requestParameters", requestParameters
+              )
+              , dynamic(null)
+          )
+      | project
+          TimeGenerated
+          , EventCount
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventSubType
+          , EventResult
+          , EventResultDetails
+          , EventSeverity
+          , EventProduct
+          , EventVendor
+          , EventSchema
+          , EventSchemaVersion
+          , EventUid
+          , EventOriginalUid
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalResultDetails
+          , EventMessage
+          , EventProductVersion
+          , Dvc
+          , DvcFQDN
+          , DvcHostname
+          , DvcDomain
+          , DvcDomainType
+          , LogonMethod
+          , LogonProtocol
+          , LogonTarget
+          , TargetUserId
+          , TargetUserIdType
+          , TargetUsername
+          , TargetUsernameType
+          , TargetUserType
+          , TargetOriginalUserType
+          , TargetUserScopeId
+          , TargetRiskLevel
+          , TargetOriginalRiskLevel
+          , TargetAppName
+          , TargetAppType
+          , Application
+          , SrcIpAddr
+          , SrcFQDN
+          , Src
+          , Dst
+          , IpAddr
+          , User
+          , HttpUserAgent
+          , AdditionalFields
+          , Type
+  };
+  vimAuthenticationAlibabaCloudActionTrail(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      eventresultdetails_in=eventresultdetails_in,
+      disabled=disabled,
+      pack=pack)
