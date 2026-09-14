@@ -2,7 +2,7 @@
 
 ## Version 0.2.20
 
-- (2026-09-14) Add the Alibaba Cloud ActionTrail Authentication parser. - [PR #](https://github.com/Azure/Azure-Sentinel/pull/)
+- (2026-09-14) Add the Alibaba Cloud ActionTrail Authentication parser. - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
 
 ## Version 0.2.19
 

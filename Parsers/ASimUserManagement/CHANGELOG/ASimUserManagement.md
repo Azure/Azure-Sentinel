@@ -2,7 +2,7 @@
 
 ## Version 0.1.3
 
-- (2026-09-14) Add the Alibaba Cloud ActionTrail User Management parser  - [PR #](https://github.com/Azure/Azure-Sentinel/pull/)
+- (2026-09-14) Add the Alibaba Cloud ActionTrail User Management parser  - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
 
 ## Version 0.1.2
 

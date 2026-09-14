@@ -1,7 +1,7 @@
 # Changelog for imAuditEvent.yaml
 
 ## Version 0.1.7
-- (2026-09-14) [ASIM] AuditEvent - Alibaba Cloud ActionTrail (New Filtering Parser) - [PR #](https://github.com/Azure/Azure-Sentinel/pull/)
+- (2026-09-14) [ASIM] AuditEvent - Alibaba Cloud ActionTrail (New Filtering Parser) - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
 - Add Alibaba Cloud ActionTrail filtering parser to imAuditEvent
 
 ## Version 0.1.6
