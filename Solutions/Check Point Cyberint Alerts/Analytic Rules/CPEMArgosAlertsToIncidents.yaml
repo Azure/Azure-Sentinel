@@ -1,0 +1,81 @@
+id: 2f7c4e91-6b8d-4a3f-9e15-c0d84b7a2f36
+name: Check Point Exposure Management - Argos alerts to incidents
+description: |
+  Creates a Microsoft Sentinel incident for each open Check Point Exposure Management alert
+  ingested into the argsentdc_CL table by the CCP data connector. Each result becomes its own
+  alert, and ref_id is surfaced as a Custom Detail so the CPEM Exporter playbook can map the
+  incident back to the originating Argos alert through
+  properties.alerts[*].properties.additionalData['Custom Details'].
+
+  This rule replaces the Importer playbook's Log Ingestion API path. The Logs Ingestion API
+  does not support writing to the built-in SecurityAlert table, and a scheduled analytic rule
+  produces the attached alert and Custom Details natively, with no data collection endpoint,
+  data collection rule, managed identity or role assignment.
+
+  queryPeriod is deliberately much larger than queryFrequency. The connector's DCR maps the
+  alert's update_date into TimeGenerated, so a row carries a timestamp several minutes older
+  than the moment it becomes queryable. A window equal to the run interval would miss it.
+  Repeat matches are folded into the existing incident by grouping on the ref_id custom detail.
+severity: Medium
+queryFrequency: 5m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1566
+  - T1036
+requiredDataConnectors:
+  - connectorId: CheckPointCyberintAlerts
+    dataTypes:
+      - argsentdc_CL
+query: |
+  argsentdc_CL
+  | where TimeGenerated > ago(1d)
+  | summarize arg_max(TimeGenerated, *) by tostring(ref_id)
+  | where status == "open"
+  | extend SentinelSeverity = case(
+      severity in ("very_high", "critical"), "High",
+      severity == "high", "High",
+      severity == "medium", "Medium",
+      severity == "low", "Low",
+      "Informational")
+  | project TimeGenerated,
+            RefId = tostring(ref_id),
+            AlertTitle = tostring(event_title),
+            AlertDescription = tostring(description),
+            OriginalSeverity = tostring(severity),
+            SentinelSeverity,
+            Confidence = tostring(confidence),
+            EventType = tostring(event_type),
+            Category = tostring(category),
+            Recommendation = tostring(recommendation)
+suppressionEnabled: false
+suppressionDuration: 5h
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - ref_id
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertTitle}}'
+  alertDescriptionFormat: '{{AlertDescription}}'
+  alertSeverityColumnName: SentinelSeverity
+customDetails:
+  ref_id: RefId
+  event_type: EventType
+  category: Category
+  argos_severity: OriginalSeverity
+  confidence: Confidence
+  recommendation: Recommendation
+version: 1.0.0
+kind: Scheduled
