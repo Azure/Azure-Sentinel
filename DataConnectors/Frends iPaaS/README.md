@@ -11,7 +11,7 @@ SaaS, no Function Apps or Logic Apps to maintain.
 | **Author** | Konstantinos Lianos |
 | **Support** | KanenasCS — Konstantinos_lianos@hotmail.com |
 | **Provider** | Microsoft Security Community |
-| **Version** | 1.0.0 |
+| **Version** | 1.0.1 |
 | **Table** | `FrendsAuditLogs_CL` |
 | **Source** | Frends Platform API — `GET /api/v1/audit-log` |
 | **Auth** | Entra ID OAuth 2.0 client credentials |
@@ -114,7 +114,7 @@ Tag Discovery API.
 ```bash
 # Azure CLI — replace <region> with your workspace region
 az network list-service-tags --location <region> \
-  --query "values[?name=='Scuba'].properties.addressPrefixes | [0]" -o tsv
+  --query "values[?name=='Scuba'].properties.addressPrefixes[]" -o tsv
 ```
 
 The `Scuba` tag is published as a single global list (region argument scopes
@@ -172,8 +172,10 @@ FrendsAuditLogs_CL
 
 - The API returns entries under a `data` envelope; each entry's `parameters`
   field arrives as a JSON-serialized string and is parsed with `todynamic()`.
-- The poller uses a wide query window to reliably capture low-frequency audit
-  activity; the CCF framework de-duplicates across overlapping windows.
+- The poller uses a 5-minute query window with `PageSize` 200. Audit events
+  are low-frequency (human/configuration actions), so a single window is very
+  unlikely to exceed the page size; add pagination only if per-window volume
+  ever approaches 200. The CCF framework de-duplicates across overlapping windows.
 - Frends retains audit data upstream for approximately 60 days.
 - `solutionIcon` is empty in the template — supply a hosted Frends SVG URL if
   publishing to the gallery.
