@@ -1,6 +1,6 @@
 Parser:
   Title: Authentication ASIM filtering parser for Alibaba Cloud ActionTrail
-  Version: '0.1.0'
+  Version: '0.1.1'
   LastUpdated: Sep 14, 2026
 Product:
   Name: Alibaba Cloud ActionTrail
@@ -106,7 +106,10 @@ ParserQuery: |
               , _ErrorCode == "AuthenticationFailed.UsernameOrPassword", "No such user or password"
               , "Other"
           )
-      | where array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(sourceIpAddress, srcipaddr_has_any_prefix)
+      | where array_length(srcipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(sourceIpAddress, srcipaddr_has_any_prefix)
+          or ipv6_is_in_any_range(sourceIpAddress, srcipaddr_has_any_prefix)
+      | where array_length(srchostname_has_any) == 0 // SrcHostname not available in source
       | where array_length(username_has_any) == 0 or _TargetUsername has_any (username_has_any)
       | where array_length(targetappname_has_any) == 0 or _TargetAppName has_any (targetappname_has_any)
       | where array_length(eventtype_in) == 0 or "Logon" in (eventtype_in)
@@ -179,14 +182,15 @@ ParserQuery: |
           , TargetUsernameType = case(isempty(TargetUsername), "", TargetUsername has "@", "UPN", "Simple")
       | project-rename
           EventOriginalUid = eventId
-          , EventOriginalType = eventType
+          , EventOriginalType = eventName
           , EventProductVersion = eventVersion
           , HttpUserAgent = userAgent
       | extend
           AdditionalFields = iff(
               pack
               , pack(
-                  "loginMethodRaw", _LoginMethodRaw
+                  "eventType", eventType
+                  , "loginMethodRaw", _LoginMethodRaw
                   , "mfaChecked", tostring(additionalEventData.mfaChecked)
                   , "isMFAChecked", tostring(additionalEventData.isMFAChecked)
                   , "mfaAuthenticatedRequestParam", tostring(requestParameters.MFAAuthenticated)
