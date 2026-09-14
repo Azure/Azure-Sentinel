@@ -2,7 +2,7 @@
 
 ## Version 0.2.0
 
-- (2026-09-14) Add support for updated connector via SalesforceServiceCloudV3_CL table  [PR #]
+- (2026-09-14) Add support for updated connector via SalesforceServiceCloudV3_CL table - [PR #15123](https://github.com/Azure/Azure-Sentinel/pull/15123)
 
 ## Version 0.1.0
 
