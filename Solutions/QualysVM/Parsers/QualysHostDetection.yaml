@@ -1,8 +1,8 @@
 id: 7162903e-e07f-426b-9b07-63b8c7eb77b1
 Function:
     Title: Parser for QualysHostDetection
-    Version: '1.0.3'
-    LastUpdated: '2026-09-10'
+    Version: '1.0.4'
+    LastUpdated: '2026-09-11'
 Category: Microsoft Sentinel Parser
 FunctionName: QualysHostDetection
 FunctionAlias: QualysHostDetection
@@ -92,7 +92,11 @@ FunctionQuery: |
     let QualysHostDetectionV3_view = view () {
     QualysHostDetectionV3_CL
     | extend DetectionList = todynamic(DetectionList)
-    | mv-expand Detections = todynamic(DetectionList.DETECTION)
+    | extend Detections = iff(
+        gettype(DetectionList.DETECTION) == "array",
+        DetectionList.DETECTION,
+        pack_array(DetectionList.DETECTION))
+    | mv-expand Detections
     | extend 
         TenantId = column_ifexists('TenantId', ''),
         SourceSystem = column_ifexists('SourceSystem', ''),
@@ -114,7 +118,14 @@ FunctionQuery: |
         LastVMScannedDateTime = column_ifexists('LastVMScannedDateTime', ''),
         LastVMAuthScannedDateTime = column_ifexists('LastVMAuthScannedDateTime', ''),
         QID = tostring(Detections.QID),
+        UniqueVulnerabilityId = tostring(Detections.UNIQUE_VULN_ID),
+        Port = tostring(Detections.PORT),
+        Protocol = tostring(Detections.PROTOCOL),
+        FQDN = tostring(Detections.FQDN),
         SSL = tostring(Detections.SSL),
+        Instance = tostring(Detections.INSTANCE),
+        ResultInstance = tostring(Detections.RESULT_INSTANCE),
+        CVE = tostring(Detections.CVE),
         Status = tostring(Detections.STATUS),
         Ignored = tostring(Detections.IS_IGNORED),
         Severity = tostring(Detections.SEVERITY),
@@ -123,16 +134,45 @@ FunctionQuery: |
         LastFound = todatetime(Detections.LAST_FOUND_DATETIME),
         TimesFound = tostring(Detections.TIMES_FOUND),
         FirstFound = todatetime(Detections.FIRST_FOUND_DATETIME),
+        LastTestDateTime = todatetime(Detections.LAST_TEST_DATETIME),
         LastUpdate = todatetime(Detections.LAST_UPDATE_DATETIME),
+        FirstReopenedDateTime = todatetime(Detections.FIRST_REOPENED_DATETIME),
+        LastReopenedDateTime = todatetime(Detections.LAST_REOPENED_DATETIME),
+        TimesReopened = tostring(Detections.TIMES_REOPENED),
         LastProcessedDateTime = coalesce(
             todatetime(Detections.LAST_PROCESSED_DATETIME),
             todatetime(Detections.LAST_PROCESSED_DATE)),
-        Results_0 = tostring(Detections['RESULTS']['#cdata-section']),
+        Results_0 = coalesce(
+            tostring(Detections['RESULTS']['#cdata-section']),
+            tostring(Detections.RESULTS)),
         Result_column_count = "1",
         Type = tostring(Detections.TYPE),
+        Source = tostring(Detections.SOURCE),
+        VulnerabilityDetectionSources = tostring(Detections.VULNERABILITY_DETECTION_SOURCES),
+        LatestVulnerabilityDetectionSource = tostring(Detections.LATEST_VULNERABILITY_DETECTION_SOURCE),
+        MitreTacticName = tostring(Detections.MITRE_TACTIC_NAME),
+        MitreTechniqueName = tostring(Detections.MITRE_TECHNIQUE_NAME),
+        MitreTacticId = tostring(Detections.MITRE_TACTIC_ID),
+        MitreTechniqueId = tostring(Detections.MITRE_TECHNIQUE_ID),
+        TruRiskEliminationStatus = tostring(Detections.TRURISK_ELIMINATION_STATUS),
+        QDS = coalesce(
+            toint(Detections.QDS),
+            toint(Detections.QDS['#text']),
+            toint(Detections.QDS['#cdata-section'])),
+        QDSSeverity = coalesce(
+            tostring(Detections.QDS['@severity']),
+            tostring(Detections.QDS._severity),
+            tostring(Detections.QDS.SEVERITY),
+            tostring(Detections.QDS_SEVERITY)),
+        QDSFactors = tostring(Detections.QDS_FACTORS),
+        Service = tostring(Detections.SERVICE),
+        AffectRunningKernel = tostring(Detections.AFFECT_RUNNING_KERNEL),
+        AffectRunningService = tostring(Detections.AFFECT_RUNNING_SERVICE),
+        AffectExploitableConfig = tostring(Detections.AFFECT_EXPLOITABLE_CONFIG),
+        AssetCVE = tostring(Detections.ASSET_CVE),
         _ResourceId = column_ifexists('_ResourceId', '')
     | extend _IngestionTime = todatetime(TimeGenerated)
-    | summarize arg_max(_IngestionTime, *) by HostId, QID, Status, SSL, Ignored, Severity, Disabled, LastFixed, LastFound, TimesFound, FirstFound, Result_column_count, Results_0, Type
+    | summarize arg_max(_IngestionTime, *) by HostId, QID, UniqueVulnerabilityId, Type, Severity, Port, Protocol, FQDN, SSL, Instance, ResultInstance, CVE, Results_0, Status, FirstFound, LastFound, Source, VulnerabilityDetectionSources, LatestVulnerabilityDetectionSource, MitreTacticName, MitreTechniqueName, MitreTacticId, MitreTechniqueId, TruRiskEliminationStatus, QDS, QDSSeverity, QDSFactors, TimesFound, LastTestDateTime, LastFixed, FirstReopenedDateTime, LastReopenedDateTime, TimesReopened, Service, Ignored, Disabled, AffectRunningKernel, AffectRunningService, AffectExploitableConfig, AssetCVE
     | project-away _IngestionTime
     };
     union isfuzzy=true
@@ -160,7 +200,14 @@ FunctionQuery: |
         LastVMScannedDateTime,
         LastVMAuthScannedDateTime,
         QID,
+        UniqueVulnerabilityId,
+        Port,
+        Protocol,
+        FQDN,
         SSL,
+        Instance,
+        ResultInstance,
+        CVE,
         Type,
         Status,
         Ignored,
@@ -170,10 +217,30 @@ FunctionQuery: |
         LastFound,
         TimesFound,
         FirstFound,
+        LastTestDateTime,
         LastUpdate,
+        FirstReopenedDateTime,
+        LastReopenedDateTime,
+        TimesReopened,
         LastProcessedDateTime,
         Result_column_count,
         Results_0,
+        Source,
+        VulnerabilityDetectionSources,
+        LatestVulnerabilityDetectionSource,
+        MitreTacticName,
+        MitreTechniqueName,
+        MitreTacticId,
+        MitreTechniqueId,
+        TruRiskEliminationStatus,
+        QDS,
+        QDSSeverity,
+        QDSFactors,
+        Service,
+        AffectRunningKernel,
+        AffectRunningService,
+        AffectExploitableConfig,
+        AssetCVE,
         _ResourceId
     | extend
         HostId = tostring(HostId),
