@@ -12,10 +12,12 @@ description: |
   produces the attached alert and Custom Details natively, with no data collection endpoint,
   data collection rule, managed identity or role assignment.
 
-  queryPeriod is deliberately much larger than queryFrequency. The connector's DCR maps the
-  alert's update_date into TimeGenerated, so a row carries a timestamp several minutes older
-  than the moment it becomes queryable. A window equal to the run interval would miss it.
-  Repeat matches are folded into the existing incident by grouping on the ref_id custom detail.
+  Two time filters are needed. The connector's DCR maps the alert's update_date into
+  TimeGenerated, so a row carries a timestamp several minutes older than the moment it becomes
+  queryable, and a TimeGenerated window equal to the run interval would miss it. The wide
+  TimeGenerated bound keeps the row in scope, while the ingestion_time bound stops the rule
+  re-alerting on the same row every cycle. Any remaining repeats are folded into the existing
+  incident by grouping on the ref_id custom detail.
 severity: Medium
 queryFrequency: 5m
 queryPeriod: 1d
@@ -35,6 +37,7 @@ requiredDataConnectors:
 query: |
   argsentdc_CL
   | where TimeGenerated > ago(1d)
+  | where ingestion_time() > ago(20m)
   | summarize arg_max(TimeGenerated, *) by tostring(ref_id)
   | where status == "open"
   | extend SentinelSeverity = case(

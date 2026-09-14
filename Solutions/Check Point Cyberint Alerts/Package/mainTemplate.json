@@ -295,7 +295,7 @@
                 "description": "Creates a Microsoft Sentinel incident for each open Check Point Exposure Management alert\ningested into the argsentdc_CL table by the CCP data connector. Each result becomes its own\nalert, and ref_id is surfaced as a Custom Detail so the CPEM Exporter playbook can map the\nincident back to the originating Argos alert through\nproperties.alerts[*].properties.additionalData['Custom Details'].\n\nThis rule replaces the Importer playbook's Log Ingestion API path. The Logs Ingestion API\ndoes not support writing to the built-in SecurityAlert table, and a scheduled analytic rule\nproduces the attached alert and Custom Details natively, with no data collection endpoint,\ndata collection rule, managed identity or role assignment.\n\nqueryPeriod is deliberately much larger than queryFrequency. The connector's DCR maps the\nalert's update_date into TimeGenerated, so a row carries a timestamp several minutes older\nthan the moment it becomes queryable. A window equal to the run interval would miss it.\nRepeat matches are folded into the existing incident by grouping on the ref_id custom detail.",
                 "displayName": "Check Point Exposure Management - Argos alerts to incidents",
                 "enabled": false,
-                "query": "argsentdc_CL\n| where TimeGenerated > ago(1d)\n| summarize arg_max(TimeGenerated, *) by tostring(ref_id)\n| where status == \"open\"\n| extend SentinelSeverity = case(\n    severity in (\"very_high\", \"critical\"), \"High\",\n    severity == \"high\", \"High\",\n    severity == \"medium\", \"Medium\",\n    severity == \"low\", \"Low\",\n    \"Informational\")\n| project TimeGenerated,\n          RefId = tostring(ref_id),\n          AlertTitle = tostring(event_title),\n          AlertDescription = tostring(description),\n          OriginalSeverity = tostring(severity),\n          SentinelSeverity,\n          Confidence = tostring(confidence),\n          EventType = tostring(event_type),\n          Category = tostring(category),\n          Recommendation = tostring(recommendation)\n",
+                "query": "argsentdc_CL\n| where TimeGenerated > ago(1d)\n| where ingestion_time() > ago(20m)\n| summarize arg_max(TimeGenerated, *) by tostring(ref_id)\n| where status == \"open\"\n| extend SentinelSeverity = case(\n    severity in (\"very_high\", \"critical\"), \"High\",\n    severity == \"high\", \"High\",\n    severity == \"medium\", \"Medium\",\n    severity == \"low\", \"Low\",\n    \"Informational\")\n| project TimeGenerated,\n          RefId = tostring(ref_id),\n          AlertTitle = tostring(event_title),\n          AlertDescription = tostring(description),\n          OriginalSeverity = tostring(severity),\n          SentinelSeverity,\n          Confidence = tostring(confidence),\n          EventType = tostring(event_type),\n          Category = tostring(category),\n          Recommendation = tostring(recommendation)\n",
                 "queryFrequency": "PT5M",
                 "queryPeriod": "P1D",
                 "severity": "Medium",
@@ -1021,7 +1021,7 @@
                               "type": "SetVariable",
                               "inputs": {
                                 "name": "AlertRefId",
-                                "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                                "value": "@{json(items('For_each_alert')?['properties']?['additionalData']?['Custom Details'])?['ref_id']?[0]}"
                               }
                             },
                             "Update_Argos_Alert_Status": {
@@ -1405,7 +1405,7 @@
                           "type": "SetVariable",
                           "inputs": {
                             "name": "AlertRefId",
-                            "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                            "value": "@{json(items('For_each_alert')?['properties']?['additionalData']?['Custom Details'])?['ref_id']?[0]}"
                           }
                         },
                         "Update_Argos_Alert_Status": {
@@ -2223,7 +2223,7 @@
                           "type": "SetVariable",
                           "inputs": {
                             "name": "AlertRefId",
-                            "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                            "value": "@{json(items('For_each_alert')?['properties']?['additionalData']?['Custom Details'])?['ref_id']?[0]}"
                           }
                         },
                         "Get_Alert_Details": {
@@ -3090,7 +3090,7 @@
                           "type": "SetVariable",
                           "inputs": {
                             "name": "AlertRefId",
-                            "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                            "value": "@{json(items('For_each_alert')?['properties']?['additionalData']?['Custom Details'])?['ref_id']?[0]}"
                           }
                         },
                         "Get_Alert_Details": {
