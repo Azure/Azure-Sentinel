@@ -1,12 +1,12 @@
 Parser:
-  Title: Web Session ASIM parser for Salesforce Service Cloud
-  Version: '0.1.0'
-  LastUpdated: Jun 05, 2026
+  Title: Web Session ASIM filtering parser for Salesforce Service Cloud
+  Version: '0.2.0'
+  LastUpdated: Sep 14, 2026
 Product:
   Name: Salesforce Service Cloud
 Normalization:
   Schema: WebSession
-  Version: '0.2.7'
+  Version: '1.0.0'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
@@ -15,18 +15,54 @@ References:
 - Title: Salesforce Service Cloud REST API Documentation
   Link: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
 Description: |
-  This ASIM parser supports normalizing Salesforce Service Cloud web session and API request logs from the SalesforceServiceCloudV2_CL table to the ASIM Web Session normalized schema.
-ParserName: ASimWebSessionSalesforceServiceCloudV2
-EquivalentBuiltInParser: _ASim_WebSession_SalesforceServiceCloudV2
+  This ASIM parser supports filtering and normalizing Salesforce Service Cloud web session and API request logs from the SalesforceServiceCloudV2_CL and SalesforceServiceCloudV3_CL table to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionSalesforceServiceCloud
+EquivalentBuiltInParser: _Im_WebSession_SalesforceServiceCloud
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
   - Name: pack
     Type: bool
     Default: false
+
 ParserQuery: |
-  let parser=(disabled:bool=false, pack:bool=false) {
+  let parser=(
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    url_has_any:dynamic=dynamic([]),
+    httpuseragent_has_any:dynamic=dynamic([]),
+    eventresultdetails_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false,
+    pack:bool=false
+  ) {
     let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [
         "ApiTotalUsage",    "ApiRequest",
         "RestApi",          "ApiRequest",
@@ -51,9 +87,31 @@ ParserQuery: |
         "LightningInteraction", "UiTelemetryResourceTiming",
         "UiTelemetryNavigationTiming", "CSPViolation"
     ]);
-    SalesforceServiceCloudV2_CL
+    union isfuzzy=true
+      SalesforceServiceCloudV2_CL,
+      SalesforceServiceCloudV3_CL
     | where not(disabled)
     | where EventType in (WebSessionEventTypes)
+    // -- Pre-filtering on time
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    // -- Pre-filtering on source IP
+    | where (array_length(srcipaddr_has_any_prefix) == 0)
+        or has_any_ipv4_prefix(coalesce(ClientIp, SourceIp, SrcIpAddr), srcipaddr_has_any_prefix)
+    // -- Pre-filtering on URL
+    | where (array_length(url_has_any) == 0)
+        or (coalesce(Url, Uri) has_any (url_has_any))
+    // -- Pre-filtering on HTTP user agent
+    | where (array_length(httpuseragent_has_any) == 0)
+        or (coalesce(HttpUserAgentOriginal, HttpUserAgent, UserAgent) has_any (httpuseragent_has_any))
+    // -- Pre-filtering on event result details (HTTP status code)
+    | where (array_length(eventresultdetails_in) == 0)
+        or (StatusCode in (eventresultdetails_in))
+    // -- Pre-filtering on event result
+    | where (eventresult == '*')
+        or (eventresult == "Success" and toint(StatusCode) between (100 .. 399))
+        or (eventresult == "Failure" and toint(StatusCode) between (400 .. 599))
+        or (eventresult == "NA" and isempty(StatusCode))
     | project-rename EventOriginalType = EventType
     | lookup EventTypeLookup on EventOriginalType
     | extend
@@ -67,12 +125,11 @@ ParserQuery: |
         DstDomainType = iff(_UrlHost has ".", "FQDN", "")
     | extend
         // -- Event fields
-        Type = "SalesforceServiceCloudV2_CL",
         EventCount              = int(1),
         EventStartTime          = TimeGenerated,
         EventEndTime            = TimeGenerated,
         EventSchema             = "WebSession",
-        EventSchemaVersion      = "0.2.7",
+        EventSchemaVersion      = "1.0.0",
         EventVendor             = "Salesforce",
         EventProduct            = "Salesforce Service Cloud",
         EventProductVersion     = ApiVersion,
@@ -97,7 +154,6 @@ ParserQuery: |
         SrcUserId               = UserId,
         SrcUserIdType           = iff(isnotempty(UserId), "SalesforceId", ""),
         SrcUsername             = coalesce(UserEmail, User),
-        
         SrcUserType             = case(
                                     UserType == "Standard" or UserType == "S", "Regular",
                                     UserType == "X", "Admin",
@@ -126,6 +182,14 @@ ParserQuery: |
                                     isnotempty(SrcUsername), "Simple",
                                     ""
                                   )
+    // -- ipaddr_has_any_prefix post-filter
+    | extend
+        ASimMatchingIpAddr = case(
+            array_length(ipaddr_has_any_prefix) == 0, "-",
+            has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix), "SrcIpAddr",
+            "No match"
+        )
+    | where ASimMatchingIpAddr != "No match"
     | extend
         // -- Conditional fields
         SrcDvcIdType            = iff(isnotempty(SrcDvcId), "Other", ""),
@@ -190,7 +254,7 @@ ParserQuery: |
         DstBytes,
         SrcIpAddr,
         SrcBytes,
-        ASimMatchingIpAddr = "SrcIpAddr",
+        ASimMatchingIpAddr,
         ASimMatchingHostname = "DstHostname",
         // -- Event optional
         EventOriginalType,
@@ -236,4 +300,4 @@ ParserQuery: |
         // -- Source table
         Type
   };
-  parser(disabled=disabled, pack=pack)
+  parser(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled, pack=pack)
