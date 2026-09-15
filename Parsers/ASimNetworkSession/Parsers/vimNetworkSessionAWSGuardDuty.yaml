@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for AWS GuardDuty findings
-  Version: '0.1.3'
-  LastUpdated: Jul 29, 2026
+  Version: '0.1.4'
+  LastUpdated: Sep 15, 2026
 Product:
   Name: AWS GuardDuty
 Normalization:
@@ -51,6 +51,9 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 ParserQuery: |
   let parser = (
     starttime: datetime=datetime(null),
@@ -62,7 +65,8 @@ ParserQuery: |
     hostname_has_any: dynamic=dynamic([]),
     dvcaction: dynamic=dynamic([]),
     eventresult: string='*',
-    disabled: bool=false
+    disabled: bool=false,
+    pack: bool=false
   ) {
     AWSGuardDuty
     | where not(disabled)
@@ -110,6 +114,28 @@ ParserQuery: |
         IsApiCall_  = ActionType_ == "AWS_API_CALL",
         IsInbound_  = ActionType_ == "PORT_PROBE"
             or (ActionType_ == "NETWORK_CONNECTION" and tostring(NetworkAction_.connectionDirection) == "INBOUND")
+    // Resolve and apply filters while the native GuardDuty fields are still available.
+    | extend
+        SrcIpAddr_ = case(IsApiCall_, RemoteIp_, IsInbound_, RemoteIp_, LocalIp_),
+        DstIpAddr_ = case(IsApiCall_, "", IsInbound_, LocalIp_, RemoteIp_),
+        DstPortNumber_ = case(IsApiCall_, int(null), IsInbound_, LocalPort_, RemotePort_),
+        InstanceId_ = tostring(InstanceDetails_.instanceId),
+        DvcAction_ = case(
+            ActionType_ == "NETWORK_CONNECTION", iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
+            ""
+        ),
+        EventResult_ = case(
+            ActionType_ == "PORT_PROBE", "Failure",
+            tobool(NetworkAction_.blocked) == true, "Failure",
+            "Success"
+        )
+    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr_, srcipaddr_has_any_prefix))
+        and (array_length(dstipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DstIpAddr_, dstipaddr_has_any_prefix))
+        and (array_length(ipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr_, ipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr_, ipaddr_has_any_prefix))
+        and (isnull(dstportnumber) or DstPortNumber_ == dstportnumber)
+        and (array_length(hostname_has_any) == 0 or (not(IsApiCall_) and InstanceId_ has_any (hostname_has_any)))
+        and (array_length(dvcaction) == 0 or DvcAction_ has_any (dvcaction))
+        and (eventresult == '*' or EventResult_ == eventresult)
     // ASIM event metadata
     | extend
         EventStartTime  = TimeCreated,
@@ -121,11 +147,7 @@ ParserQuery: |
         EventProduct    = "GuardDuty",
         EventProductVersion = SchemaVersion,
         EventCount      = toint(1),
-        EventResult     = case(
-            ActionType_ == "PORT_PROBE", "Failure",
-            tobool(NetworkAction_.blocked) == true, "Failure",
-            "Success"
-        ),
+        EventResult     = EventResult_,
         EventSeverity   = case(
             Severity >= 7, "High",
             Severity >= 4, "Medium",
@@ -141,10 +163,10 @@ ParserQuery: |
     // initiated, so it is Src and the AWS resource is Dst. Outbound: the reverse. AWS_API_CALL:
     // the caller is always Src; there is no meaningful destination endpoint to report.
     | extend
-        SrcIpAddr      = case(IsApiCall_, RemoteIp_, IsInbound_, RemoteIp_, LocalIp_),
-        DstIpAddr      = case(IsApiCall_, "", IsInbound_, LocalIp_, RemoteIp_),
+        SrcIpAddr      = SrcIpAddr_,
+        DstIpAddr      = DstIpAddr_,
         SrcPortNumber  = case(IsApiCall_, int(null), IsInbound_, RemotePort_, LocalPort_),
-        DstPortNumber  = case(IsApiCall_, int(null), IsInbound_, LocalPort_, RemotePort_),
+        DstPortNumber  = DstPortNumber_,
         SrcHostname    = case(IsApiCall_ or IsInbound_, "", tostring(InstanceDetails_.instanceId)),
         DstHostname    = case(not(IsApiCall_) and IsInbound_, tostring(InstanceDetails_.instanceId), ""),
         SrcDvcId       = case(IsApiCall_ or IsInbound_, "", tostring(InstanceDetails_.instanceId)),
@@ -188,9 +210,9 @@ ParserQuery: |
         )
     // Device (the EC2 instance or resource the finding is about, when present)
     | extend
-        DvcId       = tostring(InstanceDetails_.instanceId),
-        DvcIdType   = iff(isnotempty(tostring(InstanceDetails_.instanceId)), "Other", ""),
-        DvcHostname = tostring(InstanceDetails_.instanceId),
+        DvcId       = InstanceId_,
+        DvcIdType   = iff(isnotempty(InstanceId_), "Other", ""),
+        DvcHostname = InstanceId_,
         DvcOs       = case(
             tostring(InstanceDetails_.platform) == "windows", "Windows",
             isnotempty(tostring(InstanceDetails_.platform)),  tostring(InstanceDetails_.platform),
@@ -198,10 +220,7 @@ ParserQuery: |
         ),
         // Only NETWORK_CONNECTION carries a "blocked" flag; defaulting AWS_API_CALL/PORT_PROBE
         // to "Allow" here would be a fabricated result, not an observed one.
-        DvcAction   = case(
-            ActionType_ == "NETWORK_CONNECTION", iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
-            ""
-        ),
+        DvcAction   = DvcAction_,
         DvcInterface = tostring(NetIf0_.networkInterfaceId)
     // Threat fields - always point at the remote party GuardDuty actually flagged,
     // regardless of which ASIM side (Src/Dst) it landed on above.
@@ -220,7 +239,7 @@ ParserQuery: |
         RuleNumber = int(0),
         RuleAction = "Alert"
     // AWS-specific context, packed for ASIM AdditionalFields
-    | extend AdditionalFields = bag_pack(
+    | extend AdditionalFields = iff(pack, bag_pack(
         "AwsAccountId",   AccountId,
         "AwsRegion",      Region,
         "AwsPartition",   Partition,
@@ -232,15 +251,7 @@ ParserQuery: |
         "GuardDutyActionType", ActionType_,
         "RemoteAsn",      tostring(RemoteDetails_.organization.asn),
         "RemoteIsp",      tostring(RemoteDetails_.organization.isp)
-    )
-    // Apply filter parameters
-    | where (isempty(srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-        and (isempty(dstipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_prefix))
-        and (isempty(ipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix))
-        and (isnull(dstportnumber) or DstPortNumber == dstportnumber)
-        and (isempty(hostname_has_any) or SrcHostname has_any (hostname_has_any) or DstHostname has_any (hostname_has_any))
-        and (isempty(dvcaction) or DvcAction has_any (dvcaction))
-        and (eventresult == '*' or (eventresult == 'Success' and EventResult == 'Success') or (eventresult == 'Failure' and EventResult == 'Failure'))
+    ), dynamic({}))
     | project
         EventStartTime, EventEndTime, EventType, EventSchema, EventSchemaVersion,
         EventVendor, EventProduct, EventProductVersion, EventCount, EventResult,
@@ -264,4 +275,4 @@ ParserQuery: |
         Hostname = DstHostname,
         IpAddr = SrcIpAddr
   };
-  parser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled, pack)

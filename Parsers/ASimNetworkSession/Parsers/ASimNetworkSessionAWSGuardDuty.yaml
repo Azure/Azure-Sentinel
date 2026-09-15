@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for AWS GuardDuty findings
-  Version: '0.1.3'
-  LastUpdated: Jul 29, 2026
+  Version: '0.1.4'
+  LastUpdated: Sep 15, 2026
 Product:
   Name: AWS GuardDuty
 Normalization:
@@ -24,8 +24,11 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 ParserQuery: |
-  let parser = (disabled: bool = false) {
+  let parser = (disabled: bool = false, pack: bool = false) {
     AWSGuardDuty
     | where not(disabled)
     // Only findings that carry network context are in scope for this parser.
@@ -180,7 +183,7 @@ ParserQuery: |
         RuleNumber = int(0),
         RuleAction = "Alert"
     // AWS-specific context, packed for ASIM AdditionalFields
-    | extend AdditionalFields = bag_pack(
+    | extend AdditionalFields = iff(pack, bag_pack(
         "AwsAccountId",   AccountId,
         "AwsRegion",      Region,
         "AwsPartition",   Partition,
@@ -192,7 +195,7 @@ ParserQuery: |
         "GuardDutyActionType", ActionType_,
         "RemoteAsn",      tostring(RemoteDetails_.organization.asn),
         "RemoteIsp",      tostring(RemoteDetails_.organization.isp)
-    )
+    ), dynamic({}))
     | project
         EventStartTime, EventEndTime, EventType, EventSchema, EventSchemaVersion,
         EventVendor, EventProduct, EventProductVersion, EventCount, EventResult,
@@ -216,4 +219,4 @@ ParserQuery: |
         Hostname = DstHostname,
         IpAddr = SrcIpAddr
   };
-  parser (disabled)
+  parser (disabled, pack)
