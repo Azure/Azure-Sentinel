@@ -123,7 +123,7 @@ namespace Kqlvalidations.Tests
 
                 return output
                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(fileName => Path.GetFullPath(Path.Combine(basePath, fileName.Replace('/', Path.DirectorySeparatorChar))))
+                    .Select(fileName => Path.GetFullPath(Path.Join(basePath, fileName.Replace('/', Path.DirectorySeparatorChar))))
                     .ToHashSet();
             }
         }
