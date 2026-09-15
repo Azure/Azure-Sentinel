@@ -1,0 +1,30 @@
+id: 3c8b6e21-45af-4d90-8b17-9e2f7c1a4d55
+name: Outbound contact with a HoneyLabs malware loader or C2 URL
+description: |
+  'Looks for requests to URLs that HoneyLabs extracted from payloads captured by its honeypot sensors. These are the addresses attacker tooling actually fetched its second stage from, so a hit generally indicates post-compromise activity rather than inbound scanning and is worth investigating on the requesting host.'
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1105
+query: |
+  let lookBack = 14d;
+  let recent = 1d;
+  let HoneyLabs_URLs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'url:value'
+    | extend TI_url = tostring(ObservableValue);
+  HoneyLabs_URLs
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(recent)
+      | where isnotempty(RequestURL)
+  ) on $left.TI_url == $right.RequestURL
+  | summarize Requests = count(), LastSeen = max(TimeGenerated) by TI_url, SourceIP, DeviceName, Confidence
+  | sort by Requests desc

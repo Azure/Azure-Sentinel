@@ -5,7 +5,7 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Incident. It will take the Hosts from the Incident entities list and search the Microsoft Sentinel SecurityAlert logs for other entities containing the same Hosts. A comment noting the alerts the Hosts have previously appeared in will be added to the Incident.
 
@@ -40,7 +40,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Recurring-Host-Entity
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Recurring-Host-Entity%2Fmain%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 

@@ -1,0 +1,36 @@
+id: 95f7ab0b-3025-487e-9523-1b68152f4b91
+name: Top Recipients Receiving Threats Delivered by Override
+description: |
+  This query lists the recipients who received the most threats that were delivered because of an admin or user override, with the share overridden and a breakdown of override types, using the EmailEvents table.
+description-detailed: |
+  Threats delivered because of an admin or user override (allow policies, safe-sender lists, Exchange transport rules, quarantine release) bypass Microsoft Defender for Office 365 protection and reach the user. This query ranks the recipients with the most overridden threats, showing the total threats they received, how many were delivered via an override, the override percentage, and which override types were responsible. A high override rate on a mailbox warrants a policy review.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // Recipients with the most threats delivered via an admin or user override, with the override share and type breakdown.
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound" and isnotempty(ThreatTypes) and OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend OverrideType = case(
+      OrgLevelAction == "Allow" and OrgLevelPolicy != "" and OrgLevelPolicy != "SecOps Mailbox", OrgLevelPolicy,
+      UserLevelAction == "Allow", strcat("User: ", UserLevelPolicy),
+      "(none)")
+  | summarize PerType = count() by RecipientEmailAddress, OverrideType
+  | summarize TotalThreats = sum(PerType),
+              OverriddenThreats = sumif(PerType, OverrideType != "(none)"),
+              OverrideTypes = strcat_array(make_set_if(strcat(OverrideType, " (", PerType, ")"), OverrideType != "(none)"), "; ")
+          by RecipientEmailAddress
+  | where OverriddenThreats > 0
+  | extend OverridePercent = round(OverriddenThreats * 100.0 / TotalThreats, 1)
+  | top 15 by OverriddenThreats
+  | project Recipient = RecipientEmailAddress, TotalThreats, OverriddenThreats, OverridePercent, OverrideTypes
+version: 1.0.0

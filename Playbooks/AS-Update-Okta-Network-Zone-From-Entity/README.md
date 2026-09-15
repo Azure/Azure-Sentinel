@@ -5,7 +5,7 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Entity. It will add the IP address from Microsoft Sentinel entities to an Okta Network Zone of your choosing.
 
@@ -55,7 +55,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Update-Okta-Network-Zone-From-Entity
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Update-Okta-Network-Zone-From-Entity%2Fazuredeploy.json)                                             
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 

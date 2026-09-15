@@ -1,0 +1,88 @@
+id: 5e71c965-6875-4348-b98e-5ba38186be2e
+Function:
+  Title: Parser for SecurityScorecard Issues
+  Version: '2.0.3'
+  LastUpdated: '2026-06-26'
+Category: Microsoft Sentinel Parser
+FunctionName: SecurityScorecardIssue
+FunctionAlias: SecurityScorecardIssue
+FunctionQuery: |
+    let SecurityScorecardIssueLegacy = view () {
+        SecurityScorecardIssues_CL
+        | extend
+            body_s = tostring(column_ifexists("body_s", "Issue")),
+            eventID_d = todouble(column_ifexists("eventID_d", real(null))),
+            Factor_s = tostring(column_ifexists("Factor_s", "")),
+            subject_s = tostring(column_ifexists("subject_s", "")),
+            date_s = tostring(column_ifexists("date_s", "")),
+            issueType_s = tostring(column_ifexists("issueType_s", "")),
+            issueName_s = tostring(column_ifexists("issueName_s", "")),
+            findingsCount_d = todouble(column_ifexists("findingsCount_d", real(null))),
+            groupStatus_s = tostring(column_ifexists("groupStatus_s", "")),
+            totalScoreImpact_d = todouble(column_ifexists("totalScoreImpact_d", real(null))),
+            severity_value_s = tostring(column_ifexists("severity_value_s", "")),
+            detail_url_s = tostring(column_ifexists("detail_url_s", "")),
+            ss_time_t = todatetime(column_ifexists("ss_time_t", column_ifexists("ss_time_s", ""))),
+            industry_s = tostring(column_ifexists("industry_s", "")),
+            portfolioId_g = toguid(column_ifexists("portfolioId_s", "")),
+            portfolioName_s = tostring(column_ifexists("portfolioName_s", ""))
+        | project
+            TimeGenerated,
+            body_s,
+            eventID_d,
+            Factor_s,
+            subject_s,
+            date_s,
+            issueType_s,
+            issueName_s,
+            findingsCount_d,
+            groupStatus_s,
+            totalScoreImpact_d,
+            severity_value_s,
+            detail_url_s,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s
+    };
+    let SecurityScorecardIssueCCF = view () {
+        SecurityScorecardIssuesHistory_CL
+        | where TimeGenerated > ago(365d)
+        | summarize arg_max(TimeGenerated, *) by id, portfolio_id, domain, issue_date
+        | extend
+            body_s = "Issue",
+            eventID_d = todouble(id),
+            Factor_s = tostring(factor),
+            subject_s = tostring(domain),
+            date_s = tostring(issue_date),
+            issueType_s = tostring(issue_type),
+            issueName_s = strcat_array(split(tostring(issue_type), "_"), " "),
+            findingsCount_d = todouble(issue_count),
+            groupStatus_s = tostring(group_status),
+            totalScoreImpact_d = todouble(total_score_impact),
+            severity_value_s = tostring(severity),
+            detail_url_s = tostring(detail_url),
+            ss_time_t = todatetime(issue_date),
+            industry_s = tostring(industry),
+            portfolioId_g = toguid(portfolio_id),
+            portfolioName_s = tostring(portfolio_name)
+        | project
+            TimeGenerated,
+            body_s,
+            eventID_d,
+            Factor_s,
+            subject_s,
+            date_s,
+            issueType_s,
+            issueName_s,
+            findingsCount_d,
+            groupStatus_s,
+            totalScoreImpact_d,
+            severity_value_s,
+            detail_url_s,
+            ss_time_t,
+            industry_s,
+            portfolioId_g,
+            portfolioName_s
+    };
+    union isfuzzy=true SecurityScorecardIssueLegacy, SecurityScorecardIssueCCF

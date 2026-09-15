@@ -1,0 +1,567 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## VNet Flow Logs Traffic Analytics"
+      },
+      "name": "text-overview"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "20fb9e4b-76d1-466c-a5d4-a71a70b50af0",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters-time-range"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| extend VM_s = case(\n    tolong(AllowedInFlows) > 0 or tolong(DeniedInFlows) > 0, DestVm,\n    tolong(AllowedOutFlows) > 0 or tolong(DeniedOutFlows) > 0, SrcVm,\n    coalesce(DestVm, SrcVm)\n)\n| where isnotempty(VM_s)\n| summarize TotalFlows = count() by bin(FlowIntervalStartTime, 1h), VM_s\n| project TimeGenerated = FlowIntervalStartTime, VM_s, TotalFlows\n",
+        "size": 0,
+        "title": "Traffic flows over time on virtual machines",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "70",
+      "name": "query-vm-flows"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| summarize TotalFlows = count() by FlowType\n",
+        "size": 0,
+        "title": "Traffic flow types",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query-flow-types"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union\n(\n    NTANetAnalytics\n    | where SubType == \"FlowLog\"\n    | where isnotempty(SrcNic)\n    | project\n        SubscriptionId = tostring(SrcSubscription),\n        NICName = tostring(SrcNic),\n        VMName = tostring(SrcVm),\n        AllowedOutFlows = coalesce(tolong(AllowedOutFlows), 0),\n        DeniedOutFlows = coalesce(tolong(DeniedOutFlows), 0),\n        AllowedInFlows = long(0),\n        DeniedInFlows = long(0)\n),\n(\n    NTANetAnalytics\n    | where SubType == \"FlowLog\"\n    | where isnotempty(DestNic)\n    | project\n        SubscriptionId = tostring(DestSubscription),\n        NICName = tostring(DestNic),\n        VMName = tostring(DestVm),\n        AllowedOutFlows = long(0),\n        DeniedOutFlows = long(0),\n        AllowedInFlows = coalesce(tolong(AllowedInFlows), 0),\n        DeniedInFlows = coalesce(tolong(DeniedInFlows), 0)\n)\n| summarize\n    AllowedOutFlows = sum(AllowedOutFlows),\n    DeniedOutFlows = sum(DeniedOutFlows),\n    AllowedInFlows = sum(AllowedInFlows),\n    DeniedInFlows = sum(DeniedInFlows)\n    by SubscriptionId, NICName, VMName\n| extend TotalFlows = AllowedOutFlows + DeniedOutFlows + AllowedInFlows + DeniedInFlows\n| project SubscriptionId, NICName, VMName, AllowedOutFlows, DeniedOutFlows, AllowedInFlows, DeniedInFlows, TotalFlows\n| order by TotalFlows desc\n",
+        "size": 0,
+        "title": "Flows on network interfaces and virtual machines",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "AllowedOutFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "green",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeniedOutFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AllowedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "green",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeniedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TotalFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "customWidth": "70",
+      "name": "query-nic-vm-flows"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| summarize TotalFlows = count() by FlowDirection\n",
+        "size": 0,
+        "title": "Traffic flow direction",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query-flow-direction"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Malicious actors"
+      },
+      "name": "text-malicious-actors"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\"\n| extend CountryOrRegion = iff(FlowType == \"AzurePublic\", AzureRegion, Country)\n| where FlowDirection == \"Inbound\"\n| where isnotempty(SrcIp)\n| summarize\n    FlowCount = sum(coalesce(tolong(AllowedInFlows), 0) + coalesce(tolong(DeniedInFlows), 0)),\n    AllowedInFlows = sum(coalesce(tolong(AllowedInFlows), 0)),\n    DeniedInFlows = sum(coalesce(tolong(DeniedInFlows), 0))\n    by IPAdress = strcat(SrcIp, \" (\", CountryOrRegion, \")\")\n| sort by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Malicious IP address communication",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "FlowCount",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AllowedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeniedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "customWidth": "50",
+      "name": "query-malicious-ip"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend FlowCount = coalesce(tolong(AllowedInFlows), 0) + coalesce(tolong(DeniedInFlows), 0)\n| extend Country = iff(isempty(Country), \"Unknown\", Country)\n| summarize FlowCount = sum(FlowCount) by Country\n| sort by FlowCount desc\n",
+        "size": 0,
+        "title": "Traffic country of origin",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query-country-origin"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Attacked resources"
+      },
+      "name": "text-attacked-resources"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\"\n| where FlowDirection == \"Inbound\"\n| where isnotempty(DestIp)\n| summarize AllowedInFlows = sum(coalesce(tolong(AllowedInFlows), 0)) by DestIp, DestVm, DestSubscription\n| extend Computer = strcat(\n    DestIp, \" (\",\n    iff(isempty(DestVm), \"Unknown VM\", DestVm),\n    \" - \",\n    iff(isempty(DestSubscription), \"Unknown subscription\", DestSubscription),\n    \")\"\n)\n| project Computer, AllowedInFlows\n| sort by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Most attacked machines",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query-attacked-machines"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and tostring(FaSchemaVersion) == \"3\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| where isnotempty(DestSubnet)\n| summarize AllowedInFlows = sum(coalesce(tolong(AllowedInFlows), 0)) by DestSubnet, DestSubscription\n| extend Subnet = strcat(\n    DestSubnet, \" (\",\n    iff(isempty(DestSubscription), \"Unknown subscription\", DestSubscription),\n    \")\"\n)\n| project Subnet, AllowedInFlows\n| sort by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Most attacked subnets",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query-attacked-subnets"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| where isnotempty(DestIp)\n| extend AllowedInFlows = coalesce(tolong(AllowedInFlows), 0), DeniedInFlows = coalesce(tolong(DeniedInFlows), 0)\n| summarize\n    AllowedInFlows = sum(AllowedInFlows),\n    DeniedInFlows = sum(DeniedInFlows)\n    by IPAddress = DestIp, VM = DestVm, Subnet = DestSubnet, Subscription = DestSubscription\n| extend FlowCount = AllowedInFlows + DeniedInFlows\n| extend VMParts = split(VM, \"/\"), SubnetParts = split(Subnet, \"/\")\n| extend\n    VMResourceId = iff(\n        isnotempty(Subscription) and array_length(VMParts) >= 2,\n        strcat(\"/subscriptions/\", Subscription, \"/resourceGroups/\", tostring(VMParts[0]), \"/providers/Microsoft.Compute/virtualMachines/\", tostring(VMParts[1])),\n        \"\"\n    ),\n    VNetResourceId = iff(\n        isnotempty(Subscription) and array_length(SubnetParts) >= 2,\n        strcat(\"/subscriptions/\", Subscription, \"/resourceGroups/\", tostring(SubnetParts[0]), \"/providers/Microsoft.Network/virtualNetworks/\", tostring(SubnetParts[1])),\n        \"\"\n    )\n| project IPAddress, VM = VMResourceId, VNet = VNetResourceId, Subscription, FlowCount, AllowedInFlows, DeniedInFlows\n| order by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Attacked resources",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "FlowCount",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AllowedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeniedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "name": "query-attacked-resources"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Malicious traffic target protocols"
+      },
+      "name": "text-target-protocols"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend AllowedInFlows = coalesce(tolong(AllowedInFlows), 0), DeniedInFlows = coalesce(tolong(DeniedInFlows), 0)\n| summarize\n    FlowCount = sum(AllowedInFlows + DeniedInFlows),\n    AllowedInFlows = sum(AllowedInFlows),\n    DeniedInFlows = sum(DeniedInFlows)\n    by L7Protocol, DestPort\n| extend L7Protocol = strcat(iff(isempty(L7Protocol), \"Unknown\", L7Protocol), \" (\", tostring(DestPort), \")\")\n| project L7Protocol, FlowCount, AllowedInFlows, DeniedInFlows\n| top 10 by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Malicious traffic, by application ports",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "FlowCount",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AllowedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeniedInFlows",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "name": "query-malicious-app-ports-grid"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and tostring(FaSchemaVersion) == \"3\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend AllowedIn = coalesce(tolong(AllowedInFlows), 0), DeniedIn = coalesce(tolong(DeniedInFlows), 0)\n| summarize FlowCount = sum(AllowedIn + DeniedIn) by L4Protocol\n| extend L4Protocol = case(\n    toupper(L4Protocol) == \"T\", \"TCP\",\n    toupper(L4Protocol) == \"U\", \"UDP\",\n    isempty(L4Protocol), \"Unknown\",\n    L4Protocol\n)\n| project L4Protocol, FlowCount\n| sort by FlowCount desc\n",
+        "size": 0,
+        "title": "Malicious traffic protocols",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-malicious-protocols"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| where FlowType == \"MaliciousFlow\"\n| where FlowDirection == \"Inbound\"\n| summarize AllowedInFlows = sum(coalesce(tolong(AllowedInFlows), 0)) by L4Protocol\n| extend L4Protocol = case(\n    toupper(L4Protocol) == \"T\", \"TCP\",\n    toupper(L4Protocol) == \"U\", \"UDP\",\n    isempty(L4Protocol), \"Unknown\",\n    L4Protocol\n)\n| project L4Protocol, AllowedInFlows\n| sort by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Allowed malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-allowed-malicious"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| summarize DeniedInFlows = sum(coalesce(tolong(DeniedInFlows), 0)) by L4Protocol\n| extend L4Protocol = case(\n    toupper(L4Protocol) == \"T\", \"TCP\",\n    toupper(L4Protocol) == \"U\", \"UDP\",\n    isempty(L4Protocol), \"Unknown\",\n    L4Protocol\n)\n| project L4Protocol, DeniedInFlows\n| sort by DeniedInFlows desc\n",
+        "size": 0,
+        "title": "Denied malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-denied-malicious"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend FlowCount = coalesce(tolong(AllowedInFlows), 0) + coalesce(tolong(DeniedInFlows), 0)\n| extend ApplicationPort = strcat(iff(isempty(L7Protocol), \"Unknown\", L7Protocol), \" (\", tostring(DestPort), \")\")\n| summarize FlowCount = sum(FlowCount) by ApplicationPort\n| top 10 by FlowCount desc\n",
+        "size": 0,
+        "title": "Malicious traffic, by application port",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-malicious-app-port"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and FlowType == \"MaliciousFlow\"\n| where FlowDirection == \"Inbound\"\n| extend AllowedIn = coalesce(tolong(AllowedInFlows), 0)\n| summarize AllowedInFlows = sum(AllowedIn) by L7Protocol, DestPort\n| extend L7Protocol = strcat(iff(isempty(L7Protocol), \"Unknown\", L7Protocol), \" (\", tostring(DestPort), \")\")\n| project L7Protocol, AllowedInFlows\n| top 10 by AllowedInFlows desc\n",
+        "size": 0,
+        "title": "Allowed malicious traffic, by application port",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-allowed-app-port"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and tostring(FaSchemaVersion) == \"3\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend DeniedIn = coalesce(tolong(DeniedInFlows), 0)\n| summarize DeniedInFlows = sum(DeniedIn) by L7Protocol, DestPort\n| extend L7Protocol = strcat(iff(isempty(L7Protocol), \"Unknown\", L7Protocol), \" (\", tostring(DestPort), \")\")\n| project L7Protocol, DeniedInFlows\n| top 10 by DeniedInFlows desc\n",
+        "size": 0,
+        "title": "Denied malicious traffic, by application port",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query-denied-app-port"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## NSG rule hits by malicious traffic"
+      },
+      "name": "text-nsg-rule-hits"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| where FlowType == \"MaliciousFlow\"\n| where FlowDirection == \"Inbound\"\n| extend AllowedFlowCount = coalesce(tolong(AllowedInFlows), 0)\n| where AllowedFlowCount > 0\n| extend\n    NSG = iff(isempty(AclGroup), \"Unspecified\", tostring(AclGroup)),\n    Rule = iff(isempty(AclRule), \"Unspecified\", replace_regex(tostring(AclRule), @\"^(userrule_|defaultrule_)\", \"\"))\n| summarize TotalHits = sum(AllowedFlowCount) by NSG, Rule\n| extend FullRule = strcat(NSG, \"/\", Rule)\n| project FullRule, TotalHits\n| top 10 by TotalHits desc\n",
+        "size": 0,
+        "title": "NSG rules allowing inbound malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "customWidth": "40",
+      "name": "query-nsg-allow-bar"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\"\n| where tostring(FaSchemaVersion) == \"3\"\n| where FlowType == \"MaliciousFlow\"\n| where FlowDirection == \"Inbound\"\n| extend AllowedFlowCount = coalesce(tolong(AllowedInFlows), 0)\n| where AllowedFlowCount > 0\n| extend nsg = tostring(AclGroup), rule = replace_regex(tostring(AclRule), @\"^(defaultrule_|userrule_)\", \"\")\n| where isnotempty(nsg) and isnotempty(rule)\n| summarize TotalHits = sum(AllowedFlowCount) by nsg, rule\n| extend nsgrule = strcat(nsg, \"/\", rule)\n| project nsg, rule, nsgrule, TotalHits\n| sort by TotalHits desc\n",
+        "size": 0,
+        "title": "NSG rules allowing inbound malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalHits",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "customWidth": "60",
+      "name": "query-nsg-allow-grid"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and tostring(FaSchemaVersion) == \"3\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend DeniedFlowCount = coalesce(tolong(DeniedInFlows), 0)\n| where DeniedFlowCount > 0\n| extend nsg = tostring(AclGroup), rule = replace_regex(tostring(AclRule), @\"^(defaultrule_|userrule_)\", \"\")\n| where isnotempty(nsg) and isnotempty(rule)\n| summarize TotalHits = sum(DeniedFlowCount) by nsg, rule\n| extend FullRule = strcat(nsg, \"/\", rule)\n| project FullRule, TotalHits\n| sort by TotalHits desc\n",
+        "size": 0,
+        "title": "NSG rules denying inbound malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "customWidth": "40",
+      "name": "query-nsg-deny-bar"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NTANetAnalytics\n| where SubType == \"FlowLog\" and tostring(FaSchemaVersion) == \"3\" and FlowType == \"MaliciousFlow\" and FlowDirection == \"Inbound\"\n| extend DeniedFlowCount = coalesce(tolong(DeniedInFlows), 0)\n| where DeniedFlowCount > 0\n| extend nsg = tostring(AclGroup), rule = replace_regex(tostring(AclRule), @\"^(defaultrule_|userrule_)\", \"\")\n| where isnotempty(nsg) and isnotempty(rule)\n| summarize TotalHits = sum(DeniedFlowCount) by nsg, rule\n| sort by TotalHits desc\n",
+        "size": 0,
+        "title": "NSG rules denying inbound malicious traffic",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalHits",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 25,
+          "filter": true
+        }
+      },
+      "customWidth": "60",
+      "name": "query-nsg-deny-grid"
+    }
+  ],
+ "fromTemplateId": "sentinel-AzureNetworkWatcher-VnetFL",
+ "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

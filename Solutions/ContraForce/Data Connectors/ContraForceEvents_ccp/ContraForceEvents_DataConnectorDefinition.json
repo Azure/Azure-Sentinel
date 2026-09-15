@@ -1,0 +1,124 @@
+{
+  "name": "ContraForceEvents",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ContraForceEvents",
+      "title": "ContraForce Events",
+      "publisher": "ContraForce",
+      "descriptionMarkdown": "The ContraForce Events connector ingests security service delivery events from your [ContraForce](https://www.contraforce.com) workspace into Microsoft Sentinel: incident detections from every connected security platform, administrative access changes (role and member changes), machine credential activity, and destructive workspace actions. Use it to monitor the security operations ContraForce performs on this workspace from inside your own Sentinel.",
+      "graphQueriesTableName": "ContraForceEvents_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "ContraForce events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All ContraForce events, most recent first",
+          "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Administrative access changes (roles and membership)",
+          "query": "{{graphQueriesTableName}}\n| where ActivityType in ('WorkspaceRoleAssigned', 'WorkspaceRoleChanged', 'WorkspaceRoleRemoved', 'OrganizationalRoleChanged', 'MemberAdded', 'MemberRemoved')\n| extend Meta = parse_json(Metadata)\n| project TimeGenerated, ActivityType, ActorName, ActorEmail, TargetResourceName, MemberEmail = tostring(Meta.MemberEmail), FromRole = tostring(Meta.FromRole), ToRole = tostring(Meta.ToRole)"
+        },
+        {
+          "description": "Incidents ContraForce detected on non-Sentinel platforms",
+          "query": "{{graphQueriesTableName}}\n| where ActivityType == 'IncidentDetected'\n| extend Meta = parse_json(Metadata)\n| where tostring(Meta.Source) != 'Sentinel'\n| project TimeGenerated, TargetResourceName, Source = tostring(Meta.Source), Severity = tostring(Meta.Severity)"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "ContraForceEvents_CL",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "ContraForce service account credential",
+            "description": "A ContraForce service-account credential with the 'Audit: Export' scope, created in the ContraForce portal under Settings > Developers. The service account must have a role on the workspace you are connecting."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create a ContraForce export credential",
+          "description": "In the ContraForce portal, open **Settings > Developers**, select (or create) a service account that has a role on the workspace you want to connect, and add a credential with the **Audit: Export** scope. Copy the client ID and the one-time client secret.\n\n> Events follow the account they occur under: connect each customer workspace for its events, and your own organization account for organization-level events such as service account and credential activity."
+        },
+        {
+          "title": "2. Connect your ContraForce workspace",
+          "description": "Enter your ContraForce portal URL (change it only if you use a regional portal, e.g. the UK platform), your ContraForce workspace ID (shown in the ContraForce portal URL and workspace settings), and the credential from step 1, then select **Connect**.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "ContraForce portal URL",
+                "placeholder": "https://portal.contraforce.com",
+                "type": "text",
+                "name": "apiBaseUrl"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "ContraForce workspace ID",
+                "placeholder": "00000000-0000-0000-0000-000000000000",
+                "type": "text",
+                "name": "cfWorkspaceId"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Client ID",
+                "placeholder": "Client ID",
+                "type": "text",
+                "name": "clientId"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Client secret",
+                "placeholder": "Client secret",
+                "type": "password",
+                "name": "clientSecret"
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "connect"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+id: 02909982-664b-4858-b703-429cbe031fef
+name: Potential Maldoc Execution Chain Observed
+description: |
+  Detects the aftermath of a successfully executed Microsoft Office maldoc: a document opened from an email or download spawns a suspicious execution and attempts to run code via common Windows binaries such as powershell, cmd or rundll32.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - InitialAccess
+relevantTechniques:
+  - T1059
+  - T1566.001
+query: |
+  let officeProducts = dynamic(["WINWORD.EXE","EXCEL.EXE","POWERPNT.EXE","MSACCESS.EXE","VISIO.EXE","WINPROJ.EXE"]);
+  let executionMethods = dynamic(["powershell.exe","cmd.exe","WScript.exe","rundll32.exe","cscript.exe","wmic.exe","mshta.exe","msiexec.exe"]);
+  SecurityEvent
+  | where TimeGenerated >= ago(7d)
+  | where (NewProcessName has_any (officeProducts,"OUTLOOK.EXE","explorer.exe",executionMethods) or ParentProcessName has_any (officeProducts,"OUTLOOK","explorer",executionMethods))
+  | project TimeGenerated, Computer, Activity, EventID, CommandLine, NewProcessName, processId = tolong(NewProcessId), ParentProcessName, parentProcessId = tolong(ProcessId)
+  | extend sourceAppTrue=case(NewProcessName endswith "outlook.exe",1,
+                              (ParentProcessName has_any("outlook.exe","explorer.exe") and NewProcessName has_any(officeProducts)),1,
+                              0)
+  | extend officeAppTrue=case(NewProcessName has_any(officeProducts),1,
+                              ParentProcessName has_any(officeProducts),1,
+                              0)
+  | extend executionTrue=case(NewProcessName has_any(executionMethods),1,
+                              ParentProcessName has_any(executionMethods),1,
+                              0)
+  | summarize process=make_set(NewProcessName,10), processId=make_set(processId,10), parentProcess=make_set(ParentProcessName,10),parentProcessId=make_set(parentProcessId,10), sourceApp=sum(sourceAppTrue), officeApp=sum(officeAppTrue), execution=sum(executionTrue)
+   by Computer, bin(TimeGenerated,5m)
+  | where sourceApp > 0 and officeApp > 0 and execution > 0
+version: 1.0.0

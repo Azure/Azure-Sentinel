@@ -37,6 +37,7 @@ $standardStreamMapping += @{ Key = 'COMPUTER_GROUP_BLOB'; Value = 'Microsoft-Com
 $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist' }
 $standardStreamMapping += @{ Key = 'OFFICEDATAVERSE_RESTAPI'; Value = 'Microsoft-DataverseActivity' }
 $standardStreamMapping += @{ Key = 'LLMACTIVITY_RESTAPI'; Value = 'Microsoft-CopilotActivity' }
+$standardStreamMapping += @{ Key = 'DRAGON_COPILOT'; Value = 'Microsoft-DragonCopilot' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEEVENTS'; Value = 'Microsoft-DeviceEvents' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEFILECERTIFICATEINFO'; Value = 'Microsoft-DeviceFileCertificateInfo' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEFILEEVENTS'; Value = 'Microsoft-DeviceFileEvents' }

@@ -5,7 +5,7 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Entity. It will look up the Azure AD users associated with the account entities and revoke their sessions.
                                                                                                                                      
@@ -98,7 +98,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Revoke-Azure-AD-User-Session-From-Entity
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Revoke-Azure-AD-User-Session-From-Entity%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 

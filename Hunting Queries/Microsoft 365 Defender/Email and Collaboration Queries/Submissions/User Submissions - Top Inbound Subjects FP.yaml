@@ -1,0 +1,34 @@
+id: b2c772f0-f6b2-406f-9a80-756b596f0b57
+name: User Email Submissions (FP) - Top Inbound Subjects
+description: |
+  This query visualises the top 10 subjects of inbound emails submitted as false positives by users.
+description-detailed: |
+  This query visualises the top 10 subjects of inbound emails submitted as false positives by users.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let Submissions = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "UserSubmission"
+      | extend RawData = parse_json(RawEventData)
+      | where tostring(RawData.SubmissionContentType) == "Mail" and tostring(RawData.SubmissionType) == "3"
+      | extend NetworkMessageId = tostring(RawData.ObjectId), RecipientObjectId = AccountObjectId
+      | distinct NetworkMessageId, RecipientObjectId;
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | join kind=inner Submissions on NetworkMessageId, RecipientObjectId
+  // De-duplicate to the latest EmailEvents record per message and recipient before counting
+  | summarize arg_max(Timestamp, *) by NetworkMessageId, RecipientObjectId
+  | where EmailDirection == "Inbound"
+  | summarize count() by Subject
+  | top 10 by count_
+  | project ['Subject'] = Subject, ['Emails'] = count_
+version: 1.0.0

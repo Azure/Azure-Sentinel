@@ -13,4 +13,4 @@ For more information about Log Analytics functions refer to:
 
 <br/>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/{uri}%2F{filename}%2F{filename}.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/{uri}%2F{filename}%2F{filename}.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/{uri}%2F{filename}%2F{filename}.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/{uri}%2F{filename}%2F{filename}.json)

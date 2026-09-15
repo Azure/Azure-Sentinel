@@ -1,0 +1,35 @@
+id: 5990abd3-7e11-4441-947b-17e60c69f28f
+name: User Submissions by Detection Method - Phish (FP)
+description: |
+  This query visualises user false positive submissions by the original phish filter verdict on the reported message.
+description-detailed: |
+  This query visualises user false positive submissions by the original phish filter verdict on the reported message.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let Submissions = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "UserSubmission"
+      | extend RawData = parse_json(RawEventData)
+      | where tostring(RawData.SubmissionContentType) == "Mail" and tostring(RawData.SubmissionType) == "3"
+      | extend NetworkMessageId = tostring(RawData.ObjectId), RecipientObjectId = AccountObjectId
+      | distinct NetworkMessageId, RecipientObjectId;
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | join kind=inner Submissions on NetworkMessageId, RecipientObjectId
+  // De-duplicate to the latest EmailEvents record per message and recipient so the verdict is read once
+  | summarize arg_max(Timestamp, *) by NetworkMessageId, RecipientObjectId
+  | where EmailDirection == "Inbound" and DetectionMethods has 'Phish'
+  | mv-expand Phish = parse_json(DetectionMethods).Phish to typeof(string)
+  | where isnotempty(Phish)
+  | summarize count() by Phish
+  | render piechart
+version: 1.0.0

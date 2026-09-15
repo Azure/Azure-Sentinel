@@ -20,8 +20,8 @@ The ARM template includes the cloud init files which runs commands on the VM ins
 
 ## Deploy RedHat VMSS
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FFluentD-VMSS%2FFluentD-VMSS-RH-Templatev2.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors2FFluentD-VMSS%2FFluentD-VMSS-RH-Templatev2.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors2FFluentD-VMSS%2FFluentD-VMSS-RH-Templatev2.json)
 
 ## Deploy Unbuntu VMSS
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FFluentd-VMSS%2FFluentD-VMSS-UB-Templatev2.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors2FFluentD-VMSS%2FFluentD-VMSS-UB-Templatev2.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors2FFluentD-VMSS%2FFluentD-VMSS-UB-Templatev2.json)

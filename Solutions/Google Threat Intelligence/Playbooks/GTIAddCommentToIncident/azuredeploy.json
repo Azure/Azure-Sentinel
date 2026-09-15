@@ -1,0 +1,327 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Google Threat Intelligence - Add Comment To Incident",
+    "description": "Utility sub-playbook called by GTIURLScanIncidentEnrichment and GTIURLScanEntityEnrichment. Receives the incident ARM ID, a pre-formatted HTML comment (with GTI URL scan assessment table), and the calling playbook name. Fetches the current incident comment count, enforces a 99-comment limit and a 30 000-character-per-comment limit, posts the comment (or a truncation notice / limit-reached warning that references the GTI_URLScan_CL custom table), and returns a structured HTTP response to the caller.",
+    "prerequisites": [
+      "The Logic App managed identity must have 'Microsoft Sentinel Responder' role on the Sentinel workspace.",
+      "This playbook is designed to be called as a sub-playbook by GTIURLScanIncidentEnrichment and GTIURLScanEntityEnrichment."
+    ],
+    "entities": [],
+    "tags": ["Utility", "GTI", "SubPlaybook", "IncidentComment"],
+    "support": { "tier": "Partner" },
+    "author": { "name": "Crest Data" },
+    "postDeployment": [
+      "Grant the Logic App managed identity 'Microsoft Sentinel Responder' role on the Sentinel workspace.",
+      "Ensure the caller playbooks (GTIURLScanIncidentEnrichment, GTIURLScanEntityEnrichment) reference this playbook's name in their GTIAddCommentPlaybookName parameter."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial version",
+        "notes": [
+          "Initial release.",
+          "Fetches live incident comment count via Get_Incident before posting.",
+          "Enforces 99-comment limit: posts full comment when count < 99, posts limit-reached warning at count = 99, skips silently at >= 100.",
+          "Enforces 30 000-character per-comment limit: truncates oversized comments and appends a note pointing to GTI_URLScan_CL.",
+          "Returns structured HTTP response (commentAdded boolean + reason) to the caller.",
+          "Catch_Scope posts HTTP 500 and terminates run on unexpected errors."
+        ]
+      }
+    ],
+    "lastUpdateTime": "2026-07-03T00:00:00.000Z",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "GTIAddCommentToIncident",
+      "type": "String",
+      "metadata": { "description": "Name of the Logic App / Playbook resource." }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "GTIAddCommentToIncident",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "incidentArmId": { "type": "string" },
+                    "scanResponse":  { "type": "object" },
+                    "urlScanned":    { "type": "string" },
+                    "playbookName":  { "type": "string" }
+                  },
+                  "required": ["incidentArmId", "scanResponse", "urlScanned"]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_CommentLimit": {
+              "type": "InitializeVariable",
+              "runAfter": {},
+              "inputs": {
+                "variables": [{ "name": "CommentLimit", "type": "Integer", "value": 99 }]
+              }
+            },
+            "Initialize_CommentCharLimit": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_CommentLimit": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "CommentCharLimit", "type": "Integer", "value": 30000 }]
+              }
+            },
+            "Try_Scope": {
+              "type": "Scope",
+              "runAfter": { "Initialize_CommentCharLimit": ["Succeeded"] },
+              "actions": {
+
+                "Get_Incident": {
+                  "type": "ApiConnection",
+                  "runAfter": {},
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['incidentArmId']"
+                    },
+                    "path": "/Incidents"
+                  }
+                },
+
+                "Compose_Comment": {
+                  "type": "Compose",
+                  "runAfter": { "Get_Incident": ["Succeeded"] },
+                  "inputs": "<p class=\"editor-paragraph\"><table style=\"border-collapse:collapse;width:100%;font-family:Arial,sans-serif;border:1px solid #cccccc\"><tr style=\"background-color:#1565C0\"><th colspan=\"2\" style=\"color:#ffffff;padding:10px 14px;text-align:left;font-size:15px;border-bottom:2px solid #0D47A1\">&#128269; GTI URL Scan Report &nbsp;|&nbsp; <span style=\"font-weight:normal;font-size:13px\">@{coalesce(triggerBody()?['playbookName'], 'GTI Playbook')}</span></th></tr><tr style=\"background-color:#f2f2f2;border-bottom:1px solid #dddddd\"><td style=\"padding:8px 14px;font-weight:bold;width:35%;color:#1a1a1a\">Scanned URL</td><td style=\"padding:8px 14px;color:#1a1a1a;word-break:break-all\">@{triggerBody()?['urlScanned']}</td></tr><tr style=\"background-color:#37474F\"><th colspan=\"2\" style=\"color:#ffffff;padding:7px 14px;text-align:left;font-size:13px\">GTI Assessment</th></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Verdict</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\"><strong>@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['verdict']?['value']}</strong></td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Severity</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\"><strong>@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['severity']?['value']}</strong></td></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Threat Score</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\"><strong>@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['threat_score']?['value']}</strong></td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Description</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['description']}</td></tr><tr style=\"background-color:#37474F\"><th colspan=\"2\" style=\"color:#ffffff;padding:7px 14px;text-align:left;font-size:13px\">Contributing Factors</th></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">SafeBrowsing Verdict</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['contributing_factors']?['safebrowsing_verdict']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Pervasive Indicator</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['contributing_factors']?['pervasive_indicator']}</td></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Mandiant Confidence Score</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['contributing_factors']?['mandiant_confidence_score']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">GTI Confidence Score</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['gti_assessment']?['contributing_factors']?['gti_confidence_score']}</td></tr><tr style=\"background-color:#37474F\"><th colspan=\"2\" style=\"color:#ffffff;padding:7px 14px;text-align:left;font-size:13px\">URL Details</th></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Final URL</td><td style=\"padding:7px 14px;color:#1a1a1a;word-break:break-all;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['last_final_url']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">HTTP Response Code</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['last_http_response_code']}</td></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Page Title</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['title']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">TLD</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['tld']}</td></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Content Length (bytes)</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['last_http_response_content_length']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Private Scan</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['attributes']?['private']}</td></tr><tr style=\"background-color:#37474F\"><th colspan=\"2\" style=\"color:#ffffff;padding:7px 14px;text-align:left;font-size:13px\">Context</th></tr><tr style=\"background-color:#ffffff\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Shared With Me</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['context_attributes']?['shared_with_me']}</td></tr><tr style=\"background-color:#f2f2f2\"><td style=\"padding:7px 14px;font-weight:bold;color:#1a1a1a;border-bottom:1px solid #dddddd\">Role</td><td style=\"padding:7px 14px;color:#1a1a1a;border-bottom:1px solid #dddddd\">@{triggerBody()?['scanResponse']?['data']?['context_attributes']?['role']}</td></tr><tr style=\"background-color:#37474F\"><td colspan=\"2\" style=\"padding:7px 14px;font-size:11px;color:#ffffff;text-align:right\">Full data available in <strong>GTI_URLScan_CL</strong> &nbsp;|&nbsp; @{utcNow()}</td></tr></table></p>"
+                },
+
+                "Check_Comment_Limit": {
+                  "type": "If",
+                  "runAfter": { "Compose_Comment": ["Succeeded"] },
+                  "expression": {
+                    "and": [
+                      {
+                        "less": [
+                          "@body('Get_Incident')?['properties']?['additionalData']?['commentsCount']",
+                          "@variables('CommentLimit')"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+
+                    "Add_Comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['incidentArmId']",
+                          "message": "@{if(greater(length(string(outputs('Compose_Comment'))), sub(variables('CommentCharLimit'), 200)), concat(substring(string(outputs('Compose_Comment')), 0, sub(variables('CommentCharLimit'), 200)), '<hr/><p><em>[Truncated — full data in <strong>GTI_URLScan_CL</strong>]</em></p></p>'), outputs('Compose_Comment'))}"
+                        },
+                        "path": "/Incidents/Comment"
+                      }
+                    },
+
+                    "Response_Comment_Added": {
+                      "type": "Response",
+                      "kind": "Http",
+                      "runAfter": { "Add_Comment": ["Succeeded"] },
+                      "inputs": {
+                        "statusCode": 200,
+                        "headers": { "Content-Type": "application/json" },
+                        "body": {
+                          "status": "success",
+                          "commentAdded": true,
+                          "reason": "Comment posted successfully.",
+                          "calledBy": "@{coalesce(triggerBody()?['playbookName'], 'unknown')}"
+                        }
+                      }
+                    }
+
+                  },
+                  "else": {
+                    "actions": {
+
+                      "Check_Exactly_At_Limit": {
+                        "type": "If",
+                        "runAfter": {},
+                        "expression": {
+                          "and": [
+                            {
+                              "equals": [
+                                "@body('Get_Incident')?['properties']?['additionalData']?['commentsCount']",
+                                "@variables('CommentLimit')"
+                              ]
+                            }
+                          ]
+                        },
+                        "actions": {
+
+                          "Add_Limit_Warning": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                              "method": "post",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['incidentArmId']",
+                                "message": "<p class=\"editor-paragraph\"><table><tbody><tr><th colspan=\"2\" style=\"text-align:left; background-color:#FFF3CD;\">&#9888; GTI Enrichment — Comment Limit Reached</th></tr><tr><td><strong>Limit</strong></td><td>This incident has reached the maximum of 99 enrichment comments. No further comments will be added.</td></tr><tr><td><strong>Data Availability</strong></td><td>All URL scan results remain fully available in the <strong>GTI_URLScan_CL</strong> custom log table in your Log Analytics workspace. Query: <code>GTI_URLScan_CL | order by TimeGenerated desc</code></td></tr><tr><td><strong>Called By</strong></td><td>@{coalesce(triggerBody()?['playbookName'], 'GTI Playbook')}</td></tr></tbody></table></p>"
+                              },
+                              "path": "/Incidents/Comment"
+                            }
+                          },
+
+                          "Response_Limit_Reached": {
+                            "type": "Response",
+                            "kind": "Http",
+                            "runAfter": { "Add_Limit_Warning": ["Succeeded", "Failed"] },
+                            "inputs": {
+                              "statusCode": 200,
+                              "headers": { "Content-Type": "application/json" },
+                              "body": {
+                                "status": "success",
+                                "commentAdded": false,
+                                "reason": "Comment limit (99) reached. Limit-warning comment posted. Full data available in GTI_URLScan_CL.",
+                                "calledBy": "@{coalesce(triggerBody()?['playbookName'], 'unknown')}"
+                              }
+                            }
+                          }
+
+                        },
+                        "else": {
+                          "actions": {
+
+                            "Response_Limit_Exceeded": {
+                              "type": "Response",
+                              "kind": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "statusCode": 200,
+                                "headers": { "Content-Type": "application/json" },
+                                "body": {
+                                  "status": "success",
+                                  "commentAdded": false,
+                                  "reason": "Comment count exceeds 99 limit. Comment skipped. Full data available in GTI_URLScan_CL.",
+                                  "calledBy": "@{coalesce(triggerBody()?['playbookName'], 'unknown')}"
+                                }
+                              }
+                            }
+
+                          }
+                        }
+                      }
+
+                    }
+                  }
+                }
+
+              }
+            },
+
+            "Catch_Scope": {
+              "type": "Scope",
+              "runAfter": { "Try_Scope": ["Failed", "TimedOut", "Skipped"] },
+              "actions": {
+                "Response_Error": {
+                  "type": "Response",
+                  "kind": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "statusCode": 500,
+                    "headers": { "Content-Type": "application/json" },
+                    "body": {
+                      "status": "error",
+                      "message": "GTIAddCommentToIncident failed.",
+                      "incidentArmId": "@{triggerBody()?['incidentArmId']}",
+                      "calledBy": "@{coalesce(triggerBody()?['playbookName'], 'unknown')}",
+                      "details": "@{result('Try_Scope')}"
+                    }
+                  }
+                },
+                "Terminate_Unexpected_Error": {
+                  "type": "Terminate",
+                  "runAfter": { "Response_Error": ["Succeeded", "Failed"] },
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "500",
+                      "message": "@{concat('GTIAddCommentToIncident failed for incident: ', triggerBody()?['incidentArmId'], '. Called by: ', coalesce(triggerBody()?['playbookName'], 'unknown'), '. Details: ', string(result('Try_Scope')))}"
+                    }
+                  }
+                }
+              }
+            }
+
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}

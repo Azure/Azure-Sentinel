@@ -1,46 +1,28 @@
 id: 86f7ddaf-abab-4e40-9bef-c443a562ea07
 Function:
   Title: Corelight SSL Aggregated Events
-  Version: '1.1.1'
-  LastUpdated: '2026-03-19'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_ssl_agg
 FunctionAlias: corelight_ssl_agg
 FunctionQuery: |
-    let dummy_table = datatable(TimeGenerated: datetime, uids_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uids: dynamic) [];
     let corelight_ssl_agg = view () {
         union isfuzzy=true
-            Corelight_v2_ssl_agg_CL,
+            Corelight_v3_ssl_agg_CL,
             dummy_table
-        | summarize arg_max(TimeGenerated, *) by uids_s
+        | summarize arg_max(TimeGenerated, *) by uids_key = tostring(uids)
         | join kind=leftouter 
             (corelight_conn
             | project uid, local_orig, local_resp    
             )
-            on $left.uids_s == $right.uid
-        | project-away uid
+            on $left.uids_key == $right.uid
+        | project-away uids_key, uid
         | extend
-            path=column_ifexists("_path_s", ""),
-            system_name=column_ifexists("_system_name_s", ""),
-            uid = column_ifexists("uids_s", ""),
-            id_orig_h=column_ifexists("id_orig_h_s", ""),
-            id_orig_p=column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h=column_ifexists("id_resp_h_s", ""),
-            id_resp_p=column_ifexists("id_resp_p_d", real(null)),
-            version=column_ifexists("version_s", ""),
-            cipher=column_ifexists("cipher_s", ""),
-            curve=column_ifexists("curve_s", ""),
-            established=column_ifexists("established_b", ""),
-            server_name=column_ifexists("server_name_s", ""),
-            next_protocol=column_ifexists("next_protocol_s", ""),
-            ssl_history=column_ifexists("ssl_history_s", ""),
-            cert_chain_fps=column_ifexists("cert_chain_fps_s", ""),
-            client_cert_chain_fps=column_ifexists("client_cert_chain_fps_s", ""),
-            validation_status=column_ifexists("validation_status_s", ""),
-            ja3=column_ifexists("ja3_s", ""),
-            ja3s=column_ifexists("ja3s_s", ""),
-            resumed=column_ifexists("resumeds_s", ""),
-            sni_matches_cert=column_ifexists("sni_matches_certs_s", "")
+            uid = tostring(uids),
+            resumed=resumeds,
+            sni_matches_cert=sni_matches_certs
         | extend
             EventVendor="Corelight",
             EventProduct="CorelightSensor",
@@ -57,7 +39,7 @@ FunctionQuery: |
             ssl_subject_common_name=server_name,
             fingerprint=cert_chain_fps,
             is_self_signed = iff(validation_status=="self signed certificate", "yes", "no"),
-            action = iff(established=="true","success","failure"),
+            action = iff(established==true,"success","failure"),
             sensor_name = coalesce(system_name, "unknown"),
             signature=validation_status,
             ssl_version = version
@@ -65,7 +47,7 @@ FunctionQuery: |
             is_broadcast = iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
             is_src_internal_ip = iff(local_orig == true, "true", "false"),
             is_dest_internal_ip = iff(local_resp == true, "true", "false"),
-            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+            direction=case(local_orig==true and local_resp==true, "internal", local_orig==true and local_resp==false, "outbound", local_orig==false and local_resp==false, "external", local_orig==false and local_resp==true, "inbound", "unknown")
         | project
             path,
             system_name,

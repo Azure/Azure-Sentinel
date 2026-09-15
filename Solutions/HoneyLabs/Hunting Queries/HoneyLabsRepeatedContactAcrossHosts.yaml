@@ -1,0 +1,33 @@
+id: b7e4d013-9a26-4c8f-bb51-6d3c0f9e2a18
+name: One HoneyLabs indicator contacting several internal hosts
+description: |
+  'Finds HoneyLabs-flagged source IPs that touched more than one internal host in the last day. Spray across multiple hosts separates a targeted or automated campaign from a single incidental hit, and is a useful way to prioritise which matches deserve an analyst.'
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1046
+query: |
+  let lookBack = 14d;
+  let recent = 1d;
+  let HoneyLabs_IPs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ip = tostring(ObservableValue);
+  HoneyLabs_IPs
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(recent)
+    | where isnotempty(SourceIP)
+    | extend ip = SourceIP
+  ) on $left.TI_ip == $right.ip
+  | summarize Hosts = dcount(DeviceName), HostList = make_set(DeviceName, 20), Events = count() by TI_ip, Confidence
+  | where Hosts > 1
+  | extend HoneyLabsReport = strcat('https://honeylabs.net/lookup/', TI_ip)
+  | sort by Hosts desc, Events desc

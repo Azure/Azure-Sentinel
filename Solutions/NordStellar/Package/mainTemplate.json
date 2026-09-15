@@ -47,11 +47,11 @@
     "email": "support@nordstellar.com",
     "_email": "[variables('email')]",
     "_solutionName": "NordStellar",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.1",
     "solutionId": "nordsecurityinc.azure-sentinel-solution-nordstellar",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.0",
+    "dataConnectorCCPVersion": "3.0.1",
     "_dataConnectorContentIdConnectorDefinition1": "NordStellarPush",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "NordStellarPushConnections",
@@ -89,7 +89,7 @@
                   "id": "NordStellarPush",
                   "title": "NordStellar (Push)",
                   "publisher": "Nord Security Inc.",
-                  "descriptionMarkdown": "The [NordStellar](https://nordstellar.com) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types:**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`, `CONSUMER_CREDENTIAL`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
+                  "descriptionMarkdown": "The [NordStellar](https://nordlayer.com/intelligence/) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventTime`, `EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types:**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`, `CONSUMER_CREDENTIAL`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
                   "graphQueries": [
                     {
                       "metricName": "NordStellar events",
@@ -100,7 +100,7 @@
                   "sampleQueries": [
                     {
                       "description": "Critical and High severity events (last 24h)",
-                      "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
+                      "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventTime, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
                     },
                     {
                       "description": "Event volume by event type (last 7d)",
@@ -116,7 +116,7 @@
                     },
                     {
                       "description": "Domain permutations (typosquatting)",
-                      "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
+                      "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, EventTime, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
                     }
                   ],
                   "dataTypes": [
@@ -248,7 +248,7 @@
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [\"NAME\"],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, `tags`, and the appropriate timestamp (`date_added` for leaked-data/dark-web/domain-permutation, `detected_at` for attack-surface) into typed columns. Everything else is preserved in the dynamic `Details` column."
+                            "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [\"NAME\"],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, and `tags` into typed columns. `TimeGenerated` is set to the ingestion time so historical events are never dropped by retention checks, while the original event timestamp (`detected_at` for attack-surface/domain-permutation, `date_added` otherwise) is preserved in `EventTime`. Everything else is preserved in the dynamic `Details` column."
                           }
                         }
                       ]
@@ -291,7 +291,7 @@
                   "name": "NordStellar",
                   "tier": "Partner",
                   "email": "support@nordstellar.com",
-                  "link": "https://nordstellar.com"
+                  "link": "https://nordlayer.com/intelligence/"
                 },
                 "dependencies": {
                   "criteria": [
@@ -342,7 +342,7 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend EventId = tostring(event.id), EventType = tostring(event['type']), Module = tostring(event.module), RiskLevel = tostring(event.risk_level), AssetType = case(tostring(event['type']) == 'DOMAIN_PERMUTATION', 'DOMAIN', isnotempty(tostring(event.asset['type'])), tostring(event.asset['type']), isnotempty(tostring(event.source_type)), tostring(event.source_type), ''), AssetValue = case(tostring(event['type']) == 'DOMAIN_PERMUTATION', tostring(event.original_domain), isnotempty(tostring(event.asset['value'])), tostring(event.asset['value']), isnotempty(tostring(event.asset_value)), tostring(event.asset_value), ''), Tags = event['tags'], TimeGenerated = iif(isnotempty(tostring(event.date_added)), todatetime(event.date_added), iif(isnotempty(tostring(event.detected_at)), todatetime(event.detected_at), iif(isnotempty(['time']), todatetime(['time']), now()))), Details = event | project TimeGenerated, EventId, EventType, Module, RiskLevel, AssetType, AssetValue, Tags, Details",
+                    "transformKql": "source | extend EventId = tostring(event.id), EventType = tostring(event['type']), Module = tostring(event.module), RiskLevel = tostring(event.risk_level), AssetType = case(tostring(event['type']) in ('DOMAIN_PERMUTATION', 'CONSUMER_CREDENTIAL'), 'DOMAIN', isnotempty(tostring(event.asset['type'])), tostring(event.asset['type']), isnotempty(tostring(event.source_type)), tostring(event.source_type), ''), AssetValue = case(tostring(event['type']) == 'DOMAIN_PERMUTATION', tostring(event.original_domain), tostring(event['type']) == 'CONSUMER_CREDENTIAL', tostring(event.asset_value), isnotempty(tostring(event.asset['value'])), tostring(event.asset['value']), isnotempty(tostring(event.asset_value)), tostring(event.asset_value), ''), Tags = event['tags'], TimeGenerated = now(), EventTime = iif(isnotempty(tostring(event.detected_at)), todatetime(event.detected_at), iif(isnotempty(tostring(event.date_added)), todatetime(event.date_added), iif(isnotempty(['time']), todatetime(['time']), now()))), Details = event | project TimeGenerated, EventTime, EventId, EventType, Module, RiskLevel, AssetType, AssetValue, Tags, Details",
                     "outputStream": "Custom-NordStellar_CL"
                   }
                 ]
@@ -361,7 +361,12 @@
                     {
                       "name": "TimeGenerated",
                       "type": "datetime",
-                      "description": "Timestamp when the event was ingested into Microsoft Sentinel. Derived from event.date_added (leaked-data, dark-web, domain-permutation), event.detected_at (attack-surface), or the envelope time field as fallback."
+                      "description": "Timestamp when the event was ingested into Microsoft Sentinel (set to ingestion time by the DCR transform). The original event timestamp is preserved in EventTime."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "datetime",
+                      "description": "Original NordStellar event timestamp. Derived from event.detected_at when present, otherwise event.date_added, otherwise the envelope time field. May be significantly older than TimeGenerated when historical events are delivered."
                     },
                     {
                       "name": "EventId",
@@ -386,12 +391,12 @@
                     {
                       "name": "AssetType",
                       "type": "string",
-                      "description": "Asset type for leaked-data events (asset.type, e.g. EMAIL/DOMAIN/IP/PHONE), domain-permutation events (hardcoded to DOMAIN), or asset source kind for attack-surface events (source_type, e.g. WEB_APPLICATION/NETWORK_SERVICE/DNS). Empty for dark-web events whose target lives in type-specific fields inside Details."
+                      "description": "Asset type for leaked-data events (asset.type, e.g. EMAIL/DOMAIN/IP/PHONE), domain-permutation and consumer-credential events (hardcoded to DOMAIN), or asset source kind for attack-surface events (source_type, e.g. WEB_APPLICATION/NETWORK_SERVICE/DNS). Empty for dark-web events whose target lives in type-specific fields inside Details."
                     },
                     {
                       "name": "AssetValue",
                       "type": "string",
-                      "description": "Asset value: nested asset.value (leaked-data), original_domain (domain-permutation), or root-level asset_value (attack-surface). Empty for dark-web events."
+                      "description": "Asset value: nested asset.value (leaked-data), original_domain (domain-permutation), or root-level asset_value (attack-surface, consumer-credential). Empty for dark-web events."
                     },
                     {
                       "name": "Tags",
@@ -429,7 +434,7 @@
           "id": "NordStellarPush",
           "title": "NordStellar (Push)",
           "publisher": "Nord Security Inc.",
-          "descriptionMarkdown": "The [NordStellar](https://nordstellar.com) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types:**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`, `CONSUMER_CREDENTIAL`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
+          "descriptionMarkdown": "The [NordStellar](https://nordlayer.com/intelligence/) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventTime`, `EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types:**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`, `CONSUMER_CREDENTIAL`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
           "graphQueries": [
             {
               "metricName": "NordStellar events",
@@ -440,7 +445,7 @@
           "sampleQueries": [
             {
               "description": "Critical and High severity events (last 24h)",
-              "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
+              "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventTime, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
             },
             {
               "description": "Event volume by event type (last 7d)",
@@ -456,7 +461,7 @@
             },
             {
               "description": "Domain permutations (typosquatting)",
-              "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
+              "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, EventTime, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
             }
           ],
           "dataTypes": [
@@ -588,7 +593,7 @@
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [\"NAME\"],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, `tags`, and the appropriate timestamp (`date_added` for leaked-data/dark-web/domain-permutation, `detected_at` for attack-surface) into typed columns. Everything else is preserved in the dynamic `Details` column."
+                    "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [\"NAME\"],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, and `tags` into typed columns. `TimeGenerated` is set to the ingestion time so historical events are never dropped by retention checks, while the original event timestamp (`detected_at` for attack-surface/domain-permutation, `date_added` otherwise) is preserved in `EventTime`. Everything else is preserved in the dynamic `Details` column."
                   }
                 }
               ]
@@ -631,7 +636,7 @@
           "name": "NordStellar",
           "tier": "Partner",
           "email": "support@nordstellar.com",
-          "link": "https://nordstellar.com"
+          "link": "https://nordlayer.com/intelligence/"
         },
         "dependencies": {
           "criteria": [
@@ -718,7 +723,7 @@
                   "name": "NordStellar",
                   "tier": "Partner",
                   "email": "support@nordstellar.com",
-                  "link": "https://nordstellar.com"
+                  "link": "https://nordlayer.com/intelligence/"
                 }
               }
             },
@@ -766,12 +771,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "NordStellar",
         "publisherDisplayName": "NordStellar",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/NordStellar/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://nordstellar.com\">NordStellar</a> solution for Microsoft Sentinel pushes real-time threat intelligence and exposure events from NordStellar's Leaked Data, Dark Web Monitoring, Domain Squatting, and Attack Surface modules into a unified <code>NordStellar_CL</code> table using the Codeless Connector Framework (CCF) Push pattern.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/entra/identity-platform/quickstart-register-app\">Microsoft Entra application registrations</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/NordStellar/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://nordlayer.com/intelligence/\">NordStellar</a> solution for Microsoft Sentinel pushes real-time threat intelligence and exposure events from NordStellar's Leaked Data, Dark Web Monitoring, Domain Squatting, and Attack Surface modules into a unified <code>NordStellar_CL</code> table using the Codeless Connector Framework (CCF) Push pattern.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/entra/identity-platform/quickstart-register-app\">Microsoft Entra application registrations</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -791,7 +796,7 @@
           "name": "NordStellar",
           "email": "support@nordstellar.com",
           "tier": "Partner",
-          "link": "https://nordstellar.com"
+          "link": "https://nordlayer.com/intelligence/"
         },
         "dependencies": {
           "operator": "AND",

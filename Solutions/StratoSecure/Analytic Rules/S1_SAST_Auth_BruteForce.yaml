@@ -1,0 +1,50 @@
+id: 4ae9f294-410d-4c11-9072-0d8fcf5162d8
+name: SAST Auth Finding Correlated with Brute Force
+description: |
+  Detects applications with open SAST authentication findings that are
+  simultaneously experiencing brute force login attempts in Azure AD.
+  Correlates StratoSecure SAST findings with SigninLogs failure spikes.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: StratoSecurePush
+    dataTypes:
+      - StratoSecure_Findings_CL
+queryFrequency: 1h
+queryPeriod: 75m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+  - T1078
+query: |
+  let lookback = 1h;
+  let bruteForceThreshold = 20;
+  let AuthFindings = StratoSecure_Findings_CL
+      | where TimeGenerated >= ago(lookback)
+      | where FixStatus =~ "open"
+      | where Severity in ("Critical", "High")
+      | where RuleId has_any ("auth", "jwt", "login", "session", "token", "password", "credential")
+      | summarize FindingCount = count(), RuleIds = make_set(RuleId), Repos = make_set(Repository)
+          by ApplicationId, StraTenantId;
+  let BruteForce = SigninLogs
+      | where TimeGenerated >= ago(lookback)
+      | where ResultType != "0"
+      | summarize FailedAttempts = count(), DistinctUsers = dcount(UserPrincipalName),
+          IPList = make_set(IPAddress, 20), FirstAttempt = min(TimeGenerated), LastAttempt = max(TimeGenerated)
+          by AppId, AppDisplayName
+      | where FailedAttempts >= bruteForceThreshold;
+  AuthFindings
+      | join kind=inner BruteForce on $left.ApplicationId == $right.AppId
+      | project TimeGenerated = LastAttempt, ApplicationId, AppDisplayName, StraTenantId,
+          FindingCount, RuleIds, Repos, FailedAttempts, DistinctUsers, IPList
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+version: 1.0.0
+kind: Scheduled
