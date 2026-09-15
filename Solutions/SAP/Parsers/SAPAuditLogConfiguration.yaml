@@ -1,0 +1,66 @@
+Contentkind: Function
+Description: SAPAuditLogConfiguration
+Function:
+  Title: SAPAuditLogConfiguration
+  Version: 3.1.1
+  LastUpdated: '2024-04-07'
+Category: SAPFunctions
+FunctionName: SAPAuditLogConfiguration
+FunctionParams:
+  - Name: SelectedSystems
+    Type: dynamic
+    Default: dynamic(["All Systems"])
+  - Name: SelectedSystemRoles
+    Type: dynamic
+    Default: dynamic(["All System Roles"])
+  - Name: SelectedSeverities
+    Type: dynamic
+    Default: dynamic(["High", "Medium"])
+  - Name: SelectedRuleTypes
+    Type: dynamic
+    Default: dynamic(["All RuleTypes"])
+FunctionQuery: |
+  // // optional parameters can look like this
+  // let SelectedSystems =  dynamic(["All Systems"]);
+  // let SelectedSystemRoles =  dynamic(["All System Roles"]);
+  // let SelectedSeverities=  dynamic(["High", "Medium"]);
+  // let SelectedRuleTypes = dynamic(["All RuleTypes"]);
+  // // let SelectedRuleTypes= dynamic(["AnomaliesOnly"]);
+  // let SelectedRuleTypes= dynamic(["Deterministic"]);
+  // // let SelectedSystems =  dynamic(["S4P", "B4X", "ODT"]);
+  // // let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  // let SelectedSeverities =  dynamic(["All Severities"]);
+  let Configuration = materialize(_GetWatchlist('SAP_Dynamic_Audit_Log_Monitor_Configuration')
+      | where (SelectedSeverities has ProductionSeverity or SelectedSeverities has NonProdSeverity or tostring(SelectedSeverities) == '["All Severities"]')
+      | where (SelectedRuleTypes has RuleType or tostring(SelectedRuleTypes) == '["All RuleTypes"]')
+      | summarize arg_max(LastUpdatedTimeUTC, *) by SearchKey
+      | extend DummyJoinField = 1);
+  let Systems = materialize(SAPSystems(SelectedSystems, SelectedSystemRoles)
+  | project SystemID, SystemRole, SystemUsage, DummyJoinField);
+  let SystemConfigurations =  Configuration
+      | join kind= inner Systems on DummyJoinField;
+  SystemConfigurations
+  | extend IsProd = iff(SystemRole == "Production" , true, false)
+  | extend Severity = iff(IsProd, ProductionSeverity, NonProdSeverity)
+  | extend Threshold = tolong( iff(IsProd, ProductionThreshold, NonProdThreshold))
+  | where (SelectedSeverities has Severity or  tostring(SelectedSeverities) == '["All Severities"]')
+  | extend BagOfDetails = bag_pack('MessageID', MessageID, 'Tactics', Tactics, 'SystemID', SystemID, 'Severity', Severity, 'DestinationEmail', DestinationEmail, 'TeamsChannelID', TeamsChannelID)
+  | extend RolesTagsToExclude = parse_csv(translate(';. ', ',,', RolesTagsToExclude))
+  | extend RolesTagsToExclude= set_difference(RolesTagsToExclude, dynamic(["nan",""," "]))
+  | summarize RolesTagsToExclude=make_set_if(RolesTagsToExclude, isnotempty( RolesTagsToExclude)), BagOfDetails=make_set(BagOfDetails)
+  , Tactics=make_set_if(Tactics, isnotempty( Tactics) and Tactics != "nan"), TeamsChannelID=make_set_if(TeamsChannelID, isnotempty( TeamsChannelID) and TeamsChannelID != "nan")
+  by CategoryName
+  , MessageID
+  , MessageText
+  , SystemID
+  , SystemRole
+  , SystemUsage
+  , DetailedDescription
+  , Severity
+  , DestinationEmail
+  , IsProd
+  , Threshold
+  , RuleType
+  | extend RolesTagsToExclude= replace_string(translate(',[]"',@';   ',tostring(RolesTagsToExclude)),' ','')
+  | extend Tactics= translate(',[]"',@';   ',tostring(Tactics))
+  | extend TeamsChannelID=tostring(TeamsChannelID[0])

@@ -1,0 +1,79 @@
+id: 6898699a-07c5-4cf5-bee5-a588d06df81a
+kind: Scheduled
+name: SAP - (Preview) AS JAVA - Sensitive Privileged User Signed In
+description: |
+  This rule identifies instances of dialog sign-in (UME) by sensitive privileged users within the SAP AS Java environment. You must maintain the list of privileged users in the "SAP - Privileged Users" Watchlist.
+  Source Action: Sign in to the backend system using privileged users.
+  *Data Sources: SAPJAVAFilesLog*
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPJAVAFilesLogs
+      - SAPSystems
+      - SAPUsersGetPrivileged
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  // SAP Java - Sensitive Privileged User Logged in
+  // here you can exclude certain users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveLogOnOK'
+  let excludeUsersTags= dynamic(['SensitiveLogOnOK']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)
+      | summarize by User2Exclude=SAPUser;
+  let PrivilegedUsers = SAPUsersGetPrivileged()
+      | project User, SystemID;
+  let SelectedSystemRoles = dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole;
+  SAPJAVAFilesLogs()
+  | where SourceName == "/System/Security/Authentication"
+  | join kind= inner SelectedSystems on SystemID
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | join kind=inner PrivilegedUsers on User, SystemID
+  | extend Login= tostring(column_ifexists("_Login", ""))
+  | extend IPAddress= column_ifexists("_IP_Address", "")
+  | where isnotempty( Login)
+  | order by TimeGenerated asc
+  | summarize Count=count(), Time=min(Time), IPAddresses=make_set_if(IPAddress, isnotempty( IPAddress))
+  , LogonInfo=take_anyif(tostring(Text), isnotempty(Text))
+  by SystemID, User, SystemRole, Login, Instance
+  | extend AlertName= strcat("SAP AS JAVA - Privileged User ", User, " Has ", iff(Login == "OK" , "succeeded", "failed")," logging in" )
+  | extend AlertDescription= strcat("SAP AS JAVA - Privileged User ", User, " Has ", iff(Login == "OK" , "succeeded", "failed")," logging in to a ", SystemRole, " System ", Count, iff(Count > 1, " times. ", "time. "), " \n Login info: ", LogonInfo)
+  | extend Severity= iff(Login == "OK", "Low", "High")
+  | extend IPAddress= IPAddresses[0]
+  | extend AlertRuleUniqueName = 'asjavasensitiveprivilegedusersignedin'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |+
+    {{AlertDescription}}
+    Identifies Dialog logon of a sensitive privileged user.
+    Source Action: Logon to the backend system using a privileged user.
+    Privileged users should be maintained in "SAP - Privileged Users" Watchlist
+
+  alertSeverityColumnName: Severity
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

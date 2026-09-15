@@ -1,0 +1,161 @@
+Contentkind: Function
+Description: SAPConnectorHealth
+Function:
+  Title: SAPConnectorHealth
+  Version: 3.1.13
+  LastUpdated: '2024-08-01'
+Category: SAPFunctions
+FunctionName: SAPConnectorHealth
+FunctionParams:
+  - Name: LatestAgentVersion
+    Type: string
+    Default: '79099153'
+FunctionQuery: |
+  // function parameters:
+  let RedAgo = 21d;
+  let YellowAgo = 1d;
+  let GreenAgo= 1h;
+  let DeletionPatience= 30m;
+  // let LatestAgentVersion = '${latestAgentVersion}';
+  let WLResponse= datatable(Value:string)[@'${watchlistItems}'];
+  let SystemRolesDictionary= dynamic({"UD": "Unknown (disconnected)", "UP": "Unknown (Production)", "AH": "Agent Heartbeat", "P": "Production", "T": "Test", "C": "Customizing", "D": "Demo", "E": "Training/Education", "S": "SAP reference", "EXL": "Excluded HW Key", "AEG": "Agent exited gracefully", "SEG": "System exited gracefully"});
+  // colors are there for the data connector UI
+  let colors = dynamic (['Green', 'Yellow', 'Red', 'Header', 'Unclear', 'Footer']);
+  // prepare a template structure in case we are  missing the SAP_HeartBeat_CL table
+  let AgentHealthEmpty= datatable (Agent: string, SystemID: string, LastHealthSeen: datetime, LastDataSeen: datetime, TimeGenerated: datetime, LastConfigedOn: datetime, agent_id_s: string, AgentGUID: string, AgentName: string, KeyMode: string, SdkPath: string, VaultId: string, agent_ver_s: string, SncPath: string, SystemGUID: string, Action: string, WLItemID: string, CLientID: string, message_key_s: string, Message: string, sap_control_abap_s:string, sap_control_java_s:string, sap_client_category_s: string, agent_from_ui_b: bool) ['Sentinel solution', 'Solution version check', '2021-03-01T00:00:00Z', '2021-03-01T00:00:00Z', '2021-03-01T00:00:00Z', '2021-03-01T00:00:00Z', 'Sentinel solution', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', true];
+  // get the configuration of the agents created by the data connector UI
+  let WLFromAPI = WLResponse | extend Value= todynamic(column_ifexists("Value","{}"))
+  | mv-expand bagexpansion= array Value
+  | project itemsKeyValue= Value["properties"]["itemsKeyValue"]
+  , _DTItemId= tostring(Value["properties"]["watchlistItemId"])
+  , LastUpdatedTimeUTC= todatetime(Value["systemData"]["lastModifiedAt"])
+  | evaluate bag_unpack(itemsKeyValue)
+  | extend SearchKey= tostring(column_ifexists('AgentGUID', ""));
+  let SAPAgentDetailsWL= (_GetWatchlist('SAPAgentDetails') | extend AgentGUID= tostring(column_ifexists('AgentGUID', '')) | extend SystemGUID= tostring(column_ifexists('SystemGUID', '')) | union (WLFromAPI | extend AgentGUID= tostring(column_ifexists('AgentGUID', '')) | extend SystemGUID= tostring(column_ifexists('SystemGUID', '')))
+  | project-rename agent_id_s= SearchKey, LastConfigedOn= LastUpdatedTimeUTC , WLItemID= _DTItemId
+  | extend system_id_s= tostring(column_ifexists('SystemID', '_')), AgentGUID= tostring(column_ifexists('AgentGUID', '')), SystemGUID=tostring(column_ifexists('SystemGUID', '')), WLItemID= tostring(WLItemID), AgentName= tostring(column_ifexists('AgentName', '')), VaultId= tostring(column_ifexists('VaultId', '')), client_id_s= substring(tostring(column_ifexists('ClientID', '')),0,3)
+  // get last action per agent and system
+  | summarize LastConfigedOn= arg_max(LastConfigedOn, *) by AgentGUID, SystemGUID);
+  // combine the heartbeats and the watchlist data to produce a list of agents and system IDs.
+  let AgentHealth = materialize((union isfuzzy=true AgentHealthEmpty, SAPAgentDetailsWL, (SAP_HeartBeat_CL
+  | where TimeGenerated > ago(RedAgo)
+  | extend SystemGUID= column_ifexists('system_guid_g','')))
+  | where TimeGenerated > ago(RedAgo) or isnull(TimeGenerated) or TimeGenerated == todatetime('2021-03-01T00:00:00Z')
+  | extend LastHealthSeen = max_of(TimeGenerated, LastHealthSeen)
+  // add agents from the SAPAgentDetails watchlist in case these are not yet sending data
+  | extend Agent= iff(isnotempty(agent_id_s), agent_id_s,column_ifexists('agent_id_g','')), ClientID= column_ifexists('client_id_s', '')
+  | summarize Action= take_anyif(Action, isnotempty(Action)),  arg_max(LastHealthSeen, *), LastConfigedOn=max(LastConfigedOn) by Agent, system_id_s, ClientID, SystemGUID
+  | extend SystemID = iff(system_id_s == 'N/A' or system_id_s == 'AGENT', 'AGENT', substring(system_id_s, 0, 3)), AgentVersion = agent_ver_s, LastConfigedOn=LastConfigedOn1, IsGUID= isnotnull(toguid(Agent))
+  | project-rename MessageKey= message_key_s
+  | extend sap_control_java_s= replace_string(sap_control_java_s,"_",""), sap_control_abap_s= replace_string(sap_control_abap_s, "_", "")
+  | extend SystemClient= case(SystemID == "AGENT", "AGENT", SystemID != "J2E" , strcat(SystemID, '-', ClientID, iff(isnotempty(sap_control_java_s),strcat("-", sap_control_java_s),""), iff(isnotempty(sap_control_abap_s),strcat("-", sap_control_abap_s),""))
+  , SystemID == "J2E", strcat("J2E", '-', sap_control_java_s), "SystemClient N/A"));
+  //  find systems that have been converted to persistant GUIDs. their older IDs should be disregarded
+  let GUIDedSystems= AgentHealth | where IsGUID | summarize by SystemID | extend GUIDedSystem= true;
+  let LastKnownCategory= (union isfuzzy=true AgentHealthEmpty, SAPAgentDetailsWL, SAP_HeartBeat_CL) | where TimeGenerated > ago(7d)
+  | where bag_has_key(SystemRolesDictionary,sap_client_category_s)
+  | extend Agent= iff(isnotempty(agent_id_s), agent_id_s, column_ifexists('agent_id_g','')), ClientID= column_ifexists('client_id_s', '')
+  | where isnotempty( ClientID)
+  | summarize arg_max(TimeGenerated, sap_client_category_s) by Agent, ClientID, SystemID= system_id_s
+  | project-rename LastKnownSystemRoleCode=sap_client_category_s;
+  // get the version per agent
+  let AgentsHeader = AgentHealth
+  | summarize arg_max(LastHealthSeen, Agent, AgentVersion), AssociatedSystems= make_list_if(SystemID,Action=="System Created", 20) by Agent
+  | project-keep Agent, AgentVersion, LastHealthSeen, AssociatedSystems
+  | extend SystemID = 'Agent Version Check', AssociatedSystems= translate('["]','',tostring(AssociatedSystems));
+  // AgentsHeader
+  // prepare a template structure in case we are  missing all ABAP* tables
+  let AgentPotentialEmpty = datatable (PotentialAgent: string, SystemID_s: string, TimeGenerated: date)[];
+  // agent potential- we are looking for SAP systems that send data but not heartbeats. a special case of very old agents that did not have heartbeats
+  let AgentPotential = AgentPotentialEmpty
+  | project SystemID_s, TimeGenerated
+  | extend PotentialAgent = strcat(SystemID_s, ' ')
+  | project-rename SystemID = SystemID_s
+  , LastDataSeen = TimeGenerated;
+  // helper function- handle values and texts for time spans
+  let FtimePassed = (DateTime: datetime, Occured: int = 1) {
+  case(
+  datetime_diff('Hour', now(), DateTime) < 0 or isnull(DateTime), bag_pack(strcat('{TimeSpan', tostring(Occured), '}'), 'is missing', strcat('{TimeScale', tostring(Occured), '}'), '')
+  , datetime_diff('Hour', now(), DateTime) < 2, bag_pack(strcat('{TimeSpan', tostring(Occured), '}'), '1', strcat('{TimeScale', tostring(Occured), '}'), 'hour')
+  , datetime_diff('Hour', now(), DateTime) < 24, bag_pack(strcat('{TimeSpan', tostring(Occured), '}'), tostring(datetime_diff('Hour', now(), DateTime)), strcat('{TimeScale', tostring(Occured), '}'), 'hours')
+  , datetime_diff('Hour', now(), DateTime) < 48, bag_pack(strcat('{TimeSpan', tostring(Occured), '}'), '1', strcat('{TimeScale', tostring(Occured), '}'), 'day')
+  , bag_pack(strcat('{TimeSpan', tostring(Occured), '}'), tostring(datetime_diff('Day', now(), DateTime)), strcat('{TimeScale', tostring(Occured), '}'), 'days'))
+  };
+  // helper function- determine statuses and details per SID
+  let FBaggedDetails = (Agent: string, LastHealthSeen: datetime, LastConfigedOn: datetime, LastHealthSeen4Agent: datetime, GreenAgo: timespan, YellowAgo: timespan, RedAgo: timespan, AgentVersion: string='0.0', SystemID: string='', MessageKey: string, Action: string) {
+  case(
+  // helper function- to make judgment on the agent/ SID status/ version
+  // handle deletions:
+  // deleted and no hearbeat- that is OK!
+  ((Action == "System Deleted" or Action == "Agent Deleted") and (LastHealthSeen < ago(DeletionPatience) or isempty(LastHealthSeen) )),bag_pack('Details', strcat(Action, ' and no hearbeat observed'),'ExtendedDetails', 'The deletion is successful', 'Status', 'Remove', 'MessageCode', 'DeletionSuccess', 'Variables','')
+  // deleted in the last DeletionPatience minutes and still heartbeat- warning!
+  ,((Action == "System Deleted" or Action == "Agent Deleted") and (LastConfigedOn + DeletionPatience) > LastHealthSeen  ),bag_pack('Details', strcat(Action, ' but heartbeat is still observed'),'ExtendedDetails', 'The deletion is still pending', 'Status', 'Yellow', 'MessageCode', 'DeletionPending', 'Variables','')
+  // deleted more than DeletionPatience ago and still heartbeat- error!
+  ,((Action == "System Deleted" or Action == "Agent Deleted") and (LastConfigedOn + DeletionPatience) < LastHealthSeen ),bag_pack('Details', strcat(Action, ' but heartbeat is still observed'),'ExtendedDetails', 'The deletion has likely failed', 'Status', 'Red', 'MessageCode', 'DeletionFailed', 'Variables','')
+  // PYRFC messages from Heartbeat cannot be good!
+  ,isnotempty(MessageKey) and MessageKey != "NOT_AUTHORIZED" and LastHealthSeen > ago(GreenAgo), bag_pack('Details', strcat('error ', MessageKey, ' received from SAP system'),'ExtendedDetails', strcat('Error ', MessageKey, ' received from the agent'), 'Status', 'Red', 'MessageCode', MessageKey, 'Variables','')
+  // MessageKey == "NOT_AUTHORIZED" , System Connected – unauthorized to collect role, production assumed, Yellow
+  ,MessageKey == "NOT_AUTHORIZED" and LastHealthSeen > ago(GreenAgo), bag_pack('Details', 'System Connected - unauthorized to collect role, production assumed','ExtendedDetails', 'The agent is missing read permissions for SAP table T000', 'Status', 'Yellow', 'MessageCode', 'NOAUTH', 'Variables','')
+  // agent version checks:
+  // UPAVLA - An upgrade is available for the Microsoft Sentinel for SAP Agent. <br> Current Agent released date {CurrentVersion}, latest version relesed on {LatestVersion}.
+  ,(SystemID== 'AGENT' and isnotempty(AgentVersion) and strcmp(LatestAgentVersion, AgentVersion) > 0 ), bag_pack('Details', 'Agent update available', 'ExtendedDetails', 'An upgrade is available for the Microsoft Sentinel for SAP Agent', 'Status', 'Header', 'MessageCode', 'UPAVLA', 'Variables', bag_pack('{CurrentVersion}', AgentVersion, '{LatestVersion}', LatestAgentVersion))
+  // Agent Configuration checks:
+  // ACIOK - Agent configuration is there (since GreenAgo) and so is heartbeat, remove this configuration check (Green)
+  , SystemID== 'AGENT' and (isnotempty(LastConfigedOn) and (LastHealthSeen4Agent > ago(GreenAgo))), bag_pack('Details', 'Agent configuration is there', 'ExtendedDetails', strcat('Agent was configured ', FtimePassed(LastConfigedOn)['{TimeSpan1}'], ' ', FtimePassed(LastConfigedOn)['{TimeScale1}'], ' ago, and heartbeat sent since then'), 'Status', 'Green', 'MessageCode', 'ACIOK', 'Variables', FtimePassed(LastConfigedOn))
+  // ACCUY - Agent configuration is there, and there is no heartbeat since (between green and yellow).- (Yellow, StatusCode= 1, )
+  , ((SystemID== 'AGENT' and isnotempty(LastConfigedOn) and (max_of(LastHealthSeen4Agent, LastConfigedOn) > ago(YellowAgo)))), bag_pack('Details', 'Agent configuration is incomplete', 'ExtendedDetails', strcat('Agent was configured ', FtimePassed(LastConfigedOn)['{TimeSpan1}'], ' ', FtimePassed(LastConfigedOn)['{TimeScale1}'], ' ago, but no heartbeat was recieved since then. Please review configuration'), 'Status', 'Yellow', 'MessageCode', 'ACCUY', 'Variables', FtimePassed(LastConfigedOn))
+  // ACCOY - Agent configuration is there, and there is no heartbeat since (between yellow and red).- (Red, StatusCode=2, )
+  , (SystemID== 'AGENT' and isnotempty(LastConfigedOn) and max_of(LastHealthSeen4Agent, LastConfigedOn) < ago(YellowAgo)), bag_pack('Details', 'Agent configuration is incomplete', 'ExtendedDetails', strcat('Agent was configured ', FtimePassed(LastConfigedOn)['{TimeSpan1}'], ' ', FtimePassed(LastConfigedOn)['{TimeScale1}'], ' ago, but no heartbeat was recieved since then. Please review configuration'), 'Status', 'Red', 'MessageCode', 'ACCOY', 'Variables', FtimePassed(LastConfigedOn))
+  // handle missing heartbeat at the systems ID level:
+  // OKOK - HB recieved in the last {TimeSpan1}' ' {TimeScale1}.
+  , ((SystemID != 'AGENT' and LastHealthSeen > ago(GreenAgo)) or (SystemID == 'AGENT' and LastHealthSeen4Agent > ago(GreenAgo))), bag_pack('Details', iff(SystemID == 'AGENT', 'Agent healthy','System healthy'), 'ExtendedDetails', strcat('Heartbeat recieved in the last ', FtimePassed(ago(GreenAgo))['{TimeSpan1}'], ' ', FtimePassed(ago(GreenAgo))['{TimeScale1}']), 'Status', 'Green', 'MessageCode', 'OKOK', 'Variables', FtimePassed(ago(GreenAgo)))
+  // MDOG - missing hearbeat for over GreenAgo timespan - Missing data and heartbeat for over {TimeSpan1}' ' {TimeScale1}.  Check Connectivity.
+  , ((SystemID != 'AGENT' and  LastHealthSeen < ago(GreenAgo)) or (SystemID == 'AGENT' and LastHealthSeen4Agent > ago(YellowAgo))), bag_pack('Details', strcat(iff(SystemID == 'AGENT', 'Agent ','System '), 'unreachable for over 1 hour'), 'ExtendedDetails', strcat('Missing heartbeat for over ', FtimePassed(ago(GreenAgo))['{TimeSpan1}'], ' ', FtimePassed(ago(GreenAgo))['{TimeScale1}']), 'Status', 'Red', 'MessageCode', 'MDOG', 'Variables', FtimePassed(ago(GreenAgo)))
+  // // MDOY - missing heartbeat for over YellowAgo timespan - Missing data and heartbeat for over {TimeSpan1}' ' {TimeScale1}.  Check Connectivity.
+  // , ((SystemID != 'AGENT' and LastHealthSeen > ago(RedAgo) or (SystemID == 'AGENT' and LastHealthSeen4Agent > ago(RedAgo)))), bag_pack('Details', strcat(iff(SystemID == 'AGENT', 'Agent ','System '), 'unreachable for over 24 hours'), 'ExtendedDetails', strcat('Missing heartbeat for over ', FtimePassed(ago(YellowAgo))['{TimeSpan1}'], ' ', FtimePassed(ago(YellowAgo))['{TimeScale1}']), 'Status', 'Red', 'MessageCode', 'MDOY', 'Variables', FtimePassed(ago(YellowAgo)))
+  // UNCLEAR - fallback of all cases, 'Heartbeat Last Recieved %s ago, heartbeat last recieved %s ago' {Variable1, Variable2}
+  , bag_pack('Details', 'Status unclear - check system', 'ExtendedDetails', strcat('Heartbeat last recieved ', FtimePassed(LastHealthSeen)['{TimeSpan1}'], ' ', FtimePassed(LastHealthSeen)['{TimeScale1}'], ' ago'), 'Status', 'Unclear', 'MessageCode', 'UNCLEAR', 'Variables', bag_merge(FtimePassed(LastHealthSeen), FtimePassed(DateTime= LastHealthSeen, Occured=2))))
+  };
+  // gather the heartbeat and configuration and add a line per agent for version check
+  AgentHealth
+  // remove the WL fields for now, as these are only there on some of the lines (agents only)
+  | project-away AgentGUID, AgentName, KeyMode, SdkPath, VaultId, SncPath, WLItemID, Action
+  // now join again with agentHeader to get the last heartbeat recieved from the agent and connected systems
+  | join kind= leftouter (AgentsHeader
+  | project Agent, LastHealthSeen4Agent= LastHealthSeen, AssociatedSystems, AgentVersion)
+  on Agent
+  // SID health inferred from data coming in- #TODO- remove the agent potential as we have the agent health
+  | join kind=fullouter AgentPotential on $left.SystemID == $right.SystemID
+  | extend
+  Agent = iff(isempty(Agent), PotentialAgent, Agent),
+  LastSeen = LastHealthSeen
+  | extend SystemID = iff(SystemID == SystemID1, SystemID1, strcat(SystemID1, SystemID))
+  | extend LastDataSeen = LastDataSeen1 // LastDataSeen1 is the real one coming from AgentPotential
+  // get agent attributes from WL
+  | join kind= leftouter  (((SAPAgentDetailsWL | where system_id_s == "AGENT") | union AgentHealthEmpty)| project AgentGUID, AgentName, KeyMode, SdkPath, VaultId, SncPath, AgentWLItemID= WLItemID, AgentAction= Action )
+  on $left.Agent== $right.AgentGUID
+  // get system attributes from WL
+  | join kind= leftouter  (((SAPAgentDetailsWL | where system_id_s != "AGENT") | union AgentHealthEmpty)| project SystemWLItemID= WLItemID, SystemAction= Action, SystemGUID, system_id_s, SystemsAgentGUID= AgentGUID)
+  on $left.Agent== $right.SystemsAgentGUID, SystemGUID
+  | extend WLItemID= iff(SystemID=="AGENT", AgentWLItemID, SystemWLItemID)
+  | extend Action= iff(SystemID=="AGENT", AgentAction, SystemAction)
+  // disregard non-GUID-like rows for systems that have been upgraded to be GUID-like
+  | lookup GUIDedSystems on SystemID
+  | where IsGUID == true or (IsGUID == false and GUIDedSystem != true)
+  // get the judgement from FBaggedDetails
+  | extend BaggedDetails = FBaggedDetails(Agent, LastHealthSeen, LastConfigedOn, LastHealthSeen4Agent, GreenAgo, YellowAgo, RedAgo, AgentVersion, SystemID, MessageKey, Action)
+  | evaluate bag_unpack(BaggedDetails)
+  | where Status != 'Remove' // not everything is interesting
+  | extend StatusCode = array_index_of(colors, Status)
+  | extend SystemRoleCode= column_ifexists("sap_client_category_s","N/A")
+  | extend SystemRoleCode= iff(bag_has_key(SystemRolesDictionary,SystemRoleCode), SystemRoleCode, "N/A")
+  | extend SystemRoleCode= case(SystemRoleCode != "N/A", SystemRoleCode, MessageKey == "NOT_AUTHORIZED", "UP", "N/A")
+  | lookup LastKnownCategory on Agent, ClientID, SystemID
+  | extend SystemRoleCode= iff(SystemRoleCode != "N/A", SystemRoleCode, LastKnownSystemRoleCode)
+  | extend SystemRole= tostring(SystemRolesDictionary[SystemRoleCode])
+  | extend ConfigurationSource= case(agent_from_ui_b or Action contains 'Created', 'KeyVault', column_ifexists('api_mode_s', '') == 'FA', 'BusinessApplicationAgents', 'LocalConfig')
+  | where isnotempty(SystemID)
+  | where isnotempty( LastSeen) or LastConfigedOn > ago(180d)
+  | project-keep Agent, SystemID, MessageCode, Details, ExtendedDetails, LastSeen, Status, StatusCode, Variables, AgentGUID, AgentName, KeyMode, SdkPath, VaultId, SncPath, SystemRole, SystemRoleCode, WLItemID, Action, ClientID, SystemGUID, AssociatedSystems, MessageKey, Message, AgentVersion, SystemClient, sap_control_java_s, ConfigurationSource
+  | summarize arg_max(LastSeen, *) by Agent, SystemClient
+  | order by StatusCode, Agent desc;

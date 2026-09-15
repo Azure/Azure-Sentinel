@@ -1,0 +1,134 @@
+id: 6a028035-0967-4bbe-9229-0377a1f4e7df
+kind: Scheduled
+name: SAP - (Preview) Developer key assigned in a production system
+description: |
+  Identifies the assignment of a DEV access key in a production environment. These keys allow modification of runtime objects and therefore should only be assigned in a development environment.
+
+  Source Action:  Create or delete a DEVAccess key in a production system.
+
+  *Data Sources: SAPcon -  Audit Log*
+  *Data Sources: SAPcon -  Table data log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPTableDataLog
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1dt12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1608
+query: |
+  // SAP - Developer access in production
+  // !!!IMPORTANT!!!
+  // Please keep "Lookup data from the last" to be >= 36 hours to allow reading of user authorization data
+  // Actual lookback is set by setting TimeAgo
+  let TimeAgo= 75m;
+  let SelectedSystemRoles = dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole;
+  // here you can exclude system users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'PRODDEVAccessOK'
+  // can also specify relevant SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['PRODDEVAccessOK']);// dynamic(['PRODDEVAccessOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)
+      | summarize by UserMakingChanges=SAPUser;
+  let ClosestLoginDetails= (T: (DevAccessUser: string, UserMakingChanges: string, UpdatedOn: datetime, SystemID: string, TransactionCode: string)) {
+      T
+      | join kind=leftouter  (SAPAuditLog
+          | where TimeGenerated> ago(TimeAgo+ 1h)
+          | where SystemID in (SelectedSystems)
+          | where Email has "@")
+          on $left.UserMakingChanges == $right.User, SystemID
+      | extend TimeDiff= abs(datetime_diff('second', UpdatedOn, UpdatedOn_t))
+      | summarize TransactionStartTime=arg_min(TimeDiff, *) by SystemID, DevAccessUser, UserMakingChanges, TransactionCode
+  };
+  SAPTableDataLog
+  | where TimeGenerated> ago(TimeAgo)
+  | where SystemID in (SelectedSystems)
+  | where TableName contains "DEVACCESS"
+  | order by LogKey, SystemID, UpdatedOn asc
+  | summarize
+      UserMakingChanges=take_any(UserName),
+      TransactionCode=take_any(TransactionCode),
+      DevAccessUser=take_any(LogKey),
+      AccesKey=take_anyif(coalesce(NewValue, OldValue), TableField == "ACCESSKEY"),
+      Operations= make_list_with_nulls(OperationTypeSQL)
+      by SystemID, DBLogID, UpdatedOn
+  | join kind=leftantisemi excludedUsers on UserMakingChanges
+  | summarize
+      DeletedOn=take_anyif(UpdatedOn, tostring(Operations) == "[\"D\",\"D\"]"),
+      UpsertedOn=take_anyif(UpdatedOn, tostring(Operations) == "[\"I\",\"I\"]" or tostring(Operations) == "[\"U\",\"U\"]")
+      by SystemID, DevAccessUser, UserMakingChanges, TransactionCode
+  | extend Action= case(
+                       isempty(DeletedOn) and isnotempty(UpsertedOn), " created ",
+                       isnotempty(DeletedOn) and isempty(UpsertedOn), " deleted ",
+                       isnotempty(DeletedOn) and isnotempty(UpsertedOn) and UpsertedOn > DeletedOn, " replaced ",
+                       isnotempty(DeletedOn) and isnotempty(UpsertedOn) and UpsertedOn < DeletedOn, " created and then deleted ",
+                       " ")
+  | extend Action= case(
+                       DevAccessUser == UserMakingChanges, strcat(DevAccessUser, Action, "own DEV access key"),
+                       DevAccessUser != UserMakingChanges, strcat(UserMakingChanges, Action, " for user ", DevAccessUser),
+                       "")
+  | lookup SelectedSystems on SystemID
+  | extend UpdatedOn= min_of(UpsertedOn, DeletedOn)
+  | invoke ClosestLoginDetails()
+  | extend AlertName= strcat("SAP - user ", Action, " in a ", tolower(SystemRole), " system")
+  | project
+      SystemID,
+      DevAccessUser,
+      UserMakingChanges,
+      TransactionCode,
+      DeletedOn,
+      UpsertedOn,
+      Action,
+      SystemRole,
+      Instance,
+      ClientID,
+      TERM_IPV6,
+      Email,
+      SystemNumber,
+      Host,
+      Computer,
+      AlertName,
+      UpdatedOn
+  | extend ExtendedDetails= bag_pack_columns(TransactionCode, DeletedOn, UpsertedOn, SystemNumber, UpdatedOn)
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Computer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TERM_IPV6
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    Identifies the assignment of a DEV access key in a production environment. These keys allow modification of runtime objects and therefore should only be assigned in a development environment.
+
+    Source Action:  Create or delete a DEVAccess key in a production system.
+    {{ExtendedDetails}}
+customDetails:
+  SAP_User: UserMakingChanges
+  SAP_User2: DevAccessUser
+version: 3.5.09

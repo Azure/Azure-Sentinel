@@ -1,0 +1,117 @@
+Contentkind: Function
+Description: SAPUsersAssignments
+Function:
+  Title: SAPUsersAssignments
+  Version: 3.3.04
+  LastUpdated: '2025-02-19'
+Category: SAPFunctions
+FunctionName: SAPUsersAssignments
+FunctionParams:
+  - Name: SelectedSystems
+    Type: dynamic
+    Default: dynamic(["All Systems"])
+  - Name: SelectedSystemRoles
+    Type: dynamic
+    Default: dynamic(["All System Roles"])
+FunctionQuery: |
+  // let SelectedSystemRoles =  dynamic(["All System Roles"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  // let SelectedSystems = dynamic(["All Systems"]); // can also do // let SelectedSystems = dynamic(["BIP", "C4D"]);
+  let UserMDTimeAgo = 36h;
+  // only show users which are not locked for over 180 days (for performance considerations)
+  let agoLocked = format_datetime(ago(180d), 'yyyyMMdd');
+  let Systems= SAPSystems(SelectedSystemRoles= SelectedSystemRoles, SelectedSystems=SelectedSystems)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  // get the user details from the agentless data connector
+  let AgentLessUserDetails= ABAPUserDetails
+  | where TimeGenerated > ago(UserMDTimeAgo)
+  | where SystemId in (Systems)
+  | summarize LastSynched=arg_max(TimeGenerated, Email, UserType, Timezone, LockedStatus, LastSeen, Profiles, CreatedOn, Roles, ChangedOn, LastChangedBy, UserGroupAuth= UserGroup)
+  by User, Client= ClientId, SystemID= SystemId
+  | mv-apply Roles on (summarize Roles= make_set(Roles.AGR_NAME))
+  | mv-apply Profiles on (summarize Profiles= make_set(Profiles.BAPIPROF))
+  | extend Source= 'UserDetailsFromCloudPlatform';
+  // get assignments from change documents
+  let UserMDUpdates= SAP_AGR_USERS | where TimeGenerated > ago(UserMDTimeAgo)
+  | where SystemID in (Systems)
+  | summarize LastSynched= max(TimeGenerated) by SystemID, ClientID=MANDT;
+  let RoleAssignments =SAPChangeDocsLog
+  | where TimeGenerated > ago(UserMDTimeAgo)
+  | where SystemID in (Systems)
+  | where UpdatedOn_t > ago(UserMDTimeAgo)
+  | where (ObjectClass == "PFCG" and TableName == "AGR_USERS")
+  | extend UserAssigned = trim_end(@"[^\w]+" ,extract(@"^.{1,33}\s*?(.{1,12})\s*?\d{16}", 1, ChangedTableKey))
+  | project-rename Role=ObjectID, ChangedOn= UpdatedOn_t;
+  let ProfileAssignments =SAPChangeDocsLog
+  | where TimeGenerated > ago(UserMDTimeAgo)
+  | where SystemID in (Systems)
+  | where UpdatedOn_t > ago(UserMDTimeAgo)
+  | where (ObjectClass == "IDENTITY" and TableName == "SUSR_UST04")
+  | extend UserAssigned = ObjectID
+  | project-rename ChangedOn= UpdatedOn_t;
+  let UserRecordChanges= SAPAuditLog
+  | where TimeGenerated> ago(UserMDTimeAgo + 1h)
+  | where SystemID in (Systems)
+  | where MessageID == "AUB" or MessageID == "AUD"
+  | where ingestion_time() > ago(UserMDTimeAgo)
+  | project-rename ChangedOn= UpdatedOn_t
+  | distinct ChangedOn, TerminalIPv6, User, Host, Email, UserAssigned=Variable1;
+  let Assignments= UserRecordChanges
+  | join kind=inner (RoleAssignments | union ProfileAssignments) on User, ChangedOn
+  | extend Profile= iff(TableName == "SUSR_UST04", ChangedTableKey, "")
+  | summarize LastChangedOn=arg_max(ChangedOn, *)
+  by UserAssigned, Role, Profile, SystemID, ClientID
+  | lookup UserMDUpdates on SystemID, ClientID
+  | where LastChangedOn > LastSynched // drop the updates that are already included in user MD synch
+  | summarize AddedProfiles=make_set_if(Profile,isnotempty(Profile) and TypeofChange_Item in(dynamic(["I", "U", "J"])))
+  , RemovedProfiles=make_set_if(Profile,isnotempty(Profile) and TypeofChange_Item in(dynamic(["E", "D"])))
+  , AddedRoles=make_set_if(Role,isnotempty(Role) and TypeofChange_Item in(dynamic(["I", "U", "J"])))
+  , RemovedRoles=make_set_if(Role,isnotempty(Role) and TypeofChange_Item in(dynamic(["E", "D"])))
+  by User= UserAssigned, SystemID, ClientID
+  | extend Source= "ChangeDocs";
+  // get logon Data (Kernel-Side Use)
+  SAP_USR02 | where TimeGenerated > ago(UserMDTimeAgo)
+  | where SystemID in (Systems)
+  | extend Relevant= strcmp( GLTGB, agoLocked) > 0 or GLTGB == "00000000"
+  | where Relevant
+  | summarize any(ERDAT), arg_max(TimeGenerated, CLASS, UFLAG, TZONE, USTYP, TRDAT, LTIME, ERDAT) by BNAME, MANDT, SystemID
+  // get profiles
+  | join kind=leftouter (SAP_UST04| where TimeGenerated > ago(UserMDTimeAgo) | where SystemID in (Systems) | summarize arg_max(TimeGenerated, *), profiles = make_set(PROFILE, 50) by BNAME, MANDT, SystemID)
+  on BNAME, MANDT, SystemID
+  // get Assignment of roles to users
+  | join kind=leftouter hint.strategy=shuffle (SAP_AGR_USERS | where TimeGenerated > ago(UserMDTimeAgo) | where SystemID in (Systems) | summarize arg_max(TimeGenerated, UNAME, AGR_NAME, MANDT, SystemID, COL_FLAG) by UNAME, AGR_NAME, MANDT, SystemID, COL_FLAG
+  // get the child roles as well
+  | join kind= leftouter   (SAP_AGR_AGRS | where TimeGenerated > ago(UserMDTimeAgo) | where SystemID in (Systems) | summarize arg_max(TimeGenerated, MANDT, AGR_NAME, CHILD_AGR, SystemID) by MANDT, AGR_NAME, CHILD_AGR, SystemID)
+  on MANDT, SystemID, AGR_NAME
+  | summarize DirectRoles = make_set_if(AGR_NAME, COL_FLAG != 'X',  50),// COL_FLAG==X -> indirect
+  ChildRoles = make_set_if(CHILD_AGR, isnotempty(CHILD_AGR) ,50)
+  by UNAME, MANDT, SystemID)
+  on $left.BNAME == $right.UNAME
+  , $left.MANDT == $right.MANDT
+  , $left.SystemID == $right.SystemID
+  // get User Name/Address Key Assignment
+  | join kind=leftouter hint.strategy=shuffle ( (SAP_USR21 | where TimeGenerated > ago(UserMDTimeAgo)
+  | summarize arg_max(TimeGenerated, BNAME, ADDRNUMBER, PERSNUMBER) by BNAME, MANDT, SystemID )
+  // get E-Mail Addresses
+  | join kind= inner hint.strategy=shuffle (SAP_ADR6| where TimeGenerated > ago(UserMDTimeAgo) | summarize arg_max(TimeGenerated, ADDRNUMBER, SMTP_ADDR) by CLIENT, ADDRNUMBER, PERSNUMBER, DATE_FROM, CONSNUMBER, SystemID)
+  on $left.ADDRNUMBER == $right.ADDRNUMBER
+  , $left.MANDT == $right.CLIENT
+  , $left.SystemID == $right.SystemID
+  , $left.PERSNUMBER == $right.PERSNUMBER
+  | summarize
+  arg_max(TimeGenerated1, SMTP_ADDR, MANDT, SystemID),
+  arg_max(TimeGenerated, BNAME, MANDT, SystemID)
+  by BNAME, MANDT, SystemID)
+  on $left.BNAME == $right.BNAME
+  , $left.MANDT == $right.MANDT
+  , $left.SystemID == $right.SystemID
+  | extend LastSeen = todatetime(strcat(TRDAT, LTIME))
+  | extend CreatedOn = todatetime(ERDAT)
+  | project-rename User= BNAME, ClientID = MANDT
+  | join kind=fullouter Assignments on SystemID, User, ClientID
+  | extend User= coalesce(User, User1)
+  | extend DirectRoles= set_difference(set_union(DirectRoles, AddedRoles),RemovedRoles)
+  | extend ChildRoles= set_difference(ChildRoles,RemovedRoles)
+  | extend Profiles= set_difference(set_union(profiles, AddedProfiles), RemovedProfiles)
+  | project User, Email = SMTP_ADDR, UserType = USTYP, Timezone = TZONE, LockedStatus = UFLAG, LastSeen, UserGroupAuth = CLASS, Profiles, DirectRoles, ChildRoles, CreatedOn, Client= ClientID, SystemID = SystemID, AddedRoles, RemovedRoles, AddedProfiles, RemovedProfiles, Roles=set_union(DirectRoles, ChildRoles), Source=coalesce(Source,"UserMD")
+  | union AgentLessUserDetails
