@@ -2,7 +2,7 @@
 
 ## Version 0.2.1
 
-- (2026-09-15) Update the normalization schema version to 1.0.0 and map EventUid from RequestId
+- (2026-09-15) Update the normalization schema version to 1.0.0 and map EventUid from RequestId - [PR #15135](https://github.com/Azure/Azure-Sentinel/pull/15135)
 
 ## Version 0.2.0
 
