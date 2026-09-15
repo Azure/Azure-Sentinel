@@ -37,10 +37,12 @@ az monitor log-analytics workspace table list \
   --resource-group "$resourceGroup" --workspace-name "$workspace" \
   --query "[?schema.tableSubType=='Classic'].{Name:name}" -o table
 
-# Convert each one
+# Convert each one, using the table name exactly as returned by the list
+# command above (it already includes the _CL suffix, e.g. Communication_Data_CL —
+# do not append _CL again)
 az monitor log-analytics workspace table migrate \
   --resource-group "$resourceGroup" --workspace-name "$workspace" \
-  --table-name "<TableName>_CL"
+  --table-name "<TableName>"
 ```
 
 > **The conversion cannot be undone.** It is a one-way operation per table.
