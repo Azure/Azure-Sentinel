@@ -1,0 +1,32 @@
+id: 88035c0e-0e2d-4805-a249-34d54a88c3fe
+name: QR Code URL Detections Trend
+description: |
+  This query visualises inbound email detections involving URLs embedded in QR codes over time, split by the threat type of the detection (phishing, malware, spam).
+description-detailed: |
+  This query visualises inbound email detections in Microsoft Defender for Office 365 where the malicious URL was embedded in a QR code (EmailUrlInfo UrlLocation == "QRCode"), over time and split by whether the URL was flagged for phishing, malware or spam. Messages are de-duplicated to the latest record per NetworkMessageId and recipient, and deliveries to the SecOps mailbox and by the phishing simulation system are excluded.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let qrMessages = EmailUrlInfo
+  | where Timestamp >= TimeStart
+  | where UrlLocation == "QRCode"
+  | distinct NetworkMessageId;
+  EmailEvents
+  | where Timestamp >= TimeStart
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | where EmailDirection == "Inbound" and DetectionMethods has "Url"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where NetworkMessageId in (qrMessages)
+  | make-series ['Phish QR Detection'] = countif(parse_json(DetectionMethods).Phish has "URL"), ['Malware QR Detection'] = countif(parse_json(DetectionMethods).Malware has "URL"), ['Spam QR Detection'] = countif(parse_json(DetectionMethods).Spam has "URL") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | render timechart
+version: 1.0.0

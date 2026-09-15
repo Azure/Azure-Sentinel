@@ -1,0 +1,126 @@
+id: 8f3c1a4e-6b52-4d19-9c07-2a5e8d0f7b41
+name: Datazag - impersonation domain resolved in DNS
+description: |
+  Matches active Datazag impersonation indicators against DNS activity normalized by the ASIM
+  Dns schema, so the rule works across any normalized DNS source without modification. A match
+  means a host inside the estate resolved a domain Datazag scored as brand impersonation,
+  platform impersonation or attacker infrastructure. Requires the ASIM DNS parsers.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1566
+  - T1071
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  let datazag_identity = "identity--55a5a448-c6f1-5128-bc71-4d85b719131e";
+  let ioc_lookback = 14d;
+  let dns_lookback = 1h;
+  let confidence_floor = 85;
+  let DatazagDomains =
+      ThreatIntelIndicators
+      | where TimeGenerated >= ago(ioc_lookback)
+      | where tostring(Data.created_by_ref) == datazag_identity
+      | where ObservableKey == "domain-name:value"
+      | where isnotempty(ObservableValue)
+      | summarize arg_max(TimeGenerated, *) by Id
+      | where IsDeleted == false
+      | where tostring(Data.revoked) != "true"
+      | where isempty(ValidUntil) or ValidUntil > now()
+      | where Confidence >= confidence_floor
+      | extend IndicatorDomain = tolower(trim_end(@"\.", ObservableValue))
+      | project
+          IndicatorDomain,
+          IndicatorStixId     = tostring(Data.id),
+          IndicatorRecordId   = Id,
+          DatazagAlertRef     = tostring(Data.external_references[0].external_id),
+          Confidence,
+          IndicatorEvidence   = tostring(Data.labels),
+          IndicatorValidUntil = ValidUntil;
+  let DnsActivity =
+      _Im_Dns
+      | where TimeGenerated >= ago(dns_lookback)
+      | where isnotempty(DnsQuery)
+      | extend IndicatorDomain = tolower(trim_end(@"\.", DnsQuery))
+      | project
+          DnsTime         = TimeGenerated,
+          IndicatorDomain,
+          DnsQuery,
+          SrcIpAddr       = column_ifexists("SrcIpAddr", ""),
+          SrcHostname     = column_ifexists("SrcHostname", ""),
+          SrcUsername     = column_ifexists("SrcUsername", ""),
+          SrcUsernameType = column_ifexists("SrcUsernameType", ""),
+          EventVendor     = column_ifexists("EventVendor", ""),
+          EventProduct    = column_ifexists("EventProduct", "");
+  DatazagDomains
+  | join kind=innerunique DnsActivity on IndicatorDomain
+  | summarize
+      FirstSeen   = min(DnsTime),
+      LastSeen    = max(DnsTime),
+      QueryCount  = count(),
+      SourceIps   = make_set(SrcIpAddr, 50),
+      SourceHosts = make_set(SrcHostname, 50),
+      Upns        = make_set_if(SrcUsername, SrcUsernameType == "UPN", 50),
+      SeenBy      = make_set(strcat(EventVendor, " ", EventProduct), 10)
+      by
+      IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,
+      Confidence, IndicatorEvidence, IndicatorValidUntil
+  | extend
+      SourceIp   = tostring(SourceIps[0]),
+      SourceHost = tostring(SourceHosts[0]),
+      AccountUpn = tostring(Upns[0])
+  | order by LastSeen desc
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Datazag: {{IndicatorDomain}} resolved from inside the estate'
+  alertDescriptionFormat: |
+    {{IndicatorDomain}} was resolved from inside the estate. Datazag scored this indicator
+    at confidence {{Confidence}}. Supporting evidence: {{IndicatorEvidence}}
+customDetails:
+  DatazagAlertRef: DatazagAlertRef
+  DatazagIndicatorRef: IndicatorStixId
+  DatazagConfidence: Confidence
+  DatazagEvidence: IndicatorEvidence
+  IndicatorExpiry: IndicatorValidUntil
+  ResolutionCount: QueryCount
+  ObservedBy: SeenBy
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: IndicatorDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+suppressionEnabled: false
+suppressionDuration: 1h
+version: 1.0.0
+kind: Scheduled

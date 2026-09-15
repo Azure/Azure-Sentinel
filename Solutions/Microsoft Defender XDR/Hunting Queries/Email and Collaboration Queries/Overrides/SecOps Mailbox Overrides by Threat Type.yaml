@@ -1,0 +1,25 @@
+id: b5ac7138-d807-450e-9f67-dbdac948f651
+name: SecOps Mailbox Overrides by Threat Type
+description: |
+  This query breaks down inbound emails delivered to the SecOps mailbox by an organisation-level allow override, grouped by threat type.
+description-detailed: |
+  This query breaks down inbound emails delivered to the SecOps mailbox in Microsoft Defender for Office 365 as a result of an organisation-level allow override (OrgLevelPolicy == "SecOps Mailbox" and OrgLevelAction == "Allow"), grouped by threat type (Malware, Phish, Spam). Messages are de-duplicated to the latest record per NetworkMessageId and recipient.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where OrgLevelPolicy == "SecOps Mailbox" and OrgLevelAction == "Allow"
+  | extend ThreatType = case(ThreatTypes has "Malware", "Malware", ThreatTypes has "Phish", "Phish", ThreatTypes has "Spam", "Spam", ThreatTypes)
+  | summarize TotalEmails = count() by OrgLevelAction, OrgLevelPolicy, ThreatType
+  | sort by TotalEmails desc
+  | project ['Override Action'] = OrgLevelAction, ['Override Policy'] = OrgLevelPolicy, ['Threat Type'] = ThreatType, ['Total Emails'] = TotalEmails
+version: 1.0.0

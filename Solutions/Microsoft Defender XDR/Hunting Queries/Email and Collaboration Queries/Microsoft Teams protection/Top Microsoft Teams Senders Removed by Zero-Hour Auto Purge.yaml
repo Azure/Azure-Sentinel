@@ -1,0 +1,34 @@
+id: 2f28771a-8849-4172-a6d0-1398e902b2d7
+name: Top Microsoft Teams Senders Removed by Zero-Hour Auto Purge
+description: |
+  This query ranks Microsoft Teams senders by how many of their messages were removed after delivery by zero-hour auto purge, split by malware and phish.
+description-detailed: |
+  This query ranks Microsoft Teams senders by the number of their messages that zero-hour auto purge removed after delivery over the last 30 days, using Advanced hunting in Microsoft Defender XDR, with malware and phish removals counted separately and the first and last removal timestamps. Existing queries list the messages that were purged; this one aggregates by sender, which answers a different question. Every removal here represents a message that passed initial filtering and reached a mailbox before being retracted, so a sender appearing repeatedly is one that is consistently getting through the first line of defence. That pattern is invisible when looking at individual purged messages, and it is the sender worth blocking, investigating or feeding to threat intelligence.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessagePostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query ranks Microsoft Teams senders by messages removed after delivery by zero-hour auto purge over the last
+  //30 days, with malware and phish removals split out.
+  //Each removal is a message that passed initial filtering and reached a mailbox before being retracted, so a sender
+  //appearing repeatedly is consistently getting through the first line of defence. Aggregating by sender surfaces
+  //that pattern, which per-message ZAP queries cannot show.
+  MessagePostDeliveryEvents
+  | where Timestamp > ago(30d)
+  | where isnotempty(SenderEmailAddress)
+  | summarize ZapActions = count(),
+              MalwareZAP = countif(ActionType == "Malware ZAP"),
+              PhishZAP = countif(ActionType == "Phish ZAP"),
+              FirstRemoval = min(Timestamp),
+              LastRemoval = max(Timestamp)
+      by SenderEmailAddress
+  | top 20 by ZapActions
+  | project ['Teams Sender']=SenderEmailAddress, ['Messages Removed by ZAP']=ZapActions,
+            ['Malware ZAP']=MalwareZAP, ['Phish ZAP']=PhishZAP,
+            ['First Removal']=FirstRemoval, ['Last Removal']=LastRemoval
+version: 1.0.0

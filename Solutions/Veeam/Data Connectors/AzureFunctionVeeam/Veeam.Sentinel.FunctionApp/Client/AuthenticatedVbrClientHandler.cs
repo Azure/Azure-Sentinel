@@ -89,11 +89,8 @@ namespace Sentinel.Client
             apiConfig.AddDefaultHeader(VbrRestApiConstants.ApiVersionHeaderLabel, VbrRestApiConstants.ApiVersion);
 
             apiConfig.AddDefaultHeader("x-api-version", "1.2-rev0");
-
             apiConfig.DateTimeFormat = LogAnalyticsConstants.DefaultTimeFormat;
-
             apiConfig.AddApiKeyPrefix(VbrRestApiConstants.Authorization, VbrRestApiConstants.Bearer);
-            apiConfig.ApiClient.RestClient.RemoteCertificateValidationCallback = new CertificateValidation("").Callback;
             return apiConfig;
         }
     }

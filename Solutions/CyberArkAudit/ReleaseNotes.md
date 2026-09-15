@@ -1,8 +1,9 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.1       | 02-09-2026                     | Security Patch: Remove logResponseContent attribute from Polling Config                    |
 | 3.2.0       | 06-07-2026                     | Rebrand to Idira and remove deprecated Azure Functions Data Connector                      |
 | 3.1.1       | 16-04-2026                     | Update Azure Function based connector to Python 3.12                                       |
 | 3.1.0       | 13-03-2026                     | New Data Connector based on CCF.<br> added missing migration instructions and disclaimers. |
 | 3.0.2       | 16-10-2025                     | Add Analytics Rules.                                                                       |
-| 3.0.1       | 29-04-2024                     | Configuration procedure update.      	                                                     |  
-| 3.0.0       | 03-04-2024                     | Initial Solution Release.        	              	                                          |  
+| 3.0.1       | 29-04-2024                     | Configuration procedure update.      	                                                      |  
+| 3.0.0       | 03-04-2024                     | Initial Solution Release.        	              	                                            |  

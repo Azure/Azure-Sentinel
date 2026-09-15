@@ -1001,7 +1001,7 @@ function GetPlaybookDataMetadata($file, $contentToImport, $contentResourceDetail
     $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
     $fileName = Split-path -Parent $file | Split-Path -leaf
-    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger") { 
+    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger" -or $fileName.ToLower() -eq "incident-trigger-logingestionapi" -or $fileName.ToLower() -eq "alert-trigger-logingestionapi") { 
         $parentPath = Split-Path $file -Parent; 
         $fileName = (Split-Path $parentPath -Parent | Split-Path -leaf) + "-" + $fileName; 
     }
@@ -3014,9 +3014,9 @@ function RunArmTtkOnPackage {
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
         if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
             Write-Output "Missing arm-ttk validations. Downloading module..."
-            Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
+            & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
         }
-        Invoke-Expression "& '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
+        & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
     }
 }
 

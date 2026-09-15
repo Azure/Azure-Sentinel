@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM filtering parser for Okta
-  Version: '0.4.0'
-  LastUpdated: Jan 08, 2026
+  Version: '0.4.1'
+  LastUpdated: Aug 20, 2026
 Product:
   Name: Okta
 Normalization:
   Schema: Authentication
-  Version: '0.1.3'
+  Version: '0.1.4'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
@@ -63,12 +63,6 @@ ParserQuery: |
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
-    let SrcDeviceTypeLookup = datatable(OriginalClientDevice: string, SrcDeviceType: string)
-    [
-        "Computer", "Computer",
-        "Mobile", "Mobile Device",
-        "Tablet", "Mobile Device"
-    ];
     let OutcomeReasonLookup = datatable(EventOriginalResultDetails: string, EventResultDetails: string)
     [
         "LOCKED_OUT", "User locked",
@@ -117,8 +111,11 @@ ParserQuery: |
     | extend EventResultDetails = iif(OriginalOutcomeResult in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
     // Filtering on eventresultdetails_in
     | where (array_length(eventresultdetails_in) == 0) or EventResultDetails in~ (eventresultdetails_in)
-    | lookup SrcDeviceTypeLookup on OriginalClientDevice
-    | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
+    | extend SrcDeviceType = case(
+        OriginalClientDevice == "Computer", "Computer",
+        OriginalClientDevice == "Mobile", "Mobile Device",
+        OriginalClientDevice == "Tablet", "Mobile Device",
+        "Other")
     | extend
         Type = "OktaV2_CL",
         EventProduct = "Okta",
@@ -146,7 +143,8 @@ ParserQuery: |
         SrcDvcId,
         SrcDvcIdType,
         DvcAction,
-        EventOriginalUid,
+        EventOriginalUid
+    | extend
         TargetSessionId = ActorSessionId,
         TargetUserId = ActorUserId,
         TargetUsername = ActorUsername,

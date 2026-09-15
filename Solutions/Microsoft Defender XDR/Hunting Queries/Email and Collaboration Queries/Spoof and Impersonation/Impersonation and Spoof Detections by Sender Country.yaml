@@ -1,0 +1,30 @@
+id: 04f08949-c44a-4c02-9d3c-ba40186ea6b2
+name: Impersonation and Spoof Detections by Sender Country
+description: |
+  This query summarizes inbound impersonation and spoof (BEC) detections by the geographic country of the sending IP address, using the EmailEvents table.
+description-detailed: |
+  Mapping impersonation and spoof (BEC) detections to the country of the sending IP address helps identify the regions and sending infrastructure behind targeted email attacks. This query resolves the sender IPv4 address to a country and counts inbound impersonation and spoof detections per country, with the number of distinct sending IPs. Use it to spot high-risk sending regions for targeted mitigation. Country is derived from IP geolocation and is approximate.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // Inbound impersonation and spoof (BEC) detections by sender-IP country. Country is from IP geolocation and is approximate.
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy !in ("Phishing simulation", "SecOps Mailbox")
+  | where (DetectionMethods has "Impersonation" or DetectionMethods has "Spoof") and isnotempty(SenderIPv4)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend Country = tostring(geo_info_from_ip_address(SenderIPv4).country)
+  | where isnotempty(Country)
+  | summarize ImpersonationEmails = countif(DetectionMethods has "Impersonation"), SpoofEmails = countif(DetectionMethods has "Spoof"), SenderIPs = dcount(SenderIPv4) by Country
+  | extend TotalBEC = ImpersonationEmails + SpoofEmails
+  | top 20 by TotalBEC
+  | project Country, ImpersonationEmails, SpoofEmails, SenderIPs, TotalBEC
+version: 1.0.0
