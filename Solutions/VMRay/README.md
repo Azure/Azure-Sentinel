@@ -1,6 +1,6 @@
 # VMRay Threat Intelligence Feed and Enrichment Integration - Microsoft Sentinel
 
-**Latest Version:** **3.0.1** - **Release Date:** **2025-11-07**
+**Latest Version:** **3.0.2** - **Release Date:** **2026-08-13**
 
 ## Overview
 
@@ -184,7 +184,7 @@
 | Playbook Name		| Please provide a playbook name, if needed |
 | Workspace ID		| Please provide Log Analytics Workspace ID |
 | Function App Name		| Please provide the VMRay enrichment function app name |
-| Whitelisted URL Domains	| Optional. Comma-separated list of domains whose URLs are never submitted to VMRay, e.g. `microsoft.com,google.com`. Matching is case-insensitive and subdomains of a listed domain are also skipped. Leave empty to submit every URL. |
+| Whitelisted URL Domains	| Optional. Comma-separated list of domains whose URLs are never submitted to VMRay, e.g. `microsoft.com,google.com`. Matching is case-insensitive and also skips subdomains of a listed domain (up to four labels deep, e.g. `a.b.example.com` matches `example.com`). Leave empty to submit every URL. |
 
 - Once you provide the above values, please click on `Review + create` button.
 
