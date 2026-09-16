@@ -45,7 +45,6 @@
             "crossComponentResources": [
               "{Subscription}"
             ],
-            "value": "",
             "typeSettings": {
               "resourceTypeFilter": {
                 "microsoft.operationalinsights/workspaces": true
@@ -74,6 +73,9 @@
             "name": "WorkspaceName",
             "type": 1,
             "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id == \"{Workspace}\"\r\n| project name",
+            "crossComponentResources": [
+              "value::selected"
+            ],
             "isHiddenWhenLocked": true,
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources"
@@ -87,7 +89,8 @@
             "typeSettings": {
               "additionalResourceOptions": []
             },
-            "jsonData": "[\r\n    {\"value\": \"Yes\", \"label\": \"Yes\"},\r\n    {\"value\": \"No\", \"label\": \"No\"}\r\n]"
+            "jsonData": "[\r\n    {\"value\": \"Yes\", \"label\": \"Yes\"},\r\n    {\"value\": \"No\", \"label\": \"No\"}\r\n]",
+            "value": "Yes"
           }
         ],
         "style": "above",
@@ -103,21 +106,12 @@
         "style": "tabs",
         "links": [
           {
-            "id": "4f22e250-0e78-4acb-82d9-eee067e32315",
-            "cellValue": "Tab",
-            "linkTarget": "parameter",
-            "linkLabel": "Bulk Update",
-            "subTarget": "BulkUpdate",
-            "preText": "Tab",
-            "style": "link"
-          },
-          {
             "id": "dff67182-9d46-405c-bfbd-f4e92a8cabc8",
             "cellValue": "Tab",
             "linkTarget": "parameter",
             "linkLabel": "Archive",
             "subTarget": "Archive",
-            "preText": "Tab",
+            "preText": "Archive",
             "style": "link"
           },
           {
@@ -126,6 +120,14 @@
             "linkTarget": "parameter",
             "linkLabel": "Basic",
             "subTarget": "Basic",
+            "style": "link"
+          },
+          {
+            "id": "f1e2d3c4-b5a6-9780-bcde-fa9876543210",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Auxiliary",
+            "subTarget": "Auxiliary",
             "style": "link"
           }
         ]
@@ -141,180 +143,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Bulk-update table retention or plan for any number of tables\n\nSelect a subscription and workspace at the top of the workbook, then use the **Tables to update** dropdown below. It's a live, multi-select list sourced from Azure Resource Graph (`Microsoft.OperationalInsights/workspaces/tables`), so it always shows every table in the workspace -- not just tables that happened to ingest data recently -- and there's no 20-item cap: select a handful of tables or use **Select all** to target the entire workspace.\n\n**Why a generated script, and not a single click?** The Log Analytics [Tables - Update API](https://learn.microsoft.com/rest/api/loganalytics/tables/update) and the Workbooks [ARM Action link](https://learn.microsoft.com/azure/azure-monitor/visualize/workbooks-link-actions) both operate on **one table per call**; there's no documented bulk/batch endpoint for table settings, and the stable Workbooks ARM Action can't loop over an array of selected resources (that capability -- **View Repeater** / **Data Repeater** -- exists only in the [Workbooks preview experience](https://learn.microsoft.com/azure/azure-monitor/visualize/workbooks-preview) and doesn't yet have a published JSON authoring schema). To reliably update many tables in one pass regardless of count, this tab generates one CLI/PowerShell command per selected table below -- copy all of them into [Azure Cloud Shell](https://portal.azure.com/#cloudshell/) (or a terminal signed in with `az login` / `Connect-AzAccount`) and run them together.",
-              "style": "info"
-            },
-            "name": "text - bulk-intro"
-          },
-          {
-            "type": 9,
-            "content": {
-              "version": "KqlParameterItem/1.0",
-              "parameters": [
-                {
-                  "id": "1684c985-7065-4caa-a575-4f255933d7db",
-                  "version": "KqlParameterItem/1.0",
-                  "name": "AllTables",
-                  "label": "Tables to update (select any number, including 'Select all')",
-                  "type": 2,
-                  "isRequired": true,
-                  "multiSelect": true,
-                  "quote": "\"",
-                  "delimiter": ",",
-                  "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend TableName = tostring(coalesce(properties.tableName, name))\n| project value = TableName, label = TableName\n| order by value asc",
-                  "crossComponentResources": [
-                    "{Subscription}"
-                  ],
-                  "typeSettings": {
-                    "additionalResourceOptions": [
-                      "value::all"
-                    ],
-                    "selectAllValue": "$ALL$",
-                    "showDefault": false
-                  },
-                  "queryType": 1,
-                  "resourceType": "microsoft.resourcegraph/resources"
-                },
-                {
-                  "id": "cd15cac4-42e3-4393-925e-2898491900a8",
-                  "version": "KqlParameterItem/1.0",
-                  "name": "DesiredRetentionInDays",
-                  "label": "New interactive (hot) retention, days: 4-730, or -1 to reset to workspace default",
-                  "type": 1,
-                  "isRequired": true,
-                  "value": "-1"
-                },
-                {
-                  "id": "b11d3328-9877-4d82-99a8-2f95478063f9",
-                  "version": "KqlParameterItem/1.0",
-                  "name": "DesiredTotalRetentionInDays",
-                  "label": "New total retention, days: 4-730 or 1095/1460/1826/2191/2556/2922/3288/3653/4018/4383, or -1 to reset to the retention value above",
-                  "type": 1,
-                  "isRequired": true,
-                  "value": "-1"
-                },
-                {
-                  "id": "098d463e-9867-4d44-bb1e-4df1f0e14d67",
-                  "version": "KqlParameterItem/1.0",
-                  "name": "DesiredPlan",
-                  "label": "New table plan",
-                  "type": 2,
-                  "isRequired": true,
-                  "jsonData": "[{\"value\":\"Analytics\",\"label\":\"Analytics\",\"selected\":true},{\"value\":\"Basic\",\"label\":\"Basic\"}]",
-                  "typeSettings": {
-                    "additionalResourceOptions": [],
-                    "showDefault": false
-                  },
-                  "queryType": 0
-                },
-                {
-                  "id": "43cf2c32-c448-4ef5-987b-a186754b4552",
-                  "version": "KqlParameterItem/1.0",
-                  "name": "ScriptFormat",
-                  "label": "Generate script for",
-                  "type": 2,
-                  "isRequired": true,
-                  "jsonData": "[{\"value\":\"cli\",\"label\":\"Azure CLI (Bash)\",\"selected\":true},{\"value\":\"pwsh\",\"label\":\"Azure PowerShell\"}]",
-                  "typeSettings": {
-                    "additionalResourceOptions": [],
-                    "showDefault": false
-                  },
-                  "queryType": 0
-                }
-              ],
-              "style": "pills",
-              "queryType": 0,
-              "resourceType": "microsoft.resourcegraph/resources"
-            },
-            "name": "parameters - bulk"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
-              "size": 0,
-              "title": "All tables in this workspace (reference -- current settings)",
-              "exportFieldName": "DataType",
-              "exportParameterName": "DataType",
-              "queryType": 1,
-              "resourceType": "microsoft.resourcegraph/resources",
-              "crossComponentResources": [
-                "{Subscription}"
-              ]
-            },
-            "customWidth": "100",
-            "name": "query - tablelist-bulk"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "print sub = extract(@\"subscriptions/(.+)\", 1, \"{Subscription}\")\n| extend selected = dynamic([{AllTables}])\n| mv-expand Table = selected to typeof(string)\n| project Table, Command = strcat(\n    \"az monitor log-analytics workspace table update\",\n    \" --subscription \", sub,\n    \" --resource-group \", \"{resourceGroup}\",\n    \" --workspace-name \", \"{WorkspaceName}\",\n    \" --name \", Table,\n    \" --retention-time \", \"{DesiredRetentionInDays}\",\n    \" --total-retention-time \", \"{DesiredTotalRetentionInDays}\",\n    \" --plan \", \"{DesiredPlan}\")",
-              "size": 0,
-              "title": "Generated Azure CLI commands - one per selected table (no count limit)",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "conditionalVisibility": {
-                "parameterName": "ScriptFormat",
-                "comparison": "isEqualTo",
-                "value": "cli"
-              }
-            },
-            "customWidth": "100",
-            "name": "query - bulk-cli"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "print sub = extract(@\"subscriptions/(.+)\", 1, \"{Subscription}\")\n| extend selected = dynamic([{AllTables}])\n| mv-expand Table = selected to typeof(string)\n| project Table, Command = strcat(\n    \"Update-AzOperationalInsightsTable\",\n    \" -SubscriptionId \", sub,\n    \" -ResourceGroupName \", \"{resourceGroup}\",\n    \" -WorkspaceName \", \"{WorkspaceName}\",\n    \" -TableName \", Table,\n    \" -RetentionInDays \", \"{DesiredRetentionInDays}\",\n    \" -TotalRetentionInDays \", \"{DesiredTotalRetentionInDays}\",\n    \" -Plan \", \"{DesiredPlan}\")",
-              "size": 0,
-              "title": "Generated Azure PowerShell commands - one per selected table (no count limit)",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "conditionalVisibility": {
-                "parameterName": "ScriptFormat",
-                "comparison": "isEqualTo",
-                "value": "pwsh"
-              }
-            },
-            "customWidth": "100",
-            "name": "query - bulk-pwsh"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "### Notes\n- `--retention-time` / `-RetentionInDays` and `--total-retention-time` / `-TotalRetentionInDays` accept `-1` to reset that value to the workspace default. Valid custom ranges and the Analytics/Basic/Auxiliary plan rules are documented in [Manage data retention in a Log Analytics workspace](https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure).\n- A table's **plan** can only be changed about once per week; if a selected table was recently changed, that table's command will fail until the cooldown ends. See [Manage tables in a Log Analytics workspace](https://learn.microsoft.com/azure/azure-monitor/logs/manage-logs-tables).\n- For very large batches (hundreds of tables), run the commands in smaller chunks to avoid Azure Resource Manager request throttling.\n- For single-table changes with a guided, click-to-run experience, use the **Archive** or **Basic** tabs instead.",
-              "style": "info"
-            },
-            "name": "text - bulk-footer"
-          }
-        ]
-      },
-      "conditionalVisibility": {
-        "parameterName": "Tab",
-        "comparison": "isEqualTo",
-        "value": "BulkUpdate"
-      },
-      "name": "Bulk Update"
-    },
-    {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "items": [
-          {
-            "type": 1,
-            "content": {
-              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.\r\n\r\nFor changing many tables at once, use the **Bulk Update** tab instead.",
+              "json": "Select a subscription and workspace above.\r\n\r\n**Single table update:** Click a row in either table below to select it, set retention values, and click the individual Update button.\r\n\r\n**Bulk update:** Use the **Tables for Bulk Update** multi-select dropdown (or **Select All**), set retention values, and click each **Send Batch** button that appears.\r\n\r\n⚠️ The bulk dropdown lists every table registered in the workspace via the ARM API, regardless of ingestion recency.\r\n⚠️ Tables with Azure-enforced immutable retention will fail individually within the batch — all other tables in that batch will still succeed.\r\n⚠️ Each Send Batch button covers 20 tables. Supports up to **300 tables (15 batches)**.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -328,27 +157,44 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
+              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| project DataType, Plan, IsBillable, Quantity, QuantityUnit, TimeGenerated\r\n| order by DataType asc",
               "size": 0,
-              "title": "Tables Found in Workspace (all tables, via Azure Resource Graph)",
+              "title": "Tables Found in Workspace — click a row to select for single-table update",
+              "timeContext": {
+                "durationMs": 604800000
+              },
               "exportFieldName": "DataType",
               "exportParameterName": "DataType",
-              "queryType": 1,
-              "resourceType": "microsoft.resourcegraph/resources",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
-                "{Subscription}"
+                "{Workspace}"
+              ],
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Quantity",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Quantity",
+                  "sortOrder": 2
+                }
               ]
             },
             "customWidth": "50",
-            "name": "query - tablelist-archive-primary"
+            "name": "query - 1"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Usage\r\n| extend DataType2 = DataType \r\n| where DataType2 has 'srch'\r\n| project TimeGenerated, DataType2, ResourceUri",
+              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| where DataType endswith '_SRCH'\r\n| project TimeGenerated, DataType, Plan, Quantity, QuantityUnit\r\n| extend DataType2 = DataType",
               "size": 0,
-              "title": "Generated Search Tables",
+              "title": "Generated Search Tables — click a row to select for single-table update",
               "timeContext": {
                 "durationMs": 2592000000
               },
@@ -367,32 +213,32 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-07-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2023-09-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"},{\"path\":\"$.retentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceRetention\"},{\"path\":\"$.totalRetentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceTotalRetention\"}]}}]}",
               "size": 1,
-              "title": "Retention for {DataType}",
+              "title": "Current Retention for {DataType}",
               "queryType": 12,
               "sortBy": []
             },
             "customWidth": "50",
-            "name": "query - 1"
+            "name": "query - 2"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-07-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType2}?api-version=2023-09-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"},{\"path\":\"$.retentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceRetention\"},{\"path\":\"$.totalRetentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceTotalRetention\"}]}}]}",
               "size": 1,
-              "title": "Retention for {DataType2}",
+              "title": "Current Retention for {DataType2}",
               "queryType": 12,
               "sortBy": []
             },
             "customWidth": "50",
-            "name": "query - 1b"
+            "name": "query - 3"
           },
           {
             "type": 1,
             "content": {
-              "json": "The body below will be how the retention settings are changed when calling the API.\r\nretentionInDays is the total amount of days that the data in the workspace is in 'hot' tier (allowed: 4-730).\r\ntotalRetentionInDays is the total amount of days that the data will be kept in the workspace (allowed: 4-730, or 1095/1460/1826/2191/2556/2922/3288/3653/4018/4383).\r\n\r\nTo calculate the number of days that the data will be in archive, take the totalRetentionInDays and subtract retentionInDays from it. The remainder is the number of days in archive.\r\n\r\nNote: setting retentionInDays to 'null' applies the workspace's current retention period.\r\n\r\nSource: Manage data retention in a Log Analytics workspace - https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure",
+              "json": "**Interactive Retention (retentionInDays):** Days data stays in the hot/queryable tier.\r\n- Analytics tables: 4–730 days. Select **-1** to reset to the workspace default.\r\n- Basic / Auxiliary tables: fixed at 30 days.\r\n\r\n**Total Retention (totalRetentionInDays):** Maximum **4,383 days (12 years)**.\r\n\r\n**Archive duration** = Total Retention − Interactive Retention\r\n\r\nTo reset a table to the workspace default, select **-1** for Interactive Retention.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -408,19 +254,260 @@
               "version": "KqlParameterItem/1.0",
               "parameters": [
                 {
-                  "id": "9fc95cb8-a3e5-4ee5-bafc-270fbe86d712",
+                  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                   "version": "KqlParameterItem/1.0",
-                  "name": "APIBody",
-                  "type": 1,
-                  "value": "{\r\n\t\"properties\":{\r\n\t\t\"retentionInDays\": null,\r\n\t\t\"totalRetentionInDays\": 200\r\n\t}\r\n}",
+                  "name": "ArchiveRetentionDays",
+                  "label": "Interactive Retention (days)",
+                  "type": 2,
                   "typeSettings": {
-                    "multiLineText": true,
-                    "editorLanguage": "json",
-                    "multiLineHeight": 8
+                    "additionalResourceOptions": []
                   },
-                  "timeContext": {
-                    "durationMs": 86400000
-                  }
+                  "jsonData": "[{\"value\":\"-1\",\"label\":\"-1 (Inherit workspace default)\"},{\"value\":\"30\",\"label\":\"30\"},{\"value\":\"60\",\"label\":\"60\"},{\"value\":\"90\",\"label\":\"90\"},{\"value\":\"180\",\"label\":\"180\"},{\"value\":\"365\",\"label\":\"365 (1 year)\"},{\"value\":\"730\",\"label\":\"730 (2 years, max)\"}]",
+                  "value": "90"
+                },
+                {
+                  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveTotalRetentionDays",
+                  "label": "Total Retention (days)",
+                  "type": 2,
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "jsonData": "[{\"value\":\"90\",\"label\":\"90\"},{\"value\":\"180\",\"label\":\"180\"},{\"value\":\"365\",\"label\":\"365 (1 year)\"},{\"value\":\"730\",\"label\":\"730 (2 years)\"},{\"value\":\"1095\",\"label\":\"1095 (3 years)\"},{\"value\":\"1460\",\"label\":\"1460 (4 years)\"},{\"value\":\"1826\",\"label\":\"1826 (5 years)\"},{\"value\":\"2191\",\"label\":\"2191 (6 years)\"},{\"value\":\"2556\",\"label\":\"2556 (7 years)\"},{\"value\":\"2922\",\"label\":\"2922 (8 years)\"},{\"value\":\"3288\",\"label\":\"3288 (9 years)\"},{\"value\":\"3653\",\"label\":\"3653 (10 years)\"},{\"value\":\"4018\",\"label\":\"4018 (11 years)\"},{\"value\":\"4383\",\"label\":\"4383 (12 years, max)\"}]",
+                  "value": "365"
+                },
+                {
+                  "id": "11111111-2222-4333-a444-555555555551",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedTables",
+                  "label": "Tables for Bulk Update",
+                  "type": 2,
+                  "multiSelect": true,
+                  "quote": "",
+                  "delimiter": "|",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables?api-version=2023-09-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"$.name\",\"columnid\":\"value\"},{\"path\":\"$.name\",\"columnid\":\"label\"}]}}]}",
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false,
+                    "multiSelect": true,
+                    "delimiter": "|",
+                    "quoteWith": ""
+                  },
+                  "queryType": 12,
+                  "value": [
+                    "value::all"
+                  ]
+                },
+                {
+                  "id": "aa000011-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchesNeeded",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| summarize c = count()\r\n| project result = strcat(iff(c > 0, 'b01', ''), iff(c > 20, ',b02', ''), iff(c > 40, ',b03', ''), iff(c > 60, ',b04', ''), iff(c > 80, ',b05', ''), iff(c > 100, ',b06', ''), iff(c > 120, ',b07', ''), iff(c > 140, ',b08', ''), iff(c > 160, ',b09', ''), iff(c > 180, ',b10', ''), iff(c > 200, ',b11', ''), iff(c > 220, ',b12', ''), iff(c > 240, ',b13', ''), iff(c > 260, ',b14', ''), iff(c > 280, ',b15', ''))",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "11111111-2222-4333-a444-555555555552",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody01",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 0 and rn < 20\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000022-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody02",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 20 and rn < 40\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000033-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody03",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 40 and rn < 60\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000044-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody04",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 60 and rn < 80\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000055-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody05",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 80 and rn < 100\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000066-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody06",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 100 and rn < 120\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000077-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody07",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 120 and rn < 140\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000088-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody08",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 140 and rn < 160\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000099-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody09",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 160 and rn < 180\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000100-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody10",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 180 and rn < 200\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000111-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody11",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 200 and rn < 220\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000122-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody12",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 220 and rn < 240\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000133-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody13",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 240 and rn < 260\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000144-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody14",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 260 and rn < 280\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "aa000155-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ArchiveBatchBody15",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet ret = '{ArchiveRetentionDays}';\r\nlet total = '{ArchiveTotalRetentionDays}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 280 and rn < 300\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"retentionInDays\":', ret, ',\"totalRetentionInDays\":', total, '}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
                 }
               ],
               "style": "pills",
@@ -432,7 +519,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## You are about to modify the retention of the {DataType} table. </br>\r\n\r\n### Note: Tables will inherit the retention of the workspace unless changed. It is possible to change the retention of the table to differ from the workspace retention. If a retention is set on a table and the workspace retention is changed, the table retention will not be affected. To reset the table retention to the workspace retention, set the retentionInDays to -1.\r\n\r\n## Changes to be made:\r\n{APIBody}",
+              "json": "## ⚠️ You are about to modify the retention of the **{DataType}** table.\r\n\r\n- Interactive Retention: **{ArchiveRetentionDays}** days\r\n- Total Retention: **{ArchiveTotalRetentionDays}** days\r\n\r\nOnce custom retention is set, workspace-level changes will no longer affect this table. Select **-1** for Interactive Retention to reset to workspace default.",
               "style": "warning"
             },
             "customWidth": "50",
@@ -441,7 +528,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## You are about to modify the retention of the {DataType2} table.\r\n\r\n### Note: Tables will inherit the retention of the workspace unless changed. It is possible to change the retention of the table to differ from the workspace retention. If a retention is set on a table and the workspace retention is changed, the table retention will not be affected. To reset the table retention to the workspace retention, set the retentionInDays to -1.\r\n\r\n## Changes to be made:\r\n{APIBody}",
+              "json": "## ⚠️ You are about to modify the retention of the **{DataType2}** search table.\r\n\r\n- Interactive Retention: **{ArchiveRetentionDays}** days\r\n- Total Retention: **{ArchiveTotalRetentionDays}** days\r\n\r\nOnce custom retention is set, workspace-level changes will no longer affect this table. Select **-1** for Interactive Retention to reset to workspace default.",
               "style": "warning"
             },
             "customWidth": "50",
@@ -450,7 +537,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Clicking the Update Retention button will run the API that will update the retention of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
+              "json": "Confirm the table name shown above and the selected retention values, then click the appropriate button below.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -469,16 +556,16 @@
                 {
                   "id": "d0307859-0760-4b9a-972f-297a5be4efda",
                   "linkTarget": "ArmAction",
-                  "linkLabel": "Update Retention",
+                  "linkLabel": "Update Retention for {DataType}",
                   "style": "primary",
                   "linkIsContextBlade": true,
                   "armActionContext": {
-                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01",
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2023-09-01",
                     "headers": [],
                     "params": [],
-                    "body": "{APIBody}",
-                    "httpMethod": "PUT",
-                    "description": "# ARM actions can potentially modify resources.\n## Please use caution and include a confirmation message in this description when authoring this command."
+                    "body": "{\"properties\":{\"retentionInDays\":{ArchiveRetentionDays},\"totalRetentionInDays\":{ArchiveTotalRetentionDays}}}",
+                    "httpMethod": "PATCH",
+                    "description": "# ⚠️ Modifying retention for table: {DataType}\n## Interactive Retention: {ArchiveRetentionDays} days\n## Total Retention: {ArchiveTotalRetentionDays} days\n## Please confirm before proceeding."
                   }
                 }
               ]
@@ -495,22 +582,503 @@
                 {
                   "id": "634769e9-a4ab-41eb-a314-1ca30eecf454",
                   "linkTarget": "ArmAction",
-                  "linkLabel": "Update Search Table Retention",
+                  "linkLabel": "Update Retention for {DataType2}",
                   "style": "primary",
                   "linkIsContextBlade": true,
                   "armActionContext": {
-                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType2}?api-version=2025-07-01",
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType2}?api-version=2023-09-01",
                     "headers": [],
                     "params": [],
-                    "body": "{APIBody}",
-                    "httpMethod": "PUT",
-                    "description": "# ARM actions can potentially modify resources.\n## Please use caution and include a confirmation message in this description when authoring this command."
+                    "body": "{\"properties\":{\"retentionInDays\":{ArchiveRetentionDays},\"totalRetentionInDays\":{ArchiveTotalRetentionDays}}}",
+                    "httpMethod": "PATCH",
+                    "description": "# ⚠️ Modifying retention for search table: {DataType2}\n## Interactive Retention: {ArchiveRetentionDays} days\n## Total Retention: {ArchiveTotalRetentionDays} days\n## Please confirm before proceeding."
                   }
                 }
               ]
             },
             "customWidth": "50",
             "name": "links - 11"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\r\n## Bulk Retention Update\r\n\r\nUse the **Tables for Bulk Update** dropdown above (or **Select All**). Click **every Send Batch button that appears** in sequence.\r\n\r\n⚠️ Each button covers 20 tables. Supports up to **300 tables (15 batches)**.\r\n⚠️ Tables with Azure-enforced immutable retention will fail individually — all other tables in that batch still succeed.\r\n⚠️ Check the JSON response body after each batch to see per-request results.\r\n\r\n**Currently selected tables:** `{SelectedTables}`",
+              "style": "info"
+            },
+            "name": "text - bulk-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let selected = '{SelectedTables}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| project TableName = t, PlannedInteractiveRetentionDays = '{ArchiveRetentionDays}', PlannedTotalRetentionDays = '{ArchiveTotalRetentionDays}', Batch = strcat('Batch ', tostring(rn / 20 + 1))",
+              "size": 0,
+              "title": "Tables Queued for Bulk Retention Update",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - bulk-preview"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## ⚠️ Bulk Retention Update Confirmation\r\n\r\n- Interactive Retention: **{ArchiveRetentionDays}** days\r\n- Total Retention: **{ArchiveTotalRetentionDays}** days\r\n\r\nClick **every visible Send Batch button** below in sequence. Tables with immutable retention fail individually — others in the same batch still succeed.",
+              "style": "warning"
+            },
+            "name": "text - bulk-warning"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "11111111-2222-4333-a444-555555555553",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 01 — Tables 1 to 20",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody01}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 01 (tables 1–20)\n## Interactive: {ArchiveRetentionDays} | Total: {ArchiveTotalRetentionDays}\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b01"
+            },
+            "name": "links - bulk-archive-01"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000222-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 02 — Tables 21 to 40",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody02}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 02 (tables 21–40)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b02"
+            },
+            "name": "links - bulk-archive-02"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000333-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 03 — Tables 41 to 60",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody03}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 03 (tables 41–60)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b03"
+            },
+            "name": "links - bulk-archive-03"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000444-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 04 — Tables 61 to 80",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody04}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 04 (tables 61–80)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b04"
+            },
+            "name": "links - bulk-archive-04"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000555-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 05 — Tables 81 to 100",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody05}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 05 (tables 81–100)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b05"
+            },
+            "name": "links - bulk-archive-05"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000666-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 06 — Tables 101 to 120",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody06}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 06 (tables 101–120)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b06"
+            },
+            "name": "links - bulk-archive-06"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000777-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 07 — Tables 121 to 140",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody07}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 07 (tables 121–140)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b07"
+            },
+            "name": "links - bulk-archive-07"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000888-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 08 — Tables 141 to 160",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody08}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 08 (tables 141–160)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b08"
+            },
+            "name": "links - bulk-archive-08"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa000999-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 09 — Tables 161 to 180",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody09}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 09 (tables 161–180)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b09"
+            },
+            "name": "links - bulk-archive-09"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001000-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 10 — Tables 181 to 200",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody10}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 10 (tables 181–200)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b10"
+            },
+            "name": "links - bulk-archive-10"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001100-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 11 — Tables 201 to 220",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody11}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 11 (tables 201–220)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b11"
+            },
+            "name": "links - bulk-archive-11"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001200-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 12 — Tables 221 to 240",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody12}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 12 (tables 221–240)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b12"
+            },
+            "name": "links - bulk-archive-12"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001300-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 13 — Tables 241 to 260",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody13}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 13 (tables 241–260)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b13"
+            },
+            "name": "links - bulk-archive-13"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001400-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 14 — Tables 261 to 280",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody14}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 14 (tables 261–280)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b14"
+            },
+            "name": "links - bulk-archive-14"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "aa001500-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 15 — Tables 281 to 300",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{ArchiveBatchBody15}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Retention — Batch 15 (tables 281–300)\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "ArchiveBatchesNeeded",
+              "comparison": "contains",
+              "value": "b15"
+            },
+            "name": "links - bulk-archive-15"
           }
         ]
       },
@@ -530,7 +1098,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Select a subscription and workspace above.\r\nClick on one of the rows below to view the retention of the table and also modify it if needed.\r\n\r\nFor changing many tables at once, use the **Bulk Update** tab instead.",
+              "json": "Select a subscription and workspace above.\r\n\r\n**Single table update:** Click a row in the table below, choose the target plan, and click **Update Plan**.\r\n\r\n**Bulk update:** Use the **Tables for Bulk Plan Change** dropdown (or **Select All**), choose the plan, and click each **Send Batch** button that appears.\r\n\r\n⚠️ Each button covers 20 tables. Supports up to **300 tables (15 batches)**.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -544,36 +1112,38 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces/tables'\n| where id startswith strcat('{Workspace}', '/')\n| extend DataType = tostring(coalesce(properties.tableName, name))\n| extend Plan = tostring(properties.plan), RetentionInDays = properties.retentionInDays, TotalRetentionInDays = properties.totalRetentionInDays, ArchiveRetentionInDays = properties.archiveRetentionInDays\n| project DataType, Plan, RetentionInDays, TotalRetentionInDays, ArchiveRetentionInDays\n| order by DataType asc",
+              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| project DataType, Plan, IsBillable, Quantity, QuantityUnit, TimeGenerated\r\n| order by DataType asc",
               "size": 0,
-              "title": "Tables Found in Workspace (all tables, via Azure Resource Graph)",
+              "title": "Tables Found in Workspace — click a row to select for single-table plan change",
+              "timeContext": {
+                "durationMs": 604800000
+              },
               "exportFieldName": "DataType",
               "exportParameterName": "DataType",
-              "queryType": 1,
-              "resourceType": "microsoft.resourcegraph/resources",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
-                "{Subscription}"
+                "{Workspace}"
               ]
             },
-            "customWidth": "50",
-            "name": "query - tablelist-basic-primary"
+            "name": "query - 1"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"{\\r\\n\\t\\\"properties\\\":{\\r\\n\\t\\t\\\"retentionInDays\\\": 180,\\r\\n\\t\\t\\\"totalRetentionInDays\\\": 200 \\r\\n\\t}\\r\\n}\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/microsoft.operationalinsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01\",\"urlParams\":[{\"key\":\"\",\"value\":\"\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"}]}}]}",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2023-09-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"},{\"path\":\"$.retentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceRetention\"},{\"path\":\"$.totalRetentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceTotalRetention\"}]}}]}",
               "size": 1,
-              "title": "Retention for {DataType}",
+              "title": "Current Settings for {DataType}",
               "queryType": 12,
               "sortBy": []
             },
-            "name": "query - 1"
+            "name": "query - 2"
           },
           {
             "type": 1,
             "content": {
-              "json": "The Table Plan can be set to Analytics or Basic.\r\n\r\nNote: The Table Plan can only be changed once per week (per table).\r\n\r\nSource: Manage tables in a Log Analytics workspace - https://learn.microsoft.com/azure/azure-monitor/logs/manage-logs-tables",
+              "json": "**Analytics**: Full KQL, alerts, up to 730 days interactive retention.\r\n**Basic**: Flat-rate ingestion, 30-day fixed interactive retention, queries billed per GB.\r\n\r\n⚠️ Plan can only be changed **once per week**.\r\n⚠️ Analytics→Basic: alerts and summary rules break.\r\n⚠️ Basic→Analytics: full features restored, ingestion cost increases.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -589,19 +1159,246 @@
               "version": "KqlParameterItem/1.0",
               "parameters": [
                 {
-                  "id": "9fc95cb8-a3e5-4ee5-bafc-270fbe86d712",
+                  "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
                   "version": "KqlParameterItem/1.0",
-                  "name": "APIBody",
-                  "type": 1,
-                  "value": "{\r\n    \"properties\": {\r\n        \"plan\": \"Basic\"\r\n    }\r\n}",
+                  "name": "BasicTablePlan",
+                  "label": "Target Table Plan",
+                  "type": 2,
                   "typeSettings": {
-                    "multiLineText": true,
-                    "editorLanguage": "json",
-                    "multiLineHeight": 8
+                    "additionalResourceOptions": []
                   },
-                  "timeContext": {
-                    "durationMs": 86400000
-                  }
+                  "jsonData": "[{\"value\":\"Basic\",\"label\":\"Basic\"},{\"value\":\"Analytics\",\"label\":\"Analytics\"}]",
+                  "value": "Basic"
+                },
+                {
+                  "id": "11111111-2222-4333-a444-555555555554",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedTablesBasic",
+                  "label": "Tables for Bulk Plan Change",
+                  "type": 2,
+                  "multiSelect": true,
+                  "quote": "",
+                  "delimiter": "|",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables?api-version=2023-09-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"$.name\",\"columnid\":\"value\"},{\"path\":\"$.name\",\"columnid\":\"label\"}]}}]}",
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false,
+                    "multiSelect": true,
+                    "delimiter": "|",
+                    "quoteWith": ""
+                  },
+                  "queryType": 12,
+                  "value": []
+                },
+                {
+                  "id": "bb000011-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchesNeeded",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| summarize c = count()\r\n| project result = strcat(iff(c > 0, 'b01', ''), iff(c > 20, ',b02', ''), iff(c > 40, ',b03', ''), iff(c > 60, ',b04', ''), iff(c > 80, ',b05', ''), iff(c > 100, ',b06', ''), iff(c > 120, ',b07', ''), iff(c > 140, ',b08', ''), iff(c > 160, ',b09', ''), iff(c > 180, ',b10', ''), iff(c > 200, ',b11', ''), iff(c > 220, ',b12', ''), iff(c > 240, ',b13', ''), iff(c > 260, ',b14', ''), iff(c > 280, ',b15', ''))",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "11111111-2222-4333-a444-555555555555",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody01",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 0 and rn < 20\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000022-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody02",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 20 and rn < 40\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000033-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody03",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 40 and rn < 60\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000044-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody04",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 60 and rn < 80\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000055-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody05",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 80 and rn < 100\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000066-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody06",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 100 and rn < 120\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000077-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody07",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 120 and rn < 140\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000088-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody08",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 140 and rn < 160\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000099-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody09",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 160 and rn < 180\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000100-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody10",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 180 and rn < 200\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000111-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody11",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 200 and rn < 220\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000122-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody12",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 220 and rn < 240\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000133-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody13",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 240 and rn < 260\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000144-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody14",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 260 and rn < 280\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "bb000155-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BasicBatchBody15",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nlet plan = '{BasicTablePlan}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 280 and rn < 300\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2023-09-01\",\"content\":{\"properties\":{\"plan\":\"', plan, '\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
                 }
               ],
               "style": "pills",
@@ -613,7 +1410,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## You are about to modify the retention of the {DataType} table.\r\n\r\n### Note: The Table Plan can only be changed once per week.\r\n\r\n## Changes to be made:\r\n{APIBody}",
+              "json": "## ⚠️ You are about to change the plan for **{DataType}** to **{BasicTablePlan}**.\r\n\r\n- Plan can only be changed **once per week**.\r\n- Analytics→Basic: alerts break.\r\n- Basic→Analytics: full features restored, higher ingestion cost.",
               "style": "warning"
             },
             "name": "text - 5"
@@ -621,7 +1418,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Clicking the Update Plan button will run the API that will update the plan of the table, based on what has been set in the body. Please confirm which table you are about to modify above.",
+              "json": "Confirm the table name and target plan shown above, then click Update Plan.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -638,29 +1435,505 @@
               "style": "list",
               "links": [
                 {
-                  "id": "d0307859-0760-4b9a-972f-297a5be4efda",
+                  "id": "d0307859-0760-4b9a-972f-297a5be4efdb",
                   "linkTarget": "ArmAction",
-                  "linkLabel": "Update Plan",
+                  "linkLabel": "Update Plan to {BasicTablePlan} for {DataType}",
                   "style": "primary",
                   "linkIsContextBlade": true,
                   "armActionContext": {
-                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}",
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2023-09-01",
                     "headers": [],
-                    "params": [
-                      {
-                        "key": "api-version",
-                        "value": "2025-07-01"
-                      }
-                    ],
-                    "body": "{APIBody}",
+                    "params": [],
+                    "body": "{\"properties\":{\"plan\":\"{BasicTablePlan}\"}}",
                     "httpMethod": "PATCH",
-                    "description": "# ARM actions can potentially modify resources.\n## Please use caution and include a confirmation message in this description when authoring this command."
+                    "description": "# ⚠️ Changing plan for table: {DataType} to {BasicTablePlan}\n## Plan can only be changed once per week.\n## Please confirm before proceeding."
                   }
                 }
               ]
             },
             "customWidth": "50",
             "name": "links - 4"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\r\n## Bulk Plan Change\r\n\r\nUse the **Tables for Bulk Plan Change** dropdown above (or **Select All**), choose the **Target Table Plan**, then click each **Send Batch** button that appears.\r\n\r\n⚠️ Each button covers 20 tables. Supports up to **300 tables (15 batches)**.\r\n\r\n**Currently selected tables:** `{SelectedTablesBasic}`",
+              "style": "info"
+            },
+            "name": "text - bulk-header-basic"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let selected = '{SelectedTablesBasic}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| project TableName = t, TargetPlan = '{BasicTablePlan}', Batch = strcat('Batch ', tostring(rn / 20 + 1))",
+              "size": 0,
+              "title": "Tables Queued for Bulk Plan Change",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - bulk-preview-basic"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## ⚠️ Bulk Plan Change Confirmation\r\n\r\nChanging all tables above to **{BasicTablePlan}**. Click every visible Send Batch button in sequence.\r\n\r\n- Plan can only be changed **once per week** per table.\r\n- Analytics→Basic: alerts break.\r\n- Basic→Analytics: full features restored.",
+              "style": "warning"
+            },
+            "name": "text - bulk-warning-basic"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "11111111-2222-4333-a444-555555555556",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 01 — Tables 1 to 20",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody01}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 01 (tables 1–20)\n## Target plan: {BasicTablePlan}\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b01"
+            },
+            "name": "links - bulk-basic-01"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000222-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 02 — Tables 21 to 40",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody02}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 02\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b02"
+            },
+            "name": "links - bulk-basic-02"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000333-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 03 — Tables 41 to 60",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody03}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 03\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b03"
+            },
+            "name": "links - bulk-basic-03"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000444-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 04 — Tables 61 to 80",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody04}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 04\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b04"
+            },
+            "name": "links - bulk-basic-04"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000555-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 05 — Tables 81 to 100",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody05}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 05\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b05"
+            },
+            "name": "links - bulk-basic-05"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000666-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 06 — Tables 101 to 120",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody06}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 06\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b06"
+            },
+            "name": "links - bulk-basic-06"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000777-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 07 — Tables 121 to 140",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody07}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 07\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b07"
+            },
+            "name": "links - bulk-basic-07"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000888-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 08 — Tables 141 to 160",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody08}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 08\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b08"
+            },
+            "name": "links - bulk-basic-08"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb000999-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 09 — Tables 161 to 180",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody09}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 09\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b09"
+            },
+            "name": "links - bulk-basic-09"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001000-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 10 — Tables 181 to 200",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody10}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 10\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b10"
+            },
+            "name": "links - bulk-basic-10"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001100-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 11 — Tables 201 to 220",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody11}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 11\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b11"
+            },
+            "name": "links - bulk-basic-11"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001200-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 12 — Tables 221 to 240",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody12}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 12\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b12"
+            },
+            "name": "links - bulk-basic-12"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001300-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 13 — Tables 241 to 260",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody13}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 13\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b13"
+            },
+            "name": "links - bulk-basic-13"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001400-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 14 — Tables 261 to 280",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody14}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 14\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b14"
+            },
+            "name": "links - bulk-basic-14"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "bb001500-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 15 — Tables 281 to 300",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{BasicBatchBody15}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Plan Change — Batch 15\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "BasicBatchesNeeded",
+              "comparison": "contains",
+              "value": "b15"
+            },
+            "name": "links - bulk-basic-15"
           }
         ]
       },
@@ -670,10 +1943,853 @@
         "value": "Basic"
       },
       "name": "Basic"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Select a subscription and workspace above.\r\n\r\n**Single table update:** Click a row below, then click **Update Plan to Auxiliary**.\r\n\r\n**Bulk update:** Use the **Tables for Bulk Auxiliary Change** dropdown (or **Select All**), then click each **Send Batch** button that appears.\r\n\r\n⚠️ Not all tables support the Auxiliary plan. Unsupported tables fail individually — others in the same batch still succeed.\r\n⚠️ This tab uses API version **2025-07-01**.\r\n⚠️ Each button covers 20 tables. Supports up to **300 tables (15 batches)**.",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "EnableSteps",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - 6"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Usage\r\n| summarize arg_max(TimeGenerated, *) by DataType\r\n| project DataType, Plan, IsBillable, Quantity, QuantityUnit, TimeGenerated\r\n| order by DataType asc",
+              "size": 0,
+              "title": "Tables Found in Workspace — click a row to select for single-table update",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "exportFieldName": "DataType",
+              "exportParameterName": "DataType",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.properties\",\"columns\":[{\"path\":\"$.retentionInDays\",\"columnid\":\"TableInteractivePeriod\"},{\"path\":\"$.archiveRetentionInDays\",\"columnid\":\"TableArchivePeriod\"},{\"path\":\"$.totalRetentionInDays\",\"columnid\":\"TotalRetentionPeriod\"},{\"path\":\"$.plan\",\"columnid\":\"TablePlan\"},{\"path\":\"$.retentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceRetention\"},{\"path\":\"$.totalRetentionInDaysAsDefault\",\"columnid\":\"InheritsWorkspaceTotalRetention\"}]}}]}",
+              "size": 1,
+              "title": "Current Settings for {DataType}",
+              "queryType": 12,
+              "sortBy": []
+            },
+            "name": "query - 2"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "**Auxiliary / Lake plan:** Lowest ingestion cost. Full KQL over entire retention period. Queries billed per GB. Up to 4,383 days retention.\r\n\r\n⚠️ Alerts stop working after switch to Auxiliary.\r\n⚠️ Plan can only be changed **once per week**.\r\n⚠️ Analytics→Auxiliary: alerts stop, summary rules break.\r\n⚠️ Auxiliary→Analytics: data not available until search job is run.",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "EnableSteps",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - 7"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "11111111-2222-4333-a444-555555555557",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedTablesAux",
+                  "label": "Tables for Bulk Auxiliary Change",
+                  "type": 2,
+                  "multiSelect": true,
+                  "quote": "",
+                  "delimiter": "|",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":\"\",\"headers\":[],\"method\":\"GET\",\"path\":\"{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables?api-version=2025-07-01\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"$.name\",\"columnid\":\"value\"},{\"path\":\"$.name\",\"columnid\":\"label\"}]}}]}",
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false,
+                    "multiSelect": true,
+                    "delimiter": "|",
+                    "quoteWith": ""
+                  },
+                  "queryType": 12,
+                  "value": []
+                },
+                {
+                  "id": "cc000011-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchesNeeded",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| summarize c = count()\r\n| project result = strcat(iff(c > 0, 'b01', ''), iff(c > 20, ',b02', ''), iff(c > 40, ',b03', ''), iff(c > 60, ',b04', ''), iff(c > 80, ',b05', ''), iff(c > 100, ',b06', ''), iff(c > 120, ',b07', ''), iff(c > 140, ',b08', ''), iff(c > 160, ',b09', ''), iff(c > 180, ',b10', ''), iff(c > 200, ',b11', ''), iff(c > 220, ',b12', ''), iff(c > 240, ',b13', ''), iff(c > 260, ',b14', ''), iff(c > 280, ',b15', ''))",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "11111111-2222-4333-a444-555555555558",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody01",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 0 and rn < 20\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000022-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody02",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 20 and rn < 40\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000033-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody03",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 40 and rn < 60\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000044-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody04",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 60 and rn < 80\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000055-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody05",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 80 and rn < 100\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000066-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody06",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 100 and rn < 120\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000077-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody07",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 120 and rn < 140\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000088-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody08",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 140 and rn < 160\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000099-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody09",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 160 and rn < 180\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000100-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody10",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 180 and rn < 200\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000111-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody11",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 200 and rn < 220\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000122-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody12",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 220 and rn < 240\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000133-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody13",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 240 and rn < 260\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000144-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody14",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 260 and rn < 280\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "cc000155-0000-0000-0000-000000000000",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "AuxBatchBody15",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nlet sub = '{Subscription}';\r\nlet rg = '{resourceGroup}';\r\nlet ws = '{WorkspaceName}';\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| where rn >= 280 and rn < 300\r\n| extend req = strcat('{\"httpMethod\":\"PATCH\",\"name\":\"req', tostring(rn), '\",\"url\":\"', sub, '/resourcegroups/', rg, '/providers/Microsoft.OperationalInsights/workspaces/', ws, '/tables/', t, '?api-version=2025-07-01\",\"content\":{\"properties\":{\"plan\":\"Auxiliary\"}}}')\r\n| summarize reqs = make_list(req)\r\n| project body = strcat('{\"requests\":[', strcat_array(reqs, ','), ']}') ",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - aux-bulk"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## ⚠️ You are about to switch the **{DataType}** table to the **Auxiliary** plan.\r\n\r\n- Alerts will STOP working after the switch.\r\n- Queries over Auxiliary data are billed per GB.\r\n- This change can only be reversed **once per week**.\r\n- If **{DataType}** does not support Auxiliary, the API will return an error.\r\n\r\n**API version in use:** 2025-07-01",
+              "style": "warning"
+            },
+            "name": "text - 5"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "Confirm the table name shown above, then click Update Plan to Auxiliary.",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "EnableSteps",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - 8"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "e9f8a7b6-c5d4-3210-fedc-ba9876543210",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Update Plan to Auxiliary for {DataType}",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "{Subscription}/resourcegroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/tables/{DataType}?api-version=2025-07-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{\"properties\":{\"plan\":\"Auxiliary\"}}",
+                    "httpMethod": "PATCH",
+                    "description": "# ⚠️ Switching table {DataType} to the Auxiliary plan.\n## Alerts will STOP working.\n## Plan can only be changed once per week.\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "links - 4"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\r\n## Bulk Auxiliary Plan Change\r\n\r\nUse the **Tables for Bulk Auxiliary Change** dropdown above (or **Select All**), then click each **Send Batch** button that appears.\r\n\r\n⚠️ Each button covers 20 tables. Supports up to **300 tables (15 batches)**.\r\n⚠️ Unsupported tables fail individually — others in the same batch still succeed.\r\n\r\n**Currently selected tables:** `{SelectedTablesAux}`",
+              "style": "info"
+            },
+            "name": "text - bulk-header-aux"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let selected = '{SelectedTablesAux}';\r\nlet tables = split(selected, '|');\r\nrange i from 0 to (array_length(tables) - 1) step 1\r\n| extend t = tostring(tables[i])\r\n| where isnotempty(t)\r\n| order by i asc\r\n| serialize\r\n| extend rn = row_number() - 1\r\n| project TableName = t, TargetPlan = 'Auxiliary', APIVersion = '2025-07-01', Batch = strcat('Batch ', tostring(rn / 20 + 1))",
+              "size": 0,
+              "title": "Tables Queued for Bulk Auxiliary Plan Change",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - bulk-preview-aux"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## ⚠️ Bulk Auxiliary Plan Change Confirmation\r\n\r\nSwitching all tables above to **Auxiliary**. Click every visible Send Batch button in sequence.\r\n\r\n- Alerts will STOP working on all selected tables.\r\n- Plan can only be changed **once per week** per table.\r\n- Unsupported tables fail individually — others still succeed.",
+              "style": "warning"
+            },
+            "name": "text - bulk-warning-aux"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "11111111-2222-4333-a444-555555555559",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 01 — Tables 1 to 20",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody01}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 01 (tables 1–20)\n## Alerts will STOP working.\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b01"
+            },
+            "name": "links - bulk-aux-01"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000222-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 02 — Tables 21 to 40",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody02}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 02\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b02"
+            },
+            "name": "links - bulk-aux-02"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000333-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 03 — Tables 41 to 60",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody03}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 03\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b03"
+            },
+            "name": "links - bulk-aux-03"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000444-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 04 — Tables 61 to 80",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody04}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 04\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b04"
+            },
+            "name": "links - bulk-aux-04"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000555-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 05 — Tables 81 to 100",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody05}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 05\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b05"
+            },
+            "name": "links - bulk-aux-05"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000666-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 06 — Tables 101 to 120",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody06}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 06\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b06"
+            },
+            "name": "links - bulk-aux-06"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000777-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 07 — Tables 121 to 140",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody07}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 07\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b07"
+            },
+            "name": "links - bulk-aux-07"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000888-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 08 — Tables 141 to 160",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody08}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 08\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b08"
+            },
+            "name": "links - bulk-aux-08"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc000999-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 09 — Tables 161 to 180",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody09}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 09\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b09"
+            },
+            "name": "links - bulk-aux-09"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001000-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 10 — Tables 181 to 200",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody10}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 10\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b10"
+            },
+            "name": "links - bulk-aux-10"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001100-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 11 — Tables 201 to 220",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody11}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 11\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b11"
+            },
+            "name": "links - bulk-aux-11"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001200-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 12 — Tables 221 to 240",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody12}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 12\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b12"
+            },
+            "name": "links - bulk-aux-12"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001300-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 13 — Tables 241 to 260",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody13}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 13\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b13"
+            },
+            "name": "links - bulk-aux-13"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001400-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 14 — Tables 261 to 280",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody14}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 14\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b14"
+            },
+            "name": "links - bulk-aux-14"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "list",
+              "links": [
+                {
+                  "id": "cc001500-0000-0000-0000-000000000000",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Send Batch 15 — Tables 281 to 300",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "/batch?api-version=2020-06-01",
+                    "headers": [],
+                    "params": [],
+                    "body": "{AuxBatchBody15}",
+                    "httpMethod": "POST",
+                    "description": "# ⚠️ Bulk Auxiliary — Batch 15\n## Please confirm before proceeding."
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "AuxBatchesNeeded",
+              "comparison": "contains",
+              "value": "b15"
+            },
+            "name": "links - bulk-aux-15"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "Auxiliary"
+      },
+      "name": "Auxiliary"
     }
   ],
   "fallbackResourceIds": [
-    ""
+    "azure monitor"
   ],
   "fromTemplateId": "sentinel-UserWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
