@@ -83,10 +83,10 @@ Version 4 includes an updated Executive Summary, Teams & Collaboration reporting
 
 1) Open the “Microsoft Defender for Office 365 Detections and Insights” template (.pbit).
 2) Enter variables and Load:
-   - PBI_Tenantld: Directory (tenant) ID
-   - PBI_Clientld: Application (client) ID
+   - PBI_TenantId: Directory (tenant) ID
+   - PBI_ClientId: Application (client) ID
    - PBI_KeyVaultUrl: Key Vault Url
-   - PBI_SecretName:Secret name (that holds the app secret)
+   - PBI_SecretName: Secret name (that holds the app secret)
    - PBI_EnableSentinelIncidents: Try `True` first. If the incident queries fail because Sentinel incident data is unavailable through Advanced Hunting, set it to `False`. Incident visuals remain empty when disabled.
    ![variable setup](Images/3templatevariables.png)
 3) When prompted by the Azure Key Vault connector, sign in with a user that has access to the secret.  
