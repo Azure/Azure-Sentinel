@@ -1,0 +1,75 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b09795c9-8dce-47ab-8f75-5a4afb78ef0c
+    path: Analytic Rules/Threat_Essentials_UserAssignedPrivilegedRole.yaml
+    version: 1.0.3
+    querySha256: 2c469b42048a16534378e56c9032f73e769acffbc029f950b9a1cf8d36bbf3ae
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.004
+properties:
+  id: xdr-threat-essentials-user-assigned-privileged-role-b09795c9
+  displayName: Threat Essentials - User Assigned Privileged Role
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "RoleManagement"
+      | where AADOperationType in~ ("Assign", "AssignEligibleRole")
+      | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+      | mv-expand TargetResources
+      | mv-expand TargetResources.modifiedProperties
+      | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)
+      | where displayName_ =~ "Role.DisplayName"
+      | extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))
+      | where RoleName contains "Admin"
+      | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+      | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
+      | extend Target = tostring(TargetResources.userPrincipalName)
+      | summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result
+      | extend InitiatorName=split(Initiator, "@")[0], InitiatorUPNSuffix=split(Initiator, "@")[1]
+      | extend TargetName=split(Target, "@")[0], TargetUPNSuffix=split(Target, "@")[1]
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Threat Essentials - User Assigned Privileged Role
+      description: |-
+        'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatorName
+          upnSuffixColumn: InitiatorUPNSuffix
+        - id: account2
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004

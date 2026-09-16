@@ -1,0 +1,91 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ba66b81c-2cf7-4c53-9db0-e8b6f537704a
+    path: Analytic Rules/NetskopeWebtx_Rule7.yaml
+    version: 1.0.0
+    querySha256: 009c73e132935e66a098c9bf3dbdfb3324a0c33a189e3e543c17a203cad409bd
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 8d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Discovery
+    originalTechniques:
+    - T1199
+    - T1526
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-netskope-new-risky-app-access-vs-7-day-baseline-ba66b81c
+  displayName: Netskope - New Risky App Access vs 7-Day Baseline
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookbackPeriod = 7d;
+      let currentPeriod = 1d;
+      let baseline = NetskopeWebTransactions_CL
+          | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))
+          | where isnotempty(CsUsername) and isnotempty(XCsApp)
+          | summarize BaselineApps = make_set(XCsApp) by CsUsername;
+      let current = NetskopeWebTransactions_CL
+          | where TimeGenerated > ago(currentPeriod)
+          | where isnotempty(CsUsername) and isnotempty(XCsApp)
+          | where XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low' or XCsAppCcl =~ 'medium' or XCsAppCci < 70
+          | summarize
+              CurrentApps = make_set(XCsApp),
+              arg_max(TimeGenerated, XCsAppCcl, XCsAppCci, XCsAppCategory)
+              by CsUsername, XCsApp;
+      current
+      | join kind=leftouter baseline on CsUsername
+      | extend BaselineApps = coalesce(BaselineApps, dynamic([]))
+      | where not(set_has_element(BaselineApps, XCsApp))
+      | where isnotempty(XCsApp)
+      | where XCsAppCci < 70 or XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low'
+      | project
+          TimeGenerated,
+          User = CsUsername,
+          NewRiskyApp = XCsApp,
+          AppCCL = XCsAppCcl,
+          AppCCI = XCsAppCci,
+          AppCategory = XCsAppCategory,
+          BaselineAppCount = array_length(BaselineApps)
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Netskope - New Risky App Access vs 7-Day Baseline
+      description: Compares today's accessed applications against a 7-day baseline and triggers alerts when users access new
+        risky applications not seen before.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: NewRiskyApp
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1526

@@ -1,0 +1,95 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 71e6586e-0d3f-4e33-b390-faa50b5e08fa
+    path: Analytic Rules/NetskopeWebtx_Rule6.yaml
+    version: 1.0.0
+    querySha256: 48bff38e53bc7dada7589b94edefee541a000b02497e9045df2b9c049f366c45
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    - T1048
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-netskope-large-outbound-data-transfer-sensitive-upload-dlp-71e6586e
+  displayName: Netskope - Large Outbound Data Transfer / Sensitive Upload (DLP)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let uploadThresholdMB = 100;
+      NetskopeWebTransactions_CL
+      | where TimeGenerated > ago(1h)
+      | where isnotempty(CsUsername)
+      | where XCsAppActivity =~ 'Upload' or XCsAppActivity =~ 'Post' or XCsAppActivity =~ 'Share'
+          or CsMethod =~ 'POST' or CsMethod =~ 'PUT'
+      | where CsBytes > 0 or XRsFileSize > 0
+      | extend UploadBytes = coalesce(CsBytes, XRsFileSize, 0)
+      | summarize
+          TotalUploadBytes = sum(UploadBytes),
+          FileCount = dcount(XCsAppObjectName),
+          Files = make_set(XCsAppObjectName, 10),
+          FileTypes = make_set(XRsFileType),
+          Apps = make_set(XCsApp),
+          Destinations = make_set(XCsAppInstanceName),
+          Countries = make_set(XSCountry)
+          by CsUsername, XCDevice, XCCountry, bin(TimeGenerated, 1h)
+      | extend TotalUploadMB = round(TotalUploadBytes / 1048576.0, 2)
+      | where TotalUploadMB > uploadThresholdMB
+      | extend AlertSeverity = case(
+          TotalUploadMB > 1000, 'Critical',
+          TotalUploadMB > 500, 'High',
+          TotalUploadMB > 100, 'Medium',
+          'Low')
+      | project
+          TimeGenerated,
+          User = CsUsername,
+          UploadVolumeMB = TotalUploadMB,
+          FileCount,
+          Files,
+          FileTypes,
+          Applications = Apps,
+          DestinationInstances = Destinations,
+          SourceCountry = XCCountry,
+          DestinationCountries = Countries,
+          Device = XCDevice,
+          AlertSeverity
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Netskope - Large Outbound Data Transfer / Sensitive Upload (DLP)
+      description: Detects large outbound data transfers and sensitive file uploads. Monitors for potential data exfiltration
+        via cloud applications.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+        - technique: T1048

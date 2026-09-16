@@ -10,6 +10,7 @@ $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.j
 
 $global:baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
 $global:baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
+. "$PSScriptRoot/customDetections.ps1"
 
 # Content Counters - (for adding numbering to each item)
 $global:analyticRuleCounter = 1
@@ -3039,7 +3040,16 @@ function CheckJsonIsValid($solutionFolderBasePath) {
     }
 }
 
-function GeneratePackage($solutionName, $contentToImport, $calculatedBuildPipelinePackageVersion = '') {
+function GeneratePackage(
+    $solutionName,
+    $contentToImport,
+    $calculatedBuildPipelinePackageVersion = '',
+    [bool]$IncludeXdrDetections = $false
+) {
+    if ($IncludeXdrDetections) {
+        Add-XdrCustomDetectionsToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate | Out-Null
+    }
+
     if ($contentToImport.Description) {
         $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
             

@@ -1,0 +1,67 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 78d2b06c-8dc0-40e1-91c8-66d916c186f3
+    path: Analytic Rules/PhishingDetection.yaml
+    version: 1.1.2
+    querySha256: 3690e123024638c1c25c52e9834c24acb21e4985b695a3c5511ce92d18dac3f4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566.002
+properties:
+  id: xdr-okta-fast-pass-phishing-detection-78d2b06c
+  displayName: Okta Fast Pass phishing Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Add any known good IPs to this list to reduce noise
+      let AllowedIPList = dynamic([]);
+      OktaSSO
+      | where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPList)
+      | where eventType_s == 'user.authentication.auth_via_mfa'
+      | where outcome_result_s == 'FAILURE'
+      | where outcome_reason_s == 'FastPass declined phishing attempt'
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,
+       outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, client_geographicalContext_city_s, client_geographicalContext_country_s
+      | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s), AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Okta Fast Pass phishing Detection
+      description: This query detects cases in which Okta FastPass effectively prevented access to a known phishing website.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: client_ipAddress_s
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+          subTechniques:
+          - T1566.002

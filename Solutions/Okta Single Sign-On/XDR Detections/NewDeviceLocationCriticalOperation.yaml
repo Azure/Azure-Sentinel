@@ -1,0 +1,85 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 41e843a8-92e7-444d-8d72-638f1145d1e1
+    path: Analytic Rules/NewDeviceLocationCriticalOperation.yaml
+    version: 1.1.3
+    querySha256: 2ad0484609b65296f53708fc7bee49ec83731eed6a80db0e89d4593865cb986b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Custom Detections support one tactic; only the first tactic was retained
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    - T1556
+    - T1098
+properties:
+  id: xdr-new-device-location-sign-in-along-with-critical-operation-41e843a8
+  displayName: New Device/Location sign-in along with critical operation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let timeframe = 1h;
+      let RiskyOperations = dynamic(["policy.rule.update","policy.rule.create","policy.rule.delete", "policy.rule.deactivate", "policy.lifecycle.update", "policy.rule.modify", "policy.lifecycle.create", "policy.lifecycle.delete", "policy.lifecycle.deactivate", "policy.lifecycle.modify", "network_zone.rule.disabled", "system.api_token.create", "system.api_token.revoke", "application.policy.sign_on.update", "application.policy.sign_on.rule.delete","user.mfa.factor.deactivate", "user.mfa.factor.reset_all", "system.mfa.factor.deactivate", "user.mfa.attempt_bypass"]);
+      let UserLoginNewCountryDevice = OktaSSO
+      | where eventType_s == "user.session.start"
+      | where outcome_result_s == "SUCCESS"
+      | extend debugContext_debugData_logOnlySecurityData_s = column_ifexists('debugContext_debugData_logOnlySecurityData_s', '{}')
+      | extend behaviors = parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors))
+      | where tostring(behaviors.["New Country"]) == "POSITIVE"
+      | where tostring(behaviors.["New Geo-Location"]) == "POSITIVE"
+      | where tostring(behaviors.["New Device"]) == "POSITIVE"
+      | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d
+      | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s);
+      let RiskyOperationsObserved = OktaSSO
+      | where eventType_s in (RiskyOperations)
+      | where outcome_result_s == "SUCCESS"
+      | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d;
+      UserLoginNewCountryDevice
+      | join kind=inner (RiskyOperationsObserved) on timekey, actor_displayName_s, client_ipAddress_s
+      | project TimeGenerated = timekey, actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, Location
+      | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: New Device/Location sign-in along with critical operation
+      description: This query identifies users seen login from a new geo location/country and a new device, then correlates
+        that sign-in with successful risky operations such as policy changes, MFA changes, API token actions etc. This can
+        be an indication of an attacker gaining access to a user's credentials and then performing critical operations, which
+        typically requires admin privileges. By detecting such patterns, organizations can quickly respond to potential security
+        incidents and mitigate risks associated with unauthorized access and privilege escalation.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: client_ipAddress_s
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1556
+        - technique: T1098

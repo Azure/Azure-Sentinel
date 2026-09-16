@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
+    path: Analytic Rules/Granting_Permissions_To_Account_detection.yaml
+    version: 2.0.2
+    querySha256: 3ce491adbbcff14b0740d0e886c165ea76b7bfd7fef3e625671bc08383756322
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098
+    - T1548
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-suspicious-granting-of-permissions-to-an-account-b2c15736
+  displayName: Suspicious granting of permissions to an account
+  status: disabled
+  queryCondition:
+    queryText: "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations above which an IP address is considered\
+      \ an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string)\
+      \ [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv\"] with\
+      \ (format=\"csv\", ignoreFirstRecord=True);\nlet createRoleAssignmentActivity = AzureActivity\n| where OperationNameValue\
+      \ =~ \"microsoft.authorization/roleassignments/write\";\nlet RoleAssignedActivity = createRoleAssignmentActivity\n|\
+      \ where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller, bin(TimeGenerated,\
+      \ 1d)\n| where count_ >= alertOperationThreshold\n// Returns all the records from the right side that don't have matches\
+      \ from the left.\n| join kind = rightanti (\ncreateRoleAssignmentActivity\n| where TimeGenerated > ago(endtime)\n| extend\
+      \ parsed_property = tostring(parse_json(Properties).requestbody)\n| extend PrincipalId = case(parsed_property has_cs\
+      \ 'PrincipalId',parse_json(parsed_property).Properties.PrincipalId, parsed_property has_cs 'principalId',parse_json(parsed_property).properties.principalId,\"\
+      \")\n| extend PrincipalType = case(parsed_property has_cs 'PrincipalType',parse_json(parsed_property).Properties.PrincipalType,\
+      \ parsed_property has_cs 'principalType',parse_json(parsed_property).properties.principalType, \"\")\n| extend Scope\
+      \ = case(parsed_property has_cs 'Scope',parse_json(parsed_property).Properties.Scope, parsed_property has_cs 'scope',parse_json(parsed_property).properties.scope,\"\
+      \")\n| extend RoleAddedDetails = case(parsed_property has_cs 'RoleDefinitionId',parse_json(parsed_property).Properties.RoleDefinitionId,parsed_property\
+      \ has_cs 'roleDefinitionId',parse_json(parsed_property).properties.roleDefinitionId,\"\")\n| summarize StartTimeUtc\
+      \ = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue\
+      \ = make_set(ActivityStatusValue), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()\n\
+      by ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope,\
+      \ RoleAddedDetails\n) on CallerIpAddress, Caller\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity\
+      \ = CallerIpAddress;\nlet RoleAssignedActivitywithRoleDetails = RoleAssignedActivity\n| extend RoleAssignedID = tostring(split(RoleAddedDetails,\
+      \ \"/\")[-1])\n// Returns all matching records from left and right sides.\n| join kind = inner (AzureBuiltInRole\n)\
+      \ on $left.RoleAssignedID == $right.ID;\nlet CallerIPCountSummary = RoleAssignedActivitywithRoleDetails | summarize\
+      \ AssignmentCountbyCaller = count() by Caller, CallerIpAddress;\nlet RoleAssignedActivityWithCount = RoleAssignedActivitywithRoleDetails\
+      \ | join kind = inner (CallerIPCountSummary | project Caller, AssignmentCountbyCaller, CallerIpAddress) on Caller, CallerIpAddress;\n\
+      RoleAssignedActivityWithCount\n| summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID\n// \tReturns all\
+      \ the records from the left side and only matching records from the right side.\n| join kind = leftouter( IdentityInfo\n\
+      | summarize arg_max(TimeGenerated, *) by AccountObjectId\n) on $left.PrincipalId == $right.AccountObjectId\n// Check\
+      \ if assignment count is greater than the threshold.\n| where AssignmentCountbyCaller >= alertOperationThreshold\n|\
+      \ project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails,\
+      \ Role, RoleDescription, AccountUpn, CreatedDateTime, GroupMembership, TenantMembershipType, ActivityStatusValue, ResourceGroup,\
+      \ PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity, AssignmentCountbyCaller\n| extend\
+      \ Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Suspicious granting of permissions to an account
+      description: '''Identifies IPs from which users grant access to other users on Azure resources and alerts when a previously
+        unseen source IP address is used.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098

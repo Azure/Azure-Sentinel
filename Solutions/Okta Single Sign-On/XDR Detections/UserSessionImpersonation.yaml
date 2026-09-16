@@ -1,0 +1,72 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 35846296-4052-4de2-8098-beb6bb5f2203
+    path: Analytic Rules/UserSessionImpersonation.yaml
+    version: 1.1.1
+    querySha256: efd5619d720fd17ce43e2a7f59119e6a009bada7e08cc3fa9e9b58e5236d5c8d
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1134
+    - T1134.003
+properties:
+  id: xdr-user-session-impersonation-okta-35846296
+  displayName: User Session Impersonation(Okta)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      OktaSSO
+      | where eventType_s == "user.session.impersonation.initiate" and outcome_result_s == "SUCCESS"
+      // Expand the JSON array in 'target_s' field to extract detailed information about the event
+      | mv-expand parsed_json = todynamic(target_s) // Unpack and understand the details from the 'target_s' JSON array
+      // Enhance visibility by extending columns with extracted details for better analysis
+      | extend TargetUser_id = tostring(parsed_json.id),
+               TargetUser_type = tostring(parsed_json.type),
+               TargetUser_alternateId = tostring(parsed_json.alternateId),
+               TargetUser_displayName = tostring(parsed_json.displayName),
+               Target_detailEntry = tostring(parsed_json.detailEntry)
+      // Filter out events with unknown target user IDs to focus on valid impersonation attempts
+      | where isnotempty(TargetUser_alternateId) and TargetUser_alternateId != "unknown"
+      // Project event details to gain insights into the security context, including actor and target user information
+      | project TimeGenerated, actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, TargetUser_displayName, TargetUser_type, TargetUser_id, eventType_s, outcome_result_s
+      | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: User Session Impersonation(Okta)
+      description: This query detects instances of user session impersonation, where an attacker successfully initiates a
+        session impersonation event. The query extracts detailed information about the target user and the actor involved
+        in the impersonation, providing insights into potential privilege escalation activities.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1134
+          subTechniques:
+          - T1134.003

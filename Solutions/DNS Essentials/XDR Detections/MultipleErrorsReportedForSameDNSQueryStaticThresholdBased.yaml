@@ -1,0 +1,87 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5b8344eb-fa28-4ac3-bcff-bc19d5d63089
+    path: Analytic Rules/MultipleErrorsReportedForSameDNSQueryStaticThresholdBased.yaml
+    version: 1.0.4
+    querySha256: 460af422eb8e1d484dc7df69e909d5e810ef817832bab656744421b15ff7b860
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    - DNS has no supported Custom Detection mapping
+    - Url has no supported Custom Detection mapping
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1573
+    - T1008
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-detect-dns-queries-reporting-multiple-errors-from-different-clients-stat-5b8344eb
+  displayName: Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback=1h;
+      let threshold = 2;
+      let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+      _Im_Dns(starttime=ago(lookback))
+        | where EventResultDetails has_any (errors)
+        | summarize SrcIPs = make_set(SrcIpAddr, 100), Dvcs = make_set(Dvc, 100), ResourceIds = make_set(_ResourceId, 100) by DnsQuery, bin(TimeGenerated, 10min)
+        | where array_length(SrcIPs) >= threshold
+        | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold
+        | extend DomainName = strcat(split(DnsQuery, ".")[1], ".", split(DnsQuery, ".")[2])
+        | mv-expand SrcIPs
+        | extend SrcIP = tostring(SrcIPs)
+        | mv-expand Dvcs
+        | extend Dvc = tostring(Dvcs)
+        | mv-expand ResourceIds
+        | extend ResourceId = tostring(ResourceIds)
+        | extend Dvc = strcat(split(Dvc, ".")[0])
+        | summarize Start=min(TimeGenerated), End=max(TimeGenerated) by SrcIP, Dvc, ResourceId, DnsQuery, DomainName, SrcIPs = tostring(SrcIPs), IPCountthreshold = threshold, TotalIPs
+        | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)
+      description: '''This rule creates an alert when multiple clients report errors for the same DNS query. This helps in
+        identifying possible similar C2 communications originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM)
+        normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIP
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: ResourceId
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          ntDomainColumn: HostNameDomain
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1573
+        - technique: T1008

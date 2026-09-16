@@ -1,0 +1,66 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b7dc801e-1e79-48bb-91e8-2229a8e6d40b
+    path: Analytic Rules/Remote Desktop Network Brute force (ASIM Network Session schema).yaml
+    version: 1.0.0
+    querySha256: 77461d08250a76bedce5e9e6345fc350da6620c22abe6055a14cef7a55099ff8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-remote-desktop-network-brute-force-asim-network-session-schema-b7dc801e
+  displayName: Remote Desktop Network Brute force (ASIM Network Session schema)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Start of the query and  Filter events that resulted in failure
+      _Im_NetworkSession(eventresult="Failure")
+      // Filter out private source IP addresses and focus on specific destination port (3389)
+      // Also, ensure that the source and destination IP addresses are not the same
+      | where not(ipv4_is_private(SrcIpAddr)) and tostring(DstPortNumber) has_any ("3389") and SrcIpAddr != DstIpAddr
+      // Summarize the data by source and destination IP addresses, destination port number, network protocol, and event result
+      // Also, bin the time generated in 5-minute intervals
+      // Calculate the minimum and maximum time generated, the sum of event counts, and a set of up to 10 event vendors
+      | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),TargettedIPs=dcount(DstIpAddr),Eventscount=sum(EventCount),EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstPortNumber,EventResult, bin(TimeGenerated, 5m)
+      // Filter the summarized data to include only those with an event count of 25 or more
+      | where Eventscount >= 25
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Remote Desktop Network Brute force (ASIM Network Session schema)
+      description: '''This detection identifies RDP application network traffic and filters any source/destination pair generating
+        more than 25 events hard threshold.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

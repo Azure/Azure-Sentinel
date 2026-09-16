@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: cdc01279-d6ea-41b1-a32d-49d726be95b8
+    path: Analytic Rules/NetskopeWebtx_Rule10.yaml
+    version: 1.0.0
+    querySha256: 75cbd438d82b0b02434025a156219d8419a826ef1dbe4b51ffbc4ac78bb3bb59
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Exfiltration
+    originalTechniques:
+    - T1199
+    - T1567
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-netskope-unsanctioned-risky-cloud-app-access-shadow-it-cdc01279
+  displayName: Netskope - Unsanctioned/Risky Cloud App Access (Shadow IT)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      NetskopeWebTransactions_CL
+      | where TimeGenerated > ago(1h)
+      | where isnotempty(CsUsername) and isnotempty(XCsApp)
+      | where XCsAppTags contains 'Unsanctioned'
+          or XCsAppCcl =~ 'poor'
+          or XCsAppCcl =~ 'low'
+          or XCsAppCci < 50
+      | summarize
+          EventCount = count(),
+          TotalBytesMB = round(sum(Bytes) / 1048576.0, 2),
+          Activities = make_set(XCsAppActivity),
+          FirstSeen = min(TimeGenerated),
+          LastSeen = max(TimeGenerated)
+          by
+          CsUsername,
+          XCsApp,
+          XCsAppCategory,
+          XCsAppCcl,
+          XCsAppCci,
+          XCsAppTags,
+          XCCountry,
+          XCDevice
+      | extend RiskLevel = case(
+          XCsAppCci < 30, 'Critical',
+          XCsAppCci < 50, 'High',
+          XCsAppCci < 70, 'Medium',
+          'Low')
+      | project
+          TimeGenerated = LastSeen,
+          User = CsUsername,
+          RiskyApplication = XCsApp,
+          AppCategory = XCsAppCategory,
+          CloudConfidenceLevel = XCsAppCcl,
+          CloudConfidenceIndex = XCsAppCci,
+          AppTags = XCsAppTags,
+          RiskLevel,
+          Country = XCCountry,
+          Device = XCDevice,
+          Activities,
+          EventCount,
+          DataTransferMB = TotalBytesMB
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Netskope - Unsanctioned/Risky Cloud App Access (Shadow IT)
+      description: Alerts when users access unsanctioned or risky cloud applications based on Cloud Confidence Level (CCL)
+        and app tags. Detects Shadow IT usage.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: RiskyApplication
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567

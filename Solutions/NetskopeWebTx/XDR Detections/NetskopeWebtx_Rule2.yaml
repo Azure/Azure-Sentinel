@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: cf103180-cb81-4796-921d-3cc7eef4e817
+    path: Analytic Rules/NetskopeWebtx_Rule2.yaml
+    version: 1.0.0
+    querySha256: 5bb82152331463179919f5842a230da84201c18bec733e882661836d6285a1ca
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - Collection
+    originalTechniques:
+    - T1567
+    - T1074
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-netskope-data-movement-tracking-upload-download-monitoring-cf103180
+  displayName: Netskope - Data Movement Tracking (Upload/Download Monitoring)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let significantSizeMB = 50;
+      NetskopeWebTransactions_CL
+      | where TimeGenerated > ago(1h)
+      | where isnotempty(CsUsername)
+      | where CsBytes > 0 or ScBytes > 0 or XRsFileSize > 0
+      | extend
+          Direction = case(
+              CsBytes > ScBytes, 'Upload',
+              ScBytes > CsBytes, 'Download',
+              'Unknown'),
+          TransferSize = max_of(CsBytes, ScBytes, XRsFileSize)
+      | summarize
+          TotalUploadBytes = sumif(CsBytes, Direction == 'Upload'),
+          TotalDownloadBytes = sumif(ScBytes, Direction == 'Download'),
+          UploadCount = countif(Direction == 'Upload'),
+          DownloadCount = countif(Direction == 'Download'),
+          UniqueFiles = dcount(XCsAppObjectName),
+          Files = make_set(XCsAppObjectName, 20),
+          FileTypes = make_set(XRsFileType),
+          Apps = make_set(XCsApp),
+          Destinations = make_set(CsHost, 20)
+          by CsUsername, XCDevice, XCCountry, bin(TimeGenerated, 1h)
+      | extend
+          TotalUploadMB = round(TotalUploadBytes / 1048576.0, 2),
+          TotalDownloadMB = round(TotalDownloadBytes / 1048576.0, 2),
+          TotalTransferMB = round((TotalUploadBytes + TotalDownloadBytes) / 1048576.0, 2)
+      | where TotalTransferMB > significantSizeMB
+      | extend DataFlowSummary = strcat('Upload: ', TotalUploadMB, ' MB (', UploadCount, ' ops), Download: ', TotalDownloadMB, ' MB (', DownloadCount, ' ops)')
+      | project
+          TimeGenerated,
+          User = CsUsername,
+          Device = XCDevice,
+          Country = XCCountry,
+          TotalUploadMB,
+          TotalDownloadMB,
+          TotalTransferMB,
+          UploadOperations = UploadCount,
+          DownloadOperations = DownloadCount,
+          UniqueFiles,
+          FilesSample = Files,
+          FileTypes,
+          Applications = Apps,
+          Destinations,
+          DataFlowSummary
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Netskope - Data Movement Tracking (Upload/Download Monitoring)
+      description: Tracks file uploads and downloads, monitoring data movement direction, size, and destination. Provides
+        visibility into data flow patterns.
+      severity: informational
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567

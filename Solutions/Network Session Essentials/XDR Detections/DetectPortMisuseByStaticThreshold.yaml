@@ -1,0 +1,221 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 156997bd-da0f-4729-b47a-0a3e02dd50c8
+    path: Analytic Rules/DetectPortMisuseByStaticThreshold.yaml
+    version: 1.2.0
+    querySha256: d22ba1323932b53077b193e49790fac6b1ecb0ab3e2ba84d29f099ee9c0e32c2
+    schedule:
+      queryFrequency: 20m
+      queryPeriod: 60m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    - Custom Detections support one tactic; configure ruleOverrides.156997bd-da0f-4729-b47a-0a3e02dd50c8.tactic and techniques
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Custom Detections support one tactic; configure ruleOverrides.156997bd-da0f-4729-b47a-0a3e02dd50c8.tactic and techniques
+    errors:
+    - no supported entity mappings were produced
+    originalTactics:
+    - CommandAndControl
+    - Execution
+    - InitialAccess
+    originalTechniques:
+    - T1095
+    - T1059
+    - T1203
+    - T1190
+properties:
+  id: xdr-detect-port-misuse-by-static-threshold-asim-network-session-schema-156997bd
+  displayName: Detect port misuse by static threshold (ASIM Network Session schema)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 20m;
+      let mapping = _GetWatchlist('NetworkSession_Monitor_Configuration')
+          | where Type == "Detection" and ThresholdType == "Static" and Severity != "Disabled"
+          | extend
+              Ports = split(Ports, ","),
+              App = split(App, ","),
+              Protocol = split(Protocol, ","),
+              Direction = split(Direction, ","),
+              Action = split(Action, ",")
+          | project
+              Ports,
+              App,
+              Protocol,
+              Direction,
+              Action,
+              Type,
+              ThresholdType,
+              Threshold,
+              Severity,
+              Tactic,
+              Name,
+              Description
+          | mv-expand Ports
+          | mv-expand App
+          | mv-expand Protocol
+          | mv-expand Direction
+          | mv-expand Action
+          | extend
+              Ports = tostring(Ports),
+              App = tostring(App),
+              Protocol = tostring(Protocol),
+              Direction = tostring(Direction),
+              Action = tostring(Action),
+              Threshold = toint(Threshold);
+      let NetworkSummary_Protocol = materialize(
+          union isfuzzy=true
+              (
+              NetworkSummary_Protocol_CL
+              | project v = int(2)
+              ),
+              (
+              print int(1)
+              | project v = print_0
+              )
+          | summarize maxv = max(v)
+          | extend
+              NetworkSummary_Protocol_Exists = (maxv > 1),
+              NetworkCustomAnalyticsExists = false
+          );
+      let NetworkCustomAnalytics = materialize(
+          union isfuzzy=true
+              (
+              NetworkCustomAnalytics_protocol_CL
+              | project v = int(2)
+              ),
+              (
+              print int(1)
+              | project v = print_0
+              )
+          | summarize maxv = max(v)
+          | extend
+              NetworkCustomAnalyticsExists = (maxv > 1),
+              NetworkSummary_Protocol_Exists = false
+          );
+      let allData = union isfuzzy=true
+              (
+              (datatable(
+          exists: int,
+          NetworkSummary_Protocol_Exists: bool,
+          NetworkCustomAnalyticsExists: bool
+      )[
+          1, false, false
+      ]
+              | join (NetworkSummary_Protocol) on NetworkSummary_Protocol_Exists
+              | join (NetworkCustomAnalytics) on NetworkCustomAnalyticsExists
+              )
+              | join (
+                  _Im_NetworkSession(starttime=bin(now(-20m), 20m), endtime=bin(now(), 20m))
+                  | where TimeGenerated > bin(now(-20m), 20m)
+                  | summarize Count=count()
+                      by
+                      NetworkProtocol,
+                      DstPortNumber,
+                      DstAppName,
+                      NetworkDirection,
+                      DvcAction,
+                      bin(TimeGenerated, 20m)
+                  | extend
+                      EventTime = TimeGenerated,
+                      Count = toint(Count),
+                      DstPortNumber = toint(DstPortNumber),
+                      exists=int(1)
+                  )
+                  on exists
+              | project-away exists*, maxv, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
+              ),
+              (
+              (datatable(exists: int, NetworkSummary_Protocol_Exists: bool)[1, false]
+              | join (NetworkSummary_Protocol) on NetworkSummary_Protocol_Exists
+              )
+              | join (
+                  NetworkCustomAnalytics_protocol_CL
+                  | where EventTime_t == toscalar(NetworkCustomAnalytics_protocol_CL
+                      | summarize max(EventTime_t))
+                  | project
+                      NetworkProtocol=NetworkProtocol_s,
+                      DstPortNumber=DstPortNumber_d,
+                      DstAppName=DstAppName_s,
+                      NetworkDirection=NetworkDirection_s,
+                      DvcAction=DvcAction_s,
+                      Count=count__d,
+                      EventTime=EventTime_t,
+                      TimeGenerated,
+                      Type
+                  | extend Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+                  )
+                  on exists
+              | project-away exists*, maxv, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
+              ),
+              (
+              NetworkSummary_Protocol_CL
+              | where EventTime == toscalar(NetworkSummary_Protocol_CL
+                  | summarize max(EventTime))
+              | project
+                  NetworkProtocol,
+                  DstPortNumber,
+                  DstAppName,
+                  NetworkDirection,
+                  DvcAction,
+                  Count=count_,
+                  EventTime,
+                  TimeGenerated,
+                  Type
+              | extend Count = toint(Count), DstPortNumber = toint(DstPortNumber)
+              )
+          | project-away exists*, maxv*, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
+      ;
+      allData
+      | where isnotempty(DstPortNumber)
+      | summarize Sum=sum(Count) by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction
+      | join kind=inner ['mapping'] where Ports has tostring(DstPortNumber)
+      | where Sum > Threshold
+          and (Protocol == "*" or Protocol has NetworkProtocol)
+          and (Direction == "*" or Direction has NetworkDirection)
+          and (Action == "*" or Action has DvcAction)
+      | project
+          Name,
+          Description,
+          NetworkProtocol,
+          DstPortNumber,
+          NetworkDirection,
+          DvcAction,
+          Severity,
+          Tactic
+      | summarize
+          NetworkProtocols=make_set_if(NetworkProtocol, isnotempty(NetworkProtocol), 20),
+          NetworkDirections=make_set_if(NetworkDirection, isnotempty(NetworkDirection), 5),
+          DvcActions=make_set_if(DvcAction, isnotempty(DvcAction), 10)
+          by Name, Severity, Tactic, DstPortNumber, Description
+  schedule:
+    frequency: PT20M
+  detectionAction:
+    alertTemplate:
+      title: Detect port misuse by static threshold (ASIM Network Session schema)
+      description: '''This detection rule detects port usage above the configured threshold. The rule utilize [ASIM](https://aka.ms/AboutASIM)
+        normalization, and is applied to any source which supports the ASIM Network Session schema. To tune the rule to your
+        environment configure it using the ''NetworkSession_Monitor_Configuration'' watchlist. This rule leverages log summaries
+        generated by a Summary Rule or Summarized Playbook. If no such summaries are available, the rule falls back to direct
+        analysis using ASIM function.'''
+      severity: medium
+      entityMappings: {}
+      tactics:
+      - tactic: CommandAndControl

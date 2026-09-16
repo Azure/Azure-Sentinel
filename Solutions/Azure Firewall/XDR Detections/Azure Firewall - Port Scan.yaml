@@ -1,0 +1,87 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b2c5907b-1040-4692-9802-9946031017e8
+    path: Analytic Rules/Azure Firewall - Port Scan.yaml
+    version: 1.1.3
+    querySha256: af9a2a0eb2d1ef39e27b81f8b63c65f290c3c10061bae2221d4fcbf2092c774d
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Discovery
+    - Reconnaissance
+    originalTechniques:
+    - T1046
+    - T1595.001
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-port-scan-b2c5907b
+  displayName: Port Scan
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let MinimumDifferentPortsThreshold = 100;
+      let BinTime = 30s;
+      // Exclude known benign scanner IPs in your environment to reduce noise
+      let KnownScannerIPs = dynamic([]);
+      union isfuzzy=true(
+      AZFWApplicationRule
+      | where SourceIp !in (KnownScannerIPs)
+      | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+      | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
+      (AZFWNetworkRule
+      | where SourceIp !in (KnownScannerIPs)
+      | extend Fqdn = DestinationIp
+      | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+      | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
+      (AzureDiagnostics
+      | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+      | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int *
+      | where isnotempty(Fqdn) and isnotempty(SourceIp)
+      | where SourceIp !in (KnownScannerIPs)
+      | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+      | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold)
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Port Scan
+      description: |-
+        'Identifies a source IP scanning multiple open ports on Azure Firewall. This can indicate malicious scanning of ports by an attacker, trying to reveal open ports in the organization that can be compromised for initial access.
+
+        Configurable Parameters:
+
+        - Port scan time - the time range to look for multiple ports scanned. Default is set to 30 seconds.
+        - Minimum different ports threshold - alert only if more than this number of ports scanned. Default is set to 100.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: Fqdn
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

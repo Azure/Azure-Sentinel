@@ -1,0 +1,167 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 01191239-274e-43c9-b154-3a042692af06
+    path: Analytic Rules/PotentialDGADetectedviaRepetitiveFailuresAnomalyBased.yaml
+    version: 1.0.2
+    querySha256: da06fabdd41940e4511eafabf1df6acd5eef9cac517df396957a1db4ae8f7e5f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1008
+properties:
+  id: xdr-potential-dga-domain-generation-algorithm-detected-via-repetitive-failur-01191239
+  displayName: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 2.5;
+      let min_t = ago(14d);
+      let max_t = now();
+      let timeframe = 1d;
+      // calculate avg. eps(events per second)
+      let eps = materialize (_Im_Dns
+        | project TimeGenerated
+        | where TimeGenerated > ago(5m)
+        | count
+        | extend Count = Count / 300);
+      let maxSummarizedTime = toscalar (
+        union isfuzzy=true
+            (
+            DNS_Summarized_Logs_ip_CL
+            | where EventTime_t >= min_t
+            | summarize max_TimeGenerated=max(EventTime_t)
+            | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)
+            ),
+            (
+            print(min_t)
+            | project max_TimeGenerated = print_0
+            )
+        | summarize maxTimeGenerated = max(max_TimeGenerated)
+        );
+      let summarizationexist = materialize(
+        union isfuzzy=true
+            (
+            DNS_Summarized_Logs_ip_CL
+            | where EventTime_t > ago(1d)
+            | project v = int(2)
+            ),
+            (
+            print int(1)
+            | project v = print_0
+            )
+        | summarize maxv = max(v)
+        | extend sumexist = (maxv > 1)
+        );
+      let allData = union isfuzzy=true
+            (
+            (datatable(exists: int, sumexist: bool)[1, false]
+            | where toscalar(eps) > 1000
+            | join (summarizationexist) on sumexist)
+            | join (
+                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())
+                | where TimeGenerated > maxSummarizedTime
+                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
+                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+                )
+                on exists
+            | project-away exists, maxv, sum*
+            ),
+            (
+            (datatable(exists: int, sumexist: bool)[1, false]
+            | where toscalar(eps) between (501 .. 1000)
+            | join (summarizationexist) on sumexist)
+            | join (
+                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())
+                | where TimeGenerated > maxSummarizedTime
+                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
+                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+                )
+                on exists
+            | project-away exists, maxv, sum*
+            ),
+            (
+            (datatable(exists: int, sumexist: bool)[1, false]
+            | where toscalar(eps) <= 500
+            | join (summarizationexist) on sumexist)
+            | join (
+                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())
+                | where TimeGenerated > maxSummarizedTime
+                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
+                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+                )
+                on exists
+            | project-away exists, maxv, sum*
+            ),
+            (
+            DNS_Summarized_Logs_ip_CL
+            | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
+            | project-rename
+                SrcIpAddr=SrcIpAddr_s,
+                DnsQuery=DnsQuery_s,
+                Count=count__d,
+                EventTime=EventTime_t
+            | extend Count = toint(Count)
+            );
+      allData
+      | make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr
+      // include calculated Anomalies, Score and Baseline
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')
+      | mv-expand anomalies, score, baseline, EventTime, QueryCount
+      | extend
+        anomalies = toint(anomalies),
+        score = toint(score),
+        baseline = toint(baseline),
+        EventTime = todatetime(EventTime),
+        Total = tolong(QueryCount)
+      | where EventTime >= ago(timeframe)
+      | where score >= threshold * 2
+      // Join allData to include DnsQuery details
+      | join kind=inner(allData
+        | where TimeGenerated >= ago(timeframe)
+        | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)
+        on SrcIpAddr
+      | project-away SrcIpAddr1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
+      description: '''This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response
+        count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert
+        is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating
+        a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that
+        supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1008

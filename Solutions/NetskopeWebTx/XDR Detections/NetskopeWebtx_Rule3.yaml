@@ -1,0 +1,98 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dd0ebd84-ffbe-45df-848b-0615ac446b04
+    path: Analytic Rules/NetskopeWebtx_Rule3.yaml
+    version: 1.0.0
+    querySha256: 1cddb2e3f1c3e6140371d93c77eeb0ea1e9b73a29a558dbfb14552c575895fd5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - Collection
+    originalTechniques:
+    - T1530
+    - T1074
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `User` was provisionally mapped to Account.upnColumn. Confirm that the source always
+      emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-netskope-excessive-downloads-detection-spike-vs-baseline-dd0ebd84
+  displayName: Netskope - Excessive Downloads Detection (Spike vs Baseline)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookbackPeriod = 7d;
+      let currentPeriod = 1h;
+      let threshold = 3;
+      let baseline = NetskopeWebTransactions_CL
+          | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))
+          | where isnotempty(CsUsername)
+          | where XCsAppActivity =~ 'Download' or ScBytes > 0
+          | summarize
+              BaselineAvgBytes = avg(ScBytes),
+              BaselineTotalBytes = sum(ScBytes),
+              BaselineCount = count()
+              by CsUsername
+          | extend BaselineDailyAvg = BaselineTotalBytes / 7;
+      let current = NetskopeWebTransactions_CL
+          | where TimeGenerated > ago(currentPeriod)
+          | where isnotempty(CsUsername)
+          | where XCsAppActivity =~ 'Download' or ScBytes > 0
+          | summarize
+              CurrentTotalBytes = sum(ScBytes),
+              CurrentCount = count(),
+              Apps = make_set(XCsApp),
+              Files = make_set(XCsAppObjectName)
+              by CsUsername;
+      current
+      | join kind=inner baseline on CsUsername
+      | where CurrentTotalBytes > (BaselineDailyAvg * threshold)
+      | extend
+          SpikeMultiplier = round(CurrentTotalBytes / BaselineDailyAvg, 2),
+          CurrentTotalMB = round(CurrentTotalBytes / 1048576.0, 2),
+          BaselineDailyMB = round(BaselineDailyAvg / 1048576.0, 2)
+      | project
+          TimeGenerated = now(),
+          User = CsUsername,
+          CurrentDownloadMB = CurrentTotalMB,
+          BaselineDailyAvgMB = BaselineDailyMB,
+          SpikeMultiplier,
+          DownloadCount = CurrentCount,
+          ApplicationsUsed = Apps,
+          FilesDownloaded = Files
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Netskope - Excessive Downloads Detection (Spike vs Baseline)
+      description: Detects users with excessive download activity compared to their 7-day baseline. Triggers when current
+        download volume exceeds 3x the average.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1530

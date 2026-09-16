@@ -1,0 +1,82 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 16daa67c-b137-48dc-8eb7-76598a44791a
+    path: Analytic Rules/PossibleAiTMPhishingAttemptAgainstAAD.yaml
+    version: 1.0.4
+    querySha256: 7bf005da0c6bbff0e97f22873b5a0724b39e52235136f1194ad7ef1054c8b6df
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - DefenseEvasion
+    - CredentialAccess
+    originalTechniques:
+    - T1078.004
+    - T1557
+    - T1111
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-possible-aitm-phishing-attempt-against-microsoft-entra-id-16daa67c
+  displayName: Possible AiTM Phishing Attempt Against Microsoft Entra ID
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let time_threshold = 10m;
+      let RiskySignins = materialize (SigninLogs
+      | where TimeGenerated > ago(1d)
+      | where ResultType == 0
+      | where RiskLevelDuringSignIn =~ "high" or RiskLevelAggregated =~ "high"
+      | extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, "@")[0], UPNSuffix=split(UserPrincipalName, "@")[1]);
+      let ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));
+      RiskySignins
+      | join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult="Success", pack=True))
+      on $left.IPAddress == $right.DstIpAddr
+      | where EventStartTime < TimeGenerated
+      | extend TimeDelta = TimeGenerated - EventStartTime
+      | where TimeDelta <= time_threshold
+      | extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime
+      | extend SrcUsername = column_ifexists("SrcUsername", "Unknown")
+      | project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Possible AiTM Phishing Attempt Against Microsoft Entra ID
+      description: |-
+        'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.
+        This detection looks for successful Microsoft Entra ID sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.
+        It then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a use
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1557
+        - technique: T1111

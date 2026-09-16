@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7a0f78b3-9a55-4ad0-a56d-b6616fdbff6a
+    path: Analytic Rules/Azure Firewall - Elevation of Privilege attempt detected.yaml
+    version: 1.0.1
+    querySha256: 84a5c88ca5aa5b4f2a6020d54274aecfc369c3c69988773cb4428dbb17093d6a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CredentialAccess
+    originalTechniques:
+    - T1078
+    - T1110
+properties:
+  id: xdr-elevation-of-privilege-attempt-detected-7a0f78b3
+  displayName: Elevation of Privilege attempt detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TimeWindow   = 90d;    // How far back to look
+      let HitThreshold = 10;     // Minimum hits to alert per SourceIp + Category
+      let MinSeverity  = 1;      // Set Minimum Severity
+      // Feature flags for optional filters
+      let EnableCategoryFilter    = true;   // Filter 1
+      let EnableDescriptionFilter = false;  // Filter 2
+      let EnableActionFilter      = false;  // Filter 3
+      // Filter 1: Categories of interest
+      let CategoriesOfInterest = dynamic([
+          "Attempted User Privilege Gain",
+          "Unsuccessful User Privilege Gain",
+          "Successful User Privilege Gain",
+          "Attempted Administrator Privilege Gain",
+          "Successful Administrator Privilege Gain"
+      ]);
+      // Filter 2: Descriptions of interest
+      let DescriptionsOfInterest = dynamic([
+          "attempted-user",
+          "unsuccessful-user",
+          "successful-user",
+          "attempted-admin",
+          "successful-admin"
+      ]);
+      // Filter 3: Action match
+      let MatchActions = dynamic(["Deny", "alert"]);
+      AZFWIdpsSignature
+      | where TimeGenerated >= ago(TimeWindow)
+      | where Severity >= MinSeverity
+      // Filter 1: Category filter (optional)
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+      // Filter 2: Description filter (optional)
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+      // Filter 3: Action filter (optional)
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+      | summarize
+          StartTime   = min(TimeGenerated),
+          EndTime     = max(TimeGenerated),
+          TotalHits   = count(),
+          MaxSeverity = max(Severity),
+          Actions     = make_set(Action, 5),
+          Signatures  = make_set(SignatureId, 20),
+          Description = make_set(substring(tostring(Description), 0, 120), 3)
+          by SourceIp, ThreatCategory = Category
+      | where TotalHits >= HitThreshold
+      | project
+          StartTime,
+          EndTime,
+          SourceIp,
+          ThreatCategory,
+          TotalHits,
+          MaxSeverity,
+          Actions,
+          Signatures,
+          Description
+      | order by MaxSeverity desc, TotalHits desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Elevation of Privilege attempt detected
+      description: Identifies Elevation of Privilege attempt Azure Firewall IDPS logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

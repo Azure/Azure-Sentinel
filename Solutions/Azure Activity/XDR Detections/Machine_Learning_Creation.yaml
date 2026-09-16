@@ -1,0 +1,78 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 68c89998-8052-4c80-a1f6-9d81060b6d57
+    path: Analytic Rules/Machine_Learning_Creation.yaml
+    version: 1.0.0
+    querySha256: 0fc9454249496fc96881b16826f19a58a9da8c2f449168e8f296c40ac8096913
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Account.Name column `Caller` was mapped as a complete UPN identity
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    - Impact
+    originalTechniques:
+    - T1078
+    - T1059
+    - T1496
+properties:
+  id: xdr-azure-machine-learning-write-operations-68c89998
+  displayName: Azure Machine Learning Write Operations
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AzureActivity
+      | where ResourceProviderValue == "MICROSOFT.MACHINELEARNINGSERVICES"  // Filter activities related to Microsoft Machine Learning Services
+      | extend SCOPE = tostring(parse_json(Authorization).scope)  // Parse Authorization scope as string
+      | extend subname = split(Hierarchy, "/")  // Split Hierarchy to extract Subscription Name and ID
+      | extend ['Subscription Name'] = subname[-2], ['Subscription ID'] = subname[-1]  // Extract Subscription Name and ID
+      | extend Properties = parse_json(Properties)  // Parse Properties as JSON
+      | extend Properties_entity = tostring(Properties.entity)  // Cast Properties.entity to string
+      | where isnotempty(Properties_entity)  // Filter activities where Properties.entity is not empty
+      // | where Properties_entity contains "deepseek"  // Filter activities where Properties.entity contains "deepseek"
+      | where OperationNameValue contains "write"  // Filter activities where OperationNameValue contains "write"
+      | where OperationNameValue !contains "MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/WRITE"  // Exclude role assignments
+      | extend LLM = tostring(split(Properties_entity, "/")[-1])  // Extract the last segment of Properties_entity and cast it to string
+      | distinct TimeGenerated, tostring(['Subscription Name']), ResourceGroup, tostring(['Subscription ID']), Caller, CallerIpAddress, OperationNameValue, LLM, _ResourceId  // Select distinct relevant fields for output
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Azure Machine Learning Write Operations
+      description: '''Shows the most prevalent users who perform write operations on Azure Machine Learning resources. List
+        the common source IP address for each of those accounts. If an operation is not from those IP addresses, it may be
+        worthy of investigation.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: Caller
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: _ResourceId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
