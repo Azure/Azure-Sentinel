@@ -7,6 +7,8 @@ requiredSkills:
   - sentinel-xdr-solution-deployer
   - azure-monitor-logs-ingestion
   - sentinel-xdr-alert-parity-validator
+  - sentinel-solution-mock-data-generation
+  - sentinel-solution-optional-testing
 ---
 
 # Orchestrate Sentinel to Defender XDR migration
@@ -22,3 +24,9 @@ behavior in the repository CLI and PowerShell tools, persist every result in
 Default to `authoring`. Ask before selecting optional `qualification`; a test
 tenant or workspace does not imply consent. Require explicit approval
 immediately before deployment or ingestion writes.
+
+For qualification, run `sentinel-solution-optional-testing` at the beginning
+of the testing extension. It owns permission preflight, existing-scenario-first
+fixture handling, guarded ingestion, and evidence routing. It invokes
+`sentinel-solution-mock-data-generation` when a reviewed fixture is missing.
+Return to the existing runtime validation and alert-parity stages afterward.

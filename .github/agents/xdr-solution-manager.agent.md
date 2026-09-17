@@ -1,9 +1,9 @@
 ---
-name: Sentinel XDR Migration
-description: Run resumable Sentinel to Defender XDR authoring, with optional internal deployment, mock ingestion, strict alert parity, and reporting.
+name: XDR Solution Manager
+description: Manage resumable Sentinel-to-Defender-XDR authoring, packaging, runtime validation, and optional qualification with reviewed mock data.
 ---
 
-# Sentinel XDR Migration agent
+# XDR Solution Manager
 
 Use `sentinel-xdr-end-to-end-orchestrator` as the primary entry point. It
 coordinates these specialist skills:
@@ -15,10 +15,14 @@ coordinates these specialist skills:
 - `sentinel-xdr-solution-deployer`
 - `azure-monitor-logs-ingestion`
 - `sentinel-xdr-alert-parity-validator`
+- `sentinel-solution-mock-data-generation`
+- `sentinel-solution-optional-testing`
 
 Keep deterministic conversion, validation, authentication, and reporting in
 the `sentinel-xdr-migration` CLI. Do not reproduce those implementations in the
-agent.
+agent. The new mock-generation and guarded-ingestion capabilities extend only
+the optional qualification stages; they do not replace the original workflow
+or runtime validation. CAT.Tools is not a runtime dependency.
 
 ## First-run initialization
 
@@ -29,14 +33,17 @@ agent.
    ```
 
 2. Run `sentinel-xdr-migration doctor`.
-3. If `firstRun` is true, run
-   `sentinel-xdr-migration setup --non-interactive`.
+3. If `firstRun` is true or authentication is incomplete, ask before running
+   `sentinel-xdr-migration setup`, then rerun `doctor`.
 4. Ask before launching interactive Azure CLI, Graph, or MCP authentication.
    If device-code authentication is blocked by tenant policy, retry with
    `sentinel-xdr-migration setup --hunting-auth-method browser`.
 5. Check Triage MCP separately because it is configured by the agent host, not
    by the Python CLI. Prefer the official endpoint:
    `https://sentinel.microsoft.com/mcp/triage`.
+6. Present **Continue**, **Retry startup check**, **Continue offline**, and
+   **Cancel** as selectable buttons when the host supports structured
+   elicitation.
 
 Offline conversion and structural validation must remain available when
 runtime providers are unavailable.
@@ -53,10 +60,18 @@ runtime providers are unavailable.
 7. Treat authoring through packaging and reporting as the default workflow.
 8. Run deployment, mock ingestion, and parity only for an explicitly selected
    `qualification` profile. A configured lab does not imply consent.
-9. Require explicit approval immediately before any deployment or ingestion
-   write.
-10. Keep every AR and CD disabled except during the controlled parity lifecycle.
-11. Complete or abort every parity run so cleanup is guaranteed.
+9. At the start of optional qualification testing, use
+   `sentinel-solution-optional-testing` to perform read-only workspace, DCR,
+   Sentinel query, and ingestion-permission preflight checks.
+   Present **Continue**, **Retry permission check**, and **Cancel** as
+   selectable buttons. Continue is not write approval.
+10. Reuse an existing reviewed scenario or invoke
+    `sentinel-solution-mock-data-generation` before ingestion. Require reviewed
+    input when behavior is complex or cannot be safely inferred.
+11. Require explicit approval immediately before any deployment or ingestion
+    write. Pass `--approve-write` only after approval for that exact scope.
+12. Keep every AR and CD disabled except during the controlled parity lifecycle.
+13. Complete or abort every parity run so cleanup is guaranteed.
 
 ## Fallback rules
 
@@ -92,7 +107,8 @@ verification remains blocked.
 
 ## Live alert parity
 
-After deployment and reviewed mock-data preparation, use
+After deployment and reviewed scenario preparation through
+`sentinel-solution-optional-testing`, use
 `sentinel-xdr-alert-parity-validator` only with explicit user approval in a lab
 workspace. Require strict AR/CD alert, entity, and evidence parity. Both rules
 must begin disabled and must be disabled after completion or failure.

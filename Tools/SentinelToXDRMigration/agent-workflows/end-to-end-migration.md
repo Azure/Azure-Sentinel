@@ -138,10 +138,24 @@ Administrator.
 
 ### Mock ingestion — qualification only
 
-Prepare one reviewed malicious and benign fixture per AR/CD pair. Every
-fixture needs a unique scenario marker and expected malicious match-key set.
-Pass only after ingestion is accepted and the exact target query can observe
-the records.
+Use `sentinel-solution-optional-testing` for this stage:
+
+1. Run read-only workspace, DCR, Sentinel query, and effective ingestion
+   permission preflight before fixture preparation.
+2. Present Continue, Retry permission check, or Cancel. Continue is not write
+   approval.
+3. Check the default rule-specific fixture path first.
+4. Reuse a complete reviewed scenario or invoke
+   `sentinel-solution-mock-data-generation`.
+5. Require reviewed input for joins, thresholds, aggregation, sequences,
+   historical baselines, watchlists, anomalies, and absence-of-data behavior.
+6. Require separate exact-scope approval immediately before ingestion.
+7. Track ingestion acceptance and query visibility independently.
+
+Every fixture needs a unique scenario marker and expected malicious match-key
+set. Pass only after ingestion is accepted and the exact target query can
+observe the records. The existing runtime-validation and alert-parity stages
+remain unchanged.
 
 ### Alert parity — qualification only
 

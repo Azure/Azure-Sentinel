@@ -35,24 +35,37 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("existing-scenario", text)
         self.assertIn("generate_mock_scenario.py", text)
 
-    def test_migration_agent_connects_generation_before_optional_testing(self):
+    def test_solution_manager_is_single_connected_agent(self):
         text = (
             ROOT
             / ".github"
             / "agents"
-            / "sentinel-solution-migration.agent.md"
+            / "xdr-solution-manager.agent.md"
         ).read_text(encoding="utf-8")
 
         generation = text.index("sentinel-solution-mock-data-generation")
         optional_testing = text.index("sentinel-solution-optional-testing")
         self.assertLess(generation, optional_testing)
-        self.assertLess(text.index("sentinel-xdr-migration doctor"), generation)
+        workflow = text.index("## Migration workflow")
+        self.assertLess(text.index("sentinel-xdr-migration doctor"), workflow)
+        self.assertLess(
+            text.index("At the start of optional qualification testing", workflow),
+            text.index("Reuse an existing reviewed scenario", workflow),
+        )
         self.assertIn("sentinel-xdr-migration setup", text)
-        self.assertIn("existing toolkit's runtime-validation stages", text)
+        self.assertIn("XDR Solution Manager", text)
+        self.assertIn("do not replace the original workflow", text)
         self.assertIn("CAT.Tools is not a runtime dependency.", text)
         self.assertIn("Pass `--approve-write` only after approval", text)
         self.assertIn("Retry permission check", text)
         self.assertIn("selectable buttons", text)
+
+        agents = list((ROOT / ".github" / "agents").glob("*.agent.md"))
+        names = [
+            path.read_text(encoding="utf-8").split("name:", 1)[1].splitlines()[0].strip()
+            for path in agents
+        ]
+        self.assertEqual(["XDR Solution Manager"], names)
 
     def test_optional_testing_requires_startup_before_target_preflight(self):
         text = (
