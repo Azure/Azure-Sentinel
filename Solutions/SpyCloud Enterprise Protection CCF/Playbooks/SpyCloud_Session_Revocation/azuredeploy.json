@@ -1,0 +1,600 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SpyCloud Session Revocation Playbook",
+        "description": "Revoke all active sign-in sessions for users named in an identity access record exposure.",
+        "prerequisites": "Create an App in App registration and provide permissions and create a client secret",
+        "lastUpdateTime": "2026-08-29T00:00:00.000Z",
+        "entities": [
+            "account"
+        ],
+        "tags": [],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "SpyCloud"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SpyCloud_Session_Revocation",
+            "type": "string"
+        },
+        "Revoke_User_Sessions": {
+            "type": "string",
+            "defaultValue": "false",
+            "allowedValues": [
+                "true",
+                "false"
+            ],
+            "metadata": {
+                "description": "Revoke all active sign-in sessions for users named in an identity access record exposure."
+            }
+        },
+        "ClientID": {
+            "type": "string",
+            "metadata": {
+                "description": "Application (client) ID of the app registration."
+            }
+        },
+        "TenantID": {
+            "type": "string",
+            "metadata": {
+                "description": "Microsoft Entra tenant ID of the app registration."
+            }
+        },
+        "ClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Client secret of the app registration."
+            }
+        },
+        "DCE_Endpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "Data Collection Endpoint logs-ingestion URL for the playbook log table."
+            }
+        },
+        "DCE_Immutable_ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Immutable ID of the data collection rule for the playbook log table."
+            }
+        },
+        "Custom_Table_Name": {
+            "type": "string",
+            "defaultValue": "SpyCloud_ConditionalAccessLogsV2_CL",
+            "metadata": {
+                "description": "Custom Log Analytics table for playbook execution logs. Shared with the Conditional Access playbook; rows are distinguished by PlaybookName."
+            }
+        },
+        "AccessRecordIncidentTitle": {
+            "type": "string",
+            "defaultValue": "SpyCloud identity access record exposure",
+            "metadata": {
+                "description": "Title of incidents raised by AR_Access_Records_30. Microsoft Sentinel sets the incident title from the analytic rule's display name; change only if you renamed the rule."
+            }
+        },
+        "Automation_Rule_Order": {
+            "type": "int",
+            "defaultValue": 3,
+            "metadata": {
+                "description": "Execution order of the automation rule (lower = higher priority)."
+            }
+        },
+        "Sentinel_Workspace_Resource_Id": {
+            "type": "string",
+            "metadata": {
+                "description": "Full resource ID of the Microsoft Sentinel workspace, e.g. /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<name>"
+            }
+        }
+    },
+    "variables": {
+        "loginUrl": "[environment().authentication.loginEndpoint]",
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "sessionRevocationAutomationRuleName": "[guid('SpyCloud-SessionRevocation-Rule', parameters('Sentinel_Workspace_Resource_Id'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object"
+                        },
+                        "PlaybookName": {
+                            "type": "String",
+                            "defaultValue": "SpyCloud_Session_Revocation"
+                        },
+                        "Revoke_User_Sessions": {
+                            "type": "Bool",
+                            "defaultValue": false
+                        },
+                        "ClientID": {
+                            "type": "String"
+                        },
+                        "TenantID": {
+                            "type": "String"
+                        },
+                        "ClientSecret": {
+                            "type": "String"
+                        },
+                        "DCE_Endpoint": {
+                            "type": "String"
+                        },
+                        "DCE_Immutable_ID": {
+                            "type": "String"
+                        },
+                        "Custom_Table_Name": {
+                            "type": "String",
+                            "defaultValue": "SpyCloud_ConditionalAccessLogsV2_CL"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "variables_Section": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "loginUrl",
+                                        "type": "string",
+                                        "value": "[variables('loginUrl')]"
+                                    },
+                                    {
+                                        "name": "Authority",
+                                        "type": "string",
+                                        "value": "[variables('loginUrl')]"
+                                    },
+                                    {
+                                        "name": "Audience",
+                                        "type": "string",
+                                        "value": "https://graph.microsoft.com"
+                                    },
+                                    {
+                                        "name": "incident_custom_details_object",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "DocumentID",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "SpyCloudPublishDate",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "InfectedTime",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "InfectedMachineId",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "log_ingestion_api",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "SessionsRevoked",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "SessionsRevokedText",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each_incident_alert": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {
+                                "variables_Section": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            },
+                            "actions": {
+                                "Set_custom_details_object": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "incident_custom_details_object",
+                                        "value": "@json(items('For_each_incident_alert')?['properties']?['additionalData']?['Custom Details'])"
+                                    }
+                                },
+                                "Set_Spycloud_publish_date": {
+                                    "runAfter": {
+                                        "Set_custom_details_object": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SpyCloudPublishDate",
+                                        "value": "@first(coalesce(variables('incident_custom_details_object')?['SpyCloudPublishDate'], createArray('')))"
+                                    }
+                                },
+                                "Set_Infected_Time": {
+                                    "runAfter": {
+                                        "Set_Spycloud_publish_date": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "InfectedTime",
+                                        "value": "@first(coalesce(variables('incident_custom_details_object')?['InfectedTime'], createArray('')))"
+                                    }
+                                },
+                                "Set_Infected_Machine_ID": {
+                                    "runAfter": {
+                                        "Set_Infected_Time": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "InfectedMachineId",
+                                        "value": "@first(coalesce(variables('incident_custom_details_object')?['InfectedMachineId'], createArray('')))"
+                                    }
+                                },
+                                "Set_Document_ID": {
+                                    "runAfter": {
+                                        "Set_Infected_Machine_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "DocumentID",
+                                        "value": "@first(coalesce(variables('incident_custom_details_object')?['DocumentID'], createArray('')))"
+                                    }
+                                },
+                                "Set_log_ingestion_api_url": {
+                                    "runAfter": {
+                                        "Set_Document_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "log_ingestion_api",
+                                        "value": "@concat(concat(concat(parameters('DCE_Endpoint'),'/dataCollectionRules/'),parameters('DCE_Immutable_ID')),concat('/streams/Custom-',concat(parameters('Custom_Table_Name'), '?api-version=2023-01-01')))"
+                                    }
+                                }
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "For_each_incident_alert": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            },
+                            "actions": {
+                                "Reset_sessions_revoked": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SessionsRevoked",
+                                        "value": false
+                                    }
+                                },
+                                "Reset_sessions_revoked_text": {
+                                    "runAfter": {
+                                        "Reset_sessions_revoked": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SessionsRevokedText",
+                                        "value": "Session revocation was not performed."
+                                    }
+                                },
+                                "Condition_Revoke_User_Sessions": {
+                                    "runAfter": {
+                                        "Reset_sessions_revoked_text": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('Revoke_User_Sessions')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "HTTP_-_Revoke_User_Sessions": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'],'@',items('For_each')?['UPNSuffix'])}/revokeSignInSessions",
+                                                "method": "POST",
+                                                "authentication": {
+                                                    "type": "ActiveDirectoryOAuth",
+                                                    "authority": "@{variables('Authority')}",
+                                                    "tenant": "@{parameters('TenantID')}",
+                                                    "audience": "@{variables('Audience')}",
+                                                    "clientId": "@{parameters('ClientID')}",
+                                                    "secret": "@{parameters('ClientSecret')}"
+                                                }
+                                            },
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        },
+                                        "Set_sessions_revoked": {
+                                            "runAfter": {
+                                                "HTTP_-_Revoke_User_Sessions": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "SessionsRevoked",
+                                                "value": true
+                                            }
+                                        },
+                                        "Set_sessions_revoked_text": {
+                                            "runAfter": {
+                                                "Set_sessions_revoked": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "SessionsRevokedText",
+                                                "value": "Active sign-in sessions were revoked."
+                                            }
+                                        }
+                                    }
+                                },
+                                "Add_comment_to_incident": {
+                                    "runAfter": {
+                                        "Condition_Revoke_User_Sessions": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p class=\"editor-paragraph\">Identity access material was exposed for @{concat(items('For_each')?['Name'],'@',items('For_each')?['UPNSuffix'])}. Session cookies and tokens can grant account access without a password, so revoking active sessions is the primary containment action.</p><p class=\"editor-paragraph\">@{variables('SessionsRevokedText')}</p>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "GetAccessToken": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@concat(variables('loginUrl'), parameters('TenantID'), '/oauth2/v2.0/token')",
+                                        "method": "POST",
+                                        "headers": {
+                                            "Content-Type": "application/x-www-form-urlencoded"
+                                        },
+                                        "body": "grant_type=client_credentials&client_id=@{parameters('ClientID')}&client_secret=@{parameters('ClientSecret')}&scope=https://monitor.azure.com/.default"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Log_ingestion": {
+                                    "runAfter": {
+                                        "GetAccessToken": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@variables('log_ingestion_api')",
+                                        "method": "POST",
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('GetAccessToken')?['access_token']}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "body": [
+                                            {
+                                                "TimeGenerated": "@{utcNow()}",
+                                                "IncidentId": "@{triggerBody()?['object']?['properties']?['providerIncidentId']}",
+                                                "DocumentId": "@{variables('DocumentID')}",
+                                                "SpyCloudPublishDate": "@{variables('SpyCloudPublishDate')}",
+                                                "InfectedTime": "@{variables('InfectedTime')}",
+                                                "BreachTitle": "",
+                                                "InfectedMachineId": "@{variables('InfectedMachineId')}",
+                                                "Username": "@{items('For_each')?['Name']}",
+                                                "UserEmail": "@{concat(items('For_each')?['Name'],'@',items('For_each')?['UPNSuffix'])}",
+                                                "ForcedPasswordResetOnNextSignIn": false,
+                                                "UserSessionsRevoked": "@variables('SessionsRevoked')",
+                                                "CAgroup": false,
+                                                "UserDisabled": false,
+                                                "PlaybookName": "[parameters('PlaybookName')]"
+                                            }
+                                        ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "Revoke_User_Sessions": {
+                        "value": "[bool(parameters('Revoke_User_Sessions'))]"
+                    },
+                    "ClientID": {
+                        "value": "[parameters('ClientID')]"
+                    },
+                    "TenantID": {
+                        "value": "[parameters('TenantID')]"
+                    },
+                    "ClientSecret": {
+                        "value": "[parameters('ClientSecret')]"
+                    },
+                    "DCE_Endpoint": {
+                        "value": "[parameters('DCE_Endpoint')]"
+                    },
+                    "DCE_Immutable_ID": {
+                        "value": "[parameters('DCE_Immutable_ID')]"
+                    },
+                    "Custom_Table_Name": {
+                        "value": "[parameters('Custom_Table_Name')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "name": "[variables('sessionRevocationAutomationRuleName')]",
+            "scope": "[parameters('Sentinel_Workspace_Resource_Id')]",
+            "apiVersion": "2023-02-01-preview",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "displayName": "SpyCloud - Revoke sessions on identity access record exposure",
+                "order": "[parameters('Automation_Rule_Order')]",
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentTitle",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "[parameters('AccessRecordIncidentTitle')]"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                            "tenantId": "[subscription().tenantId]"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

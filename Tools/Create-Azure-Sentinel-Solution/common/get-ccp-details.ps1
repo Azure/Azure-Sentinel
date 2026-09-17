@@ -426,7 +426,7 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
                     $isTablePresent = $false;
                     foreach ($ccpRecord in $existingCCPDict) {
                         $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
-                        if ($currentFolderPath -eq $ccpDefinitionFile.CCPBaseFolder) {
+                        if ($currentFolderPath -eq $ccpRecord.CCPBaseFolder) {
                             if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -eq $currentTableFilePath) {
                                 $isTablePresent = $true;
                                 break;
