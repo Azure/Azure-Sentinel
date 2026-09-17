@@ -1,0 +1,121 @@
+{
+  "id": "MenloSecurityConnector",
+  "title": "Menlo Security",
+  "publisher": "Menlo Security",
+  "descriptionMarkdown": "The [Menlo Security](https://www.menlosecurity.com) connector uses the Menlo Security Logs API to ingest Audit, Bandwidth, and Web proxy logs into Microsoft Sentinel. It runs as three timer-triggered Azure Functions, each polling the API every 3 minutes and writing events to custom Log Analytics tables (`MenloAudit_CL`, `MenloBandwidth_CL`, `MenloWeb_CL`).",
+  "logo": "MenloSecurity.svg",
+  "lastDataReceivedInfoBalloon": "If no new data has been received in the last 3 hours, the connector will display 'not connected'. This can be due to API token expiry, rate limiting, or all log-type functions being disabled.",
+  "graphQueriesTableName": "MenloAudit_CL",
+  "graphQueries": [
+    {
+      "metricName": "Total Audit events received",
+      "legend": "MenloAudit_CL",
+      "baseQuery": "MenloAudit_CL"
+    },
+    {
+      "metricName": "Total Bandwidth events received",
+      "legend": "MenloBandwidth_CL",
+      "baseQuery": "MenloBandwidth_CL"
+    },
+    {
+      "metricName": "Total Web events received",
+      "legend": "MenloWeb_CL",
+      "baseQuery": "MenloWeb_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "Top 10 users by web events in the last 24 hours",
+      "query": "MenloWeb_CL\n| where TimeGenerated > ago(24h)\n| summarize Events = count() by userid\n| top 10 by Events desc"
+    },
+    {
+      "description": "All audit events in the last 7 days",
+      "query": "MenloAudit_CL\n| where TimeGenerated > ago(7d)\n| project TimeGenerated, uid, audit_actions, sub_event_type, name"
+    },
+    {
+      "description": "Top bandwidth consumers in the last 24 hours",
+      "query": "MenloBandwidth_CL\n| where TimeGenerated > ago(24h)\n| summarize TotalBytes = sum(sum_bytes) by userid\n| top 10 by TotalBytes desc"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "MenloAudit_CL",
+      "lastDataReceivedQuery": "MenloAudit_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    },
+    {
+      "name": "MenloBandwidth_CL",
+      "lastDataReceivedQuery": "MenloBandwidth_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    },
+    {
+      "name": "MenloWeb_CL",
+      "lastDataReceivedQuery": "MenloWeb_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "union isfuzzy=true MenloAudit_CL, MenloBandwidth_CL, MenloWeb_CL\n| where TimeGenerated > ago(3h)\n| take 1\n| project IsConnected = true"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Microsoft.Web/sites permissions",
+        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+      },
+      {
+        "name": "Menlo Security API Token",
+        "description": "A valid Menlo Security API token with permission to access the `/api/rep/v2/fetch/client_select` endpoint. Obtain this from the Menlo Security admin console."
+      },
+      {
+        "name": "Azure permissions for connector deployment",
+        "description": "Deploying the connector's Azure resources (via the **Deploy to Azure** button in the steps below) requires **Owner**, or **Contributor + User Access Administrator**, on the target resource group — the template creates role assignments that grant the Function App's managed identity access to Key Vault, Storage, and the Data Collection Rule (Contributor alone is not sufficient). Creating the custom tables also requires write access to the Log Analytics workspace's resource group."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "Step 1 — Deploy the connector infrastructure",
+      "description": "Click **Deploy to Azure** below. On the deployment page:\n- For **Resource group**, choose **Create new** and name it `MenloSecurityLogs` so all connector resources stay together and can be removed in one step later.\n- Enter your **Log Analytics Workspace Resource Group**, then select your **workspace** from the dropdown. Connector resources are deployed automatically in the **same region as the selected workspace** — no manual region matching is required.\n- Enter your **Menlo Security API token**.\n\nThe template deploys the Function App, Key Vault, Storage Account, Data Collection Endpoint, and Data Collection Rule, and creates the `MenloAudit_CL`, `MenloBandwidth_CL`, and `MenloWeb_CL` custom tables in your Log Analytics workspace.\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMenloSecurity%2FData%2520Connectors%2Fazuredeploy_MenloSecurity_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMenloSecurity%2FData%2520Connectors%2FcreateUiDefinition_MenloSecurity_API_FunctionApp.json)\n\n_To remove the connector later, delete the `MenloSecurityLogs` resource group and the three `Menlo*_CL` custom tables from the workspace._",
+      "instructions": []
+    },
+    {
+      "title": "Step 2 — Enable log collection",
+      "description": "All log-collection functions are **disabled by default**. After deployment, navigate to the Function App in the Azure Portal and enable the log types you want to collect:\n\n1. Open the **Function App** created by this solution (named `menlo-logs-func-<suffix>`).\n2. Go to **Configuration** → **Application settings**.\n3. For each log type you want to enable, set the corresponding app setting value to `0`:\n\n| Log type | App setting name | Enable value |\n|---|---|---|\n| Audit logs | `AzureWebJobs.TimerTriggerAuditLogs.Disabled` | `0` |\n| Bandwidth logs | `AzureWebJobs.TimerTriggerBandwidthLogs.Disabled` | `0` |\n| Web logs | `AzureWebJobs.TimerTriggerWebLogs.Disabled` | `0` |\n\n4. Click **Save**. Each enabled function will begin polling the Menlo Security API on a 3-minute interval.",
+      "instructions": []
+    },
+    {
+      "title": "Step 3 — Verify data ingestion",
+      "description": "After enabling at least one log type, wait approximately 5–10 minutes for the first data to appear. Verify by running the following queries in Microsoft Sentinel **Logs**:\n\n```kusto\nMenloAudit_CL | take 10\nMenloBandwidth_CL | take 10\nMenloWeb_CL | take 10\n```\n\nIf no data appears after 15 minutes, check the Function App's **Monitor** tab for invocation errors.",
+      "instructions": []
+    }
+  ]
+}
