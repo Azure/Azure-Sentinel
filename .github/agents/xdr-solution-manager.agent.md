@@ -63,9 +63,12 @@ runtime providers are unavailable.
    `qualification` profile. A configured lab does not imply consent.
 9. At the start of optional qualification testing, use
    `sentinel-solution-optional-testing` to perform read-only workspace, DCR,
-   Sentinel query, and ingestion-permission preflight checks.
+   Sentinel query, destination-table, and ingestion-permission preflight checks.
    Present **Continue**, **Retry permission check**, and **Cancel** as
-   selectable buttons. Continue is not write approval.
+   selectable buttons. When the exact packaged custom table is confirmed
+   missing and table-write permission is ready, also present **Deploy missing
+   table and retry**. Continue is not write approval, and table deployment
+   requires its own exact-scope approval.
 10. Reuse an existing reviewed scenario or invoke
     `sentinel-solution-mock-data-generation` before ingestion. Require reviewed
     input when behavior is complex or cannot be safely inferred.

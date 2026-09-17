@@ -45,6 +45,7 @@ Run from the Azure-Sentinel repository root:
 ```powershell
 python Tools\SolutionMigration\ingest_to_dcr.py `
   --stream "<Custom-StreamName_CL>" `
+  --solution "<solution-name-or-folder>" `
   --discover-only `
   --login
 ```
@@ -53,7 +54,11 @@ This first read-only discovery also runs the target-specific permission
 preflight. It verifies:
 
 - a read-only Log Analytics query against the selected workspace;
-- effective DCR access for `Microsoft.Insights/Telemetry/Write`.
+- effective DCR access for `Microsoft.Insights/Telemetry/Write`;
+- existence and packaged-schema compatibility of the DCR destination custom
+  table; and
+- when that table is absent, effective workspace permission for
+  `Microsoft.OperationalInsights/workspaces/tables/write`.
 
 The preflight writes no telemetry and does not grant write approval. If Azure
 does not allow effective DCR permissions to be inspected, report ingestion
@@ -93,6 +98,32 @@ After displaying the preflight results, present these user actions:
    the user changes authentication, role assignments, workspace, or DCR.
 3. **Cancel** — stop optional testing without affecting conversion or static
    validation.
+
+When the only recoverable blocker is a missing custom table, and the solution
+package defines the exact table schema, add a fourth action:
+
+4. **Deploy missing table and retry** — show the exact tenant, subscription,
+   workspace resource ID, table name, packaged schema path, column count, table
+   plan, and required permission. Explain that table creation changes the
+   workspace and may cause ingestion and retention charges. Obtain explicit
+   approval for this exact workspace and table, then run:
+
+   ```powershell
+   python Tools\SolutionMigration\ingest_to_dcr.py `
+     --workspace "<workspace-name-customer-id-or-arm-id>" `
+     --stream "<Custom-StreamName_CL>" `
+     --solution "<solution-name-or-folder>" `
+     --deploy-missing-table `
+     --approve-table-write
+   ```
+
+The command may create only a table confirmed absent by the immediately
+preceding preflight. It must use the schema from the packaged solution, wait
+for provisioning, verify the resulting schema, and rerun the complete
+preflight. It must not update an existing table, repair schema differences,
+deploy a DCR or DCE, or ingest data. Table approval is separate from
+`--approve-write`. The table is a persistent workspace prerequisite and is not
+automatically deleted during mock-data cleanup.
 
 Use structured user elicitation so the actions render as selectable buttons
 when the host supports it. Otherwise present the same three choices as a

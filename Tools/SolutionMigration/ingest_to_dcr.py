@@ -13,10 +13,11 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +32,10 @@ DCE_API_VERSION = "2023-03-11"
 STREAM_API_VERSION = "2023-01-01"
 WORKSPACE_API_VERSION = "2022-10-01"
 PERMISSIONS_API_VERSION = "2022-04-01"
+TABLE_API_VERSION = "2025-07-01"
 INGESTION_ACTION = "Microsoft.Insights/Telemetry/Write"
+TABLE_WRITE_ACTION = "Microsoft.OperationalInsights/workspaces/tables/write"
+WORKSPACE_WRITE_ACTION = "Microsoft.OperationalInsights/workspaces/write"
 
 
 class ToolError(RuntimeError):
@@ -92,6 +96,7 @@ def _request_json(
     url: str,
     token: str,
     body: Optional[Any] = None,
+    accepted_error_codes: Sequence[int] = (),
 ) -> Tuple[int, Any]:
     data = None if body is None else json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
@@ -113,6 +118,8 @@ def _request_json(
             detail = json.loads(text)
         except json.JSONDecodeError:
             detail = text
+        if exc.code in accepted_error_codes:
+            return exc.code, detail
         raise ToolError(f"Azure request failed with HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise ToolError(f"Azure request failed: {exc.reason}") from exc
@@ -202,12 +209,15 @@ def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> dict:
 
     for dcr in rows:
         properties = dcr.get("properties") or {}
-        streams = {
-            candidate
-            for flow in properties.get("dataFlows", [])
-            for candidate in flow.get("streams", [])
-        }
-        if stream not in streams:
+        flow = next(
+            (
+                candidate
+                for candidate in properties.get("dataFlows", [])
+                if stream in candidate.get("streams", [])
+            ),
+            None,
+        )
+        if flow is None:
             continue
         destinations = (properties.get("destinations") or {}).get("logAnalytics", [])
         if not any(
@@ -226,11 +236,14 @@ def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> dict:
         )
         endpoint = ((dce or {}).get("properties") or {}).get("logsIngestion", {}).get("endpoint")
         if endpoint:
+            output_stream = str(flow.get("outputStream") or stream)
             return {
                 "id": dcr["id"],
                 "name": dcr["name"],
                 "immutableId": immutable_id,
                 "endpoint": endpoint,
+                "outputStream": output_stream,
+                "outputTable": _custom_table_name(output_stream),
             }
 
     raise ToolError(
@@ -276,7 +289,241 @@ def _permission_allows(permission_sets: List[dict], action: str) -> bool:
     return False
 
 
-def permission_preflight(arm_token: str, workspace: dict, dcr: dict) -> dict:
+def _custom_table_name(output_stream: str) -> Optional[str]:
+    if not output_stream.startswith("Custom-"):
+        return None
+    table_name = output_stream.removeprefix("Custom-")
+    return table_name if table_name.endswith("_CL") else None
+
+
+def _walk_resources(resources: Iterable[dict]) -> Iterable[dict]:
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        yield resource
+        nested = resource.get("resources")
+        if isinstance(nested, list):
+            yield from _walk_resources(nested)
+        properties = resource.get("properties") or {}
+        for template_key in ("template", "mainTemplate"):
+            template = properties.get(template_key) or {}
+            if isinstance(template, dict):
+                yield from _walk_resources(template.get("resources") or [])
+
+
+def _solution_root(solution: str) -> Path:
+    requested = Path(solution).expanduser()
+    root = requested.resolve() if requested.is_dir() else REPOSITORY_ROOT / "Solutions" / solution
+    if not root.is_dir():
+        raise ToolError(f"Solution folder does not exist: {root}")
+    return root
+
+
+def _column_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    aliases = {
+        "bool": "boolean",
+        "boolean": "boolean",
+        "datetime": "dateTime",
+        "date_time": "dateTime",
+        "dynamic": "dynamic",
+        "guid": "guid",
+        "int": "int",
+        "integer": "int",
+        "long": "long",
+        "real": "real",
+        "double": "real",
+        "string": "string",
+    }
+    if normalized not in aliases:
+        raise ToolError(f"Unsupported custom-table column type: {value!r}")
+    return aliases[normalized]
+
+
+def load_custom_table_contract(solution: str, table_name: str) -> dict:
+    root = _solution_root(solution)
+    package = root / "Package" / "mainTemplate.json"
+    if not package.is_file():
+        raise ToolError(f"Solution package was not found: {package}")
+    try:
+        template = json.loads(package.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ToolError(f"Solution package is invalid: {package}: {exc}") from exc
+
+    for resource in _walk_resources(template.get("resources") or []):
+        if str(resource.get("type") or "").lower() != (
+            "microsoft.operationalinsights/workspaces/tables"
+        ):
+            continue
+        properties = resource.get("properties") or {}
+        schema = properties.get("schema") or {}
+        if str(schema.get("name") or "") != table_name:
+            continue
+        columns = schema.get("columns")
+        if not isinstance(columns, list) or not columns:
+            raise ToolError(
+                f"Packaged table {table_name!r} has no deployable schema columns: {package}"
+            )
+        normalized_columns = []
+        for column in columns:
+            if not isinstance(column, dict) or not column.get("name"):
+                raise ToolError(f"Packaged table {table_name!r} has an invalid column.")
+            normalized_columns.append({
+                "name": str(column["name"]),
+                "type": _column_type(column.get("type")),
+            })
+        table_properties: Dict[str, Any] = {
+            "schema": {
+                "name": table_name,
+                "columns": normalized_columns,
+            }
+        }
+        for name in ("plan", "retentionInDays", "totalRetentionInDays"):
+            if properties.get(name) is not None:
+                table_properties[name] = properties[name]
+        return {
+            "tableName": table_name,
+            "properties": table_properties,
+            "schemaSource": str(package),
+            "columnCount": len(normalized_columns),
+            "tablePlan": str(table_properties.get("plan") or "Analytics"),
+            "retentionInDays": table_properties.get("retentionInDays"),
+            "totalRetentionInDays": table_properties.get("totalRetentionInDays"),
+        }
+
+    raise ToolError(
+        f"Solution package does not define custom table {table_name!r}: {package}"
+    )
+
+
+def _table_url(workspace: dict, table_name: str) -> str:
+    return (
+        f"https://management.azure.com{workspace['id']}/tables/{table_name}"
+        f"?api-version={TABLE_API_VERSION}"
+    )
+
+
+def _schema_differences(contract: dict, table: dict) -> List[str]:
+    expected_columns = (
+        ((contract.get("properties") or {}).get("schema") or {}).get("columns") or []
+    )
+    actual_schema = ((table.get("properties") or {}).get("schema") or {})
+    actual_columns = [
+        *actual_schema.get("columns", []),
+        *actual_schema.get("standardColumns", []),
+    ]
+    actual_by_name = {
+        str(column.get("name") or "").lower(): _column_type(column.get("type"))
+        for column in actual_columns
+        if isinstance(column, dict) and column.get("name") and column.get("type")
+    }
+    differences: List[str] = []
+    for column in expected_columns:
+        name = str(column["name"])
+        expected_type = _column_type(column["type"])
+        actual_type = actual_by_name.get(name.lower())
+        if actual_type is None:
+            differences.append(f"missing column {name}")
+        elif actual_type != expected_type:
+            differences.append(
+                f"column {name} is {actual_type}, expected {expected_type}"
+            )
+    return differences
+
+
+def inspect_custom_table(
+    arm_token: str,
+    workspace: dict,
+    table_name: str,
+    contract: Optional[dict],
+    contract_error: Optional[str] = None,
+) -> dict:
+    status, response = _request_json(
+        "GET",
+        _table_url(workspace, table_name),
+        arm_token,
+        accepted_error_codes=(404,),
+    )
+    if status == 404:
+        return {
+            "name": "customLogTable",
+            "status": "missing",
+            "detail": f"Custom table {table_name!r} does not exist in the selected workspace.",
+            "tableName": table_name,
+            "deploymentAvailable": contract is not None,
+            "schemaSource": contract.get("schemaSource") if contract else None,
+            "columnCount": contract.get("columnCount") if contract else None,
+            "tablePlan": contract.get("tablePlan") if contract else None,
+            "retentionInDays": contract.get("retentionInDays") if contract else None,
+            "totalRetentionInDays": (
+                contract.get("totalRetentionInDays") if contract else None
+            ),
+            "schemaError": contract_error,
+        }
+
+    if contract_error:
+        return {
+            "name": "customLogTable",
+            "status": "unknown",
+            "detail": (
+                f"Custom table {table_name!r} exists, but its schema could not be "
+                f"compared with the solution package: {contract_error}"
+            ),
+            "tableName": table_name,
+            "deploymentAvailable": False,
+            "schemaCompatible": None,
+        }
+
+    differences = _schema_differences(contract, response or {}) if contract else []
+    if differences:
+        return {
+            "name": "customLogTable",
+            "status": "blocked",
+            "detail": (
+                f"Custom table {table_name!r} exists but does not match the packaged schema: "
+                + "; ".join(differences)
+            ),
+            "tableName": table_name,
+            "deploymentAvailable": False,
+            "schemaCompatible": False,
+        }
+    return {
+        "name": "customLogTable",
+        "status": "ready",
+        "detail": f"Custom table {table_name!r} exists in the selected workspace.",
+        "tableName": table_name,
+        "deploymentAvailable": False,
+        "schemaCompatible": True if contract else None,
+    }
+
+
+def _effective_permissions(arm_token: str, resource_id: str) -> List[dict]:
+    _, response = _request_json(
+        "GET",
+        (
+            f"https://management.azure.com{resource_id}"
+            "/providers/Microsoft.Authorization/permissions"
+            f"?api-version={PERMISSIONS_API_VERSION}"
+        ),
+        arm_token,
+    )
+    return (response or {}).get("value", [])
+
+
+def _table_deployment_permissions(contract: dict) -> List[str]:
+    required = [TABLE_WRITE_ACTION]
+    if (contract.get("properties") or {}).get("plan") is not None:
+        required.append(WORKSPACE_WRITE_ACTION)
+    return required
+
+
+def permission_preflight(
+    arm_token: str,
+    workspace: dict,
+    dcr: dict,
+    table_contract: Optional[dict] = None,
+    table_contract_error: Optional[str] = None,
+) -> dict:
     checks: List[dict] = []
 
     try:
@@ -302,16 +549,7 @@ def permission_preflight(arm_token: str, workspace: dict, dcr: dict) -> dict:
         })
 
     try:
-        _, response = _request_json(
-            "GET",
-            (
-                f"https://management.azure.com{dcr['id']}"
-                "/providers/Microsoft.Authorization/permissions"
-                f"?api-version={PERMISSIONS_API_VERSION}"
-            ),
-            arm_token,
-        )
-        permission_sets = (response or {}).get("value", [])
+        permission_sets = _effective_permissions(arm_token, dcr["id"])
         if _permission_allows(permission_sets, INGESTION_ACTION):
             checks.append({
                 "name": "logsIngestionPermission",
@@ -336,15 +574,153 @@ def permission_preflight(arm_token: str, workspace: dict, dcr: dict) -> dict:
             "requiredPermission": INGESTION_ACTION,
         })
 
+    table_name = dcr.get("outputTable")
+    if table_name:
+        try:
+            table_check = inspect_custom_table(
+                arm_token,
+                workspace,
+                table_name,
+                table_contract,
+                table_contract_error,
+            )
+            checks.append(table_check)
+        except ToolError as exc:
+            table_check = {
+                "name": "customLogTable",
+                "status": "unknown",
+                "detail": f"Custom table state could not be inspected: {exc}",
+                "tableName": table_name,
+                "deploymentAvailable": False,
+                "requiredPermission": (
+                    "Microsoft.OperationalInsights/workspaces/tables/read"
+                ),
+            }
+            checks.append(table_check)
+
+        if table_check["status"] == "missing":
+            if table_contract is None:
+                checks.append({
+                    "name": "customTableDeploymentPermission",
+                    "status": "blocked",
+                    "detail": (
+                        "The table is missing, but no exact packaged schema was supplied. "
+                        + (
+                            table_contract_error
+                            if table_contract_error
+                            else "Pass --solution to enable guarded deployment."
+                        )
+                    ),
+                    "requiredPermission": TABLE_WRITE_ACTION,
+                })
+            else:
+                required_actions = _table_deployment_permissions(table_contract)
+                try:
+                    permission_sets = _effective_permissions(arm_token, workspace["id"])
+                    missing_actions = [
+                        action
+                        for action in required_actions
+                        if not _permission_allows(permission_sets, action)
+                    ]
+                    if missing_actions:
+                        checks.append({
+                            "name": "customTableDeploymentPermission",
+                            "status": "blocked",
+                            "detail": (
+                                "Effective workspace permissions do not allow creation "
+                                f"of {table_name!r}."
+                            ),
+                            "requiredPermissions": missing_actions,
+                        })
+                    else:
+                        checks.append({
+                            "name": "customTableDeploymentPermission",
+                            "status": "ready",
+                            "detail": (
+                                "Effective workspace permissions allow creation of "
+                                f"{table_name!r}."
+                            ),
+                            "requiredPermissions": required_actions,
+                        })
+                except ToolError as exc:
+                    checks.append({
+                        "name": "customTableDeploymentPermission",
+                        "status": "unknown",
+                        "detail": (
+                            "Effective workspace table permissions could not be "
+                            f"inspected without writing: {exc}"
+                        ),
+                        "requiredPermissions": required_actions,
+                    })
+
     return {
         "status": (
             "ready"
-            if all(check["status"] == "ready" for check in checks)
+            if all(check["status"] in {"ready", "not-required"} for check in checks)
             else "action-required"
         ),
         "checks": checks,
         "writePerformed": False,
     }
+
+
+def deploy_custom_table(
+    arm_token: str,
+    workspace: dict,
+    contract: dict,
+    *,
+    attempts: int = 20,
+    delay_seconds: float = 3,
+) -> dict:
+    table_name = contract["tableName"]
+    status, _ = _request_json(
+        "PUT",
+        _table_url(workspace, table_name),
+        arm_token,
+        {"properties": contract["properties"]},
+    )
+    if status not in {200, 201, 202}:
+        raise ToolError(
+            f"Custom table deployment returned unexpected HTTP status {status}."
+        )
+
+    for _ in range(attempts):
+        read_status, table = _request_json(
+            "GET",
+            _table_url(workspace, table_name),
+            arm_token,
+            accepted_error_codes=(404,),
+        )
+        if read_status != 404:
+            provisioning = str(
+                ((table or {}).get("properties") or {}).get("provisioningState") or ""
+            )
+            if provisioning.lower() in {"failed", "deleting"}:
+                raise ToolError(
+                    f"Custom table {table_name!r} provisioning ended in {provisioning!r}."
+                )
+            if provisioning.lower() in {"", "succeeded"}:
+                differences = _schema_differences(contract, table or {})
+                if differences:
+                    raise ToolError(
+                        f"Custom table {table_name!r} was created with an unexpected schema: "
+                        + "; ".join(differences)
+                    )
+                return {
+                    "status": "created",
+                    "httpStatus": status,
+                    "tableName": table_name,
+                    "tableResourceId": (table or {}).get("id"),
+                    "schemaSource": contract["schemaSource"],
+                    "columnCount": contract["columnCount"],
+                    "tablePlan": contract.get("tablePlan") or "Analytics",
+                    "retentionInDays": contract.get("retentionInDays"),
+                    "totalRetentionInDays": contract.get("totalRetentionInDays"),
+                }
+        time.sleep(delay_seconds)
+    raise ToolError(
+        f"Timed out waiting for custom table {table_name!r} to finish provisioning."
+    )
 
 
 def load_payload(path: Path) -> List[Dict[str, Any]]:
@@ -475,6 +851,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Resolve and display the workspace and DCR without writing data.",
     )
     parser.add_argument(
+        "--deploy-missing-table",
+        action="store_true",
+        help="Create the missing packaged custom table, then rerun the preflight.",
+    )
+    parser.add_argument(
+        "--approve-table-write",
+        action="store_true",
+        help="Required acknowledgement of exact workspace/table deployment approval.",
+    )
+    parser.add_argument(
         "--approve-write",
         action="store_true",
         help="Required acknowledgement that exact-scope user approval was obtained.",
@@ -486,7 +872,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if not args.discover_only and not args.approve_write:
+    if args.deploy_missing_table:
+        if args.discover_only:
+            parser.error("--deploy-missing-table and --discover-only are separate modes")
+        if not args.approve_table_write:
+            parser.error("--approve-table-write is required for custom-table deployment")
+        if not args.solution:
+            parser.error("--solution is required for custom-table deployment")
+        if args.approve_write:
+            parser.error("table deployment and payload ingestion must be approved separately")
+    elif args.approve_table_write:
+        parser.error("--approve-table-write requires --deploy-missing-table")
+    elif not args.discover_only and not args.approve_write:
         parser.error("--approve-write is required for ingestion")
 
     try:
@@ -502,6 +899,22 @@ def main(argv: Optional[List[str]] = None) -> int:
             workspace,
             args.stream,
         )
+        table_contract = None
+        table_contract_error = None
+        if (
+            args.solution
+            and dcr.get("outputTable")
+            and (args.discover_only or args.deploy_missing_table)
+        ):
+            try:
+                table_contract = load_custom_table_contract(
+                    args.solution,
+                    dcr["outputTable"],
+                )
+            except ToolError as exc:
+                if args.deploy_missing_table:
+                    raise
+                table_contract_error = str(exc)
         result = {
             "tenantId": account.get("tenantId"),
             "subscriptionId": workspace["subscriptionId"],
@@ -517,12 +930,63 @@ def main(argv: Optional[List[str]] = None) -> int:
             "dcrResourceId": dcr["id"],
             "dcrImmutableId": dcr["immutableId"],
             "dceEndpoint": dcr["endpoint"],
+            "outputStream": dcr.get("outputStream"),
+            "outputTable": dcr.get("outputTable"),
             "writeApproved": bool(args.approve_write),
+            "tableWriteApproved": bool(args.approve_table_write),
         }
 
+        if args.discover_only or args.deploy_missing_table:
+            result["preflight"] = permission_preflight(
+                arm_token,
+                workspace,
+                dcr,
+                table_contract,
+                table_contract_error,
+            )
         if args.discover_only:
-            result["preflight"] = permission_preflight(arm_token, workspace, dcr)
             result["status"] = result["preflight"]["status"]
+            print(json.dumps(result, indent=2))
+            return 0
+        if args.deploy_missing_table:
+            table_check = next(
+                (
+                    check
+                    for check in result["preflight"]["checks"]
+                    if check["name"] == "customLogTable"
+                ),
+                None,
+            )
+            permission_check = next(
+                (
+                    check
+                    for check in result["preflight"]["checks"]
+                    if check["name"] == "customTableDeploymentPermission"
+                ),
+                None,
+            )
+            if not table_check or table_check["status"] != "missing":
+                raise ToolError(
+                    "Custom-table deployment is allowed only when preflight confirms "
+                    "that the exact destination table is missing."
+                )
+            if not permission_check or permission_check["status"] != "ready":
+                raise ToolError(
+                    "Effective workspace permissions do not authorize custom-table deployment."
+                )
+            result["tableDeployment"] = deploy_custom_table(
+                arm_token,
+                workspace,
+                table_contract,
+            )
+            result["preflightAfterDeployment"] = permission_preflight(
+                arm_token,
+                workspace,
+                dcr,
+                table_contract,
+                table_contract_error,
+            )
+            result["status"] = result["preflightAfterDeployment"]["status"]
             print(json.dumps(result, indent=2))
             return 0
 
