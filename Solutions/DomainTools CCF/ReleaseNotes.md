@@ -1,4 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                              |
 |-------------|----------------|---------------------------------------------------------------------------------|
 | 3.0.0       | 02-09-2026     | Includes all CCF connector definitions and configurations. <br> Updated publisherId to address an issue identified during Microsoft Marketplace submission.|  
-
+| 3.0.1       | 16-09-2026     | Added customer-configurable parameters: API Key, Feed Types, Session ID, Query Window in Minutes, and optional Top limit. <br> Connector now uses sessionID-based polling for continuous ingestion; `after` is no longer exposed. <br> Reduced `rateLimitQPS` to 1 and added `rateLimitConfig` to respect DomainTools 2 requests/minute limit. <br> Response format switched to NDJSON (`jsonl`) with `Accept: application/x-ndjson`. <br> Optional `top` defaults to a high value when left empty. <br> Connector-controlled parameters (`before`, `fromBeginning`) remain internal and are not exposed. |
