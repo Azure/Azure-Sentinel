@@ -33,43 +33,6 @@ python Tools\SolutionMigration\ingest_to_dcr.py `
   --login
 ```
 
-## One-time workspace selection
-
-Workspace selection is persisted as non-secret configuration under
-`~/.sentinel-xdr-migration/config.json`.
-
-When no workspace setting exists:
-
-1. Run discovery without `--workspace`.
-2. Search accessible subscriptions in the signed-in tenant and infer the
-   Defender XDR primary workspace from the workspace whose
-   `MicrosoftThreatProtection` connector has both alert and incident ingestion
-   enabled.
-3. Show that workspace as **Recommended**.
-4. Present **Use recommended workspace**, **Provide workspace ID**, and
-   **Cancel**.
-5. After the user confirms, rerun with the selected ARM resource ID and
-   `--confirm-workspace`. Only then persist it and continue to DCR and
-   permission preflight.
-6. If no unique primary workspace can be inferred, never select the first
-   workspace alphabetically. Ask for the full workspace ARM resource ID.
-
-Example confirmation:
-
-```powershell
-python Tools\SolutionMigration\ingest_to_dcr.py `
-  --workspace "<workspace-arm-resource-id>" `
-  --stream "<Custom-StreamName_CL>" `
-  --discover-only `
-  --confirm-workspace
-```
-
-When saved workspace settings exist, show the saved workspace and require the
-user to verify it is still correct. Present **Use this workspace**,
-**Rediscover primary workspace**, **Provide workspace ID**, and **Cancel**.
-Use `--rediscover-workspace` when the user requests rediscovery. Workspace
-confirmation is not Azure write approval.
-
 This first read-only discovery also runs the target-specific permission
 preflight. It verifies:
 
@@ -237,7 +200,6 @@ python Tools\SolutionMigration\ingest_to_dcr.py `
   --solution "<solution-folder>" `
   --rule-id "<rule-id>" `
   --fixture malicious `
-  --confirm-workspace `
   --approve-write
 ```
 
@@ -253,7 +215,6 @@ python Tools\SolutionMigration\ingest_to_dcr.py `
   --rule-id "<rule-id>" `
   --fixture malicious `
   --mock-data-folder "<folder-containing-the-fixtures>" `
-  --confirm-workspace `
   --approve-write
 ```
 
