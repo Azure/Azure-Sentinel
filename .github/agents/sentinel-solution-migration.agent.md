@@ -35,11 +35,22 @@ a missing conversion implementation.
 8. Run static and offline checks without requiring Azure access.
 9. Invoke `sentinel-solution-optional-testing` only when the user explicitly
    requests live Azure qualification.
-10. Discover the workspace and DCR read-only before asking for write approval.
-11. Show the exact tenant, subscription, workspace, DCR, stream, fixture,
+10. On the first optional-testing initiation, run read-only workspace, DCR,
+    Sentinel query, and effective ingestion-permission preflight checks.
+11. Present **Continue**, **Retry permission check**, and **Cancel**:
+    - Continue to fixture review when checks pass.
+    - Continue offline only when a required check is blocked or unknown.
+    - Retry the same read-only preflight after access changes.
+    - Cancel without affecting conversion or static validation.
+    - Use the host's structured user-elicitation control so these choices are
+      rendered as selectable buttons when available. If structured elicitation
+      is unavailable, present the same three choices as a numbered list and
+      wait for the user's selection.
+12. Show the exact tenant, subscription, workspace, DCR, stream, fixture,
     record count, destination, and cleanup plan.
-12. Pass `--approve-write` only after approval for that exact scope.
-13. Track ingestion acceptance, visibility, Sentinel query match, Defender XDR
+13. Pass `--approve-write` only after approval for that exact scope. The
+    preflight Continue action is not write approval.
+14. Track ingestion acceptance, visibility, Sentinel query match, Defender XDR
     query match, alert creation, parity, and cleanup as separate outcomes.
 
 ## Stage ownership

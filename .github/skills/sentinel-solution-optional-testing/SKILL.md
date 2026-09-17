@@ -33,6 +33,16 @@ python Tools\SolutionMigration\ingest_to_dcr.py `
   --login
 ```
 
+This first read-only discovery also runs the target-specific permission
+preflight. It verifies:
+
+- a read-only Log Analytics query against the selected workspace;
+- effective DCR access for `Microsoft.Insights/Telemetry/Write`.
+
+The preflight writes no telemetry and does not grant write approval. If Azure
+does not allow effective DCR permissions to be inspected, report ingestion
+permission as `unknown` rather than treating it as granted.
+
 The tool uses Azure CLI authentication. It selects workspaces in this order:
 
 1. explicit `--workspace`;
@@ -58,7 +68,22 @@ Report missing requirements with the exact blocked capability:
   `Log Analytics Reader`.
 
 Common roles are examples, not requirements; equivalent custom roles are valid.
-Offer retry, another workspace, or continuing without live qualification.
+After displaying the preflight results, present these user actions:
+
+1. **Continue** — when all required checks are ready, proceed to fixture review
+   and the separate exact-scope write-approval step. When a check is blocked or
+   unknown, continue only in offline mode and skip live ingestion.
+2. **Retry permission check** — rerun the same `--discover-only` command after
+   the user changes authentication, role assignments, workspace, or DCR.
+3. **Cancel** — stop optional testing without affecting conversion or static
+   validation.
+
+Use structured user elicitation so the actions render as selectable buttons
+when the host supports it. Otherwise present the same three choices as a
+numbered list and wait for the user's selection.
+
+Never interpret **Continue** as `--approve-write`. Write approval is requested
+later, after the exact payload and cleanup plan are shown.
 
 ## Fixture review
 

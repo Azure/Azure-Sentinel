@@ -7,6 +7,7 @@ steps. A successful HTTP response proves ingestion acceptance, not rule executio
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import subprocess
@@ -20,12 +21,16 @@ from typing import Any, Dict, List, Optional, Tuple
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ARM_RESOURCE = "https://management.azure.com/"
 MONITOR_RESOURCE = "https://monitor.azure.com/"
+LOG_ANALYTICS_RESOURCE = "https://api.loganalytics.io/"
 RESOURCE_GRAPH_URL = (
     "https://management.azure.com/providers/Microsoft.ResourceGraph/resources"
     "?api-version=2021-03-01"
 )
 DCE_API_VERSION = "2023-03-11"
 STREAM_API_VERSION = "2023-01-01"
+WORKSPACE_API_VERSION = "2022-10-01"
+PERMISSIONS_API_VERSION = "2022-04-01"
+INGESTION_ACTION = "Microsoft.Insights/Telemetry/Write"
 
 
 class ToolError(RuntimeError):
@@ -175,7 +180,7 @@ def discover_workspace(
     return rows[0], rows, source
 
 
-def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> Tuple[str, str, str]:
+def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> dict:
     workspace_id = workspace["id"]
     subscription_id = workspace["subscriptionId"]
     rows = _resource_graph_query(
@@ -211,11 +216,125 @@ def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> Tuple[str, 
         )
         endpoint = ((dce or {}).get("properties") or {}).get("logsIngestion", {}).get("endpoint")
         if endpoint:
-            return dcr["name"], immutable_id, endpoint
+            return {
+                "id": dcr["id"],
+                "name": dcr["name"],
+                "immutableId": immutable_id,
+                "endpoint": endpoint,
+            }
 
     raise ToolError(
         f"No DCR targeting workspace {workspace_id!r} declares stream {stream!r}."
     )
+
+
+def _workspace_customer_id(token: str, workspace: dict) -> str:
+    customer_id = str(((workspace.get("properties") or {}).get("customerId") or "")).strip()
+    if customer_id:
+        return customer_id
+    _, response = _request_json(
+        "GET",
+        (
+            f"https://management.azure.com{workspace['id']}"
+            f"?api-version={WORKSPACE_API_VERSION}"
+        ),
+        token,
+    )
+    customer_id = str(((response or {}).get("properties") or {}).get("customerId") or "").strip()
+    if not customer_id:
+        raise ToolError("The selected workspace did not expose its Log Analytics customer ID.")
+    return customer_id
+
+
+def _permission_allows(permission_sets: List[dict], action: str) -> bool:
+    requested = action.lower()
+    for permission_set in permission_sets:
+        allowed = [
+            str(pattern).lower()
+            for key in ("actions", "dataActions")
+            for pattern in permission_set.get(key, [])
+        ]
+        denied = [
+            str(pattern).lower()
+            for key in ("notActions", "notDataActions")
+            for pattern in permission_set.get(key, [])
+        ]
+        if any(fnmatch.fnmatchcase(requested, pattern) for pattern in allowed) and not any(
+            fnmatch.fnmatchcase(requested, pattern) for pattern in denied
+        ):
+            return True
+    return False
+
+
+def permission_preflight(arm_token: str, workspace: dict, dcr: dict) -> dict:
+    checks: List[dict] = []
+
+    try:
+        customer_id = _workspace_customer_id(arm_token, workspace)
+        query_token = _access_token(LOG_ANALYTICS_RESOURCE)
+        _request_json(
+            "POST",
+            f"https://api.loganalytics.io/v1/workspaces/{customer_id}/query",
+            query_token,
+            {"query": "print SentinelMigrationPermissionCheck=1"},
+        )
+        checks.append({
+            "name": "sentinelQueryPermission",
+            "status": "ready",
+            "detail": "The selected workspace accepted a read-only Log Analytics query.",
+        })
+    except ToolError as exc:
+        checks.append({
+            "name": "sentinelQueryPermission",
+            "status": "blocked",
+            "detail": str(exc),
+            "requiredPermission": "Workspace query/read access",
+        })
+
+    try:
+        _, response = _request_json(
+            "GET",
+            (
+                f"https://management.azure.com{dcr['id']}"
+                "/providers/Microsoft.Authorization/permissions"
+                f"?api-version={PERMISSIONS_API_VERSION}"
+            ),
+            arm_token,
+        )
+        permission_sets = (response or {}).get("value", [])
+        if _permission_allows(permission_sets, INGESTION_ACTION):
+            checks.append({
+                "name": "logsIngestionPermission",
+                "status": "ready",
+                "detail": f"Effective DCR permissions include {INGESTION_ACTION}.",
+            })
+        else:
+            checks.append({
+                "name": "logsIngestionPermission",
+                "status": "blocked",
+                "detail": f"Effective DCR permissions do not include {INGESTION_ACTION}.",
+                "requiredPermission": INGESTION_ACTION,
+            })
+    except ToolError as exc:
+        checks.append({
+            "name": "logsIngestionPermission",
+            "status": "unknown",
+            "detail": (
+                "Effective DCR permissions could not be inspected without writing data: "
+                f"{exc}"
+            ),
+            "requiredPermission": INGESTION_ACTION,
+        })
+
+    return {
+        "status": (
+            "ready"
+            if all(check["status"] == "ready" for check in checks)
+            else "action-required"
+        ),
+        "checks": checks,
+        "writePerformed": False,
+    }
 
 
 def load_payload(path: Path) -> List[Dict[str, Any]]:
@@ -368,7 +487,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             account["id"],
             args.workspace,
         )
-        dcr_name, immutable_id, endpoint = find_dcr_for_stream(
+        dcr = find_dcr_for_stream(
             arm_token,
             workspace,
             args.stream,
@@ -384,14 +503,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 {"name": item.get("name"), "id": item.get("id")} for item in alternatives
             ],
             "stream": args.stream,
-            "dcr": dcr_name,
-            "dcrImmutableId": immutable_id,
-            "dceEndpoint": endpoint,
+            "dcr": dcr["name"],
+            "dcrResourceId": dcr["id"],
+            "dcrImmutableId": dcr["immutableId"],
+            "dceEndpoint": dcr["endpoint"],
             "writeApproved": bool(args.approve_write),
         }
 
         if args.discover_only:
-            result["status"] = "ready"
+            result["preflight"] = permission_preflight(arm_token, workspace, dcr)
+            result["status"] = result["preflight"]["status"]
             print(json.dumps(result, indent=2))
             return 0
 
@@ -413,8 +534,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             monitor_token,
             args.stream,
             payload,
-            immutable_id,
-            endpoint,
+            dcr["immutableId"],
+            dcr["endpoint"],
         )
         result["recordCount"] = len(payload)
         result["payload"] = str(payload_path)

@@ -48,6 +48,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertLess(generation, optional_testing)
         self.assertIn("CAT.Tools is not a runtime dependency.", text)
         self.assertIn("Pass `--approve-write` only after approval", text)
+        self.assertIn("Retry permission check", text)
+        self.assertIn("selectable buttons", text)
 
 
 if __name__ == "__main__":

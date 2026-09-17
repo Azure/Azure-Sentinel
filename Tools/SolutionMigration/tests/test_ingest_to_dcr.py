@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 TOOLS = Path(__file__).resolve().parents[1]
@@ -14,6 +15,91 @@ import ingest_to_dcr
 
 
 class ScenarioHandoffTests(unittest.TestCase):
+    def test_permission_matching_honors_wildcards_and_denies(self):
+        self.assertTrue(ingest_to_dcr._permission_allows(
+            [{"actions": ["Microsoft.Insights/*"], "notActions": []}],
+            ingest_to_dcr.INGESTION_ACTION,
+        ))
+        self.assertFalse(ingest_to_dcr._permission_allows(
+            [{
+                "actions": ["Microsoft.Insights/*"],
+                "notActions": ["Microsoft.Insights/Telemetry/Write"],
+            }],
+            ingest_to_dcr.INGESTION_ACTION,
+        ))
+
+    @mock.patch.object(
+        ingest_to_dcr,
+        "_access_token",
+        return_value="query-token",
+    )
+    @mock.patch.object(ingest_to_dcr, "_request_json")
+    def test_permission_preflight_reports_ready_without_writing(
+        self,
+        request_json: mock.Mock,
+        _access_token: mock.Mock,
+    ):
+        request_json.side_effect = [
+            (200, {"tables": []}),
+            (
+                200,
+                {
+                    "value": [{
+                        "actions": ["Microsoft.Insights/Telemetry/Write"],
+                        "notActions": [],
+                    }]
+                },
+            ),
+        ]
+        workspace = {
+            "id": "/subscriptions/s/resourceGroups/r/providers/"
+            "Microsoft.OperationalInsights/workspaces/w",
+            "properties": {"customerId": "customer-id"},
+        }
+        dcr = {
+            "id": "/subscriptions/s/resourceGroups/r/providers/"
+            "Microsoft.Insights/dataCollectionRules/d",
+        }
+
+        result = ingest_to_dcr.permission_preflight("arm-token", workspace, dcr)
+
+        self.assertEqual("ready", result["status"])
+        self.assertFalse(result["writePerformed"])
+        self.assertTrue(all(check["status"] == "ready" for check in result["checks"]))
+
+    @mock.patch.object(
+        ingest_to_dcr,
+        "_access_token",
+        return_value="query-token",
+    )
+    @mock.patch.object(ingest_to_dcr, "_request_json")
+    def test_permission_preflight_reports_query_and_ingestion_failures(
+        self,
+        request_json: mock.Mock,
+        _access_token: mock.Mock,
+    ):
+        request_json.side_effect = [
+            ingest_to_dcr.ToolError("query forbidden"),
+            (200, {"value": [{"actions": [], "notActions": []}]}),
+        ]
+        workspace = {
+            "id": "/subscriptions/s/resourceGroups/r/providers/"
+            "Microsoft.OperationalInsights/workspaces/w",
+            "properties": {"customerId": "customer-id"},
+        }
+        dcr = {
+            "id": "/subscriptions/s/resourceGroups/r/providers/"
+            "Microsoft.Insights/dataCollectionRules/d",
+        }
+
+        result = ingest_to_dcr.permission_preflight("arm-token", workspace, dcr)
+
+        self.assertEqual("action-required", result["status"])
+        self.assertEqual(
+            ["blocked", "blocked"],
+            [check["status"] for check in result["checks"]],
+        )
+
     def test_accepts_qualification_ready_matching_stream(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
