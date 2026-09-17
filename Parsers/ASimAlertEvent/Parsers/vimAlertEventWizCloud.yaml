@@ -122,7 +122,31 @@ ParserQuery: |
       | where array_length(ipaddr_has_any_prefix) == 0 // Source has no actor/IP data
       | extend
           _RuleName = tostring(sourceRule.name)
-          , _RuleDescription = tostring(sourceRule.description)
+      | extend
+          _IsThreatKeywordMatch = _RuleName matches regex ThreatKeywordRegex
+      | extend
+          EventSubType = case(
+              issueType == "THREAT_DETECTION", "Threat"
+              , issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat"
+              , "Compliance Violation"
+          )
+      | extend
+          ThreatCategory = case(
+              _RuleName has "malware", "Malware"
+              , _RuleName has "ransomware", "Ransomware"
+              , _RuleName has "phishing", "Phishing"
+              , _RuleName has "spyware", "Spyware"
+              , _RuleName has "rootkit", "Rootkit"
+              , _RuleName has "adware", "Adware"
+              , _RuleName has "trojan", "Trojan"
+              , _RuleName has "worm", "Worm"
+              , _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominer"
+              , EventSubType == "Compliance Violation", "Security Policy Violation"
+              , "Unknown"
+          )
+      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
+      | extend
+          _RuleDescription = tostring(sourceRule.description)
           , _EntityName = tostring(entitySnapshot.name)
           , _EntityType = tostring(entitySnapshot.type)
       | extend
@@ -148,31 +172,6 @@ ParserQuery: |
           , _EntitySubscriptionName = tostring(entitySnapshot.subscriptionName)
       | extend
           _IsAzureArmId = _EntityCloudPlatform == "Azure" and _EntityExternalId startswith '/subscriptions/'
-          , _IsThreatKeywordMatch = _RuleName matches regex ThreatKeywordRegex
-      // EventSubType and ThreatCategory only depend on native/already-extended fields above,
-      // so they (and the threatcategory_has_any filter) are derived here, before the
-      // remaining field mapping below.
-      | extend
-          EventSubType = case(
-              issueType == "THREAT_DETECTION", "Threat"
-              , issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat"
-              , "Compliance Violation"
-          )
-      | extend
-          ThreatCategory = case(
-              _RuleName has "malware", "Malware"
-              , _RuleName has "ransomware", "Ransomware"
-              , _RuleName has "phishing", "Phishing"
-              , _RuleName has "spyware", "Spyware"
-              , _RuleName has "rootkit", "Rootkit"
-              , _RuleName has "adware", "Adware"
-              , _RuleName has "trojan", "Trojan"
-              , _RuleName has "worm", "Worm"
-              , _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominer"
-              , EventSubType == "Compliance Violation", "Security Policy Violation"
-              , "Unknown"
-          )
-      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
       | extend
           EventStartTime = coalesce(createdAt, TimeGenerated)
           , EventEndTime = coalesce(resolvedAt, updatedAt, TimeGenerated)
