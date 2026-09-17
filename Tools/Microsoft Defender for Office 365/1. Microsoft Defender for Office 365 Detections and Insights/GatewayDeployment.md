@@ -6,7 +6,7 @@ This guide outlines the steps to deploy the **Microsoft Defender for Office 365 
 > *   An **On-premises Data Gateway (Standard Mode)** must already be installed and online.
 >     *   *If you do not have a gateway deployed, follow the official guide here:* [On-premises data gateway architecture | Microsoft Learn](https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem-indepth)
 > *   The custom connector file: `KeyVaultConnector.mez`
-> *   The Power BI template file: `Microsoft Defender for Office 365 Detection and Insights_v3.pbit`
+> *   The Power BI template file: `Microsoft Defender for Office 365 Detection and Insights_v4.pbit`
 
 ---
 
@@ -67,8 +67,8 @@ Go to **Manage connections and gateways** > **New** and configure the following 
 ## Phase 3: Publish & Configure Report
 
 1.  **Open & Publish:**
-    Open the `Microsoft Defender for Office 365 Detection and Insights_v3.pbit` in Power BI Desktop.
-    When prompted, enter your **Key Vault Name** and other required parameters.
+    Open the `Microsoft Defender for Office 365 Detection and Insights_v4.pbit` in Power BI Desktop.
+    When prompted, enter your **Key Vault URL** and other required parameters.
     Once loaded, click **Publish** to upload it to your Power BI Workspace.
 
 2.  **Configure Semantic Model:**
