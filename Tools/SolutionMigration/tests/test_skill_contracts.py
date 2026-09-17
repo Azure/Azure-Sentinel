@@ -46,10 +46,28 @@ class SkillContractTests(unittest.TestCase):
         generation = text.index("sentinel-solution-mock-data-generation")
         optional_testing = text.index("sentinel-solution-optional-testing")
         self.assertLess(generation, optional_testing)
+        self.assertLess(text.index("sentinel-xdr-migration doctor"), generation)
+        self.assertIn("sentinel-xdr-migration setup", text)
+        self.assertIn("existing toolkit's runtime-validation stages", text)
         self.assertIn("CAT.Tools is not a runtime dependency.", text)
         self.assertIn("Pass `--approve-write` only after approval", text)
         self.assertIn("Retry permission check", text)
         self.assertIn("selectable buttons", text)
+
+    def test_optional_testing_requires_startup_before_target_preflight(self):
+        text = (
+            ROOT
+            / ".github"
+            / "skills"
+            / "sentinel-solution-optional-testing"
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        startup = text.index("sentinel-xdr-migration doctor")
+        target_preflight = text.index("target-specific DCR permission preflight")
+        fixture_review = text.index("## Fixture review")
+        self.assertLess(startup, target_preflight)
+        self.assertLess(target_preflight, fixture_review)
 
 
 if __name__ == "__main__":

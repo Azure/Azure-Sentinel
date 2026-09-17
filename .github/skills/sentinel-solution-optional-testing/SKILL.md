@@ -11,6 +11,22 @@ Use this skill only for optional live qualification. Authoring, packaging, and
 static validation must remain available when Azure access or write permissions
 are unavailable.
 
+Before entering this skill, the migration Agent must run the existing toolkit
+startup readiness flow:
+
+```powershell
+sentinel-xdr-migration doctor
+```
+
+On first use or when authentication is incomplete, it must run
+`sentinel-xdr-migration setup` and then retry `doctor`. This keeps `az login`,
+Sentinel authentication, and Advanced Hunting authentication at the beginning
+of the migration without changing the original runtime-validation flow.
+
+The target-specific DCR permission preflight in this skill runs at the
+beginning of the optional testing extension, before fixture generation or
+ingestion.
+
 ## Safety contract
 
 - Never treat workspace discovery as write approval.
