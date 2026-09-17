@@ -10,15 +10,19 @@ import argparse
 import fnmatch
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_STATE_DIR = Path.home() / ".sentinel-xdr-migration"
+CONFIG_NAME = "config.json"
 ARM_RESOURCE = "https://management.azure.com/"
 MONITOR_RESOURCE = "https://monitor.azure.com/"
 LOG_ANALYTICS_RESOURCE = "https://api.loganalytics.io/"
@@ -30,15 +34,29 @@ DCE_API_VERSION = "2023-03-11"
 STREAM_API_VERSION = "2023-01-01"
 WORKSPACE_API_VERSION = "2022-10-01"
 PERMISSIONS_API_VERSION = "2022-04-01"
+DATA_CONNECTORS_API_VERSION = "2023-02-01-preview"
 INGESTION_ACTION = "Microsoft.Insights/Telemetry/Write"
+DEFENDER_XDR_CONNECTOR_KINDS = frozenset({
+    "microsoftthreatprotection",
+    "microsoftdefenderxdr",
+})
 
 
 class ToolError(RuntimeError):
     """A user-actionable discovery or ingestion failure."""
 
 
+def _az_executable() -> str:
+    executable = shutil.which("az.cmd" if os.name == "nt" else "az")
+    if not executable:
+        executable = shutil.which("az")
+    if not executable:
+        raise ToolError("Azure CLI is not installed or is not available on PATH.")
+    return executable
+
+
 def _run_az(*args: str) -> Any:
-    command = ["az", *args, "--output", "json", "--only-show-errors"]
+    command = [_az_executable(), *args, "--output", "json", "--only-show-errors"]
     try:
         completed = subprocess.run(
             command,
@@ -47,8 +65,8 @@ def _run_az(*args: str) -> Any:
             text=True,
             encoding="utf-8",
         )
-    except FileNotFoundError as exc:
-        raise ToolError("Azure CLI is not installed or is not available on PATH.") from exc
+    except (FileNotFoundError, OSError) as exc:
+        raise ToolError("Azure CLI could not be started.") from exc
     except subprocess.CalledProcessError as exc:
         message = (exc.stderr or exc.stdout or "").strip()
         raise ToolError(message or f"Azure CLI command failed: {' '.join(command)}") from exc
@@ -65,7 +83,7 @@ def _active_account(login: bool) -> dict:
     except ToolError:
         if not login:
             raise ToolError("Azure authentication is required. Run `az login` and retry.")
-        subprocess.run(["az", "login"], check=True)
+        subprocess.run([_az_executable(), "login"], check=True)
         return _run_az("account", "show")
 
 
@@ -118,6 +136,37 @@ def _resource_graph_query(token: str, query: str, subscriptions: List[str]) -> L
     return response.get("data", []) if isinstance(response, dict) else []
 
 
+def _state_dir() -> Path:
+    configured = os.getenv("SENTINEL_XDR_MIGRATION_STATE_DIR")
+    return Path(configured).expanduser() if configured else DEFAULT_STATE_DIR
+
+
+def _read_workspace_settings() -> dict:
+    path = _state_dir() / CONFIG_NAME
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _save_workspace_settings(workspace: dict, tenant_id: Optional[str]) -> Path:
+    state_root = _state_dir()
+    state_root.mkdir(parents=True, exist_ok=True)
+    path = state_root / CONFIG_NAME
+    settings = _read_workspace_settings()
+    settings.update({
+        "tenantId": tenant_id,
+        "workspaceId": workspace["id"],
+        "workspaceName": workspace["name"],
+        "workspaceVerifiedAt": datetime.now(timezone.utc).isoformat(),
+    })
+    path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def _workspace_query(selection: Optional[str]) -> str:
     base = "Resources | where type =~ 'microsoft.operationalinsights/workspaces'"
     if not selection:
@@ -125,46 +174,111 @@ def _workspace_query(selection: Optional[str]) -> str:
     escaped = selection.replace("'", "''")
     return (
         base
-        + f" | where name =~ '{escaped}' or tostring(properties.customerId) =~ '{escaped}'"
+        + f" | where id =~ '{escaped}' or name =~ '{escaped}' "
+        + f"or tostring(properties.customerId) =~ '{escaped}'"
         + " | project id, name, subscriptionId, resourceGroup, properties"
+    )
+
+
+def _tenant_subscriptions(account: dict) -> List[dict]:
+    try:
+        subscriptions = _run_az("account", "list", "--all")
+    except ToolError:
+        return [account]
+    tenant_id = str(account.get("tenantId") or "").lower()
+    accessible = [
+        subscription
+        for subscription in subscriptions
+        if isinstance(subscription, dict)
+        and str(subscription.get("tenantId") or "").lower() == tenant_id
+        and str(subscription.get("state") or "Enabled").lower() == "enabled"
+        and subscription.get("id")
+    ]
+    return accessible or [account]
+
+
+def _subscription_ids(value: str | Sequence[str]) -> List[str]:
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _defender_xdr_primary_candidates(
+    token: str,
+    workspaces: List[dict],
+) -> Tuple[List[dict], List[dict]]:
+    candidates: List[dict] = []
+    inaccessible: List[dict] = []
+    for workspace in workspaces:
+        url = (
+            f"https://management.azure.com{workspace['id']}"
+            "/providers/Microsoft.SecurityInsights/dataConnectors"
+            f"?api-version={DATA_CONNECTORS_API_VERSION}"
+        )
+        try:
+            _, response = _request_json("GET", url, token)
+        except ToolError as exc:
+            inaccessible.append({
+                "name": workspace.get("name"),
+                "id": workspace.get("id"),
+                "error": str(exc),
+            })
+            continue
+        connectors = (response or {}).get("value", [])
+        if any(_is_primary_defender_xdr_connector(connector) for connector in connectors):
+            candidates.append(workspace)
+    return candidates, inaccessible
+
+
+def _is_primary_defender_xdr_connector(connector: Any) -> bool:
+    if not isinstance(connector, dict):
+        return False
+    if str(connector.get("kind") or "").lower() not in DEFENDER_XDR_CONNECTOR_KINDS:
+        return False
+    data_types = ((connector.get("properties") or {}).get("dataTypes") or {})
+    return all(
+        str(((data_types.get(name) or {}).get("state") or "")).lower() == "enabled"
+        for name in ("alerts", "incidents")
     )
 
 
 def discover_workspace(
     token: str,
-    subscription_id: str,
+    subscription_ids: str | Sequence[str],
     requested_workspace: Optional[str],
-) -> Tuple[dict, List[dict], str]:
-    selection = (
-        requested_workspace
-        or os.getenv("AZURE_SENTINEL_WORKSPACE_ID")
+    rediscover_workspace: bool = False,
+    tenant_id: Optional[str] = None,
+) -> dict:
+    settings = _read_workspace_settings()
+    saved_tenant = settings.get("tenantId")
+    if (
+        not requested_workspace
+        and not rediscover_workspace
+        and saved_tenant
+        and tenant_id
+        and str(saved_tenant).lower() != str(tenant_id).lower()
+    ):
+        raise ToolError(
+            "Saved workspace settings belong to a different tenant. Use "
+            "--rediscover-workspace or provide the workspace ARM resource ID."
+        )
+    saved_workspace = None if rediscover_workspace else settings.get("workspaceId")
+    environment_workspace = (
+        os.getenv("AZURE_SENTINEL_WORKSPACE_ID")
         or os.getenv("LA_WORKSPACE_ID")
     )
-    source = (
-        "explicit"
-        if requested_workspace
-        else "agent-context"
-        if selection
-        else "active-subscription"
-    )
-
-    if selection and selection.lower().startswith("/subscriptions/"):
-        parts = selection.split("/")
-        if len(parts) < 9:
-            raise ToolError("The workspace ARM resource ID is malformed.")
-        selected = {
-            "id": selection,
-            "name": parts[-1],
-            "subscriptionId": parts[2],
-            "resourceGroup": parts[4],
-            "properties": {},
-        }
-        return selected, [selected], source
+    selection = requested_workspace or environment_workspace or saved_workspace
+    if requested_workspace:
+        source = "explicit"
+    elif environment_workspace:
+        source = "agent-context"
+    elif saved_workspace:
+        source = "saved-settings"
+    else:
+        source = "defender-xdr-primary"
 
     rows = _resource_graph_query(
         token,
         _workspace_query(selection),
-        [subscription_id],
+        _subscription_ids(subscription_ids),
     )
     rows.sort(key=lambda row: (row.get("name") or "").lower())
     if not rows:
@@ -172,12 +286,45 @@ def discover_workspace(
         raise ToolError(
             f"No accessible Log Analytics workspace{detail} was found in the active subscription."
         )
-    if selection and len(rows) > 1:
+    if selection:
+        if len(rows) > 1:
+            matches = "\n".join(f"- {row['id']}" for row in rows)
+            raise ToolError(
+                f"Multiple workspaces match {selection!r}. Pass a full ARM resource ID:\n{matches}"
+            )
+        return {
+            "workspace": rows[0],
+            "alternatives": rows,
+            "source": source,
+            "settingsExist": bool(saved_workspace),
+            "configuredWorkspaceId": saved_workspace,
+            "primaryDetection": "not-run",
+            "inaccessibleWorkspaces": [],
+        }
+
+    candidates, inaccessible = _defender_xdr_primary_candidates(token, rows)
+    if len(candidates) > 1:
+        matches = "\n".join(f"- {row['id']}" for row in candidates)
+        raise ToolError(
+            "Multiple accessible workspaces expose a Defender XDR connector, so the "
+            f"primary workspace is ambiguous. Pass its full ARM resource ID:\n{matches}"
+        )
+    if not candidates:
         matches = "\n".join(f"- {row['id']}" for row in rows)
         raise ToolError(
-            f"Multiple workspaces match {selection!r}. Pass a full ARM resource ID:\n{matches}"
+            "The Defender XDR primary workspace could not be inferred from an active "
+            "MicrosoftThreatProtection connector. Pass the primary workspace ARM "
+            f"resource ID with --workspace. Accessible workspaces:\n{matches}"
         )
-    return rows[0], rows, source
+    return {
+        "workspace": candidates[0],
+        "alternatives": rows,
+        "source": source,
+        "settingsExist": False,
+        "configuredWorkspaceId": None,
+        "primaryDetection": "microsoft-threat-protection-connector",
+        "inaccessibleWorkspaces": inaccessible,
+    }
 
 
 def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> dict:
@@ -444,6 +591,16 @@ def ingest(
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", help="Workspace name, customer ID, or ARM resource ID.")
+    parser.add_argument(
+        "--rediscover-workspace",
+        action="store_true",
+        help="Ignore saved workspace settings and rediscover the Defender XDR primary workspace.",
+    )
+    parser.add_argument(
+        "--confirm-workspace",
+        action="store_true",
+        help="Confirm and persist the selected workspace for this tenant. This is not write approval.",
+    )
     parser.add_argument("--stream", required=True, help="DCR input stream, such as Custom-Example_CL.")
     parser.add_argument("--payload", type=Path, help="Explicit reviewed JSON array to ingest.")
     parser.add_argument("--solution", help="Solution folder name used for default fixture discovery.")
@@ -481,12 +638,53 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         account = _active_account(args.login)
+        subscriptions = _tenant_subscriptions(account)
+        subscription_names = {
+            str(subscription.get("id")): subscription.get("name")
+            for subscription in subscriptions
+        }
         arm_token = _access_token(ARM_RESOURCE)
-        workspace, alternatives, selection_source = discover_workspace(
+        discovery = discover_workspace(
             arm_token,
-            account["id"],
+            list(subscription_names),
             args.workspace,
+            args.rediscover_workspace,
+            account.get("tenantId"),
         )
+        workspace = discovery["workspace"]
+        verification = {
+            "required": not args.confirm_workspace,
+            "verifiedThisRun": bool(args.confirm_workspace),
+            "settingsExist": discovery["settingsExist"],
+            "configuredWorkspaceId": discovery["configuredWorkspaceId"],
+            "recommendedWorkspaceId": workspace["id"],
+            "recommendedWorkspaceName": workspace["name"],
+            "selectionSource": discovery["source"],
+            "primaryDetection": discovery["primaryDetection"],
+            "actions": (
+                ["Use this workspace", "Rediscover primary workspace", "Provide workspace ID", "Cancel"]
+                if discovery["settingsExist"]
+                else ["Use recommended workspace", "Provide workspace ID", "Cancel"]
+            ),
+        }
+        if not args.confirm_workspace:
+            print(json.dumps({
+                "status": "awaiting-workspace-confirmation",
+                "tenantId": account.get("tenantId"),
+                "subscriptionId": workspace["subscriptionId"],
+                "subscriptionName": subscription_names.get(workspace["subscriptionId"]),
+                "workspace": workspace["name"],
+                "workspaceResourceId": workspace["id"],
+                "workspaceAlternatives": [
+                    {"name": item.get("name"), "id": item.get("id")}
+                    for item in discovery["alternatives"]
+                ],
+                "workspaceVerification": verification,
+                "writeApproved": False,
+            }, indent=2))
+            return 0
+
+        settings_path = _save_workspace_settings(workspace, account.get("tenantId"))
         dcr = find_dcr_for_stream(
             arm_token,
             workspace,
@@ -495,13 +693,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         result = {
             "tenantId": account.get("tenantId"),
             "subscriptionId": workspace["subscriptionId"],
-            "subscriptionName": account.get("name"),
+            "subscriptionName": subscription_names.get(workspace["subscriptionId"]),
             "workspace": workspace["name"],
             "workspaceResourceId": workspace["id"],
-            "workspaceSelectionSource": selection_source,
+            "workspaceSelectionSource": discovery["source"],
             "workspaceAlternatives": [
-                {"name": item.get("name"), "id": item.get("id")} for item in alternatives
+                {"name": item.get("name"), "id": item.get("id")}
+                for item in discovery["alternatives"]
             ],
+            "workspaceSettings": str(settings_path),
+            "workspaceVerification": verification,
             "stream": args.stream,
             "dcr": dcr["name"],
             "dcrResourceId": dcr["id"],

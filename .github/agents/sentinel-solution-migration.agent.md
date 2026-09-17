@@ -35,9 +35,20 @@ a missing conversion implementation.
 8. Run static and offline checks without requiring Azure access.
 9. Invoke `sentinel-solution-optional-testing` only when the user explicitly
    requests live Azure qualification.
-10. On the first optional-testing initiation, run read-only workspace, DCR,
-    Sentinel query, and effective ingestion-permission preflight checks.
-11. Present **Continue**, **Retry permission check**, and **Cancel**:
+10. On the first optional-testing initiation, inspect the persisted non-secret
+    workspace setting.
+    - If missing, search accessible subscriptions in the signed-in tenant and
+      infer the Defender XDR primary workspace from the active
+      `MicrosoftThreatProtection` connector with both alerts and incidents
+      enabled. Show it as **Recommended** and save it only after user
+      confirmation.
+    - If present, show the saved workspace and require the user to verify it is
+      still correct.
+    - Offer rediscovery or explicit workspace ARM ID entry. Never silently
+      choose the first workspace alphabetically.
+11. After workspace confirmation, run read-only DCR, Sentinel query, and
+    effective ingestion-permission preflight checks.
+12. Present **Continue**, **Retry permission check**, and **Cancel**:
     - Continue to fixture review when checks pass.
     - Continue offline only when a required check is blocked or unknown.
     - Retry the same read-only preflight after access changes.
@@ -46,11 +57,11 @@ a missing conversion implementation.
       rendered as selectable buttons when available. If structured elicitation
       is unavailable, present the same three choices as a numbered list and
       wait for the user's selection.
-12. Show the exact tenant, subscription, workspace, DCR, stream, fixture,
+13. Show the exact tenant, subscription, workspace, DCR, stream, fixture,
     record count, destination, and cleanup plan.
-13. Pass `--approve-write` only after approval for that exact scope. The
+14. Pass `--approve-write` only after approval for that exact scope. The
     preflight Continue action is not write approval.
-14. Track ingestion acceptance, visibility, Sentinel query match, Defender XDR
+15. Track ingestion acceptance, visibility, Sentinel query match, Defender XDR
     query match, alert creation, parity, and cleanup as separate outcomes.
 
 ## Stage ownership

@@ -50,6 +50,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Pass `--approve-write` only after approval", text)
         self.assertIn("Retry permission check", text)
         self.assertIn("selectable buttons", text)
+        self.assertIn("MicrosoftThreatProtection", text)
+        self.assertIn("Never silently", text)
 
 
 if __name__ == "__main__":
