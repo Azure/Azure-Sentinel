@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 
+from .artifacts import report_directory
 from .catalog import referenced_catalog_tables, referenced_custom_tables
 from .converter import xdr_detection_files
 from .onboarding import (
@@ -64,7 +65,7 @@ def _write_runtime_artifacts(
     *,
     table_availability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    output = root / "XDR Detections"
+    output = report_directory(root, create=True)
     summary = {
         "solution": str(root),
         "platform": PROVIDER_PLATFORMS[provider],

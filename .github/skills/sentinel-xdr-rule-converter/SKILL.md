@@ -36,7 +36,7 @@ python -m pip install -e Tools\SentinelToXDRMigration
 
 4. Review the analytic-rule count and source paths.
 5. If deterministic rewrites are needed, create
-   `XDR Detections/migration-config.yaml`.
+   `Reports/<solution>/sentinel-xdr-migration/migration-config.yaml`.
 6. Run:
 
    ```powershell
@@ -49,7 +49,10 @@ python -m pip install -e Tools\SentinelToXDRMigration
    - needs-review count;
    - conflicts;
    - every warning and error;
-   - the generated `XDR Detections/transformation-report.html` path.
+   - the generated
+     `Reports/<solution>/sentinel-xdr-migration/transformation-report.html`
+     path.
 
 The converter must not modify `Analytic Rules` or `Package/mainTemplate.json`.
 Generated detections must remain disabled.
+`XDR Detections` must contain detection YAML only.

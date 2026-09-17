@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from .artifacts import existing_artifact_path, report_directory
 from .converter import analytic_rule_files, validate_document
 
 JSON_NAME = "migration-report.json"
@@ -68,17 +69,26 @@ def build_solution_report(
 ) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
     output = root / "XDR Detections"
-    manifest = _read_json(output / "manifest.json")
+    reports = report_directory(root, create=True)
+    manifest = _read_json(existing_artifact_path(root, "manifest.json"))
     manifest_by_source = {
         Path(item.get("source") or "").name: item for item in manifest.get("results") or []
     }
     runtime_reports = [
-        _read_json(path) for path in sorted(output.glob("runtime-validation.*.json"))
+        _read_json(path)
+        for path in sorted(reports.glob("runtime-validation.*.json"))
     ]
-    deployment = _read_json(output / "deployment.graph.json")
-    analytic_deployment = _read_json(output / "deployment.sentinel.json")
-    parity = _read_json(output / "alert-parity-report.json")
-    query_parity = _read_json(output / "mock-query-parity.json")
+    if not runtime_reports:
+        runtime_reports = [
+            _read_json(path)
+            for path in sorted(output.glob("runtime-validation.*.json"))
+        ]
+    deployment = _read_json(existing_artifact_path(root, "deployment.graph.json"))
+    analytic_deployment = _read_json(
+        existing_artifact_path(root, "deployment.sentinel.json")
+    )
+    parity = _read_json(existing_artifact_path(root, "alert-parity-report.json"))
+    query_parity = _read_json(existing_artifact_path(root, "mock-query-parity.json"))
     deployment_by_id = {
         str(item.get("id")): item for item in deployment.get("results") or []
     }
@@ -343,8 +353,8 @@ def build_solution_report(
             ],
         },
     }
-    json_path = output / JSON_NAME
-    html_path = output / HTML_NAME
+    json_path = reports / JSON_NAME
+    html_path = reports / HTML_NAME
     report["jsonReport"] = str(json_path)
     report["htmlReport"] = str(html_path)
     json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

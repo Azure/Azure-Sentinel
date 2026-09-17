@@ -21,6 +21,19 @@ query: |
   | where ActionType == "Example"
 """
 
+RICH_DETECTION = """\
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+properties:
+  id: xdr-example
+  displayName: Example rich detection
+  queryCondition:
+    queryText: |
+      DeviceEvents
+      | where ActionType == "Example"
+"""
+
 
 class XdrDetectionCleanupTests(unittest.TestCase):
     def test_preserves_detection_yaml_and_moves_reports_and_config(self):
@@ -29,29 +42,27 @@ class XdrDetectionCleanupTests(unittest.TestCase):
             xdr = root / "Solutions" / "Example" / "XDR Detections"
             xdr.mkdir(parents=True)
             (xdr / "ExampleDetection.yaml").write_text(DETECTION, encoding="utf-8")
+            (xdr / "RichDetection.yaml").write_text(
+                RICH_DETECTION, encoding="utf-8"
+            )
             (xdr / "migration-config.yaml").write_text("version: 1\n", encoding="utf-8")
             (xdr / "migration-report.json").write_text("{}", encoding="utf-8")
             (xdr / "runtime-validation.html").write_text("<html></html>", encoding="utf-8")
 
             plan = cleanup.plan_cleanup(root)
-            result = cleanup.apply_cleanup(
-                plan,
-                root / "Reports",
-                run_id="20260917T080000Z",
-            )
+            result = cleanup.apply_cleanup(plan, root / "Reports")
 
             self.assertEqual(3, result["movedCount"])
             self.assertTrue((xdr / "ExampleDetection.yaml").is_file())
             self.assertEqual(
-                ["ExampleDetection.yaml"],
+                ["ExampleDetection.yaml", "RichDetection.yaml"],
                 sorted(path.name for path in xdr.iterdir()),
             )
             report_root = (
                 root
                 / "Reports"
                 / "Example"
-                / "xdr-detection-artifacts"
-                / "20260917T080000Z"
+                / "sentinel-xdr-migration"
             )
             self.assertTrue((report_root / "migration-config.yaml").is_file())
             self.assertTrue((report_root / "migration-report.json").is_file())

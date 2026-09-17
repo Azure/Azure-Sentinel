@@ -115,6 +115,17 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("converted", content)
         self.assertNotIn("https://", content)
 
+    def test_convert_keeps_xdr_detections_yaml_only(self) -> None:
+        result = convert_solution(self.solution)
+        output = self.solution / "XDR Detections"
+
+        self.assertEqual(
+            ["SampleRule.yaml"],
+            sorted(path.name for path in output.iterdir()),
+        )
+        self.assertTrue(Path(result["manifest"]).is_file())
+        self.assertNotEqual(output, Path(result["manifest"]).parent)
+
     def test_converter_refuses_to_overwrite_different_content(self) -> None:
         convert_solution(self.solution)
         output = self.solution / "XDR Detections" / "SampleRule.yaml"

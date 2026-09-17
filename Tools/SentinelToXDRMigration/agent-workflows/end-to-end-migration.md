@@ -61,7 +61,7 @@ sentinel-xdr-migration workflow-next --solution "<solution-path>"
 ```
 
 The ignored local file
-`XDR Detections\workflow-state.json` records stage status, attempts,
+`Reports\<solution>\sentinel-xdr-migration\workflow-state.json` records stage status, attempts,
 timestamps, artifacts, evidence, profile, workspace, and version action. Never
 store credentials or tokens in it and never mark a stage passed without
 evidence.
@@ -78,7 +78,7 @@ sentinel-xdr-migration workflow-complete-stage `
   --stage discovery `
   --status passed `
   --message "Reviewed source inventory" `
-  --artifact inspection="XDR Detections\inspection.json" `
+  --artifact inspection="Reports\<solution>\sentinel-xdr-migration\inspection.json" `
   --evidence "Analytic Rules\Example.yaml"
 ```
 
@@ -98,6 +98,9 @@ and content without defensible attacker behavior or observable telemetry.
 Run `sentinel-xdr-migration convert`. Preserve source Analytic Rules. Generated
 files belong under `XDR Detections`, remain disabled, and contain source
 provenance. Pass only with no conflicts and no unresolved `needsReview` item.
+Only deployable detection YAML belongs under `XDR Detections`; conversion
+manifests, reports, configuration, validation evidence, and state belong under
+`Reports\<solution>\sentinel-xdr-migration`.
 
 ### Validation
 

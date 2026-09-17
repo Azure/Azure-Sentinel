@@ -37,8 +37,10 @@ sentinel-xdr-migration deploy-analytic-rules `
 sentinel-xdr-migration deploy --solution "<solution-path>"
 ```
 
-The first command writes `XDR Detections\deployment.sentinel.json`. The second
-writes `XDR Detections\deployment.graph.json`.
+The first command writes
+`Reports\<solution>\sentinel-xdr-migration\deployment.sentinel.json`. The
+second writes
+`Reports\<solution>\sentinel-xdr-migration\deployment.graph.json`.
 
 ## Safety gates
 

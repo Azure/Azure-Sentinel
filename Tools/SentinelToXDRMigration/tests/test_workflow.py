@@ -11,6 +11,7 @@ from sentinel_xdr_migration.workflow import (
     start_workflow_stage,
     workflow_status,
 )
+from sentinel_xdr_migration.artifacts import artifact_path
 
 
 class WorkflowTests(unittest.TestCase):
@@ -38,7 +39,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(resumed["resumed"])
         self.assertEqual(resumed["next"], "discovery")
         self.assertTrue(
-            (self.solution / "XDR Detections" / "workflow-state.json").is_file()
+            artifact_path(self.solution, "workflow-state.json").is_file()
         )
         self.assertEqual(
             resumed["stages"]["mockIngestion"]["status"],
@@ -50,6 +51,19 @@ class WorkflowTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "blocked by: discovery"):
             start_workflow_stage(self.solution, "conversion")
+
+    def test_legacy_state_moves_to_reports_when_resumed(self) -> None:
+        created = initialize_workflow(self.solution)
+        preferred = Path(created["statePath"])
+        legacy = self.solution / "XDR Detections" / "workflow-state.json"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        preferred.replace(legacy)
+
+        resumed = workflow_status(self.solution)
+
+        self.assertEqual(preferred, Path(resumed["statePath"]))
+        self.assertTrue(preferred.is_file())
+        self.assertFalse(legacy.exists())
 
     def test_failed_stage_can_be_retried(self) -> None:
         initialize_workflow(self.solution)
@@ -74,7 +88,7 @@ class WorkflowTests(unittest.TestCase):
             "discovery",
             status="passed",
             message="one source rule discovered",
-            artifacts={"inspection": "XDR Detections/inspection.json"},
+            artifacts={"inspection": "Reports/Sample/sentinel-xdr-migration/inspection.json"},
             evidence=["Analytic Rules/Sample.yaml"],
         )
 
@@ -82,7 +96,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(next_workflow_stage(self.solution)["next"], "conversion")
         persisted = workflow_status(self.solution)
         discovery = persisted["stages"]["discovery"]
-        self.assertEqual(discovery["artifacts"]["inspection"], "XDR Detections/inspection.json")
+        self.assertEqual(
+            discovery["artifacts"]["inspection"],
+            "Reports/Sample/sentinel-xdr-migration/inspection.json",
+        )
         self.assertEqual(discovery["evidence"], ["Analytic Rules/Sample.yaml"])
 
     def test_context_mismatch_is_rejected(self) -> None:

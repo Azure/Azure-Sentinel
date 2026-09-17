@@ -14,6 +14,7 @@ from sentinel_xdr_migration.alert_parity import (
     start_alert_parity,
     start_alert_parity_batch,
 )
+from sentinel_xdr_migration.artifacts import artifact_path
 
 
 def alert(match_key: str, *, account: str = "user@example.test") -> dict:
@@ -283,7 +284,9 @@ class AlertParityTests(unittest.TestCase):
                     )
 
             state = json.loads(
-                (output / "alert-parity-state.json").read_text(encoding="utf-8")
+                artifact_path(root, "alert-parity-state.json").read_text(
+                    encoding="utf-8"
+                )
             )
 
         disable.assert_called_once()
@@ -364,7 +367,9 @@ class AlertParityTests(unittest.TestCase):
                 )
 
             state = json.loads(
-                (output / "alert-parity-state.json").read_text(encoding="utf-8")
+                artifact_path(root, "alert-parity-state.json").read_text(
+                    encoding="utf-8"
+                )
             )
 
         self.assertEqual(result["rulesEnabled"], 2)

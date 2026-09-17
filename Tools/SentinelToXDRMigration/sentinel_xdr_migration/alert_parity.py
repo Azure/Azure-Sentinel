@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from .artifacts import artifact_path, migrate_legacy_artifact
 from .converter import validate_document, xdr_detection_files
 from .deployment import DEPLOYMENT_ENDPOINT, _deployment_token, _graph_request
 
@@ -379,7 +380,7 @@ def start_alert_parity(
     if not expected_keys:
         raise ValueError("at least one expected match key is required")
     root, pairs = _load_pairs(solution, detections)
-    state_path = root / "XDR Detections" / STATE_FILE_NAME
+    state_path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     if state_path.exists():
         existing = json.loads(state_path.read_text(encoding="utf-8"))
         if existing.get("status") == "awaiting-alerts":
@@ -518,7 +519,7 @@ def start_alert_parity_batch(
             + ", ".join(missing)
         )
 
-    state_path = root / "XDR Detections" / STATE_FILE_NAME
+    state_path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     if state_path.exists():
         existing = json.loads(state_path.read_text(encoding="utf-8"))
         if existing.get("status") == "awaiting-alerts":
@@ -734,8 +735,7 @@ def complete_alert_parity(
     state_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
-    output = root / "XDR Detections"
-    state_path = output / STATE_FILE_NAME
+    state_path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     if not state_path.exists():
         raise ValueError("no alert parity state exists for this solution")
     state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -785,7 +785,7 @@ def complete_alert_parity(
         "comparisons": comparisons,
         "cleanup": cleanup,
     }
-    report_path = output / REPORT_FILE_NAME
+    report_path = artifact_path(root, REPORT_FILE_NAME, create_parent=True)
     report["reportPath"] = str(report_path)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     state["status"] = "completed" if passed else "failed"
@@ -800,7 +800,7 @@ def abort_alert_parity(
     solution: str | Path, *, state_dir: str | Path | None = None
 ) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
-    state_path = root / "XDR Detections" / STATE_FILE_NAME
+    state_path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     if not state_path.exists():
         raise ValueError("no alert parity state exists for this solution")
     state = json.loads(state_path.read_text(encoding="utf-8"))

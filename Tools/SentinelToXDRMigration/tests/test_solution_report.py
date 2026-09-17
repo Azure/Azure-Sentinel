@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from sentinel_xdr_migration.converter import convert_solution
+from sentinel_xdr_migration.artifacts import report_directory
 from sentinel_xdr_migration.solution_report import build_solution_report
 
 
@@ -39,7 +40,8 @@ class SolutionReportTests(unittest.TestCase):
             )
             convert_solution(root)
             output = root / "XDR Detections"
-            (output / "runtime-validation.log-analytics-cli.json").write_text(
+            reports = report_directory(root, create=True)
+            (reports / "runtime-validation.log-analytics-cli.json").write_text(
                 json.dumps(
                     {
                         "platform": "Microsoft Sentinel Log Analytics",
@@ -55,7 +57,7 @@ class SolutionReportTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (output / "runtime-validation.graph.json").write_text(
+            (reports / "runtime-validation.graph.json").write_text(
                 json.dumps(
                     {
                         "platform": "Microsoft Defender XDR Advanced Hunting",
@@ -72,10 +74,10 @@ class SolutionReportTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (output / "mock-query-parity.json").write_text(
+            (reports / "mock-query-parity.json").write_text(
                 json.dumps(
                     {
-                        "reportPath": str(output / "mock-query-parity.json"),
+                        "reportPath": str(reports / "mock-query-parity.json"),
                         "comparisons": [
                             {
                                 "detection": "Rule.yaml",
@@ -115,6 +117,11 @@ class SolutionReportTests(unittest.TestCase):
             self.assertEqual(report["rules"][0]["queryParity"]["status"], "passed")
             self.assertTrue(Path(report["jsonReport"]).exists())
             self.assertTrue(Path(report["htmlReport"]).exists())
+            self.assertEqual(reports, Path(report["jsonReport"]).parent)
+            self.assertEqual(
+                ["Rule.yaml"],
+                sorted(path.name for path in output.iterdir()),
+            )
             html = Path(report["htmlReport"]).read_text(encoding="utf-8")
             self.assertIn("log-analytics-cli", html)
             self.assertIn("graph", html)

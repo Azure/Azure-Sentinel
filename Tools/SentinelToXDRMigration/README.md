@@ -121,10 +121,10 @@ sentinel-xdr-migration workflow-status --solution "Solutions\<solution>"
 sentinel-xdr-migration workflow-next --solution "Solutions\<solution>"
 ```
 
-The manifest is written to:
+The workflow state is written to:
 
 ```text
-Solutions\<solution>\XDR Detections\workflow-state.json
+Reports\<solution>\sentinel-xdr-migration\workflow-state.json
 ```
 
 Each stage is explicitly started and completed so interrupted runs can resume
@@ -139,7 +139,7 @@ sentinel-xdr-migration workflow-complete-stage `
   --solution "Solutions\<solution>" `
   --stage discovery `
   --status passed `
-  --artifact inspection="XDR Detections\inspection.json" `
+  --artifact inspection="Reports\<solution>\sentinel-xdr-migration\inspection.json" `
   --evidence "Analytic Rules\Example.yaml"
 ```
 
@@ -178,7 +178,7 @@ python -m sentinel_xdr_migration.cli convert `
 Every conversion run automatically creates:
 
 ```text
-Solutions\<solution>\XDR Detections\transformation-report.html
+Reports\<solution>\sentinel-xdr-migration\transformation-report.html
 ```
 
 The self-contained report shows attempted, converted, needs-review, and
@@ -204,8 +204,8 @@ The runtime validator probes required tables first. A query is reported as
 in the current tenant. It creates:
 
 ```text
-XDR Detections\runtime-validation.graph.json
-XDR Detections\runtime-validation.graph.html
+Reports\<solution>\sentinel-xdr-migration\runtime-validation.graph.json
+Reports\<solution>\sentinel-xdr-migration\runtime-validation.graph.html
 ```
 
 Agents using the official Triage MCP should inspect its advertised capabilities
@@ -292,8 +292,9 @@ comparison fails. If capture cannot be completed, run:
 sentinel-xdr-migration abort-alert-parity --solution "Solutions\<solution>"
 ```
 
-State and reports are written under `XDR Detections` as
-`alert-parity-state.json` and `alert-parity-report.json`.
+State and reports are written under
+`Reports\<solution>\sentinel-xdr-migration` as `alert-parity-state.json` and
+`alert-parity-report.json`.
 
 ## Consolidated solution report
 
@@ -315,8 +316,8 @@ retains the complete sanitized provider response rather than only a summary.
 Outputs:
 
 ```text
-XDR Detections\migration-report.json
-XDR Detections\migration-report.html
+Reports\<solution>\sentinel-xdr-migration\migration-report.json
+Reports\<solution>\sentinel-xdr-migration\migration-report.html
 ```
 
 ## Deploy Custom Detections
@@ -348,14 +349,14 @@ sentinel-xdr-migration deploy --solution "Solutions\<solution>"
 
 Rules are always submitted as disabled. The command creates missing rules,
 updates matching client-provided IDs, and writes
-`XDR Detections\deployment.graph.json`.
+`Reports\<solution>\sentinel-xdr-migration\deployment.graph.json`.
 
 Use `--overwrite` to replace previously generated files. Without it, the
 converter refuses to overwrite a file whose content differs.
 
 ## Optional migration configuration
 
-Create `XDR Detections/migration-config.yaml` when a solution needs explicit
+Create `Reports/<solution>/sentinel-xdr-migration/migration-config.yaml` when a solution needs explicit
 table, function, or column rewrites:
 
 ```yaml

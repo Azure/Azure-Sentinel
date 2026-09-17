@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .artifacts import existing_artifact_path, report_directory
 from jsonschema import Draft202012Validator
 
 from . import __version__
@@ -211,7 +213,11 @@ def solution_paths(solution: str | Path) -> tuple[Path, Path, Path]:
 
 
 def load_config(output_dir: Path, explicit: str | Path | None = None) -> dict[str, Any]:
-    path = Path(explicit).expanduser().resolve() if explicit else output_dir / "migration-config.yaml"
+    path = (
+        Path(explicit).expanduser().resolve()
+        if explicit
+        else existing_artifact_path(output_dir.parent, "migration-config.yaml")
+    )
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as handle:
@@ -804,10 +810,14 @@ def convert_solution(
             )
         )
 
-    transformation_report = output / "transformation-report.html"
+    reports = report_directory(root, create=True)
+    transformation_report = reports / "transformation-report.html"
+    manifest_path = reports / "manifest.json"
     summary = {
         "solution": str(root),
         "outputDirectory": str(output),
+        "reportDirectory": str(reports),
+        "manifest": str(manifest_path),
         "transformationReport": str(transformation_report),
         "total": len(results),
         "converted": sum(result.status == "converted" for result in results),
@@ -820,7 +830,7 @@ def convert_solution(
         "conflicts": sum(result.status == "conflict" for result in results),
         "results": [result.as_dict() for result in results],
     }
-    (output / "manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     write_transformation_report(summary, transformation_report)

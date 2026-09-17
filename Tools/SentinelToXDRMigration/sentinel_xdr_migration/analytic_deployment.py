@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from .artifacts import artifact_path
 from .alert_parity import _arm_request, _arm_token, _sentinel_rule_url
 from .converter import iso_duration, solution_paths
 
@@ -133,7 +134,7 @@ def deploy_analytic_rules(
         "failed": sum(not item["success"] for item in results),
         "results": results,
     }
-    report_path = output / "deployment.sentinel.json"
+    report_path = artifact_path(root, "deployment.sentinel.json", create_parent=True)
     report["reportPath"] = str(report_path)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report

@@ -89,7 +89,8 @@ detection. It:
 1. verifies the AR and CD both exist and are disabled;
 2. enables both through Azure Resource Manager and Microsoft Graph;
 3. ingests the payload through `azure-monitor-logs-ingestion`;
-4. writes `XDR Detections/alert-parity-state.json`; and
+4. writes
+   `Reports/<solution>/sentinel-xdr-migration/alert-parity-state.json`; and
 5. emits Sentinel and Advanced Hunting capture queries.
 
 ## Capture alerts

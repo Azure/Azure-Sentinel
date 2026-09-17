@@ -52,7 +52,8 @@ runtime providers are unavailable.
 
 1. Before initialization, ask whether optional testing is wanted. Default to
    `authoring` when it is declined or undecided.
-2. Initialize or resume `XDR Detections\workflow-state.json`.
+2. Initialize or resume
+   `Reports\<solution>\sentinel-xdr-migration\workflow-state.json`.
 3. Follow the next gated stage reported by `workflow-next`.
 4. Delegate each stage to its owning specialist skill.
 5. Record terminal status, artifacts, and evidence through the workflow CLI.

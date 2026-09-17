@@ -7,6 +7,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from .artifacts import artifact_path, existing_artifact_path, migrate_legacy_artifact
+
 STATE_FILE_NAME = "workflow-state.json"
 SCHEMA_VERSION = "1.1.0"
 WORKFLOW_PROFILES = ("authoring", "qualification")
@@ -49,8 +51,7 @@ def _paths(solution: str | Path) -> tuple[Path, Path]:
     root = Path(solution).expanduser().resolve()
     if not root.is_dir():
         raise ValueError(f"solution folder does not exist: {root}")
-    output = root / "XDR Detections"
-    return root, output / STATE_FILE_NAME
+    return root, artifact_path(root, STATE_FILE_NAME, create_parent=True)
 
 
 def _schema() -> dict[str, Any]:
@@ -80,7 +81,8 @@ def _write(path: Path, state: dict[str, Any]) -> None:
 
 
 def _load(solution: str | Path) -> tuple[Path, dict[str, Any]]:
-    _, path = _paths(solution)
+    root, _ = _paths(solution)
+    path = existing_artifact_path(root, STATE_FILE_NAME)
     if not path.is_file():
         raise ValueError(
             f"workflow state does not exist: {path}; run workflow-init first"
@@ -89,6 +91,7 @@ def _load(solution: str | Path) -> tuple[Path, dict[str, Any]]:
     if not isinstance(state, dict):
         raise ValueError(f"workflow state must be a JSON object: {path}")
     _validate(state)
+    path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     return path, state
 
 
@@ -122,7 +125,8 @@ def initialize_workflow(
         "versionBump": version_bump,
         "workflowProfile": workflow_profile,
     }
-    if path.exists():
+    existing_path = existing_artifact_path(root, STATE_FILE_NAME)
+    if existing_path.exists():
         _, state = _load(root)
         context = state["context"]
         for key, value in requested_context.items():
