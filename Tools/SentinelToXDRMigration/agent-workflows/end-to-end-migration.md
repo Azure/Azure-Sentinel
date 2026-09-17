@@ -15,7 +15,7 @@ packaging, deployment, or comparison logic in prompts.
 
 ## Profiles
 
-### Authoring — default
+### Authoring
 
 `Discovery -> Conversion -> Validation -> Packaging -> Report`
 
@@ -26,9 +26,10 @@ deployment, mock ingestion, or alert-parity test.
 
 `Discovery -> Conversion -> Validation -> Packaging -> Deployment -> Mock ingestion -> Alert parity -> Report`
 
-This is optional internal or ISV lab testing. Before initialization, ask
-whether the user wants it. If testing is declined, unavailable, or undecided,
-use `authoring`. A configured tenant or workspace does not imply consent.
+This is optional internal or ISV lab testing. Before initialization, require
+the user to explicitly choose **Authoring**, **Qualification**, or **Cancel**.
+There is no default and no workflow state may be created while the choice is
+missing or declined. A configured tenant or workspace does not imply consent.
 
 Qualification requires an approved non-production tenant and workspace plus
 separate approval immediately before deployment or ingestion writes.
@@ -41,7 +42,9 @@ Install the CLI when necessary:
 python -m pip install -e Tools\SentinelToXDRMigration
 ```
 
-Initialize:
+Run `workflow-status` first. If state does not exist, or
+`context.profileSelectionConfirmed` is not `true`, obtain the explicit profile
+selection before initializing:
 
 ```powershell
 sentinel-xdr-migration workflow-init `
@@ -59,6 +62,13 @@ Always resume from persisted state:
 sentinel-xdr-migration workflow-status --solution "<solution-path>"
 sentinel-xdr-migration workflow-next --solution "<solution-path>"
 ```
+
+When workflow context contains a full `workspaceResourceId`, it is authoritative
+for the rest of that run. Pass it explicitly to every Azure command and never
+list, rediscover, rank, or scan other workspaces. A Log Analytics customer-ID
+GUID may be resolved to an ARM resource ID once, then the ARM ID must be
+persisted. A tenant mismatch is an authentication blocker for the selected
+workspace, not a reason to choose another workspace.
 
 The ignored local file
 `Reports\<solution>\sentinel-xdr-migration\workflow-state.json` records stage status, attempts,
@@ -112,15 +122,25 @@ Microsoft Graph for Advanced Hunting only for provider-level failures.
 Unavailable workload tables are blocked environment results. Zero rows prove
 query execution, not behavioral parity. Entity mappings require review.
 
+Defender Advanced Hunting and Log Analytics workspace queries are distinct
+surfaces. A table visible in one does not prove availability in the other.
+Always name the failing surface and use only the persisted workspace for
+Sentinel validation.
+
+For Authoring, structural success with an environment-only runtime gap may
+complete this stage as passed with `runtimeStatus=environment-blocked`; preserve
+the exact error and do not claim runtime qualification. This allows V4 package
+creation. Qualification keeps the same gap blocking because deployment, mock
+ingestion, and parity require the selected lab environment.
+
 ### Packaging
 
 Use V4 for solutions containing XDR Detections:
 
 ```powershell
-.\Tools\Create-Azure-Sentinel-Solution\V4\createSolutionV4.ps1 `
-  -SolutionDataFolderPath ".\Solutions\<solution>\Data" `
-  -VersionMode local `
-  -VersionBump none
+sentinel-xdr-migration package-v4 `
+  --solution ".\Solutions\<solution>" `
+  --version-bump none
 ```
 
 V3 is the legacy Sentinel-only packager and intentionally skips XDR
@@ -130,7 +150,9 @@ solution data and metadata versions.
 
 Require the generated template, UI definition, parameter file, versioned ZIP,
 AR/CD count matching, correct `E5Flavor` conditions, disabled CDs, unique IDs,
-and explained validation results.
+and explained validation results. Complete the packaging stage only with
+`packager=V4`, the generated `packaging.v4.json`, and its template, UI,
+parameters, and ZIP paths. Existing package files are not current-run evidence.
 
 ### Deployment — qualification only
 

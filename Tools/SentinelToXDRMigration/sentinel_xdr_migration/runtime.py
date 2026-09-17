@@ -31,6 +31,11 @@ PROVIDER_PLATFORMS = {
     "triage-mcp": "Microsoft Sentinel Triage MCP",
     "log-analytics-cli": "Microsoft Sentinel Log Analytics",
 }
+PROVIDER_QUERY_SURFACES = {
+    "graph": "defender-advanced-hunting",
+    "triage-mcp": "microsoft-sentinel-triage",
+    "log-analytics-cli": "log-analytics-workspace",
+}
 SUPPORTED_EXTERNAL_PROVIDERS = frozenset(
     provider for provider in PROVIDER_PLATFORMS if provider != "graph"
 )
@@ -69,6 +74,7 @@ def _write_runtime_artifacts(
     summary = {
         "solution": str(root),
         "platform": PROVIDER_PLATFORMS[provider],
+        "querySurface": PROVIDER_QUERY_SURFACES[provider],
         "provider": provider,
         "total": len(results),
         "valid": sum(item["status"] == "passed" for item in results),

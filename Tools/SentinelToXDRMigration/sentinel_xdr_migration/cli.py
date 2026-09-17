@@ -15,6 +15,7 @@ from .converter import (
     validate_solution,
 )
 from .onboarding import doctor, setup
+from .packaging import package_solution_v4
 from .deployment import deploy_solution, setup_deployment_authentication
 from .analytic_deployment import deploy_analytic_rules
 from .alert_parity import (
@@ -170,6 +171,16 @@ def main(argv: list[str] | None = None) -> int:
         choices=["triage-mcp", "log-analytics-cli"],
     )
     record_parser.add_argument("--results", required=True)
+    package_v4 = subparsers.add_parser(
+        "package-v4",
+        help="Package the solution through the V4 XDR-aware local packager.",
+    )
+    package_v4.add_argument("--solution", required=True)
+    package_v4.add_argument(
+        "--version-bump",
+        required=True,
+        choices=["none", "patch", "minor", "major"],
+    )
     workflow_init = subparsers.add_parser(
         "workflow-init",
         help="Create or resume the gated end-to-end migration workflow state.",
@@ -182,9 +193,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     workflow_init.add_argument(
         "--workflow-profile",
+        required=True,
         choices=WORKFLOW_PROFILES,
-        default="authoring",
-        help="Use qualification only for internal deployment, mock ingestion, and alert parity.",
+        help="Explicitly select authoring or qualification before initialization.",
     )
     workflow_status_parser = subparsers.add_parser(
         "workflow-status",
@@ -280,6 +291,11 @@ def main(argv: list[str] | None = None) -> int:
             result = build_solution_report(
                 args.solution,
                 ingestion_reports=args.ingestion_reports,
+            )
+        elif args.command == "package-v4":
+            result = package_solution_v4(
+                args.solution,
+                version_bump=args.version_bump,
             )
         elif args.command == "inspect":
             result = inspect_solution(args.solution)

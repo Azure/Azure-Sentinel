@@ -664,6 +664,7 @@ AzureActivity
         self.assertEqual(result["blocked"], 0)
         self.assertEqual(result["notRun"], 0)
         self.assertEqual(result["platform"], "Microsoft Sentinel Triage MCP")
+        self.assertEqual(result["querySurface"], "microsoft-sentinel-triage")
         self.assertTrue(Path(result["jsonReport"]).is_file())
         html = Path(result["htmlReport"]).read_text(encoding="utf-8")
         self.assertIn("Provider: triage-mcp", html)
@@ -695,6 +696,7 @@ AzureActivity
             results_path=results_path,
         )
         self.assertEqual(result["platform"], "Microsoft Sentinel Log Analytics")
+        self.assertEqual(result["querySurface"], "log-analytics-workspace")
         self.assertEqual(result["notRun"], 1)
         self.assertEqual(result["invalid"], 0)
         self.assertEqual(result["blocked"], 0)

@@ -27,6 +27,31 @@ The target-specific DCR permission preflight in this skill runs at the
 beginning of the optional testing extension, before fixture generation or
 ingestion.
 
+## Workspace identity contract
+
+Read `workflow-status` before workspace discovery. When
+`context.workspaceResourceId` contains a full ARM resource ID:
+
+- treat it as the authoritative workspace for the entire run;
+- pass it unchanged through `--workspace` to every optional-testing command;
+- never run `az monitor log-analytics workspace list`, Resource Graph workspace
+  discovery, table scans across workspaces, or primary-workspace inference;
+- verify access only against that exact resource ID; and
+- return no workspace alternatives.
+
+A GUID-style Log Analytics customer ID may be resolved once with an exact
+customer-ID filter because Azure deployment APIs require the workspace ARM
+resource ID. Persist the resolved ARM ID in workflow state and reuse it for
+every later stage. Never repeat broad workspace discovery after resolution.
+
+If an Azure or MCP request reports a tenant mismatch, treat it as an
+authentication-context failure for the selected workspace. Ask to
+reauthenticate to the correct tenant and retry the same workspace. Do not look
+for another workspace. If the stored workspace is inaccessible or deleted,
+present **Retry authentication**, **Select another workspace**, **Continue
+offline**, and **Cancel**; discover alternatives only after the user explicitly
+selects **Select another workspace**.
+
 ## Safety contract
 
 - Never treat workspace discovery as write approval.
@@ -72,8 +97,9 @@ The tool uses Azure CLI authentication. It selects workspaces in this order:
 4. the first accessible workspace, sorted by name, in the active Azure
    subscription.
 
-Tell the user which workspace was selected and list any alternatives returned
-by the tool. Ask whether they want a different workspace before any write.
+Tell the user which workspace was selected. List alternatives and ask whether
+they want a different workspace only when no full workspace ARM ID was already
+stored or supplied.
 Accept a workspace name, customer ID, or full ARM resource ID. Require a full
 ARM resource ID when a name or customer ID is ambiguous.
 

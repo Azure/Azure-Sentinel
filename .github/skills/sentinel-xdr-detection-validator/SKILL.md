@@ -94,16 +94,43 @@ provider.
    ```
 
 8. Both providers create normalized JSON and self-contained HTML reports under
-   `XDR Detections`. Treat `blocked` as an environment gap, not a conversion
-   failure.
+   `Reports\<solution>\sentinel-xdr-migration`. Treat `blocked` as an
+   environment gap, not a conversion failure.
 9. For every rule:
    - execute the original `sentinelQuery`;
    - execute the `advancedHuntingQuery`;
    - record whether each query binds and executes;
    - compare returned entity columns when representative rows exist.
 10. Zero rows are not proof of behavioral parity. Record them as execution
-   success with data validation still pending.
+   success with data validation still pending. A table probe that executes and
+   returns zero rows proves the table binds on that query surface.
 11. Do not change `contentProvenance.conversion.status` to `validated` unless
    both queries execute and the entity output has been reviewed.
+
+## Query-surface isolation
+
+Defender Advanced Hunting and Sentinel Log Analytics are separate query
+surfaces even when the Defender portal shows a selected Sentinel workspace.
+A table name resolving in Advanced Hunting does not prove that the same name
+resolves through the Log Analytics workspace API, and vice versa.
+
+- Probe the original `sentinelQuery` only against the exact persisted
+  Log Analytics workspace.
+- Probe the converted `advancedHuntingQuery` only through Defender Advanced
+  Hunting.
+- Never use workspace table-management inventory as query-availability proof.
+- Never scan other workspaces after the workflow workspace is selected.
+- Report the surface explicitly, for example:
+  `IdentityInfo unavailable through log-analytics-workspace; available through
+  defender-advanced-hunting`.
+- Do not say a table is unavailable "in every accessible workspace" unless the
+  user explicitly requested a multi-workspace audit.
+
+For an **Authoring** profile, an environment-only runtime block does not prevent
+V4 packaging when structural validation passed. Complete validation as passed
+with `runtimeStatus=environment-blocked`, preserve the provider error and query
+surface, and do not claim the detection is runtime-qualified. For a
+**Qualification** profile, the same runtime block remains blocking until the
+selected lab environment satisfies the required query surfaces.
 
 Return a per-rule result and an overall pass/needs-review summary.

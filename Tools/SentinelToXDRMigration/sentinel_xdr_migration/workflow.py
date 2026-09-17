@@ -90,6 +90,9 @@ def _load(solution: str | Path) -> tuple[Path, dict[str, Any]]:
     state = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(state, dict):
         raise ValueError(f"workflow state must be a JSON object: {path}")
+    context = state.get("context")
+    if isinstance(context, dict):
+        context.setdefault("profileSelectionConfirmed", False)
     _validate(state)
     path = migrate_legacy_artifact(root, STATE_FILE_NAME)
     return path, state
@@ -113,17 +116,20 @@ def initialize_workflow(
     *,
     workspace_resource_id: str | None = None,
     version_bump: str | None = None,
-    workflow_profile: str = "authoring",
+    workflow_profile: str | None = None,
 ) -> dict[str, Any]:
     root, path = _paths(solution)
     if version_bump not in (None, "none", "patch", "minor", "major"):
         raise ValueError("version bump must be none, patch, minor, or major")
+    if workflow_profile is None:
+        raise ValueError(
+            "workflow profile selection is required: choose authoring or qualification"
+        )
     if workflow_profile not in WORKFLOW_PROFILES:
         raise ValueError("workflow profile must be authoring or qualification")
     requested_context = {
         "workspaceResourceId": workspace_resource_id,
         "versionBump": version_bump,
-        "workflowProfile": workflow_profile,
     }
     existing_path = existing_artifact_path(root, STATE_FILE_NAME)
     if existing_path.exists():
@@ -137,6 +143,7 @@ def initialize_workflow(
                 )
             if value is not None and context.get(key) is None:
                 context[key] = value
+        _select_workflow_profile(state, workflow_profile)
         _write(path, state)
         return {
             **state,
@@ -164,6 +171,8 @@ def initialize_workflow(
             for name in STAGES
         },
     }
+    state["context"]["workflowProfile"] = workflow_profile
+    state["context"]["profileSelectionConfirmed"] = True
     _write(path, state)
     return {
         **state,
@@ -171,6 +180,59 @@ def initialize_workflow(
         "resumed": False,
         "next": _next_stage_name(state),
     }
+
+
+def _select_workflow_profile(state: dict[str, Any], workflow_profile: str) -> None:
+    context = state["context"]
+    current = context["workflowProfile"]
+    if current != workflow_profile:
+        protected = [
+            name
+            for name in (*AUTHORING_OPTIONAL_STAGES, "report")
+            if state["stages"][name]["status"] not in {"pending", "notRequired"}
+        ]
+        if protected:
+            raise ValueError(
+                "workflow profile cannot change after qualification/report stages "
+                f"started: {', '.join(sorted(protected))}"
+            )
+        for name in AUTHORING_OPTIONAL_STAGES:
+            state["stages"][name] = _stage_result(
+                name,
+                required=workflow_profile == "qualification",
+            )
+        context["workflowProfile"] = workflow_profile
+    context["profileSelectionConfirmed"] = True
+
+
+def _validate_packaging_evidence(
+    state: dict[str, Any],
+    artifacts: dict[str, str],
+) -> None:
+    if artifacts.get("packager") != "V4":
+        raise ValueError("passed packaging stage requires packager=V4")
+    report_value = artifacts.get("packageReport")
+    if not report_value:
+        raise ValueError("passed packaging stage requires a V4 packageReport artifact")
+    report_path = Path(report_value).expanduser().resolve()
+    if not report_path.is_file():
+        raise ValueError(f"V4 package report does not exist: {report_path}")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"V4 package report is invalid: {report_path}: {exc}") from exc
+    if not isinstance(report, dict) or report.get("packager") != "V4":
+        raise ValueError(f"package report does not prove V4 packaging: {report_path}")
+    for name in ("mainTemplate", "createUiDefinition", "testParameters", "zip"):
+        value = artifacts.get(name) or report.get(name)
+        if not value or not Path(value).expanduser().resolve().is_file():
+            raise ValueError(f"V4 packaging evidence is missing artifact: {name}")
+    requested_bump = state["context"].get("versionBump")
+    if requested_bump is not None and report.get("versionBump") != requested_bump:
+        raise ValueError(
+            "V4 package report version bump does not match workflow context: "
+            f"{report.get('versionBump')!r} != {requested_bump!r}"
+        )
 
 
 def workflow_status(solution: str | Path) -> dict[str, Any]:
@@ -287,12 +349,15 @@ def complete_workflow_stage(
     current = state["stages"][stage]
     if current["status"] != "running":
         raise ValueError(f"workflow stage is not running: {stage}")
+    final_artifacts = artifacts or {}
+    if stage == "packaging" and status == "passed":
+        _validate_packaging_evidence(state, final_artifacts)
     current.update(
         {
             "status": status,
             "completedAt": _utc_now(),
             "message": message,
-            "artifacts": artifacts or {},
+            "artifacts": final_artifacts,
             "evidence": evidence or [],
         }
     )

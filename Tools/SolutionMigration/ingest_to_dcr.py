@@ -176,7 +176,7 @@ def discover_workspace(
             "resourceGroup": parts[4],
             "properties": {},
         }
-        return selected, [selected], source
+        return selected, [], source
 
     rows = _resource_graph_query(
         token,
@@ -194,7 +194,7 @@ def discover_workspace(
         raise ToolError(
             f"Multiple workspaces match {selection!r}. Pass a full ARM resource ID:\n{matches}"
         )
-    return rows[0], rows, source
+    return rows[0], [] if selection else rows, source
 
 
 def find_dcr_for_stream(token: str, workspace: dict, stream: str) -> dict:

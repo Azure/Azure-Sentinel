@@ -107,9 +107,10 @@ provider.
 
 ### Resumable end-to-end workflow
 
-The repository agent uses a gated workflow manifest. The default `authoring`
-profile coordinates discovery, conversion, validation, packaging, and final
-reporting:
+The repository agent uses a gated workflow manifest. Before initialization,
+the user must explicitly select `authoring` or `qualification`; the CLI has no
+profile default. The `authoring` profile coordinates discovery, conversion,
+validation, V4 packaging, and final reporting:
 
 ```powershell
 sentinel-xdr-migration workflow-init `
@@ -120,6 +121,19 @@ sentinel-xdr-migration workflow-init `
 sentinel-xdr-migration workflow-status --solution "Solutions\<solution>"
 sentinel-xdr-migration workflow-next --solution "Solutions\<solution>"
 ```
+
+Every packaging stage runs through:
+
+```powershell
+sentinel-xdr-migration package-v4 `
+  --solution "Solutions\<solution>" `
+  --version-bump none
+```
+
+The command invokes the repository V4 packager and writes
+`Reports\<solution>\sentinel-xdr-migration\packaging.v4.json`. A packaging
+stage cannot pass without that current-run V4 evidence and all generated
+package artifacts.
 
 The workflow state is written to:
 

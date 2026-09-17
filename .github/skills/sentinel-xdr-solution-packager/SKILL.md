@@ -1,6 +1,6 @@
 ---
 name: sentinel-xdr-solution-packager
-description: Package a complete Microsoft Sentinel solution with optional Defender XDR Custom Detections by using the shared V3/V4 packaging implementation.
+description: Package a complete Microsoft Sentinel and Defender XDR solution through the V4 packaging implementation.
 ---
 
 # Package a Sentinel and Defender XDR solution
@@ -8,9 +8,9 @@ description: Package a complete Microsoft Sentinel solution with optional Defend
 Use this skill after solution content and any `XDR Detections/*.yaml` files are
 complete and structurally validated.
 
-Run V4 for any solution that contains `XDR Detections`. V3 remains the legacy
-Sentinel-only packager and intentionally ignores XDR Detections. Never run both
-merely to create the same package.
+The XDR Solution Manager workflow always runs V4. V3 remains available outside
+this workflow for legacy Sentinel-only packaging and intentionally ignores XDR
+Detections. Never use V3 to satisfy this workflow's packaging stage.
 
 The generated package remains a full Microsoft Sentinel solution. When XDR
 Detections are declared, it also supports hybrid installation:
@@ -83,24 +83,25 @@ requests it and the live resource provider is known to support registration.
 5. Confirm the current solution version and the requested bump. Check that
    `ReleaseNotes.md`, when present, can be synchronized to the resulting
    version.
-6. Run one supported local entry point. V4 usage:
+6. Run the deterministic toolkit wrapper:
 
    ```powershell
-   pwsh -NoProfile -File `
-     ".\Tools\Create-Azure-Sentinel-Solution\V4\createSolutionV4.ps1" `
-     -SolutionDataFolderPath ".\Solutions\<solution>\Data" `
-     -VersionMode local `
-     -VersionBump none
+   sentinel-xdr-migration package-v4 `
+     --solution ".\Solutions\<solution>" `
+     --version-bump none
    ```
 
    Use `none` for validation without modifying source versions. Replace it with
    the approved `patch`, `minor`, or `major` value when producing a release
-   package; those options update the solution data and metadata versions.
+   package; those options update the solution data and metadata versions. The
+   wrapper invokes
+   `Tools\Create-Azure-Sentinel-Solution\V4\createSolutionV4.ps1` with local
+   version mode, validates every required output and the ZIP, and writes
+   `Reports\<solution>\sentinel-xdr-migration\packaging.v4.json`.
 
-   V3 remains supported for legacy Sentinel-only solutions. V3 and local V4
-   are independent adapters over `common\createSolutionLocal.ps1`; only V4
-   enables the XDR injection path in `common\commonFunctions.ps1`. Pipeline V4
-   receives its inputs from `.script\package-automation\package-generator.ps1`.
+   Never reuse pre-existing package artifacts as proof that this stage ran.
+   Complete the workflow stage only with the wrapper's `workflowArtifacts`
+   values, including `packager=V4` and `packageReport`.
 
 7. Require successful packaging and inspect:
 
@@ -129,5 +130,5 @@ requests it and the live resource provider is known to support registration.
     results, and any deployment prerequisites or unresolved failures.
 
 Packaging is complete only when the artifacts exist, versions are synchronized,
-all expected resources are present, and no unexplained validation failure
-remains.
+all expected resources are present, the V4 evidence report is accepted by the
+workflow gate, and no unexplained validation failure remains.

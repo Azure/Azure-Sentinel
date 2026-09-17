@@ -29,6 +29,56 @@ class ScenarioHandoffTests(unittest.TestCase):
         self.assertEqual(r"C:\AzureCLI\az.cmd", result)
         which.assert_called_once_with("az.cmd")
 
+    @mock.patch.object(ingest_to_dcr, "_resource_graph_query")
+    def test_full_workspace_resource_id_never_lists_workspaces(
+        self,
+        resource_graph_query: mock.Mock,
+    ):
+        workspace_id = (
+            "/subscriptions/subscription-id/resourceGroups/resource-group/providers/"
+            "Microsoft.OperationalInsights/workspaces/workspace-name"
+        )
+
+        selected, alternatives, source = ingest_to_dcr.discover_workspace(
+            "arm-token",
+            "active-subscription",
+            workspace_id,
+        )
+
+        self.assertEqual(workspace_id, selected["id"])
+        self.assertEqual("subscription-id", selected["subscriptionId"])
+        self.assertEqual([], alternatives)
+        self.assertEqual("explicit", source)
+        resource_graph_query.assert_not_called()
+
+    @mock.patch.object(ingest_to_dcr, "_resource_graph_query")
+    def test_customer_id_uses_one_exact_filtered_resolution(
+        self,
+        resource_graph_query: mock.Mock,
+    ):
+        customer_id = "756386d8-e2d4-4f09-905a-74b24313721f"
+        workspace = {
+            "id": "/subscriptions/s/resourceGroups/r/providers/"
+            "Microsoft.OperationalInsights/workspaces/w",
+            "name": "w",
+            "subscriptionId": "s",
+            "resourceGroup": "r",
+            "properties": {"customerId": customer_id},
+        }
+        resource_graph_query.return_value = [workspace]
+
+        selected, alternatives, source = ingest_to_dcr.discover_workspace(
+            "arm-token",
+            "active-subscription",
+            customer_id,
+        )
+
+        self.assertEqual(workspace, selected)
+        self.assertEqual([], alternatives)
+        self.assertEqual("explicit", source)
+        resource_graph_query.assert_called_once()
+        self.assertIn(customer_id, resource_graph_query.call_args.args[1])
+
     def test_permission_matching_honors_wildcards_and_denies(self):
         self.assertTrue(ingest_to_dcr._permission_allows(
             [{"actions": ["Microsoft.Insights/*"], "notActions": []}],

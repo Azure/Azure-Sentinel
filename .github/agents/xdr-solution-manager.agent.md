@@ -50,20 +50,38 @@ runtime providers are unavailable.
 
 ## Migration workflow
 
-1. Before initialization, ask whether optional testing is wanted. Default to
-   `authoring` when it is declined or undecided.
-2. Initialize or resume
+1. Run `workflow-status` first. If no state exists, or
+   `context.profileSelectionConfirmed` is not `true`, stop and ask the user to
+   choose **Authoring**, **Qualification**, or **Cancel** with structured
+   elicitation. Explain that Authoring stops after packaging/reporting while
+   Qualification adds deployment, mock ingestion, and alert parity. There is
+   no default; do not initialize until the user explicitly chooses.
+2. Initialize or resume with the selected profile:
+
+   ```powershell
+   sentinel-xdr-migration workflow-init `
+     --solution "<solution-path>" `
+     --workflow-profile "<authoring-or-qualification>" `
+     --version-bump "<none-patch-minor-or-major>"
+   ```
+
+3. Persist state under
    `Reports\<solution>\sentinel-xdr-migration\workflow-state.json`.
-3. Follow the next gated stage reported by `workflow-next`.
-4. Delegate each stage to its owning specialist skill.
-5. Record terminal status, artifacts, and evidence through the workflow CLI.
-6. Stop on failed or blocked gates; correct and retry only that stage.
-7. Treat authoring through packaging and reporting as the default workflow.
+   If its context already contains a full `workspaceResourceId`, reuse that
+   exact workspace for every later stage. Do not list, rediscover, rank, or scan
+   other workspaces. A tenant mismatch requires authentication correction, not
+   workspace substitution.
+4. Follow the next gated stage reported by `workflow-next`.
+5. Delegate each stage to its owning specialist skill.
+6. Record terminal status, artifacts, and evidence through the workflow CLI.
+7. Stop on failed or blocked gates; correct and retry only that stage.
 8. Run deployment, mock ingestion, and parity only for an explicitly selected
    `qualification` profile. A configured lab does not imply consent.
 9. At the start of optional qualification testing, use
    `sentinel-solution-optional-testing` to perform read-only workspace, DCR,
    Sentinel query, destination-table, and ingestion-permission preflight checks.
+   Resolve a customer-ID GUID to a full ARM resource ID at most once, persist
+   it, and pass it explicitly to every command.
    Present **Continue**, **Retry permission check**, and **Cancel** as
    selectable buttons. When the exact packaged custom table is confirmed
    missing and table-write permission is ready, also present **Deploy missing
@@ -76,6 +94,18 @@ runtime providers are unavailable.
     write. Pass `--approve-write` only after approval for that exact scope.
 12. Keep every AR and CD disabled except during the controlled parity lifecycle.
 13. Complete or abort every parity run so cleanup is guaranteed.
+
+The packaging stage must invoke `sentinel-xdr-solution-packager`, which must run
+`sentinel-xdr-migration package-v4`. Never mark packaging passed from existing
+package files alone. The workflow gate requires the new
+`packaging.v4.json` evidence plus the generated template, UI definition,
+parameters, and versioned ZIP.
+
+In Authoring, do not block V4 packaging solely because a required table is
+unavailable on a runtime provider when structural validation passed. Record the
+runtime result as environment-blocked, name the exact query surface, and
+continue to packaging without calling the content runtime-qualified. In
+Qualification, keep that condition blocking.
 
 ## Fallback rules
 
