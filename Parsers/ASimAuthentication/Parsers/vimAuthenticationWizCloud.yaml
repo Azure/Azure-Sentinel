@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Wiz Cloud
-  Version: '0.1.1'
-  LastUpdated: Sep 08, 2026
+  Version: '0.1.0'
+  LastUpdated: Sep 17, 2026
 Product:
   Name: Wiz Cloud
 Normalization:
@@ -92,7 +92,8 @@ ParserQuery: |
       // srchostname_has_any, targetappname_has_any, eventresultdetails_in are accepted for
       // compatibility with the imAuthentication unifying parser's documented parameter set,
       // but are not functional. This source has no SrcHostname data, TargetAppName is always the
-      // constant "Wiz", and EventResultDetails is always empty.
+      // constant "Wiz", and EventResultDetails is always empty. Since these fields are never
+      // populated with real data, any non-empty filter on them matches nothing.
       let AuthActions = dynamic(["Login", "TokenRefresh"]);
       WizAuditlogsV3_CL
           | where not(disabled)
@@ -101,8 +102,16 @@ ParserQuery: |
               and (isnull(endtime) or timestamp <= endtime)
           | where (array_length(eventtype_in) == 0 or "Logon" in (eventtype_in))
           | where action in (AuthActions)
-          | where (eventresult == '*' or (eventresult == "Success" and status == "SUCCESS") or (eventresult == "Failure" and status == "FAILED"))
+          | where (
+              eventresult == '*'
+              or (eventresult == "Success" and status == "SUCCESS")
+              or (eventresult == "Failure" and status == "FAILED")
+              or (eventresult == "NA" and status !in ("SUCCESS", "FAILED"))
+          )
           | where (array_length(srcipaddr_has_any_prefix) == 0 or sourceIP has_any (srcipaddr_has_any_prefix))
+          | where array_length(srchostname_has_any) == 0
+          | where array_length(targetappname_has_any) == 0 or "Wiz" has_any (targetappname_has_any)
+          | where array_length(eventresultdetails_in) == 0
           | extend
               _UserName = tostring(user.name)
               , _UserId = tostring(user.id)

@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM filtering parser for Wiz Cloud (WizIssuesV3_CL)
-  Version: '0.1.1'
-  LastUpdated: Sep 08, 2026
+  Version: '0.1.0'
+  LastUpdated: Sep 17, 2026
 Product:
   Name: Wiz Cloud
 Normalization:
@@ -110,14 +110,6 @@ ParserQuery: |
       | where
           (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime)
-      | extend
-          _RuleName = tostring(sourceRule.name)
-          , _RuleDescription = tostring(sourceRule.description)
-          , _EntityName = tostring(entitySnapshot.name)
-          , _EntityType = tostring(entitySnapshot.type)
-      | extend
-          _IsIdentityEntity = _EntityType in ("USER_ACCOUNT", "SERVICE_ACCOUNT")
-          , _IsHostEntity = _EntityType in ("VIRTUAL_MACHINE", "CONTAINER", "DB_SERVER")
       | where array_length(eventseverity_has_any) == 0 or (
           ("High" in (eventseverity_has_any) and severity in ("HIGH", "CRITICAL"))
           or ("Medium" in (eventseverity_has_any) and severity == "MEDIUM")
@@ -127,8 +119,18 @@ ParserQuery: |
       | where array_length(alertverdict_has_any) == 0 // Source does not support AlertVerdict
       | where array_length(attacktactics_has_any) == 0 // Source has no MITRE tactic data
       | where array_length(attacktechniques_has_any) == 0 // Source has no MITRE technique data
-      | where array_length(username_has_any) == 0 or (_IsIdentityEntity and _EntityName has_any (username_has_any))
       | where array_length(ipaddr_has_any_prefix) == 0 // Source has no actor/IP data
+      | extend
+          _RuleName = tostring(sourceRule.name)
+          , _RuleDescription = tostring(sourceRule.description)
+          , _EntityName = tostring(entitySnapshot.name)
+          , _EntityType = tostring(entitySnapshot.type)
+      | extend
+          _IsIdentityEntity = _EntityType in ("USER_ACCOUNT", "SERVICE_ACCOUNT")
+          , _IsHostEntity = _EntityType in ("VIRTUAL_MACHINE", "CONTAINER", "DB_SERVER")
+      | where array_length(username_has_any) == 0 or (
+          _IsIdentityEntity
+          and _EntityName has_any (username_has_any))
       | where array_length(hostname_has_any) == 0 or (
           _IsHostEntity
           and _EntityName has_any (hostname_has_any)
@@ -145,18 +147,36 @@ ParserQuery: |
           , _EntitySubscriptionExtId = tostring(entitySnapshot.subscriptionExternalId)
           , _EntitySubscriptionName = tostring(entitySnapshot.subscriptionName)
       | extend
-          _IsAzureArmId = _EntityCloudPlatform == "Azure" and _EntityExternalId matches regex @'(?i)^/subscriptions/'
+          _IsAzureArmId = _EntityCloudPlatform == "Azure" and _EntityExternalId startswith '/subscriptions/'
           , _IsThreatKeywordMatch = _RuleName matches regex ThreatKeywordRegex
+      // EventSubType and ThreatCategory only depend on native/already-extended fields above,
+      // so they (and the threatcategory_has_any filter) are derived here, before the
+      // remaining field mapping below.
+      | extend
+          EventSubType = case(
+              issueType == "THREAT_DETECTION", "Threat"
+              , issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat"
+              , "Compliance Violation"
+          )
+          , ThreatCategory = case(
+              _RuleName has "malware", "Malware"
+              , _RuleName has "ransomware", "Ransomware"
+              , _RuleName has "phishing", "Phishing"
+              , _RuleName has "spyware", "Spyware"
+              , _RuleName has "rootkit", "Rootkit"
+              , _RuleName has "adware", "Adware"
+              , _RuleName has "trojan", "Trojan"
+              , _RuleName has "worm", "Worm"
+              , _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominer"
+              , EventSubType == "Compliance Violation", "Security Policy Violation"
+              , "Unknown"
+          )
+      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
       | extend
           EventStartTime = coalesce(createdAt, TimeGenerated)
           , EventEndTime = coalesce(resolvedAt, updatedAt, TimeGenerated)
           , EventCount = toint(1)
           , EventType = "Alert"
-          , EventSubType = case(
-              issueType == "THREAT_DETECTION", "Threat"
-              , issueType == "TOXIC_COMBINATION" and _IsThreatKeywordMatch, "Threat"
-              , "Compliance Violation"
-          )
           , EventProduct = "Cloud"
           , EventVendor = "Wiz"
           , EventSchema = "AlertEvent"
@@ -186,21 +206,6 @@ ParserQuery: |
               , status in ("REJECTED", "RESOLVED"), "Closed"
               , ""
           )
-      | extend
-          ThreatCategory = case(
-              _RuleName has "malware", "Malware"
-              , _RuleName has "ransomware", "Ransomware"
-              , _RuleName has "phishing", "Phishing"
-              , _RuleName has "spyware", "Spyware"
-              , _RuleName has "rootkit", "Rootkit"
-              , _RuleName has "adware", "Adware"
-              , _RuleName has "trojan", "Trojan"
-              , _RuleName has "worm", "Worm"
-              , _RuleName has "cryptocurrency" or _RuleName has "cryptomin", "Cryptominer"
-              , EventSubType == "Compliance Violation", "Security Policy Violation"
-              , "Unknown"
-          )
-      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in (threatcategory_has_any)
       | extend
           RuleName = _RuleId
           , RuleDescription = _RuleDescription

@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM parser for Wiz Defend (WizDetectionsV3_CL)
-  Version: '0.1.1'
-  LastUpdated: Sep 08, 2026
+  Version: '0.1.0'
+  LastUpdated: Sep 17, 2026
 Product:
   Name: Wiz Defend
 Normalization:
@@ -50,24 +50,6 @@ ParserQuery: |
   // an ARM resource ID, a multi-label FQDN (e.g. AWS EC2 internal DNS names), a VMSS
   // instance ID with underscores (e.g. "aks-apps2-16464496-vmss_6"), or other
   let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
-  let AttackTacticLookup = datatable(_tacticId: string, AttackTacticName: string)
-      [
-          'TA0043', 'Reconnaissance',
-          'TA0042', 'Resource Development',
-          'TA0001', 'Initial Access',
-          'TA0002', 'Execution',
-          'TA0003', 'Persistence',
-          'TA0004', 'Privilege Escalation',
-          'TA0005', 'Defense Evasion',
-          'TA0006', 'Credential Access',
-          'TA0007', 'Discovery',
-          'TA0008', 'Lateral Movement',
-          'TA0009', 'Collection',
-          'TA0011', 'Command and Control',
-          'TA0010', 'Exfiltration',
-          'TA0040', 'Impact'
-      ]
-  ;
   let parser = (disabled: bool = false, pack: bool = false) {
       WizDetectionsV3_CL
       | where not(disabled)
@@ -90,13 +72,31 @@ ParserQuery: |
           , _procCommand = tostring(triggeringEvents[0].runtimeDetails.processTree[0].command)
           , _procHash = tostring(triggeringEvents[0].runtimeDetails.processTree[0].hash)
           , _procSize = triggeringEvents[0].runtimeDetails.processTree[0].size
-      | as T
-      | mv-expand _tacticId = mitreTactics to typeof(string)
-      | lookup AttackTacticLookup on _tacticId
-      | summarize AttackTactics = strcat_array(make_set_if(AttackTacticName, isnotempty(AttackTacticName)), ", ") by detectionId
-      | lookup T on detectionId
       | extend
-          _isAzureArmId = _resCloudPlatform == "Azure" and _resExtId matches regex @'(?i)^/subscriptions/'
+          _isAzureArmId = _resCloudPlatform == "Azure" and _resExtId startswith '/subscriptions/'
+          // Scalar mapping of MITRE tactic IDs to names, avoiding mv-expand/mv-apply (discouraged for performance).
+          , AttackTactics = strcat_array(
+              set_difference(
+                  pack_array(
+                      iff("TA0043" in (mitreTactics), "Reconnaissance", "")
+                      , iff("TA0042" in (mitreTactics), "Resource Development", "")
+                      , iff("TA0001" in (mitreTactics), "Initial Access", "")
+                      , iff("TA0002" in (mitreTactics), "Execution", "")
+                      , iff("TA0003" in (mitreTactics), "Persistence", "")
+                      , iff("TA0004" in (mitreTactics), "Privilege Escalation", "")
+                      , iff("TA0005" in (mitreTactics), "Defense Evasion", "")
+                      , iff("TA0006" in (mitreTactics), "Credential Access", "")
+                      , iff("TA0007" in (mitreTactics), "Discovery", "")
+                      , iff("TA0008" in (mitreTactics), "Lateral Movement", "")
+                      , iff("TA0009" in (mitreTactics), "Collection", "")
+                      , iff("TA0011" in (mitreTactics), "Command and Control", "")
+                      , iff("TA0010" in (mitreTactics), "Exfiltration", "")
+                      , iff("TA0040" in (mitreTactics), "Impact", "")
+                  ),
+                  dynamic([""])
+              ),
+              ", "
+          )
       | project-rename
           ThreatId = threatId
           , EventReportUrl = threatUrl
