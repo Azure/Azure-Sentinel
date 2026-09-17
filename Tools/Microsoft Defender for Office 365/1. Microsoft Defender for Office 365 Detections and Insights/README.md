@@ -13,6 +13,8 @@ If you need >30 days of data and have Sentinel, use the Sentinel workbook direct
 
 Note: Power BI has no native Microsoft Graph connector; Web.Contents requires application permissions (delegated auth is not supported for this flow).
 
+Version 4 includes an updated Executive Summary, Teams & Collaboration reporting, and expanded file-malware and detection-override insights.
+
 ### Quick Architecture Summary
 
 **For manual Desktop refresh:** 📱 Power BI Desktop → 🔌 Custom Connector → 🔑 Azure Key Vault → 🔐 App Secret → 📊 Graph API (Advanced Hunting) → 📈 MDO Data
@@ -30,7 +32,7 @@ Note: Power BI has no native Microsoft Graph connector; Web.Contents requires ap
 | File | Description |
 |------|-------------|
 | `KeyVaultConnector.mez` | Custom Power BI connector for Azure Key Vault authentication |
-| `Microsoft Defender for Office 365 Detection and Insights_v3.pbit` | Power BI template report |
+| `Microsoft Defender for Office 365 Detection and Insights_v4.pbit` | Power BI template report |
 | `GatewayDeployment.md` | Step-by-step guide for gateway deployment and scheduled refresh |
 | `readme.md` | This file |
 | `Images/` | Screenshots referenced in this documentation |
@@ -68,7 +70,7 @@ Note: Power BI has no native Microsoft Graph connector; Web.Contents requires ap
   ![keyvault registration fourth step](Images/keyvault4.png)  
   ![keyvault registration fifth step](Images/keyvault5.png)
 
-4) Download the files in this repository. The connector (`KeyVaultConnector.mez`) and PowerBI template (`Microsoft Defender for Office 365 Detection and Insights_v3.pbit`). 
+4) Download the files in this repository. The connector (`KeyVaultConnector.mez`) and PowerBI template (`Microsoft Defender for Office 365 Detection and Insights_v4.pbit`). 
 
 5) Enable custom connector support in Power BI Desktop
 - Follow: [Connector extensibility in Power BI](https://learn.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility#custom-connectors) to deploy the connector:
@@ -81,10 +83,11 @@ Note: Power BI has no native Microsoft Graph connector; Web.Contents requires ap
 
 1) Open the “Microsoft Defender for Office 365 Detections and Insights” template (.pbit).
 2) Enter variables and Load:
-   - Directory (tenant) ID
-   - Application (client) ID
-   - Key Vault Url
-   - Secret name (that holds the app secret)
+   - PBI_TenantId: Directory (tenant) ID
+   - PBI_ClientId: Application (client) ID
+   - PBI_KeyVaultUrl: Key Vault Url
+   - PBI_SecretName: Secret name (that holds the app secret)
+   - PBI_EnableSentinelIncidents: Try `True` first. If the incident queries fail because Sentinel incident data is unavailable through Advanced Hunting, set it to `False`. Incident visuals remain empty when disabled.
    ![variable setup](Images/3templatevariables.png)
 3) When prompted by the Azure Key Vault connector, sign in with a user that has access to the secret.  
    ![login](Images/4connectorpopup.png)
@@ -118,6 +121,6 @@ For general information on Power BI data refresh: [Data refresh in Power BI](htt
 
 
 ---
-**Last Updated:** January 2026  
-**Tested with:** Power BI Desktop (January 2026), On-premises Data Gateway (Standard Mode)  
+**Last Updated:** September 2026  
+**Tested with:** Power BI Desktop 2.157.1354.0
 **Author:** [Iustin Irimia/Security CSA] [Daniel Mozes/CxE MDO PM]

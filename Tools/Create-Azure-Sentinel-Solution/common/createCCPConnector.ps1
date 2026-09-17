@@ -649,6 +649,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($fileContent.PSObject.Properties.Name -contains "eventGridAdvancedFilters") {
                         $armResource | Add-Member -MemberType NoteProperty -Name "eventGridAdvancedFilters" -Value $fileContent.eventGridAdvancedFilters -Force
                     }
+                    if ($fileContent.PSObject.Properties.Name -contains "eventGridUseManagedIdentity") {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "eventGridUseManagedIdentity" -Value $fileContent.eventGridUseManagedIdentity -Force
+                    }
 
                     if ($null -ne $fileContent.condition) {
                         $armResource | Add-Member -MemberType NoteProperty -Name "condition" -Value $fileContent.condition                       
