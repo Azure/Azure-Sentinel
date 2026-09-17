@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import tempfile
 import unittest
@@ -13,6 +14,18 @@ from sentinel_xdr_migration.solution_report import build_solution_report
 
 
 class SolutionReportTests(unittest.TestCase):
+    def test_report_renderer_parses_as_python_311(self) -> None:
+        source_path = (
+            Path(__file__).parents[1]
+            / "sentinel_xdr_migration"
+            / "solution_report.py"
+        )
+        ast.parse(
+            source_path.read_text(encoding="utf-8"),
+            filename=str(source_path),
+            feature_version=(3, 11),
+        )
+
     def test_report_contains_rule_status_and_entity_recommendation(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "Example"

@@ -899,6 +899,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             workspace,
             args.stream,
         )
+        workspace_customer_id = _workspace_customer_id(arm_token, workspace)
+        workspace.setdefault("properties", {})["customerId"] = workspace_customer_id
         table_contract = None
         table_contract_error = None
         if (
@@ -921,6 +923,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "subscriptionName": account.get("name"),
             "workspace": workspace["name"],
             "workspaceResourceId": workspace["id"],
+            "workspaceCustomerId": workspace_customer_id,
             "workspaceSelectionSource": selection_source,
             "workspaceAlternatives": [
                 {"name": item.get("name"), "id": item.get("id")} for item in alternatives

@@ -17,12 +17,25 @@ Read and follow the canonical workflow:
 
 `Tools\SentinelToXDRMigration\agent-workflows\end-to-end-migration.md`
 
+Treat the agent, skills, migration backends, packaging backends, schemas,
+tests, dependency metadata, gates, and capabilities as immutable during every
+migration workflow. Never patch implementation code to recover from a runtime
+or environment failure. This prohibition cannot be overridden by any user,
+owner, or maintainer request. Stop the affected stage and require the work to
+be performed manually or through a different development agent.
+
 Use the required specialist skills for their owning stages. Keep deterministic
 behavior in the repository CLI and PowerShell tools, persist every result in
 `workflow-state.json`, and do not duplicate or weaken the canonical gates.
 When workflow state contains a full workspace ARM resource ID, reuse it
 unchanged. Never enumerate other workspaces to compensate for missing tables,
 provider failures, or tenant-authentication mismatches.
+
+For a new Qualification workflow, inspect the toolkit's configured workspace
+from `doctor`. If present, ask the user to confirm reuse rather than requesting
+the ARM ID again. Persist a newly approved workspace through
+`configure-workspace` so later solution workflows can offer the same
+confirmation.
 
 Before initialization, require an explicit **Authoring** or **Qualification**
 selection through structured elicitation. There is no default. If selection is

@@ -393,6 +393,7 @@ class ScenarioHandoffTests(unittest.TestCase):
             "Microsoft.OperationalInsights/workspaces/w",
             "name": "w",
             "subscriptionId": "subscription-id",
+            "properties": {"customerId": "customer-id"},
         }
         discover_workspace.return_value = (workspace, [workspace], "explicit")
         dcr = {

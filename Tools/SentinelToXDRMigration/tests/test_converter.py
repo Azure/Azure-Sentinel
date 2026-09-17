@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import tomllib
 import unittest
@@ -16,7 +17,7 @@ from sentinel_xdr_migration.converter import (
     validate_solution,
 )
 from sentinel_xdr_migration import __version__
-from sentinel_xdr_migration.onboarding import doctor, setup
+from sentinel_xdr_migration.onboarding import configure_workspace, doctor, setup
 from sentinel_xdr_migration.runtime import (
     record_runtime_validation,
     validate_advanced_hunting,
@@ -766,6 +767,59 @@ AzureActivity
         self.assertIn("tenant-id", config)
         self.assertIn("workspace-id", config)
         self.assertNotIn("token", config.lower())
+
+    def test_configured_workspace_is_reusable_across_solutions(self) -> None:
+        state_dir = Path(self.temp.name) / "state"
+        resource_id = (
+            "/subscriptions/subscription-id/resourceGroups/resource-group/providers/"
+            "Microsoft.OperationalInsights/workspaces/lab-workspace"
+        )
+
+        configured = configure_workspace(
+            resource_id,
+            workspace_customer_id="customer-id",
+            state_dir=state_dir,
+        )
+
+        self.assertEqual("configured", configured["status"])
+        config = json.loads(
+            (state_dir / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(resource_id, config["workspaceResourceId"])
+        self.assertEqual("customer-id", config["workspaceId"])
+
+    @mock.patch(
+        "sentinel_xdr_migration.onboarding._advanced_hunting_status",
+        return_value={
+            "name": "advancedHunting",
+            "status": "ready",
+            "detail": "ready",
+        },
+    )
+    @mock.patch("sentinel_xdr_migration.onboarding.shutil.which", return_value="az")
+    def test_doctor_returns_configured_workspace_for_confirmation(
+        self,
+        _which: mock.Mock,
+        _hunting: mock.Mock,
+    ) -> None:
+        def runner(command, **_kwargs):
+            return CompletedProcess(command, 0, "", "")
+
+        state_dir = Path(self.temp.name) / "state"
+        resource_id = (
+            "/subscriptions/subscription-id/resourceGroups/resource-group/providers/"
+            "Microsoft.OperationalInsights/workspaces/lab-workspace"
+        )
+        configure_workspace(
+            resource_id,
+            workspace_customer_id="customer-id",
+            state_dir=state_dir,
+        )
+
+        result = doctor(state_dir=state_dir, runner=runner, environment={})
+
+        self.assertEqual(resource_id, result["configuredWorkspaceResourceId"])
+        self.assertEqual("customer-id", result["configuredWorkspaceCustomerId"])
 
 
 if __name__ == "__main__":

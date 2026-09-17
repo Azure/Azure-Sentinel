@@ -85,6 +85,41 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def configure_workspace(
+    workspace_resource_id: str,
+    *,
+    workspace_customer_id: str | None = None,
+    state_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    normalized = workspace_resource_id.strip().rstrip("/")
+    lowered = normalized.lower()
+    if not (
+        lowered.startswith("/subscriptions/")
+        and "/resourcegroups/" in lowered
+        and "/providers/microsoft.operationalinsights/workspaces/" in lowered
+    ):
+        raise ValueError("workspace-resource-id must be a full Log Analytics ARM ID")
+
+    state_root = _state_dir(state_dir)
+    state_root.mkdir(parents=True, exist_ok=True)
+    config_path = state_root / CONFIG_NAME
+    config = _read_json(config_path)
+    config["workspaceResourceId"] = normalized
+    if workspace_customer_id:
+        config["workspaceId"] = workspace_customer_id.strip()
+    config_path.write_text(
+        json.dumps(config, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "status": "configured",
+        "workspaceResourceId": normalized,
+        "workspaceCustomerId": config.get("workspaceId"),
+        "configPath": str(config_path),
+    }
+
+
 def _advanced_hunting_status(
     state_root: Path, tenant_id: str | None = None
 ) -> dict[str, Any]:
@@ -175,14 +210,18 @@ def doctor(
         runner=runner,
     )
     workspace_id = env.get("LA_WORKSPACE_ID") or config.get("workspaceId")
+    workspace_resource_id = config.get("workspaceResourceId")
+    workspace_configured = bool(workspace_id or workspace_resource_id)
     workspace = {
         "name": "sentinelWorkspace",
-        "status": "ready" if workspace_id else "optional",
+        "status": "ready" if workspace_configured else "optional",
         "detail": (
-            "LA_WORKSPACE_ID is configured"
-            if workspace_id
+            "a reusable workspace is configured"
+            if workspace_configured
             else "set LA_WORKSPACE_ID to enable original Sentinel query execution"
         ),
+        "workspaceResourceId": workspace_resource_id,
+        "workspaceCustomerId": workspace_id,
     }
     hunting = _advanced_hunting_status(state_root, config.get("tenantId"))
     checks = [python_status, azure_cli, sentinel_auth, workspace, hunting]
@@ -204,6 +243,8 @@ def doctor(
         "mode": "runtime" if runtime_ready else "offline",
         "conversionAvailable": python_status["status"] == "ready",
         "runtimeValidationAvailable": runtime_ready,
+        "configuredWorkspaceResourceId": workspace_resource_id,
+        "configuredWorkspaceCustomerId": workspace_id,
         "checks": checks,
         "recommendedActions": actions,
     }

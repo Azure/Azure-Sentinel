@@ -14,7 +14,7 @@ from .converter import (
     runtime_validation_plan,
     validate_solution,
 )
-from .onboarding import doctor, setup
+from .onboarding import configure_workspace, doctor, setup
 from .packaging import package_solution_v4
 from .deployment import deploy_solution, setup_deployment_authentication
 from .analytic_deployment import deploy_analytic_rules
@@ -36,6 +36,9 @@ from .workflow import (
     workflow_status,
 )
 
+SUPPORTED_PYTHON_MIN = (3, 11)
+SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 13)
+
 
 def _print(value: dict) -> None:
     print(json.dumps(value, indent=2))
@@ -54,6 +57,19 @@ def _key_values(values: list[str] | None) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if not (
+        SUPPORTED_PYTHON_MIN
+        <= sys.version_info[:2]
+        < SUPPORTED_PYTHON_MAX_EXCLUSIVE
+    ):
+        print(
+            "sentinel-xdr-migration requires Python 3.11 or 3.12. "
+            "Install or select a supported interpreter; do not modify toolkit "
+            "source to compensate for the local Python version.",
+            file=sys.stderr,
+        )
+        return 2
+
     parser = argparse.ArgumentParser(
         description="Convert Microsoft Sentinel analytic rules into XDR Custom Detection YAML."
     )
@@ -89,6 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     setup_parser.add_argument("--skip-sentinel-auth", action="store_true")
     setup_parser.add_argument("--skip-hunting-auth", action="store_true")
     subparsers.add_parser("doctor", help="Report setup and runtime readiness.")
+    workspace_config = subparsers.add_parser(
+        "configure-workspace",
+        help="Persist one approved workspace for reuse across solution workflows.",
+    )
+    workspace_config.add_argument("--workspace-resource-id", required=True)
+    workspace_config.add_argument("--workspace-customer-id")
     deployment_setup = subparsers.add_parser(
         "setup-deployment",
         help="Authenticate for Microsoft Graph Custom Detection deployment.",
@@ -252,6 +274,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "doctor":
             result = doctor()
+        elif args.command == "configure-workspace":
+            result = configure_workspace(
+                args.workspace_resource_id,
+                workspace_customer_id=args.workspace_customer_id,
+            )
         elif args.command == "setup-deployment":
             result = setup_deployment_authentication(
                 tenant_id=args.tenant_id,

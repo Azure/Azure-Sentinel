@@ -390,6 +390,11 @@ def render_solution_report(report: dict[str, Any]) -> str:
             )
         )
         recommendation = rule.get("entityRecommendation")
+        recommendation_html = (
+            escape(recommendation)
+            if recommendation
+            else '<span class="muted">None</span>'
+        )
         rows.append(
             "<tr>"
             f"<td><strong>{escape(str(rule['name']))}</strong><br>"
@@ -403,7 +408,7 @@ def render_solution_report(report: dict[str, Any]) -> str:
             f"deployment: {escape(str(rule['customDetection']['deploymentStatus']))}<br>"
             f"alerts: {escape(str(rule['customDetection']['alertStatus']))}<br>"
             f"runtime: {runtime_html(rule['customDetection']['runtime'])}</td>"
-            f"<td>{escape(recommendation) if recommendation else '<span class=\"muted\">None</span>'}</td>"
+            f"<td>{recommendation_html}</td>"
             f"<td><span class=\"status {escape(str(rule['queryParity']['status']))}\">"
             f"{escape(str(rule['queryParity']['status']))}</span><br>"
             f"AR rows: {escape(str(rule['queryParity']['analyticRuleRows']))}<br>"

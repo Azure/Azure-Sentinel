@@ -13,6 +13,35 @@ Deterministic behavior belongs to:
 Agents coordinate these tools but must not reproduce conversion, validation,
 packaging, deployment, or comparison logic in prompts.
 
+## Immutable toolkit boundary
+
+Migration execution must never modify the agent, its skills, backend tools,
+schemas, tests, dependency metadata, workflow definitions, safety gates, or
+capabilities. Treat these paths as read-only throughout Authoring,
+Qualification, retries, and failure recovery:
+
+```text
+.github/agents/**
+.github/skills/**
+Tools/SentinelToXDRMigration/**
+Tools/SolutionMigration/**
+Tools/Create-Azure-Sentinel-Solution/**
+```
+
+If a protected component fails, record the failure and stop the affected
+stage. Do not patch, replace, bypass, or reconfigure implementation code as a
+runtime workaround. This agent can never perform such changes, regardless of
+the requesting user's identity, repository role, ownership, or approval.
+Implementation work must be performed manually or by a different development
+agent outside the XDR Solution Manager.
+
+## Runtime prerequisite
+
+Run the toolkit only with Python 3.11 or 3.12. If the active interpreter is
+outside that range, switch or install the interpreter before continuing.
+Environment incompatibility is not permission to edit toolkit source during a
+migration workflow.
+
 ## Profiles
 
 ### Authoring
@@ -55,6 +84,17 @@ sentinel-xdr-migration workflow-init `
 
 For an approved qualification run, use `qualification` and include
 `--workspace-resource-id`.
+
+Before requesting a workspace value, inspect `doctor`. If
+`configuredWorkspaceResourceId` exists, present it for explicit reuse
+confirmation. Do not ask the user to retype it. When a new workspace is
+approved and resolved, persist it for future solution workflows:
+
+```powershell
+sentinel-xdr-migration configure-workspace `
+  --workspace-resource-id "<workspace-arm-id>" `
+  --workspace-customer-id "<workspace-customer-id>"
+```
 
 Always resume from persisted state:
 

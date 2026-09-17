@@ -3,6 +3,36 @@
 This toolkit converts the analytic rules in a Microsoft Sentinel solution into
 versioned Defender XDR Custom Detection YAML files.
 
+## Requirements
+
+- Python 3.11 or 3.12
+- PowerShell 7 for V4 solution packaging
+- Azure CLI for authenticated runtime validation and Qualification
+
+Install the package with a supported Python interpreter:
+
+```powershell
+python -m pip install -e Tools\SentinelToXDRMigration
+```
+
+The package metadata and CLI enforce the supported Python range. If the active
+interpreter is unsupported, select or install Python 3.11/3.12. Do not modify
+toolkit source files as an environment workaround during a migration run.
+
+## Protected implementation
+
+The XDR Solution Manager treats its prompts, skills, migration backends,
+packaging backends, schemas, tests, dependency metadata, workflow definitions,
+safety gates, and capabilities as read-only during solution migrations.
+Runtime, environment, conversion, validation, packaging, or deployment
+failures must be reported rather than repaired by changing toolkit source.
+
+The XDR Solution Manager can never perform implementation changes, regardless
+of who requests or approves them. Agent and backend development must be done
+manually or through a different development agent. The XDR Solution Manager
+remains limited to migration artifacts, packaging, validation, Qualification,
+and routed reports.
+
 The first milestone intentionally stops before ARM generation. It creates and
 validates:
 
@@ -80,6 +110,19 @@ Inspect readiness at any time:
 ```powershell
 sentinel-xdr-migration doctor
 ```
+
+Persist an approved non-production workspace once for confirmation and reuse
+across solution workflows:
+
+```powershell
+sentinel-xdr-migration configure-workspace `
+  --workspace-resource-id "<workspace-arm-id>" `
+  --workspace-customer-id "<workspace-customer-id>"
+```
+
+`doctor` returns both configured identifiers. Qualification still asks the
+user to confirm the workspace for each new workflow, but it does not require
+the ID to be re-entered.
 
 Conversion and structural validation always remain available in offline mode.
 Missing runtime access is reported explicitly and never blocks YAML generation.
