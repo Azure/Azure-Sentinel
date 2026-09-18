@@ -118,9 +118,13 @@ ParserQuery: |
               , _actorName
               , ""
           )
-      | where array_length(username_has_any) == 0 or _actorName has_any (username_has_any)
+          // _actorName holds an IP address, not a username, when _actorType is NETWORK_ADDRESS
+          , _Username = iff(_actorType != "NETWORK_ADDRESS", _actorName, "")
+      | where array_length(username_has_any) == 0 or _Username has_any (username_has_any)
       | where array_length(hostname_has_any) == 0 or DvcHostname has_any (hostname_has_any)
-      | where array_length(ipaddr_has_any_prefix) == 0 or DvcIpAddr has_any (ipaddr_has_any_prefix)
+      | where array_length(ipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
+          or ipv6_is_in_any_range(DvcIpAddr, ipaddr_has_any_prefix)
       | where array_length(eventseverity_has_any) == 0 or (
           ("High" in (eventseverity_has_any) and severity in ("HIGH", "CRITICAL"))
           or ("Medium" in (eventseverity_has_any) and severity == "MEDIUM")
@@ -228,7 +232,7 @@ ParserQuery: |
               , "Other"
           )
           , AttackTechniques = iff(array_length(mitreTechniques) > 0, strcat_array(mitreTechniques, ", "), "")
-          , Username = _actorName
+          , Username = _Username
           , UserId = case(
               isnotempty(_actorProviderUniqueId), _actorProviderUniqueId
               , isnotempty(_actorExternalId), _actorExternalId
