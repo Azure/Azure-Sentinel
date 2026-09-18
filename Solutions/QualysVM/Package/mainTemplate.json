@@ -55,11 +55,11 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "QualysVM",
-    "_solutionVersion": "3.1.0",
+    "_solutionVersion": "3.1.1",
     "solutionId": "azuresentinel.azure-sentinel-qualysvm",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.1.0",
+    "dataConnectorCCPVersion": "3.1.1",
     "_dataConnectorContentIdConnectorDefinition1": "QualysVMLogsCCPDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "QualysVMLogsCCPDefinitionConnections",
@@ -437,6 +437,10 @@
                         "type": "dynamic"
                       },
                       {
+                        "name": "TAGS",
+                        "type": "dynamic"
+                      },
+                      {
                         "name": "LAST_SCAN_DATETIME",
                         "type": "datetime"
                       },
@@ -472,7 +476,7 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Custom-QualysHostDetectionV3_CL",
-                    "transformKql": "source | extend HostId = tostring(ID), IPAddress = tostring(IP), TrackingMethod = tostring(TRACKING_METHOD), OperatingSystem = tostring(OS['#cdata-section']), DnsName = tostring(DNS['#cdata-section']), NetBios = tostring(NETBIOS['#cdata-section']), QGHostId = tostring(QG_HOSTID['#cdata-section']), LastScanDateTime = todatetime(LAST_SCAN_DATETIME), LastVMScannedDateTime = todatetime(LAST_VM_SCANNED_DATE), LastVMAuthScannedDateTime = todatetime(LAST_VM_AUTH_SCANNED_DATE), DetectionList = DETECTION_LIST, TimeGenerated = now() | project HostId, IPAddress, TrackingMethod, OperatingSystem, DnsName, NetBios, QGHostId, LastScanDateTime, LastVMScannedDateTime, LastVMAuthScannedDateTime, DetectionList, TimeGenerated"
+                    "transformKql": "source | extend TagItems = iff(gettype(TAGS.TAG) == 'array', TAGS.TAG, pack_array(TAGS.TAG)) | mv-apply TagItem = TagItems to typeof(dynamic) on (extend TagName = tostring(TagItem.NAME['#cdata-section']) | where isnotempty(TagName) | summarize HostTags = make_list(TagName)) | extend HostId = tostring(ID), IPAddress = tostring(IP), TrackingMethod = tostring(TRACKING_METHOD), OperatingSystem = tostring(OS['#cdata-section']), DnsName = tostring(DNS['#cdata-section']), NetBios = tostring(NETBIOS['#cdata-section']), QGHostId = tostring(QG_HOSTID['#cdata-section']), LastScanDateTime = todatetime(LAST_SCAN_DATETIME), LastVMScannedDateTime = todatetime(LAST_VM_SCANNED_DATE), LastVMAuthScannedDateTime = todatetime(LAST_VM_AUTH_SCANNED_DATE), DetectionList = DETECTION_LIST, TimeGenerated = now() | project HostId, HostTags, IPAddress, TrackingMethod, OperatingSystem, DnsName, NetBios, QGHostId, LastScanDateTime, LastVMScannedDateTime, LastVMAuthScannedDateTime, DetectionList, TimeGenerated"
                   }
                 ]
               }
@@ -495,6 +499,11 @@
                       "name": "HostId",
                       "type": "string",
                       "description": "Unique host identifier from Qualys VM."
+                    },
+                    {
+                      "name": "HostTags",
+                      "type": "dynamic",
+                      "description": "Names of the tags assigned to the Qualys VM host."
                     },
                     {
                       "name": "IPAddress",
@@ -917,7 +926,7 @@
                   "paginatedCallsPerSecond": 1.0,
                   "queryWindowInMin": 10,
                   "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-                  "retryCount": 1,
+                  "retryCount": 3,
                   "timeoutInSeconds": 300,
                   "headers": {
                     "X-Requested-With": "XMLHttpRequest",
@@ -929,6 +938,8 @@
                     "status": "New,Fixed,Active,Re-Opened",
                     "vm_processed_before": "{_QueryWindowEndTime}",
                     "vm_processed_after": "{_QueryWindowStartTime}",
+                    "show_results": "1",
+                    "show_tags": "1",
                     "show_qds": "[[parameters('show_qds')[0]]"
                   }
                 },
@@ -939,7 +950,7 @@
                   "format": "xml"
                 },
                 "paging": {
-                  "pagingType": "PersistentLinkHeader",
+                  "pagingType": "LinkHeader",
                   "linkHeaderTokenJsonPath": "$.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.WARNING.URL.#cdata-section"
                 },
                 "checkConnectivityRequest": {
@@ -981,7 +992,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysHostDetection Data Parser with template version 3.1.0",
+        "description": "QualysHostDetection Data Parser with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -1113,7 +1124,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysVMv2 Workbook with template version 3.1.0",
+        "description": "QualysVMv2 Workbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -1201,7 +1212,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "HighNumberofVulnDetectedV2_AnalyticalRules Analytics Rule with template version 3.1.0",
+        "description": "HighNumberofVulnDetectedV2_AnalyticalRules Analytics Rule with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -1229,10 +1240,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "QualysVMLogsCCPDefinition",
                     "dataTypes": [
                       "QualysHostDetection"
-                    ]
+                    ],
+                    "connectorId": "QualysVMLogsCCPDefinition"
                   }
                 ],
                 "tactics": [
@@ -1243,22 +1254,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "NetBios"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1314,7 +1325,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "NewHighSeverityVulnDetectedAcrossMulitpleHostsV2_AnalyticalRules Analytics Rule with template version 3.1.0",
+        "description": "NewHighSeverityVulnDetectedAcrossMulitpleHostsV2_AnalyticalRules Analytics Rule with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -1342,10 +1353,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "QualysVMLogsCCPDefinition",
                     "dataTypes": [
                       "QualysHostDetection"
-                    ]
+                    ],
+                    "connectorId": "QualysVMLogsCCPDefinition"
                   }
                 ],
                 "tactics": [
@@ -1407,7 +1418,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysCustomConnector Playbook with template version 3.1.0",
+        "description": "QualysCustomConnector Playbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -3057,7 +3068,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysVM-GetAssetDetails Playbook with template version 3.1.0",
+        "description": "QualysVM-GetAssetDetails Playbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -3570,7 +3581,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysVM-GetAssets-ByCVEID Playbook with template version 3.1.0",
+        "description": "QualysVM-GetAssets-ByCVEID Playbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -4654,7 +4665,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysVM-GetAssets-ByOpenPort Playbook with template version 3.1.0",
+        "description": "QualysVM-GetAssets-ByOpenPort Playbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -5613,7 +5624,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysVM-LaunchVMScan-GenerateReport Playbook with template version 3.1.0",
+        "description": "QualysVM-LaunchVMScan-GenerateReport Playbook with template version 3.1.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion5')]",
@@ -8266,7 +8277,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.1.0",
+        "version": "3.1.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "QualysVM",
