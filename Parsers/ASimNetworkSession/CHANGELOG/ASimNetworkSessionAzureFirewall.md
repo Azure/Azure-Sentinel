@@ -1,5 +1,9 @@
 # Changelog for ASimNetworkSessionAzureFirewall.yaml
 
+## Version 0.2.1
+
+- (2026-09-18) Use column_ifexists for msg_s in the legacy AzureDiagnostics branch to prevent failures when msg_s is absent
+
 ## Version 0.2.0
 
 - (2025-12-04) AZFW ASIM Parsers - [PR #13181](https://github.com/Azure/Azure-Sentinel/pull/13181)
