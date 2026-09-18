@@ -191,8 +191,13 @@
 
 ### `VMRay-Sandbox_Outlook_Attachment` Logic App
 
-- This playbook can be used to enrich outlook attachements, this playbook when configured will collect all the `attachements` from the email and submits them to VMRay analyzer, once the submission is completed, it will add the VMRay Analysis report by creating an Incident and creates the IOCs in the microsoft seninel threat intelligence.
+- This playbook can be used to enrich outlook attachments. When configured, it collects all the `attachments` from the email and submits them to VMRay analyzer. Once a submission is completed, the playbook writes the VMRay analysis result to a Log Analytics custom table (`VMRaySubmissions_CL`) through the Logs Ingestion API, creates the IOCs in the Microsoft Sentinel threat intelligence, and emails the analysis report.
 
+- **How the incident is created.** The playbook no longer creates the incident itself. The same template also deploys a scheduled analytics rule, `VMRay - Malicious or suspicious email attachment`, which runs every 5 minutes over `VMRaySubmissions_CL` and raises an alert for every row whose verdict is `malicious` or `suspicious`. Because the incident now originates from an analytics rule that carries `File` and `FileHash` entity mappings, it is correlated by Microsoft and surfaces in **both** the Microsoft Sentinel and the Microsoft Defender portal incident queues - a playbook-created incident only ever appeared in Microsoft Sentinel. Alerts are grouped by `FileHash` over a 5 hour lookback, so repeated submissions of the same attachment fold into a single incident.
+
+- A single deployment of this template creates the custom table, the Data Collection Endpoint, the Data Collection Rule, the two API connections, the playbook and the analytics rule.
+
+> **Note:** The playbook's managed identity must be granted the `Monitoring Metrics Publisher` role on the Data Collection Rule before any result can reach the custom table. Without it the ingestion call fails with `403` and no incident is ever created - see [Provide Permission to Logic app](#provide-permission-to-logic-app).
 
 - Click on below button to deploy
   
@@ -210,13 +215,26 @@
 | Resource Group 	| Select the appropriate Resource Group |
 | Region			| Based on Resource Group this will be uto populated |
 | Playbook Name		| Please provide a playbook name, if needed |
-| Workspace Name		| Please provide Log Analytics Workspace Name |
+| Workspace Name		| Please provide Log Analytics Workspace Name. The workspace must be in the same Resource Group, since the custom table, the Data Collection Rule and the analytics rule are created against it |
 | Workspace ID		| Please provide Log Analytics Workspace ID |
 | Function App Name		| Please provide the VMRay enrichment function app name |
+| Table Name		| Log Analytics custom table the analysis results are written to. Must end with `_CL`. Default `VMRaySubmissions_CL` |
+| Data Collection Endpoint Name	| Name of the Data Collection Endpoint created by this template. Default `vmray-dce` |
+| Data Collection Rule Name	| Name of the Data Collection Rule created by this template. Default `vmray-submissions-dcr` |
+| Retention In Days		| Interactive retention for the custom table, in days. Default `30` |
+| Analytic Rule Guid		| Stable GUID for the analytics rule. **Keep this value unchanged across redeployments** - if it changes, a redeployment creates a duplicate rule instead of updating the existing one |
+| Analytic Rule Severity	| Severity assigned to the generated alerts and incidents. One of `Informational`, `Low`, `Medium`, `High`. Default `Medium` |
+| Analytic Rule Enabled		| Whether the analytics rule is enabled on deployment. Default `true`. Set to `false` to deploy the rule without turning it on |
 
 - Once you provide the above values, please click on `Review + create` button.
 
 ## Provide Permission to Logic app
+
+The playbook's system-assigned managed identity needs the role assignments below. The `Submit-URL-VMRay-Analyzer` playbook needs only the first one; the `VMRay-Sandbox_Outlook_Attachment` playbook needs **both**.
+
+### 1. `Microsoft Sentinel Contributor` on the Log Analytics workspace
+
+This allows the playbook to upload the VMRay IOCs to the Microsoft Sentinel threat intelligence.
 
 - Open [https://portal.azure.com/](https://portal.azure.com) and search `Microsoft Sentinel` service.
 - Goto `Settings` -> `Workspace Setting`
@@ -238,4 +256,18 @@
 ![38](Images/38.png)
 
 - Click on `Review + assign`
+
+### 2. `Monitoring Metrics Publisher` on the Data Collection Rule
+
+**Required for the `VMRay-Sandbox_Outlook_Attachment` playbook.** This allows the playbook to write its analysis results to the `VMRaySubmissions_CL` custom table through the Logs Ingestion API, which is what the analytics rule reads to create the incident.
+
+- Open [https://portal.azure.com/](https://portal.azure.com) and search `Data collection rules`.
+- Open the rule created by the playbook template - `vmray-submissions-dcr` by default, or the value you entered in the `Data Collection Rule Name` field.
+- Goto `Access control (IAM)` -> `Add` -> `Add role assignment`
+- Search for `Monitoring Metrics Publisher` and click `Next`
+- Select `Managed Identity` and click on `select members`.
+- Select `Logic app` as the managed identity type, search for the Logic app name deployed above and click on `select`.
+- Click on `Next`, then click on `Review + assign`
+
+> **Note:** Without this role the playbook's `Send Result To Log Analytics` action fails with `403 (Forbidden)`, nothing is written to `VMRaySubmissions_CL`, and the analytics rule therefore never fires - **no incident is created**. If submissions succeed in VMRay but no incident appears in Microsoft Sentinel or the Microsoft Defender portal, verify this role assignment first.
 
