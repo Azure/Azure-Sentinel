@@ -1,0 +1,63 @@
+id: 30df57e3-043a-5a71-9d78-dc328ecbd42b
+name: Silverfort - RemoteServiceInstallation Incident
+description: |
+  Detects Silverfort Remote Service Installation incidents. Silverfort describes this incident type as: Detects the creation of new system services on a host. May indicate remote code execution using tools like PSExec or PAExec.
+severity: High
+requiredDataConnectors:
+  - connectorId: SilverfortAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Execution
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1569.002
+  - T1543.003
+query: |-
+  CommonSecurityLog
+  | where DeviceVendor has 'Silverfort'
+  | where DeviceProduct has 'Admin Console'
+  | where DeviceEventClassID == "NewIncident"
+  | where Message has "RemoteServiceInstallation"
+  | extend IncidentData = parse_json(replace('^""|""$', '', Message))
+  | extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))
+  | extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))
+  | extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))
+  | extend UserName = coalesce(
+      tostring(IncidentData.data.users[0].samAccountName),
+      tostring(IncidentData.data.users[0].upn),
+      tostring(IncidentData.data.users[0].displayName),
+      tostring(IncidentData.users[0].displayName)
+  )
+  | extend SourceHost = coalesce(
+      tostring(IncidentData.data.sources[0].displayName),
+      tostring(IncidentData.sources[0].displayName)
+  )
+  | extend DestinationHost = coalesce(
+      tostring(IncidentData.data.destinations[0].displayName),
+      tostring(IncidentData.destinations[0].displayName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationHost
+customDetails:
+  IncidentId: IncidentId
+  IncidentKind: IncidentKind
+  IncidentSummary: IncidentSummary
+queryPeriod: 15m
+queryFrequency: 15m
+triggerOperator: gt
+triggerThreshold: 0
+version: 1.0.0
+kind: Scheduled
