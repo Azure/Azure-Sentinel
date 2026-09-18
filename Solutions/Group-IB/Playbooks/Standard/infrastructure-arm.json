@@ -1,0 +1,268 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "LogicAppName": {
+            "defaultValue": "GIBTIA-Standard",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Standard Logic App resource."
+            }
+        },
+        "AppServicePlanName": {
+            "defaultValue": "GIBTIA-Standard-Plan",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the WorkflowStandard App Service Plan."
+            }
+        },
+        "StorageAccountName": {
+            "defaultValue": "[concat('gib', uniqueString(resourceGroup().id))]",
+            "type": "string",
+            "metadata": {
+                "description": "Storage account name — alphanumeric, 3-24 chars. A uniqueString suffix is appended by default to avoid collisions."
+            }
+        },
+        "GIBUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "GIB TI portal login (email)."
+            }
+        },
+        "GIBApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "GIB TI personal API token."
+            }
+        },
+        "WorkspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics workspace ID (GUID)."
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics workspace name (used for query URI construction)."
+            }
+        },
+        "StartDate": {
+            "type": "string",
+            "metadata": {
+                "description": "YYYY-MM-DD. First-run cursor used by every collector to convert into an initial seqUpdate. Ignored after first run."
+            }
+        },
+        "LimitPerPortion": {
+            "defaultValue": "10",
+            "type": "string",
+            "metadata": {
+                "description": "Page size for GIB collector API calls. Use 10 for initial testing; raise to 1000-5000 for production. Per-collection maxima documented in USER_GUIDE_STANDARD.md §7."
+            }
+        },
+        "IOCTypeFilter": {
+            "defaultValue": "all",
+            "allowedValues": ["all", "network", "file"],
+            "type": "string",
+            "metadata": {
+                "description": "IOC Primary filter: all, network (IP/domain/URL only), or file (hashes only)."
+            }
+        },
+        "UseRiskScoreAsConfidence": {
+            "defaultValue": "false",
+            "allowedValues": ["true", "false"],
+            "type": "string",
+            "metadata": {
+                "description": "When true, IOC Primary uses each entry's GIB riskScore as the STIX confidence."
+            }
+        },
+        "FixedConfidence": {
+            "defaultValue": "-1",
+            "type": "string",
+            "metadata": {
+                "description": "Fixed confidence value 0-100 for IOC Primary indicators. -1 omits the field. Ignored when UseRiskScoreAsConfidence is true."
+            }
+        },
+        "UseAdmiraltyConfidence": {
+            "defaultValue": "false",
+            "allowedValues": ["true", "false"],
+            "type": "string",
+            "metadata": {
+                "description": "When true, IOC Primary derives STIX confidence by parsing evaluation.admiraltyCode (e.g. \"C3\") via the Admiralty Code lookup tables and emitting (reliability + credibility) / 2. Highest precedence — falls through to UseRiskScoreAsConfidence / FixedConfidence when admiraltyCode is missing or malformed on a record."
+            }
+        },
+        "HasPasswordFilter": {
+            "defaultValue": "1",
+            "allowedValues": ["1", "0"],
+            "type": "string",
+            "metadata": {
+                "description": "compromised/breacheddb only. 1 = only ingest breach records that carry a leaked password (default, matches the password-notification use case). 0 = collect all breach records regardless of password presence."
+            }
+        },
+        "AccountFeedType": {
+            "defaultValue": "unique",
+            "allowedValues": ["unique", "combolist", "all"],
+            "type": "string",
+            "metadata": {
+                "description": "compromised/account_group only. Feed type: 'unique' (default) = only unique credentials (unique=1&combolist=0); 'combolist' = only combo-list credentials (unique=0&combolist=1); 'all' = every credential (no unique/combolist filter)."
+            }
+        },
+        "ProbableCorporateAccessFilter": {
+            "defaultValue": "0",
+            "allowedValues": ["1", "0"],
+            "type": "string",
+            "metadata": {
+                "description": "compromised/account_group only. 1 = return only probable corporate-access credentials (&probable_corporate_access=1). 0 = no corporate-access filter (default). Independent of AccountFeedType."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-09-01",
+            "name": "[parameters('StorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[parameters('AppServicePlanName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "WS1",
+                "tier": "WorkflowStandard"
+            },
+            "properties": {
+                "targetWorkerCount": 1,
+                "maximumElasticWorkerCount": 3,
+                "elasticScaleEnabled": true,
+                "zoneRedundant": false
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[parameters('LogicAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,workflowapp",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccountName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', parameters('AppServicePlanName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('AppServicePlanName'))]",
+                "httpsOnly": true,
+                "siteConfig": {
+                    "minTlsVersion": "1.2",
+                    "ftpsState": "Disabled",
+                    "appSettings": [
+                        {
+                            "name": "APP_KIND",
+                            "value": "workflowApp"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "~22"
+                        },
+                        {
+                            "name": "WORKFLOWS_SUBSCRIPTION_ID",
+                            "value": "[subscription().subscriptionId]"
+                        },
+                        {
+                            "name": "WORKFLOWS_RESOURCE_GROUP_NAME",
+                            "value": "[resourceGroup().name]"
+                        },
+                        {
+                            "name": "WORKFLOWS_LOCATION_NAME",
+                            "value": "[resourceGroup().location]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccountName')), '2021-09-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccountName')), '2021-09-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(parameters('LogicAppName'))]"
+                        },
+                        {
+                            "name": "GIBUsername",
+                            "value": "[parameters('GIBUsername')]"
+                        },
+                        {
+                            "name": "GIBApiKey",
+                            "value": "[parameters('GIBApiKey')]"
+                        },
+                        {
+                            "name": "WorkspaceId",
+                            "value": "[parameters('WorkspaceId')]"
+                        },
+                        {
+                            "name": "WorkspaceName",
+                            "value": "[parameters('WorkspaceName')]"
+                        },
+                        {
+                            "name": "StartDate",
+                            "value": "[parameters('StartDate')]"
+                        },
+                        {
+                            "name": "LimitPerPortion",
+                            "value": "[parameters('LimitPerPortion')]"
+                        },
+                        {
+                            "name": "IOCTypeFilter",
+                            "value": "[parameters('IOCTypeFilter')]"
+                        },
+                        {
+                            "name": "UseRiskScoreAsConfidence",
+                            "value": "[parameters('UseRiskScoreAsConfidence')]"
+                        },
+                        {
+                            "name": "FixedConfidence",
+                            "value": "[parameters('FixedConfidence')]"
+                        },
+                        {
+                            "name": "UseAdmiraltyConfidence",
+                            "value": "[parameters('UseAdmiraltyConfidence')]"
+                        },
+                        {
+                            "name": "HasPasswordFilter",
+                            "value": "[parameters('HasPasswordFilter')]"
+                        },
+                        {
+                            "name": "AccountFeedType",
+                            "value": "[parameters('AccountFeedType')]"
+                        },
+                        {
+                            "name": "ProbableCorporateAccessFilter",
+                            "value": "[parameters('ProbableCorporateAccessFilter')]"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

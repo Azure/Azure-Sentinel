@@ -1,0 +1,592 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Hour",
+          "interval": 1
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "runs": 1
+          }
+        }
+      }
+    },
+    "actions": {
+      "Initialize_seqUpdate": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "seqUpdate",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Initialize_IsPortionEmpty": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "IsPortionEmpty",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_seqUpdate": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Query_Last_SeqUpdate": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{concat('https://management.azure.com/subscriptions/', appsetting('WORKFLOWS_SUBSCRIPTION_ID'), '/resourceGroups/', appsetting('WORKFLOWS_RESOURCE_GROUP_NAME'), '/providers/microsoft.operationalinsights/workspaces/', appsetting('WorkspaceName'), '/query?api-version=2017-10-01')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "query": "GIBCollectionTracking_CL | where CollectionName_s == \"ioc/primary\" | top 1 by TimeGenerated desc | project SeqUpdate_d"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com/"
+          }
+        },
+        "runAfter": {
+          "Initialize_IsPortionEmpty": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Condition_First_Run": {
+        "type": "If",
+        "expression": {
+          "or": [
+            {
+              "equals": [
+                "@actions('Query_Last_SeqUpdate').status",
+                "Failed"
+              ]
+            },
+            {
+              "equals": [
+                "@length(coalesce(body('Query_Last_SeqUpdate')?['tables']?[0]?['rows'], json('[]')))",
+                0
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "HTTP_Get_SequenceList": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "https://tap.group-ib.com/api/v2/sequence_list",
+              "queries": {
+                "date": "@{appsetting('StartDate')}",
+                "collection": "ioc/primary"
+              },
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (ioc-primary; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "Parse_SequenceList": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('HTTP_Get_SequenceList')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "list": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "HTTP_Get_SequenceList": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_seqUpdate_From_SequenceList": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "seqUpdate",
+              "value": "@body('Parse_SequenceList')?['list']?['ioc/primary']"
+            },
+            "runAfter": {
+              "Parse_SequenceList": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Set_seqUpdate_From_DB": {
+              "type": "SetVariable",
+              "inputs": {
+                "name": "seqUpdate",
+                "value": "@int(body('Query_Last_SeqUpdate')?['tables'][0]?['rows'][0]?[0])"
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Query_Last_SeqUpdate": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      },
+      "Until": {
+        "type": "Until",
+        "expression": "@equals(variables('IsPortionEmpty'), true)",
+        "limit": {
+          "count": 100,
+          "timeout": "PT1H"
+        },
+        "actions": {
+          "Get_next_portion": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{concat('https://tap.group-ib.com/api/v2/ioc/primary/updated?seqUpdate=', variables('seqUpdate'), '&limit=', min(int(appsetting('LimitPerPortion')), 5000), if(equals(appsetting('IOCTypeFilter'), 'all'), '', concat('&q=', appsetting('IOCTypeFilter'))))}",
+              "headers": {
+                "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                "Accept": "application/json",
+                "User-Agent": "GroupIB-MSentinel-Integration/2.0 (ioc-primary; logic-app)"
+              }
+            },
+            "runtimeConfiguration": {
+              "secureData": {
+                "properties": [
+                  "inputs"
+                ]
+              }
+            },
+            "runAfter": {}
+          },
+          "Parse_Feed_Response": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('Get_next_portion')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "seqUpdate": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "seqUpdate": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "type": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dateFirstSeen": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dateLastSeen": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ip": {
+                          "type": "array"
+                        },
+                        "domain": {
+                          "type": "array"
+                        },
+                        "url": {
+                          "type": "array"
+                        },
+                        "hash": {},
+                        "riskScore": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "malwareList": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "threatList": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Get_next_portion": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Update_seqUpdate": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "seqUpdate",
+              "value": "@body('Parse_Feed_Response')?['seqUpdate']"
+            },
+            "runAfter": {
+              "Parse_Feed_Response": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_IsPortionEmpty_on_parse_failure": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "IsPortionEmpty",
+              "value": true
+            },
+            "runAfter": {
+              "Parse_Feed_Response": [
+                "Failed",
+                "TimedOut"
+              ]
+            }
+          },
+          "Condition_Has_Items": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "greater": [
+                    "@length(body('Parse_Feed_Response')?['items'])",
+                    0
+                  ]
+                }
+              ]
+            },
+            "actions": {
+              "Filter_by_type": {
+                "type": "Query",
+                "inputs": {
+                  "from": "@body('Parse_Feed_Response')?['items']",
+                  "where": "@or(equals(appsetting('IOCTypeFilter'), 'all'), equals(item()?['type'], appsetting('IOCTypeFilter')))"
+                },
+                "runAfter": {}
+              },
+              "Filter_network_items": {
+                "type": "Query",
+                "inputs": {
+                  "from": "@body('Filter_by_type')",
+                  "where": "@equals(item()?['type'], 'network')"
+                },
+                "runAfter": {
+                  "Filter_by_type": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Filter_file_items": {
+                "type": "Query",
+                "inputs": {
+                  "from": "@body('Filter_by_type')",
+                  "where": "@equals(item()?['type'], 'file')"
+                },
+                "runAfter": {
+                  "Filter_by_type": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "For_each_network_item": {
+                "type": "Foreach",
+                "foreach": "@body('Filter_network_items')",
+                "actions": {
+                  "For_each_IP": {
+                    "type": "Foreach",
+                    "foreach": "@items('For_each_network_item')?['ip']",
+                    "actions": {
+                      "SendToBatch_IP": {
+                        "type": "SendToBatch",
+                        "inputs": {
+                          "batchName": "GIBIOCBatch",
+                          "content": {
+                            "type": "indicator",
+                            "spec_version": "2.1",
+                            "id": "@{concat('indicator--', guid())}",
+                            "created": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "modified": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "name": "@{concat('IP=', items('For_each_IP')?['ip'])}",
+                            "pattern": "@{concat('[ipv4-addr:value = ''', items('For_each_IP')?['ip'], ''']')}",
+                            "pattern_type": "stix",
+                            "valid_from": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "valid_until": "@{addDays(items('For_each_network_item')?['dateFirstSeen'], if(not(equals(items('For_each_network_item')?['evaluation']?['TTL'], null)), int(items('For_each_network_item')?['evaluation']?['TTL']), 90))}",
+                            "confidence": "@if(and(equals(bool(appsetting('UseAdmiraltyConfidence')), true), and(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), and(equals(length(items('For_each_network_item')?['evaluation']?['admiraltyCode']), 2), and(not(equals(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], null)), not(equals(json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)], null)))))), div(add(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)]), 2), if(equals(bool(appsetting('UseRiskScoreAsConfidence')), true), items('For_each_IP')?['riskScore'], if(not(equals(int(appsetting('FixedConfidence')), -1)), int(appsetting('FixedConfidence')), null)))",
+                            "indicator_types": [
+                              "malicious-activity"
+                            ],
+                            "labels": "@union(createArray('Group-IB TI', 'ioc/primary'), if(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), createArray(concat('admiralty:', items('For_each_network_item')?['evaluation']?['admiraltyCode'])), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['credibility'], null)), createArray(concat('credibility:', string(items('For_each_network_item')?['evaluation']?['credibility']))), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['reliability'], null)), createArray(concat('reliability:', string(items('For_each_network_item')?['evaluation']?['reliability']))), json('[]')), if(not(equals(items('For_each_IP')?['riskScore'], null)), createArray(concat('risk-score:', string(items('For_each_IP')?['riskScore']))), json('[]')))",
+                            "object_marking_refs": "@if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:RED'), createArray('marking-definition--5e57c739-391a-4eb3-b6be-7d15ca92d5ea'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:AMBER'), createArray('marking-definition--f88d31f6-486f-44da-b317-01333bde0b82'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:GREEN'), createArray('marking-definition--34098fce-860f-48ae-8e50-ebd3cc5e41da'), if(or(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:WHITE'), equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:CLEAR')), createArray('marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9'), json('[]')))))"
+                          },
+                          "host": {
+                            "triggerName": "Batch_messages",
+                            "workflow": {
+                              "id": "GIBTIA_IndicatorProcessor_v2"
+                            }
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "For_each_domain": {
+                    "type": "Foreach",
+                    "foreach": "@items('For_each_network_item')?['domain']",
+                    "actions": {
+                      "SendToBatch_Domain": {
+                        "type": "SendToBatch",
+                        "inputs": {
+                          "batchName": "GIBIOCBatch",
+                          "content": {
+                            "type": "indicator",
+                            "spec_version": "2.1",
+                            "id": "@{concat('indicator--', guid())}",
+                            "created": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "modified": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "name": "@{concat('domain=', items('For_each_domain')?['domain'])}",
+                            "pattern": "@{concat('[domain-name:value = ''', items('For_each_domain')?['domain'], ''']')}",
+                            "pattern_type": "stix",
+                            "valid_from": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "valid_until": "@{addDays(items('For_each_network_item')?['dateFirstSeen'], if(not(equals(items('For_each_network_item')?['evaluation']?['TTL'], null)), int(items('For_each_network_item')?['evaluation']?['TTL']), 90))}",
+                            "confidence": "@if(and(equals(bool(appsetting('UseAdmiraltyConfidence')), true), and(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), and(equals(length(items('For_each_network_item')?['evaluation']?['admiraltyCode']), 2), and(not(equals(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], null)), not(equals(json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)], null)))))), div(add(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)]), 2), if(equals(bool(appsetting('UseRiskScoreAsConfidence')), true), items('For_each_domain')?['riskScore'], if(not(equals(int(appsetting('FixedConfidence')), -1)), int(appsetting('FixedConfidence')), null)))",
+                            "indicator_types": [
+                              "malicious-activity"
+                            ],
+                            "labels": "@union(createArray('Group-IB TI', 'ioc/primary'), if(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), createArray(concat('admiralty:', items('For_each_network_item')?['evaluation']?['admiraltyCode'])), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['credibility'], null)), createArray(concat('credibility:', string(items('For_each_network_item')?['evaluation']?['credibility']))), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['reliability'], null)), createArray(concat('reliability:', string(items('For_each_network_item')?['evaluation']?['reliability']))), json('[]')), if(not(equals(items('For_each_domain')?['riskScore'], null)), createArray(concat('risk-score:', string(items('For_each_domain')?['riskScore']))), json('[]')))",
+                            "object_marking_refs": "@if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:RED'), createArray('marking-definition--5e57c739-391a-4eb3-b6be-7d15ca92d5ea'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:AMBER'), createArray('marking-definition--f88d31f6-486f-44da-b317-01333bde0b82'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:GREEN'), createArray('marking-definition--34098fce-860f-48ae-8e50-ebd3cc5e41da'), if(or(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:WHITE'), equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:CLEAR')), createArray('marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9'), json('[]')))))"
+                          },
+                          "host": {
+                            "triggerName": "Batch_messages",
+                            "workflow": {
+                              "id": "GIBTIA_IndicatorProcessor_v2"
+                            }
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "For_each_url": {
+                    "type": "Foreach",
+                    "foreach": "@items('For_each_network_item')?['url']",
+                    "actions": {
+                      "SendToBatch_URL": {
+                        "type": "SendToBatch",
+                        "inputs": {
+                          "batchName": "GIBIOCBatch",
+                          "content": {
+                            "type": "indicator",
+                            "spec_version": "2.1",
+                            "id": "@{concat('indicator--', guid())}",
+                            "created": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "modified": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "name": "@{concat('url=', items('For_each_url')?['url'])}",
+                            "pattern": "@{concat('[url:value = ''', items('For_each_url')?['url'], ''']')}",
+                            "pattern_type": "stix",
+                            "valid_from": "@{items('For_each_network_item')?['dateFirstSeen']}",
+                            "valid_until": "@{addDays(items('For_each_network_item')?['dateFirstSeen'], if(not(equals(items('For_each_network_item')?['evaluation']?['TTL'], null)), int(items('For_each_network_item')?['evaluation']?['TTL']), 90))}",
+                            "confidence": "@if(and(equals(bool(appsetting('UseAdmiraltyConfidence')), true), and(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), and(equals(length(items('For_each_network_item')?['evaluation']?['admiraltyCode']), 2), and(not(equals(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], null)), not(equals(json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)], null)))))), div(add(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 0, 1)], json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_network_item')?['evaluation']?['admiraltyCode'], 1, 1)]), 2), if(equals(bool(appsetting('UseRiskScoreAsConfidence')), true), items('For_each_url')?['riskScore'], if(not(equals(int(appsetting('FixedConfidence')), -1)), int(appsetting('FixedConfidence')), null)))",
+                            "indicator_types": [
+                              "malicious-activity"
+                            ],
+                            "labels": "@union(createArray('Group-IB TI', 'ioc/primary'), if(not(equals(items('For_each_network_item')?['evaluation']?['admiraltyCode'], null)), createArray(concat('admiralty:', items('For_each_network_item')?['evaluation']?['admiraltyCode'])), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['credibility'], null)), createArray(concat('credibility:', string(items('For_each_network_item')?['evaluation']?['credibility']))), json('[]')), if(not(equals(items('For_each_network_item')?['evaluation']?['reliability'], null)), createArray(concat('reliability:', string(items('For_each_network_item')?['evaluation']?['reliability']))), json('[]')), if(not(equals(items('For_each_url')?['riskScore'], null)), createArray(concat('risk-score:', string(items('For_each_url')?['riskScore']))), json('[]')))",
+                            "object_marking_refs": "@if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:RED'), createArray('marking-definition--5e57c739-391a-4eb3-b6be-7d15ca92d5ea'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:AMBER'), createArray('marking-definition--f88d31f6-486f-44da-b317-01333bde0b82'), if(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:GREEN'), createArray('marking-definition--34098fce-860f-48ae-8e50-ebd3cc5e41da'), if(or(equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:WHITE'), equals(items('For_each_network_item')?['evaluation']?['TLP'], 'TLP:CLEAR')), createArray('marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9'), json('[]')))))"
+                          },
+                          "host": {
+                            "triggerName": "Batch_messages",
+                            "workflow": {
+                              "id": "GIBTIA_IndicatorProcessor_v2"
+                            }
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "runAfter": {
+                  "Filter_network_items": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "For_each_file_item": {
+                "type": "Foreach",
+                "foreach": "@body('Filter_file_items')",
+                "actions": {
+                  "Compose_hash_entries": {
+                    "type": "Compose",
+                    "inputs": "@union(if(not(equals(items('For_each_file_item')?['hash']?['md5'], null)), createArray(json(concat('{\"hashType\":\"MD5\",\"value\":\"', items('For_each_file_item')?['hash']?['md5'], '\"}'  ))), json('[]')), if(not(equals(items('For_each_file_item')?['hash']?['sha1'], null)), createArray(json(concat('{\"hashType\":\"SHA-1\",\"value\":\"', items('For_each_file_item')?['hash']?['sha1'], '\"}'  ))), json('[]')), if(not(equals(items('For_each_file_item')?['hash']?['sha256'], null)), createArray(json(concat('{\"hashType\":\"SHA-256\",\"value\":\"', items('For_each_file_item')?['hash']?['sha256'], '\"}'  ))), json('[]')))",
+                    "runAfter": {}
+                  },
+                  "For_each_hash": {
+                    "type": "Foreach",
+                    "foreach": "@outputs('Compose_hash_entries')",
+                    "actions": {
+                      "SendToBatch_hash": {
+                        "type": "SendToBatch",
+                        "inputs": {
+                          "batchName": "GIBIOCBatch",
+                          "content": {
+                            "type": "indicator",
+                            "spec_version": "2.1",
+                            "id": "@{concat('indicator--', guid())}",
+                            "created": "@{items('For_each_file_item')?['dateFirstSeen']}",
+                            "modified": "@{items('For_each_file_item')?['dateFirstSeen']}",
+                            "name": "@{concat(items('For_each_hash')?['hashType'], '=', items('For_each_hash')?['value'])}",
+                            "pattern": "@{concat('[file:hashes.''', items('For_each_hash')?['hashType'], ''' = ''', items('For_each_hash')?['value'], ''']')}",
+                            "pattern_type": "stix",
+                            "valid_from": "@{items('For_each_file_item')?['dateFirstSeen']}",
+                            "valid_until": "@{addDays(items('For_each_file_item')?['dateFirstSeen'], if(not(equals(items('For_each_file_item')?['evaluation']?['TTL'], null)), int(items('For_each_file_item')?['evaluation']?['TTL']), 90))}",
+                            "confidence": "@if(and(equals(bool(appsetting('UseAdmiraltyConfidence')), true), and(not(equals(items('For_each_file_item')?['evaluation']?['admiraltyCode'], null)), and(equals(length(items('For_each_file_item')?['evaluation']?['admiraltyCode']), 2), and(not(equals(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_file_item')?['evaluation']?['admiraltyCode'], 0, 1)], null)), not(equals(json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_file_item')?['evaluation']?['admiraltyCode'], 1, 1)], null)))))), div(add(json('{\"A\":100,\"B\":80,\"C\":60,\"D\":40,\"E\":20,\"F\":0}')[substring(items('For_each_file_item')?['evaluation']?['admiraltyCode'], 0, 1)], json('{\"1\":100,\"2\":80,\"3\":60,\"4\":40,\"5\":20,\"6\":0}')[substring(items('For_each_file_item')?['evaluation']?['admiraltyCode'], 1, 1)]), 2), if(equals(bool(appsetting('UseRiskScoreAsConfidence')), true), items('For_each_file_item')?['riskScore'], if(not(equals(int(appsetting('FixedConfidence')), -1)), int(appsetting('FixedConfidence')), null)))",
+                            "indicator_types": [
+                              "malicious-activity"
+                            ],
+                            "labels": "@union(createArray('Group-IB TI', 'ioc/primary'), if(not(equals(items('For_each_file_item')?['evaluation']?['admiraltyCode'], null)), createArray(concat('admiralty:', items('For_each_file_item')?['evaluation']?['admiraltyCode'])), json('[]')), if(not(equals(items('For_each_file_item')?['evaluation']?['credibility'], null)), createArray(concat('credibility:', string(items('For_each_file_item')?['evaluation']?['credibility']))), json('[]')), if(not(equals(items('For_each_file_item')?['evaluation']?['reliability'], null)), createArray(concat('reliability:', string(items('For_each_file_item')?['evaluation']?['reliability']))), json('[]')), if(not(equals(items('For_each_file_item')?['riskScore'], null)), createArray(concat('risk-score:', string(items('For_each_file_item')?['riskScore']))), json('[]')))",
+                            "object_marking_refs": "@if(equals(items('For_each_file_item')?['evaluation']?['TLP'], 'TLP:RED'), createArray('marking-definition--5e57c739-391a-4eb3-b6be-7d15ca92d5ea'), if(equals(items('For_each_file_item')?['evaluation']?['TLP'], 'TLP:AMBER'), createArray('marking-definition--f88d31f6-486f-44da-b317-01333bde0b82'), if(equals(items('For_each_file_item')?['evaluation']?['TLP'], 'TLP:GREEN'), createArray('marking-definition--34098fce-860f-48ae-8e50-ebd3cc5e41da'), if(or(equals(items('For_each_file_item')?['evaluation']?['TLP'], 'TLP:WHITE'), equals(items('For_each_file_item')?['evaluation']?['TLP'], 'TLP:CLEAR')), createArray('marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9'), json('[]')))))"
+                          },
+                          "host": {
+                            "triggerName": "Batch_messages",
+                            "workflow": {
+                              "id": "GIBTIA_IndicatorProcessor_v2"
+                            }
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    },
+                    "runAfter": {
+                      "Compose_hash_entries": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Filter_file_items": [
+                    "Succeeded"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Set_IsPortionEmpty_true": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "IsPortionEmpty",
+                    "value": true
+                  },
+                  "runAfter": {}
+                }
+              }
+            },
+            "runAfter": {
+              "Update_seqUpdate": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Save_seqUpdate_in_loop": {
+            "type": "ApiConnection",
+            "inputs": {
+              "body": "{\"CollectionName\": \"ioc/primary\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+              "headers": {
+                "Log-Type": "GIBCollectionTracking"
+              },
+              "host": {
+                "connection": {
+                  "referenceName": "azureloganalyticsdatacollector"
+                }
+              },
+              "method": "post",
+              "path": "/api/logs"
+            },
+            "runAfter": {
+              "Condition_Has_Items": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Condition_First_Run": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}

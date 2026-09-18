@@ -1,399 +1,283 @@
-# Ingest Group-IB Threat Intelligence & Attribution Feeds and Indicators Collections
-Author: Hesham Saad
+# Group-IB Threat Intelligence — Microsoft Sentinel Integration
 
-Group-IB Azure Sentinel playbooks designed by Group-IB team and supported by Microsoft team to ingest Threat Intelligence & Attribution feeds and indicators from multiple Group-IB data collections and writes them to Microsoft Security Graph API to be listed under Azure Sentinel ThreatIntelligenceIndicators table and custom log tables as well for adversaries, threat actors,...etc
+This integration connects the [Group-IB Threat Intelligence](https://www.group-ib.com/products/threat-intelligence/) platform to Microsoft Sentinel using Azure Logic Apps (playbooks). It continuously fetches threat intelligence data from Group-IB TI feeds and delivers it to Sentinel in two complementary forms:
 
-There are a number of pre-configuration steps required before deploying the playbooks.
+- **Threat indicators** (IPs, domains, URLs, file hashes) pushed to the Sentinel Threat Intelligence blade as STIX 2.1 objects, where they match against your log data in real time.
+- **Context records** (threat actor profiles, APT reports, malware intelligence, vulnerability data, leaked credential metadata, and more) written to dedicated Log Analytics custom tables for analytics rules and enrichment queries.
 
-## Group-IB Sentinel Playbooks Collections Detailed Description
+---
 
-0. "GIBIndicatorProcessor" Playbook<br>
-This playbook is used to send indicators to Microsoft Security Graph API from all other GIB playbooks.
+## Deployment Options
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+The integration ships in two functionally-equivalent packages — pick one based on how you want to operate the integration in Azure:
 
-1. "GIBTIA_APT_Threats" Playbook<br>
-a. Collection: apt/threat<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content: <br>
-GIB APT Threat Indicator(IPv4)<br>
-GIB APT Threat Indicator(domain)<br>
-GIB APT Threat Indicator(url)<br>
-GIB APT Threat Indicator(md5)<br>
-GIB APT Threat Indicator(sha256)<br>
-GIB APT Threat Indicator(sha1)<br>
-d. Description:<br>
-Group-IB continuously monitors activities undertaken by hacker groups, investigate, collect, and analyze information about all emerging and ongoing attacks. Based on this information, we provide IOC's related to APT Groups Attacks.
+| Package         | What it is                                                                                                                                                                                   | Best for                                                                                                 | Operator guide                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Consumption** | 30 separate Logic Apps, each deployed from its own `GIBTIA_<Name>/azuredeploy.json` ARM template. Per-action billing, individual scaling and management per playbook.        | Lighter setups, partial-coverage installs, predictable per-action cost.                                  | [USER_GUIDE.md](USER_GUIDE.md)                   |
+| **Standard**    | One Standard Logic App (`Microsoft.Web/sites` + WS1 plan) hosting all 30 playbooks as nested workflows. Single shared Managed Identity, fixed plan billing. Source in `Playbooks/Standard/`. | Production installs running most/all playbooks, predictable monthly cost, single point of admin and IAM. | [USER_GUIDE_STANDARD.md](USER_GUIDE_STANDARD.md) |
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+Both packages produce identical downstream Sentinel content (same indicators in `ThreatIntelIndicators`, same `GIB*_CL` context tables). Only the wrapper around the workflow definitions differs.
 
-2. "GIBTIA_APT_ThreatActor" Playbook<br>
-a. Collection: apt/threat_actor<br>
-b. Has Indicators: No<br>
-c. Indicators Content: N/A<br>
-d. Description:<br>
-This collection contains APT groups’ info, with detailed descriptions.
+### Standard package: optional `post-deploy.sh` script
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>    
+For the Standard package, the helper script at `Playbooks/Standard/post-deploy.sh` automates everything after the initial ARM deployment except the one manual Designer-bind step that Azure's tooling currently requires for managed API connections to provision their runtime URLs.
 
-3. "GIBTIA_Attacks_ddos" Playbook<br>
-a. Collection: attacks/ddos<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB DDoS Attack(IPv4)<br>
-d. Description:<br>
-The "DDoS attacks" collection contains a DDoS Attacks targets and C2 indicators.
+```bash
+# 1. In the Azure Portal, "Deploy a custom template" → paste Playbooks/Standard/infrastructure-arm.json → fill params → deploy.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+# 2. Then, from the repo root in Cloud Shell or any environment with `az` + `zip`:
+cd Playbooks/Standard
+./post-deploy.sh <resource-group> <logic-app-name> <workspace-name>
+```
 
-4. "GIBTIA_Attacks_deface" Playbook<br>
-a. Collection: attacks/deface<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Attack Deface(url)<br>
-d. Description:<br>
-The “Deface” collection contains information about online resources that have become subject to defacement attacks (the visual content of a website being substituted or modified).
+The script (~310 lines, bash):
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_deface.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_deface.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+1. Discovers your deployment from the deployed Logic App.
+2. Assigns the two required MSI roles (`Microsoft Sentinel Contributor` + `Log Analytics Contributor`) on the workspace.
+3. Generates a placeholder `connections.json` so the Designer can render workflows, and zip-deploys the workflows.
+4. Pauses and instructs you through the **one** manual Designer-bind step (~2 minutes of Portal clicks).
+5. Polls Azure for the two new connection resources to gain populated `connectionRuntimeUrl` values (typically 1-5 minutes).
+6. Writes the final `connections.json` and redeploys.
+7. Restarts the Logic App.
 
-5. "GIBTIA_Attacks_phishing" Playbook<br>
-a. Collection: attacks/phishing<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Phishing Domain(domain)<br>
-GIB Phishing IP(IPv4)<br>
-GIB Phishing URL(url)<br>
-d. Description:<br>
-The “Attacks Phishing" collection provides information about various phishing resources (including URLs, Domains and IPs.).
+After the script completes, allow 5-15 minutes for RBAC propagation and connection-claim provisioning, then trigger any workflow to verify end-to-end. See [USER_GUIDE_STANDARD.md §5.3](USER_GUIDE_STANDARD.md#53-deploy-the-workflows) for the manual step-by-step alternative.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+---
 
-6. "GIBTIA_Attacks_phishing_kit" Playbook<br>
-a. Collection: attacks/phishing_kit<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Phishing Kit Email(email)<br>
-d. Description:<br>
-The “Atacks Phishing Kits” collection contains information about the archives of phishing kits. Emails gotten from kits can be obtained as indicators.
+## Prerequisites
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing_kit.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing_kit" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+- A **Group-IB Threat Intelligence** subscription with API access, and a username plus API key
+  (Group-IB TI portal → **Profile → Security and Access → Personal token**).
+- A **Log Analytics workspace** with **Microsoft Sentinel** enabled.
+- Permission to assign Azure roles at workspace scope (**Owner** or **User Access
+  Administrator**) — the playbooks authenticate with managed identities.
+- `GIBTIA_IndicatorProcessor_v2` **must be deployed before any indicator collector**. Every
+  collector batches indicators to it by name.
 
-7. "GIBTIA_BP_phishing" Playbook<br>
-a. Collection: bp/phishing<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Phishing Domain(domain)<br>
-GIB Phishing IP(IPv4)<br>
-GIB Phishing URL(url)<br>
-d. Description:<br>
-The "BP Phishing" collection provides events related to clients company.
+## Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+Deploy `GIBTIA_IndicatorProcessor_v2` first, then whichever collectors and enrichment playbooks
+you need. Each button deploys a single playbook.
 
-8. "GIBTIA_BP_phishing_kit" Playbook<br>
-a. Collection: bp/phishing_kit<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Phishing Kit Email(email)<br>
-d. Description:<br>
-The "BP Phishing Kit" collection provides phishing kits related to clients company.
+| Playbook | Deploy |
+| --- | --- |
+| **Group-IB TI - Indicator processor (required adapter)**<br>`GIBTIA_IndicatorProcessor_v2/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_IndicatorProcessor_v2%2Fazuredeploy.json) |
+| **Group-IB TI - APT threat actor collector**<br>`GIBTIA_APT_ThreatActor/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_APT_ThreatActor%2Fazuredeploy.json) |
+| **Group-IB TI - APT threat report collector**<br>`GIBTIA_APT_Threats/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_APT_Threats%2Fazuredeploy.json) |
+| **Group-IB TI - Breached database collector**<br>`GIBTIA_Compromised_BreachedDB/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_BreachedDB%2Fazuredeploy.json) |
+| **Group-IB TI - Compromised account collector**<br>`GIBTIA_Compromised_account/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_account%2Fazuredeploy.json) |
+| **Group-IB TI - Compromised bank card collector**<br>`GIBTIA_Compromised_BankCard/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_BankCard%2Fazuredeploy.json) |
+| **Group-IB TI - Compromised personal data collector**<br>`GIBTIA_Compromised_SPD/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_SPD%2Fazuredeploy.json) |
+| **Group-IB TI - DDoS indicator collector**<br>`GIBTIA_Attacks_ddos/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Attacks_ddos%2Fazuredeploy.json) |
+| **Group-IB TI - Defacement indicator collector**<br>`GIBTIA_Attacks_deface/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Attacks_deface%2Fazuredeploy.json) |
+| **Group-IB TI - Git repository leak collector**<br>`GIBTIA_OSI_GitLeak/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_OSI_GitLeak%2Fazuredeploy.json) |
+| **Group-IB TI - Hacker intelligence threat actor collector**<br>`GIBTIA_HI_Threat_Actor/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_HI_Threat_Actor%2Fazuredeploy.json) |
+| **Group-IB TI - Hacker intelligence threat collector**<br>`GIBTIA_HI_Threat/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_HI_Threat%2Fazuredeploy.json) |
+| **Group-IB TI - Malware C2 indicator collector**<br>`GIBTIA_Malware_cnc/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Malware_cnc%2Fazuredeploy.json) |
+| **Group-IB TI - Malware configuration indicator collector**<br>`GIBTIA_Malware_config/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Malware_config%2Fazuredeploy.json) |
+| **Group-IB TI - Masked card collector**<br>`GIBTIA_Compromised_MaskedCard/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_MaskedCard%2Fazuredeploy.json) |
+| **Group-IB TI - Open proxy indicator collector**<br>`GIBTIA_Suspicious_ip_open_proxy/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Suspicious_ip_open_proxy%2Fazuredeploy.json) |
+| **Group-IB TI - Open threats collector**<br>`GIBTIA_HI_Open_Threats/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_HI_Open_Threats%2Fazuredeploy.json) |
+| **Group-IB TI - Phishing indicator collector**<br>`GIBTIA_Attacks_phishing/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Attacks_phishing%2Fazuredeploy.json) |
+| **Group-IB TI - Phishing kit indicator collector**<br>`GIBTIA_Attacks_phishing_kit/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Attacks_phishing_kit%2Fazuredeploy.json) |
+| **Group-IB TI - Primary IOC collector**<br>`GIBTIA_IOC_Primary_Updated/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_IOC_Primary_Updated%2Fazuredeploy.json) |
+| **Group-IB TI - Public leak collector**<br>`GIBTIA_OSI_PublicLeak/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_OSI_PublicLeak%2Fazuredeploy.json) |
+| **Group-IB TI - SOCKS proxy indicator collector**<br>`GIBTIA_Suspicious_ip_socks_proxy/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Suspicious_ip_socks_proxy%2Fazuredeploy.json) |
+| **Group-IB TI - Scanner indicator collector**<br>`GIBTIA_Suspicious_ip_scanner/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Suspicious_ip_scanner%2Fazuredeploy.json) |
+| **Group-IB TI - Targeted malware collector**<br>`GIBTIA_Malware_Targeted_Malware/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Malware_Targeted_Malware%2Fazuredeploy.json) |
+| **Group-IB TI - Tor node indicator collector**<br>`GIBTIA_Suspicious_ip_tor_node/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json) |
+| **Group-IB TI - VPN indicator collector**<br>`GIBTIA_Suspicious_ip_vpn/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Suspicious_ip_vpn%2Fazuredeploy.json) |
+| **Group-IB TI - Vulnerability collector**<br>`GIBTIA_OSI_Vulnerability/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_OSI_Vulnerability%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich incident with IOC context**<br>`GIBTIA_Enrich_IOC/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_IOC%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich incident with WHOIS data**<br>`GIBTIA_Enrich_WHOIS/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_WHOIS%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich single IP entity with IOC context**<br>`GIBTIA_Enrich_IOC_Single_IP/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_IOC_Single_IP%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich single URL entity with IOC context**<br>`GIBTIA_Enrich_IOC_Single_URL/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_IOC_Single_URL%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich single domain entity with IOC context**<br>`GIBTIA_Enrich_IOC_Single_Domain/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_IOC_Single_Domain%2Fazuredeploy.json) |
+| **Group-IB TI - Enrich single file hash entity with IOC context**<br>`GIBTIA_Enrich_IOC_Single_FileHash/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_IOC_Single_FileHash%2Fazuredeploy.json) |
+| **Group-IB TI - Score a single IP entity**<br>`GIBTIA_Score_IP_Single/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Score_IP_Single%2Fazuredeploy.json) |
+| **Group-IB TI - Score incident IP addresses**<br>`GIBTIA_Score_IP/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Score_IP%2Fazuredeploy.json) |
+| **Group-IB TI - WHOIS lookup for a single IP entity**<br>`GIBTIA_Enrich_WHOIS_Single_IP/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_WHOIS_Single_IP%2Fazuredeploy.json) |
+| **Group-IB TI - WHOIS lookup for a single domain entity**<br>`GIBTIA_Enrich_WHOIS_Single_Domain/azuredeploy.json` | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Enrich_WHOIS_Single_Domain%2Fazuredeploy.json) |
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing_kit.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing_kit.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+## Post-deployment
 
-9. "GIBTIA_Compromised_account" Playbook<br>
-a. Collection: compromised/account<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Compromised Account CNC(url)<br>
-GIB Compromised Account CNC(domain)<br>
-GIB Compromised Account CNC(IPv4)<br>
-d. Description:<br>
-This collection contains credentials collected from various phishing resources, botnets, command-and-control (C&C) servers used by hackers.
+Perform these steps for **each** deployed playbook.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_account.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_account.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+1. **Authorize the API connections.** Open the playbook's resource group, select each
+   `Microsoft.Web/connections` resource created alongside the Logic App, then **Edit API
+   connection → Authorize → Save**. Collectors use *Azure Monitor Logs* and *Azure Log
+   Analytics Data Collector*; enrichment playbooks use *Microsoft Sentinel*.
+2. **Assign the managed identity its roles**, at **workspace scope**:
+   - Collectors and the indicator processor: **Microsoft Sentinel Contributor** *and*
+     **Log Analytics Contributor**. Both are required — Sentinel Contributor alone returns 403
+     on Log Analytics data-plane writes.
+   - Enrichment playbooks: **Microsoft Sentinel Responder**, so they can add incident comments.
+   - Role propagation takes 5–15 minutes. Early `401`/`403` responses during that window are
+     expected and the built-in retry policy generally absorbs them.
+3. **Set the parameters** — `GIBUsername`, `GIBApiKey`, and for collectors `StartDate` (first-run
+   cursor) and `LimitPerPortion` (page size).
+4. **Enable the Logic App.** Every playbook deploys in a **Disabled** state by design, so that
+   nothing runs before its identity and connections are ready.
+5. **Attach the enrichment playbooks.** The incident-triggered ones (`Enrich_IOC`,
+   `Enrich_WHOIS`, `Score_IP`) attach to an **automation rule**. The `*_Single*` variants are
+   entity-triggered and are run manually from an incident's investigation graph or the entity
+   page — **entity-triggered playbooks cannot be attached to automation rules**.
 
-10. "GIBTIA_Compromised_card" Playbook<br>
-a. Collection: compromised/card<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Compromised Card CNC URL(url)<br>
-GIB Compromised Card CNC Domain(domain)<br>
-GIB Compromised Card CNC IP(IPv4)<br>
-d. Description:<br>
-This collection contains information about compromised bank cards. This includes data collected from card shops, specialized forums, and public sources.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_card.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_card.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+## Playbook Catalog
 
-11. "GIBTIA_Compromised_imei" Playbook<br>
-a. Collection: compromised/imei<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Compromised IMEI CNC Domain(domain)<br>
-GIB Compromised IMEI CNC URL(url)<br>
-GIB Compromised IMEI CNC IP(IPv4)<br>
-d. Description:<br>
-The section contains data on infected mobile devices, which is obtained by analyzing mobile botnets. It does not contain personal data and is available to all system users.
+### Required Infrastructure
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_imei.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_imei.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+| Playbook file                                   | Purpose                                                                                                                                                                                       | Deploy order |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `GIBTIA_IndicatorProcessor_v2/azuredeploy.json` | Receives batched STIX 2.1 indicators from all collector playbooks and uploads them to Sentinel Threat Intelligence via Managed Identity. **Must be deployed before any indicator collector.** | 1st          |
 
-12. "GIBTIA_Compromised_mule" Playbook<br>
-a. Collection: compromised/mule<br>
-b. Has Indicators: Yes<br>
-c. Indicators Content:<br>
-GIB Compromised Mule CNC Domain(domain)<br>
-GIB Compromised Mule CNC URL(url)<br>
-GIB Compromised Mule CNC IP(IPv4)<br>
-d. Description:<br>
-This section contains information about bank accounts to which threat actors have transferred or plan to transfer stolen money. Man-in-the-Browser (MITB) attacks, mobile Trojans, and phishing kits allow fraudsters to make money transfers automatically. Playbook provides C2 data related to compromitation.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_mule.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_mule.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+### Indicator Collector Playbooks
 
-13. "GIBTIA_HI_Threat" Playbook <br>
-a. Collection: hi/threat <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB HI Threat Indicator(domain) <br>
-d. Description: <br>
-Group-IB continuously monitors activities undertaken by hacker groups, investigate, collect, and analyze information about all emerging and ongoing attacks. Based on this information, we provide IOC's related to Hackers Attacks.
+These playbooks poll Group-IB TI feeds on an hourly recurrence, transform records into STIX 2.1 indicator objects, and send them to `GIBTIA_IndicatorProcessor_v2` for submission to the Sentinel Threat Intelligence blade.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+| Playbook file                                       | Group-IB collection         | Indicator types                        | Notes                                                                                                                                                                                                                                                     |
+| --------------------------------------------------- | --------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GIBTIA_IOC_Primary_Updated/azuredeploy.json`       | `ioc/primary`               | IPv4, domain, URL, MD5, SHA-1, SHA-256 | Broadest IOC feed — curated cross-source indicators with threat/malware attribution. Supports `IOCTypeFilter` parameter (`all`/`network`/`file`). Optional `UseRiskScoreAsConfidence` and `FixedConfidence` parameters control the STIX confidence field. |
+| `GIBTIA_Malware_cnc/azuredeploy.json`               | `malware/cnc`               | IPv4, domain, URL                      | Command-and-control infrastructure for tracked malware families.                                                                                                                                                                                          |
+| `GIBTIA_Malware_config/azuredeploy.json`            | `malware/config`            | IPv4, domain, URL                      | Extracted C2 addresses from parsed malware configurations.                                                                                                                                                                                                |
+| `GIBTIA_Attacks_phishing/azuredeploy.json`          | `attacks/phishing_group`    | IPv4, domain, URL                      | Phishing kit hosting infrastructure.                                                                                                                                                                                                                      |
+| `GIBTIA_Attacks_phishing_kit/azuredeploy.json`      | `attacks/phishing_kit`      | Email addresses                        | Operator email addresses extracted from phishing kit archives.                                                                                                                                                                                            |
+| `GIBTIA_Attacks_ddos/azuredeploy.json`              | `attacks/ddos`              | IPv4                                   | DDoS botnet C2 nodes and target IPs.                                                                                                                                                                                                                      |
+| `GIBTIA_Attacks_deface/azuredeploy.json`            | `attacks/deface`            | URL                                    | Defaced page URLs — confirm if your domains are affected.                                                                                                                                                                                                 |
+| `GIBTIA_Suspicious_ip_tor_node/azuredeploy.json`    | `suspicious_ip/tor_node`    | IPv4                                   | Known Tor exit nodes.                                                                                                                                                                                                                                     |
+| `GIBTIA_Suspicious_ip_open_proxy/azuredeploy.json`  | `suspicious_ip/open_proxy`  | IPv4                                   | Publicly listed open proxy servers.                                                                                                                                                                                                                       |
+| `GIBTIA_Suspicious_ip_socks_proxy/azuredeploy.json` | `suspicious_ip/socks_proxy` | IPv4                                   | Infected hosts running SOCKS proxy malware.                                                                                                                                                                                                               |
+| `GIBTIA_Suspicious_ip_scanner/azuredeploy.json`     | `suspicious_ip/scanner`     | IPv4                                   | IPs actively scanning for vulnerabilities.                                                                                                                                                                                                                |
+| `GIBTIA_Suspicious_ip_vpn/azuredeploy.json`         | `suspicious_ip/vpn`         | IPv4                                   | Commercial VPN exit nodes used for anonymisation.                                                                                                                                                                                                         |
 
-14. "GIBTIA_HI_ThreatActor" Playbook <br>
-a. Collection: hi/threat_actor <br>
-b. Has Indicators: No <br>
-c. Indicators Content: N/A <br>
-d. Description: <br>
-This collection contains non-APT groups’  and Individual hackers info, with detailed descriptions.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat_Actor.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat_Actor.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+### Context Intelligence Playbooks
 
-15. "GIBTIA_Malware_cnc" Playbook <br>
-a. Collection: malware/cnc <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB Malware CNC Domain(domain) <br>
-GIB Malware CNC URL(url) <br>
-GIB Malware CNC IP(IPv4) <br>
-d. Description: <br>
-The "Malware" collection contains Malwares C2 detected by group IB. 
+These playbooks poll Group-IB TI intelligence collections on an hourly recurrence and write full structured records to dedicated Log Analytics custom tables. They do **not** write to the Threat Intelligence blade. Records contain rich context — threat actor profiles, malware analysis reports, CVE data, leak events — intended for analytics rules and analyst enrichment.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Malware_cnc.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Malware_cnc.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+| Playbook file                                      | Group-IB collection           | Log Analytics table           | Content                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ----------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GIBTIA_APT_Threats/azuredeploy.json`              | `apt/threat`                  | `GIBAPTThreat_CL`             | APT campaign reports with associated IOCs, sectors, and TTPs.                                                                                                                                                                                                                                                                                                    |
+| `GIBTIA_APT_ThreatActor/azuredeploy.json`          | `apt/threat_actor`            | `GIBAPTThreatActor_CL`        | Nation-state and state-sponsored threat actor profiles (aliases, capabilities, targeted regions/sectors).                                                                                                                                                                                                                                                        |
+| `GIBTIA_HI_Threat/azuredeploy.json`                | `hi/threat`                   | `GIBHIThreat_CL`              | Hacker Intel campaign and threat reports (non-APT cybercrime groups).                                                                                                                                                                                                                                                                                            |
+| `GIBTIA_HI_Threat_Actor/azuredeploy.json`          | `hi/threat_actor`             | `GIBHIThreatActor_CL`         | Individual hacker and cybercrime group profiles.                                                                                                                                                                                                                                                                                                                 |
+| `GIBTIA_HI_Open_Threats/azuredeploy.json`          | `hi/open_threats`             | `GIBHIOpenThreat_CL`          | Threat context for actively tracked open threats.                                                                                                                                                                                                                                                                                                                |
+| `GIBTIA_Malware_Targeted_Malware/azuredeploy.json` | `malware/malware`             | `GIBMalwareReport_CL`         | Malware family intelligence: classification, capabilities, C2 infrastructure, associated threat actors.                                                                                                                                                                                                                                                          |
+| `GIBTIA_Compromised_account/azuredeploy.json`      | `compromised/account_group`   | `GIBCompromisedAccount_CL`    | Leaked credential metadata (stealer logs, credential databases). Passwords are **masked** before ingestion — first 3 characters preserved, remainder replaced with `****` (e.g. `Password123` → `Pas****`). Defaults to **unique credentials** (`AccountFeedType=unique`); switch to `combolist` or `all`, and optionally set `ProbableCorporateAccessFilter=1`. |
+| `GIBTIA_Compromised_BreachedDB/azuredeploy.json`   | `compromised/breacheddb`      | `GIBCompromisedBreachedDB_CL` | Breached-database records (leak name, authors, download links, per-subject `addInfo`). Passwords are **masked** as above (each entry in the password array). Defaults to only records that carry a password (`HasPasswordFilter=1`). Other identity fields (email, addInfo) are ingested unmasked.                                                               |
+| `GIBTIA_Compromised_SPD/azuredeploy.json`          | `compromised/spd`             | `GIBCompromisedSPD_CL`        | Suspicious payment data — financial fraud indicators. (Replacing Mules collection)                                                                                                                                                                                                                                                                               |
+| `GIBTIA_Compromised_BankCard/azuredeploy.json`     | `compromised/bank_card_group` | `GIBCompromisedBankCard_CL`   | Compromised bank-card records from underground markets, forums, and messaging platforms. Card number, expiry, owner, bank, source — grouped by card. **CVV is stripped before ingestion** (see note below).                                                                                                                                                      |
+| `GIBTIA_Compromised_MaskedCard/azuredeploy.json`   | `compromised/masked_card`     | `GIBCompromisedMaskedCard_CL` | Partially-masked compromised bank-card records from the same sources. Use when full card data isn't available or needed for the use case. **CVV is stripped before ingestion** (see note below).                                                                                                                                                                 |
+| `GIBTIA_OSI_Vulnerability/azuredeploy.json`        | `osi/vulnerability`           | `GIBOSIVulnerability_CL`      | CVE records enriched with CVSS score, exploitation status, darkweb mentions, and PoC availability.                                                                                                                                                                                                                                                               |
+| `GIBTIA_OSI_PublicLeak/azuredeploy.json`           | `osi/public_leak`             | `GIBOSIPublicLeak_CL`         | Leaked data posted on Pastebin-style sites and file-sharing resources.                                                                                                                                                                                                                                                                                           |
+| `GIBTIA_OSI_GitLeak/azuredeploy.json`              | `osi/git_repository`          | `GIBOSIGitRepository_CL`      | Sensitive data found in public code repositories (tokens, credentials, internal paths).                                                                                                                                                                                                                                                                          |
 
-16. "GIBTIA_Malware_Targeted_Malware" Playbook <br>
-a. Collection: malware/targeted_malware <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB Malware Targeted Malware(md5) <br>
-GIB Malware Targeted Malware(sha1) <br>
-GIB Malware Targeted Malware(sha256) <br>
-GIB Malware Targeted Malware Inject(md5) <br>
-d. Description: <br>
-The “Targeted Trojans” section contains information about malicious programs targeting the client's infrastructure. Information is collected by examining a multitude of malicious files and investigating various incidents.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Malware_Targeted_Malware.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Malware_Targeted_Malware.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+### Enrichment Playbooks
 
-17. "GIBTIA_OSI_GitLeak" Playbook <br>
-a. Collection: osi/git_leak <br>
-b. Has Indicators: No <br>
-c. Indicators Content: N/A <br>
-d. Description: <br>
-Open-source repositories such as GitHub contain codes that anyone can search for. They are often used by threat actors planning to attack a specific company. The “Git Leaks” section contains the above data in code repositories.
+These playbooks are triggered by Sentinel incidents and add structured context as incident comments. They are not recurrence-based — they run in response to analyst activity or automation rules.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_GitLeak.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_GitLeak.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+| Playbook file                          | Trigger                           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GIBTIA_Enrich_WHOIS/azuredeploy.json` | Sentinel incident created/updated | **Light enrichment** for any incident from any source. For each IP and domain entity: queries Group-IB WHOIS API for registration data and checks `ThreatIntelIndicators` for already-ingested Group-IB indicators. Intended to run on all new incidents automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `GIBTIA_Enrich_IOC/azuredeploy.json`   | Sentinel incident created/updated | **Cross-collection IOC enrichment.** For each IP, domain, URL, or file-hash entity in the incident: (1) calls `/api/v2/user/granted_collections` once to discover which Group-IB collections this API key can read; (2) calls `/api/v2/search?q=<value>` per entity to find matches across all collections; (3) intersects the match list with the granted-collection set; (4) for each granted+matching collection, fetches the first 3 records via the collection-specific link. Posts a comment showing which collections have hits, how many, and the **full JSON record** of each fetched sample (one per line). Output is split across multiple incident comments when it would exceed Sentinel's 30,000-character comment limit ("part N of M"). The granted-collections gate ensures the playbook only fetches data the operator's account is actually entitled to. |
+| `GIBTIA_Score_IP/azuredeploy.json`     | Sentinel incident created/updated | **Risk scoring** for IP entities. Batches all IPs from the incident into a single `POST /api/v2/scoring` call, and posts each IP's GIB risk score (0–100) back as an incident comment. Score is derived from multi-source TI tags weighted by recency, frequency, persistence, and severity.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-18. "GIBTIA_OSI_PublicLeak" Playbook <br>
-a. Collection: osi/public_leak <br>
-b. Has Indicators: No <br>
-c. Indicators Content: N/A <br>
-d. Description: <br>
-The “Public leaks” collection contains the leaked clinets data collected on popular file-sharing resources or text/information exchange websites.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_PublicLeak.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_PublicLeak.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+## Authentication Model
 
-19. "GIBTIA_OSI_Vulnerability" Playbook <br>
-a. Collection: osi/vulnerability <br>
-b. Has Indicators: No <br>
-c. Indicators Content: N/A <br>
-d. Description: <br>
-The “Vulnerabilities” collection displays information about vulnerabilities detected in the software by version.
+All playbooks authenticate to Azure services using **Managed Identity** — no OAuth tokens, no client secrets, no manual re-authorization. Each Logic App resource is deployed with `"identity": {"type": "SystemAssigned"}`.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_Vulnerability.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_Vulnerability.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+| Service                                  | Auth method                                        | Required role                  |
+| ---------------------------------------- | -------------------------------------------------- | ------------------------------ |
+| Log Analytics query (seqUpdate read)     | Managed Identity → ARM endpoint                    | Log Analytics Reader           |
+| Log Analytics Data Collector API (write) | Workspace ID + Primary Key (in parameters)         | N/A — key-based                |
+| Sentinel Threat Intelligence upload      | Managed Identity → azuresentinel connector         | Microsoft Sentinel Contributor |
+| Group-IB TI API                          | HTTP Basic Auth (username + API key in parameters) | N/A — Group-IB-side credential |
 
-20. "GIBTIA_Suspicious_ip_open_proxy" Playbook <br>
-a. Collection: suspicious_ip/open_proxy <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB Open Proxy Address(IPv4) <br>
-d. Description: <br>
-The “Open proxy” collection proviedes information about lists of proxy servers that are publicly available on various online resources related to anonymity. In addition, proxy servers may be configured as open proxies intentionally or as a result of misconfiguration or breaches.
+---
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_open_proxy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_open_proxy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+## Incremental Polling Design
 
-21. "GIBTIA_Suspicious_ip_socks_proxy" Playbook <br>
-a. Collection: suspicious_ip/socks_proxy <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB Socks Proxy Address(IPv4) <br>
-d. Description: <br>
-The “Socks proxy” collection providess information about addresses where malware that turns infected computers into SOCKS proxies has been installed. Such computers (bots) are rented out and used in various attacks to ensure the attacker as much anonymity as possible.
+All collector playbooks use Group-IB's `seqUpdate` mechanism for reliable incremental polling:
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_socks_proxy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_socks_proxy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+1. On startup, the playbook reads the last saved `seqUpdate` from the `GIBCollectionTracking_CL` table, filtered by `CollectionName_s` (the same shared table is used for every collector, including `ioc/primary`).
+2. On first run (table doesn't exist or is empty), the playbook calls Group-IB's `sequence_list` endpoint to convert the user-provided `StartDate` into a `seqUpdate` value.
+3. The playbook enters an Until loop, fetching pages of up to `LimitPerPortion` records at a time.
+4. After all pages are exhausted (API returns `count: 0`), the final `seqUpdate` is saved back to Log Analytics.
+5. The next hourly run continues exactly from where the previous run stopped — no data gaps, no re-processing.
 
-22. "GIBTIA_Suspicious_ip_tor_node" Playbook <br>
-a. Collection: suspicious_ip/tor_node <br>
-b. Has Indicators: Yes <br>
-c. Indicators Content: <br>
-GIB Tor Node Address(IPv4) <br>
-d. Description: <br>
-The “Tor Node” collection displays information about Tor exit nodes, which are the final Tor relays in the circuit. The nodes act as a medium between a Tor client and public Internet.
+### Changing the polling frequency
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_tor_node.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_tor_node.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+The hourly schedule is set in each playbook's **Recurrence** trigger, not as a deployment
+parameter or app setting. Change it per playbook in the Azure Portal — Logic app designer →
+**Recurrence** → Frequency / Interval → Save (Standard: **Workflows** → pick the workflow →
+Designer). It cannot be changed from Microsoft Sentinel; the Automation → Playbooks blade
+does not expose the trigger.
 
-## Deployment Steps
-1. Deploy GIBIndicatorsProcessor playbook first
-2. Deploy Required collections Playbooks and configure the following parameters: <br>
-a. GIB Username - is a login to access GIB TI&A Web Interface <br>
-b. Save only indicators - set to true if only indicators enrichment is required, otherwise, an additional table in Workspace with full event content will be created <br>
-Note: Some collections provide no indicators, so do not have this parameter configurable and add GIB TI&A events only in Log Workspace
-c. GIB <Indicator Description> Action - This is an action required to set in a particular indicator type provided through the current collection.(The action to apply if the indicator is matched from within the targetProduct security tool. Possible values are: unknown, allow, block, alert) <br>
-d. GIB API URL - is an GIB TI&A API URL <br>
-e. Configure API Key variable. API Key can be generated in the Profile Section in Group-IB TI&A Web Interface, it's highly recommended to use Azure Key Vault Playbook Get Secret control
+Three caveats apply — a redeploy silently reverts a portal change, intervals shorter than an
+hour cause deliberately skipped runs (the paging loop's timeout is one hour and the trigger
+is capped at one concurrent run), and on Consumption the frequency is directly billable. Full
+detail: [`USER_GUIDE.md` §4.10](USER_GUIDE.md) for Consumption,
+[`USER_GUIDE_STANDARD.md` §7](USER_GUIDE_STANDARD.md) for Standard.
 
-Note:
-<br>
-- In case if you faced an issue while deploying one of the Playbooks via the ARM template's option, please refer to the Playbook json file and do a manual copy & paste activity to a blank Playbook (Logic App).
-- Please ensure keeping the default value of PlaybookName as is since there is a dependencies at other playbooks for the messages batching process on the names, ensure that GIBIndicatorsProcessor playbook be installed first then deploy any other needed playbook (Collection) and ensure that all PLaybooks have the same resource group region.
-<br>
-- Based on the Playbooks (Logic App) selected region (East US, UAE North, West Europe,...etc) please ensure validating the Logic APP region outbound IPs list are been whitelisted with Group-IB, for more details: https://docs.microsoft.com/azure/logic-apps/logic-apps-limits-and-config#outbound-ip-addresses
+---
 
-## Register an Azure AD App for TI Indicators Graph API Write Access
-1. Go to Azure Active Directory / App Registrations
-2. Create +New Registration
-3. Give it a name.  Click Register.
-4. Click API Permissions Blade.
-5. Click Add a Permission.  
-6. Click Microsoft Graph.
-7. Click Appplication Permissions
-8. Check permissions for ThreatIndicators (ThreatIndicators.ReadWrite.OwnedBy).  Click Add permissions.
-9. Click grant admin consent for domain.com
-10. Click Certificates and Secrets
-11. Click New Client Secret
-12. Enter a description, select never.  Click Add.
-13. IMPORTANT.  Click copy next to the new secret and paste it somewhere temporaily.  You can not come back to get the secret once you leave the blade.
-14. Copy the client Id from the application properties and paste it somewhere.
-15. Also copy the tenant Id from the AAD directory properties blade.
+## STIX 2.1 Indicator Format
+
+All indicators submitted to Sentinel Threat Intelligence are STIX 2.1 compliant, as required by the Sentinel Upload Indicators API. Each indicator object contains:
+
+| Field                                 | Value                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                                | `"indicator"`                                                                                                                                                                                                                                                                                                                                      |
+| `spec_version`                        | `"2.1"`                                                                                                                                                                                                                                                                                                                                            |
+| `id`                                  | `"indicator--"` + generated GUID                                                                                                                                                                                                                                                                                                                   |
+| `created` / `modified` / `valid_from` | `dateFirstSeen` from Group-IB record                                                                                                                                                                                                                                                                                                               |
+| `valid_until`                         | `dateFirstSeen + evaluation.TTL days` when present; falls back to `dateFirstSeen + 90 days` otherwise (IOC Primary only; other collectors use the 90-day default unconditionally)                                                                                                                                                                  |
+| `pattern`                             | STIX pattern, e.g. `[ipv4-addr:value = '1.2.3.4']`                                                                                                                                                                                                                                                                                                 |
+| `pattern_type`                        | `"stix"`                                                                                                                                                                                                                                                                                                                                           |
+| `confidence`                          | 0–100. IOC Primary: `(admiralty_reliability + admiralty_credibility) / 2` derived from `evaluation.admiraltyCode` (when `UseAdmiraltyConfidence=true` and code is parseable), else per-entry `riskScore` (when `UseRiskScoreAsConfidence=true`), else `FixedConfidence` (when not `-1`), else field omitted. Other collectors: hardcoded fallback. |
+| `indicator_types`                     | `["malicious-activity"]`                                                                                                                                                                                                                                                                                                                           |
+| `labels`                              | `["Group-IB TI", "<collection-name>"]` plus, when present on the record (IOC Primary only): `"admiralty:<code>"`, `"credibility:<n>"`, `"reliability:<n>"`, `"risk-score:<n>"`. `risk-score` is always surfaced when present regardless of confidence mode.                                                                                        |
+| `object_marking_refs`                 | STIX 2.1 TLP marking-definition ID derived from `evaluation.TLP` (RED/AMBER/GREEN/WHITE\|CLEAR). Empty array when no TLP. IOC Primary only.                                                                                                                                                                                                        |
+
+---
+
+## Custom Log Tables Reference
+
+| Table                         | Tracking table             | Collection name (in tracking)                                |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------ |
+| `ThreatIntelIndicators`       | `GIBCollectionTracking_CL` | `ioc/primary`, `malware/cnc`, `attacks/phishing_group`, etc. |
+| `GIBAPTThreat_CL`             | `GIBCollectionTracking_CL` | `apt/threat`                                                 |
+| `GIBAPTThreatActor_CL`        | `GIBCollectionTracking_CL` | `apt/threat_actor`                                           |
+| `GIBHIThreat_CL`              | `GIBCollectionTracking_CL` | `hi/threat`                                                  |
+| `GIBHIThreatActor_CL`         | `GIBCollectionTracking_CL` | `hi/threat_actor`                                            |
+| `GIBHIOpenThreat_CL`          | `GIBCollectionTracking_CL` | `hi/open_threats`                                            |
+| `GIBMalwareReport_CL`         | `GIBCollectionTracking_CL` | `malware/malware`                                            |
+| `GIBCompromisedAccount_CL`    | `GIBCollectionTracking_CL` | `compromised/account_group`                                  |
+| `GIBCompromisedBreachedDB_CL` | `GIBCollectionTracking_CL` | `compromised/breacheddb`                                     |
+| `GIBCompromisedSPD_CL`        | `GIBCollectionTracking_CL` | `compromised/spd`                                            |
+| `GIBCompromisedBankCard_CL`   | `GIBCollectionTracking_CL` | `compromised/bank_card_group`                                |
+| `GIBCompromisedMaskedCard_CL` | `GIBCollectionTracking_CL` | `compromised/masked_card`                                    |
+| `GIBOSIVulnerability_CL`      | `GIBCollectionTracking_CL` | `osi/vulnerability`                                          |
+| `GIBOSIPublicLeak_CL`         | `GIBCollectionTracking_CL` | `osi/public_leak`                                            |
+| `GIBOSIGitRepository_CL`      | `GIBCollectionTracking_CL` | `osi/git_repository`                                         |
+
+---
+
+## Requirements
+
+| Requirement              | Details                                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Azure subscription       | Active subscription with resource group containing a Sentinel workspace                                           |
+| Microsoft Sentinel       | Enabled on a Log Analytics workspace                                                                              |
+| Group-IB TI subscription | Active Group-IB TI portal access with API key; access to specific collections depends on your subscription tier   |
+| Logic App region         | Must be in a region supported by the `azuresentinel` managed API and `azureloganalyticsdatacollector` managed API |
+| Permissions              | Ability to create Logic App resources, assign IAM roles on the workspace, and deploy ARM templates                |
