@@ -41,6 +41,20 @@
 **.NOTES**
     Developed by ksangui@microsoft.com and Nicolas Lepagnez
     
+    
+
+    Version : 8.0.0.0 - Released : IN DEV - nilepagn
+        - Implement Log Ingestion API for Sentinel (DCE/DCR-based ingestion replacing the legacy Log Analytics HTTP Data Collector API).
+        - New LogCollection settings : SentinelLogIngestionAPIActivated, DataCollectionEndpointURI, DCRImmutableId, UseManagedIdentity, TargetLogTenantID, TargetLogAppID, TargetLogCertificateThumbprint, TargetLogAppSecretReference.
+        - Both APIs are supported simultaneously, controlled by the SentinelLogIngestionAPIActivated toggle, to enable a phased migration.
+        - Adding runtime warning banner when the collector still uses the legacy Log Analytics HTTP Data Collector API.
+          See [ESI-PublicContent/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI) for the migration procedure.
+        - New Identity sub-property columns exposed by the DCR transformKql : Identity_Depth_d, Identity_DistinguishedName_s, Identity_DomainId_s, Identity_IsDeleted_b, Identity_IsRelativeDn_b, Identity_Name_s, Identity_ObjectGuid_g, Identity_Parent_s, Identity_PartitionFQDN_s, Identity_PartitionGuid_g, Identity_Rdn_s.
+        - Create $Script:ESIDataPath to store data in a specific folder and become independant from CSV configuration.
+        - Move ExportDomainsInformation to LogCollection Section in configuration. If set to true, the Domain Information will be exported in the Log Collection. Default Value is True as before.
+        - Change GitHub link for Configuration file to use the new repository.
+        - Adding possibility to use GitHub API instead of direct download for configuration file.
+
     Version : 7.6.0.1 - Released : 26/07/2024 - nilepagn
         - Adding Try-Catch on Get-AutomationVariable Test
         - Correct a bug on Get-LastVersion with Write-LogMessage
