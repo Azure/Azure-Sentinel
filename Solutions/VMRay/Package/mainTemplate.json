@@ -31,7 +31,7 @@
   },
   "variables": {
     "_solutionName": "VMRay",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.2",
     "solutionId": "vmraygmbh1623334327435.microsoft-sentinel-solution-vmray",
     "_solutionId": "[variables('solutionId')]",
     "VMRayEnrichment_FunctionAppConnector": "VMRayEnrichment_FunctionAppConnector",
@@ -45,13 +45,13 @@
     "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','fa','-', uniqueString(concat(variables('_solutionId'),'-','AzureFunction','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "Submit-URL-VMRay-Analyzer": "Submit-URL-VMRay-Analyzer",
     "_Submit-URL-VMRay-Analyzer": "[variables('Submit-URL-VMRay-Analyzer')]",
+    "blanks": "[replace('b', 'b', '')]",
     "playbookVersion2": "1.0",
     "playbookContentId2": "Submit-URL-VMRay-Analyzer",
     "_playbookContentId2": "[variables('playbookContentId2')]",
     "playbookId2": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId2'))]",
     "playbookTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId2'))))]",
     "_playbookcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId2'),'-', variables('playbookVersion2'))))]",
-    "blanks": "[replace('b', 'b', '')]",
     "VMRay-Sandbox_Outlook_Attachment": "VMRay-Sandbox_Outlook_Attachment",
     "_VMRay-Sandbox_Outlook_Attachment": "[variables('VMRay-Sandbox_Outlook_Attachment')]",
     "playbookVersion3": "1.0",
@@ -81,7 +81,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "VMRayEnrichment_FunctionAppConnector Playbook with template version 3.0.1",
+        "description": "VMRayEnrichment_FunctionAppConnector Playbook with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -240,11 +240,11 @@
                     "FUNCTIONS_WORKER_RUNTIME": "python",
                     "APPINSIGHTS_INSTRUMENTATIONKEY": "[[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]",
                     "APPLICATIONINSIGHTS_CONNECTION_STRING": "[[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]",
-                    "AzureWebJobsStorage": "[[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2023-04-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                    "AzureWebJobsStorage": "[[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2025-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                     "vmrayBaseURL": "[[parameters('vmrayBaseURL')]",
                     "vmrayAPIKey": "[[parameters('vmrayAPIKey')]",
                     "Resubmit": "[[parameters('Resubmit')]",
-                    "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-VMRay-Enrichment"
+                    "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/vmray/ms-sentinel/raw/refs/heads/main/VMRayEnrichment/VMRayEnrichemntFuncApp.zip?raw=true"
                   }
                 }
               ]
@@ -334,7 +334,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Submit-URL-VMRay-Analyzer Playbook with template version 3.0.1",
+        "description": "Submit-URL-VMRay-Analyzer Playbook with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -359,11 +359,19 @@
               "metadata": {
                 "description": "Name of the FunctionApp"
               }
+            },
+            "WhitelistedURLDomains": {
+              "defaultValue": "",
+              "type": "string",
+              "metadata": {
+                "description": "Optional comma-separated list of domains whose URLs are never submitted to VMRay, e.g. 'microsoft.com,google.com'. Matching is case-insensitive and also skips subdomains of a listed domain (up to four labels deep). Leave empty to submit every URL."
+              }
             }
           },
           "variables": {
             "functionappName": "[[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
             "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "environmentResourceManagerUrl": "[[environment().resourceManager]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
             "_connection-1": "[[variables('connection-1')]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
@@ -406,6 +414,14 @@
                       "defaultValue": "30",
                       "type": "String"
                     },
+                    "Whitelisted_URL_Domains": {
+                      "defaultValue": "[variables('blanks')]",
+                      "type": "String"
+                    },
+                    "environmentResourceManagerUrl": {
+                      "defaultValue": "[[variables('environmentResourceManagerUrl')]",
+                      "type": "String"
+                    },
                     "$connections": {
                       "type": "Object"
                     }
@@ -429,7 +445,7 @@
                   "actions": {
                     "Entities_-_Get_URLs": {
                       "runAfter": {
-                        "Sorted_VMRay_VTIS": [
+                        "URL_Whitelist": [
                           "Succeeded"
                         ]
                       },
@@ -445,14 +461,98 @@
                         "path": "/entities/url"
                       }
                     },
-                    "For_each_URL": {
-                      "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                    "Select_URL_Hosts": {
+                      "runAfter": {
+                        "Entities_-_Get_URLs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@coalesce(body('Entities_-_Get_URLs')?['URLs'], json('[]'))",
+                        "select": {
+                          "url": "@item()?['url']",
+                          "hostRaw": "@if(empty(coalesce(item()?['url'], '')), '', first(split(first(split(first(split(if(contains(coalesce(item()?['url'], ''), '://'), split(coalesce(item()?['url'], ''), '://')[1], coalesce(item()?['url'], '')), '/')), '?')), '#')))"
+                        }
+                      }
+                    },
+                    "Normalize_URL_Hosts": {
+                      "runAfter": {
+                        "Select_URL_Hosts": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@body('Select_URL_Hosts')",
+                        "select": {
+                          "url": "@item()?['url']",
+                          "host": "@toLower(trim(first(split(last(split(coalesce(item()?['hostRaw'], ''), '@')), ':'))))"
+                        }
+                      }
+                    },
+                    "Filter_Whitelisted_URLs": {
+                      "runAfter": {
+                        "Normalize_URL_Hosts": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Query",
+                      "inputs": {
+                        "from": "@body('Normalize_URL_Hosts')",
+                        "where": "@and(not(empty(item()?['host'])), empty(intersection(variables('url_whitelist'), createArray(item()?['host'], join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 2))), '.'), join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 3))), '.'), join(skip(split(item()?['host'], '.'), max(0, sub(length(split(item()?['host'], '.')), 4))), '.')))))"
+                      }
+                    },
+                    "Comment_If_All_URLs_Were_Whitelisted": {
+                      "runAfter": {
+                        "Filter_Whitelisted_URLs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "greater": [
+                              "@length(body('Normalize_URL_Hosts'))",
+                              0
+                            ]
+                          },
+                          {
+                            "equals": [
+                              "@length(body('Filter_Whitelisted_URLs'))",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_whitelist_comment_to_incident": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p class=\"editor-paragraph\">VMRay: all @{length(body('Normalize_URL_Hosts'))} URL(s) on this incident matched the configured domain whitelist and were not submitted for analysis.</p>"
+                            },
+                            "path": "/Incidents/Comment"
+                          }
+                        }
+                      }
+                    },
+                    "For_Each_URL_Entry": {
+                      "foreach": "@body('Filter_Whitelisted_URLs')",
                       "actions": {
                         "UplaodURL": {
                           "type": "Function",
                           "inputs": {
                             "body": {
-                              "url": "@items('For_each_URL')['url']",
+                              "url": "@items('For_Each_URL_Entry')['url']",
                               "tags": [
                                 "url_submission_logic_app"
                               ]
@@ -467,11 +567,13 @@
                             "For_each_submission": {
                               "foreach": "@body('UplaodURL')?['vmray_submission']",
                               "actions": {
-                                "Set_Submission_Status": {
-                                  "type": "SetVariable",
+                                "Stagger_Poll_Start": {
+                                  "type": "Wait",
                                   "inputs": {
-                                    "name": "submission_status",
-                                    "value": false
+                                    "interval": {
+                                      "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 110), 1)",
+                                      "unit": "Second"
+                                    }
                                   }
                                 },
                                 "Wait_untill_submission_is_completed": {
@@ -503,19 +605,7 @@
                                     },
                                     "Check_if_submission_is_completed": {
                                       "actions": {
-                                        "Set_Submission_Status_to_True": {
-                                          "type": "SetVariable",
-                                          "inputs": {
-                                            "name": "submission_status",
-                                            "value": true
-                                          }
-                                        },
                                         "GetVMRaySample": {
-                                          "runAfter": {
-                                            "Set_Submission_Status_to_True": [
-                                              "Succeeded"
-                                            ]
-                                          },
                                           "type": "Function",
                                           "inputs": {
                                             "body": {
@@ -528,33 +618,30 @@
                                         },
                                         "Check_If_Sample_Verdict_is_Suspicious_or_Malicious": {
                                           "actions": {
-                                            "Set_Submission_Report_Variable": {
-                                              "type": "SetVariable",
-                                              "inputs": {
-                                                "name": "submission_report",
-                                                "value": [
-                                                  {
-                                                    "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
-                                                    "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
-                                                    "Classification": "@body('GetVMRaySample')['sample_classifications']",
-                                                    "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
-                                                    "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
-                                                    "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
-                                                    "Sample ID": "@body('GetVMRaySample')['sample_id']",
-                                                    "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
-                                                  }
-                                                ]
-                                              }
+                                            "Compose_Submission_Report": {
+                                              "type": "Compose",
+                                              "inputs": [
+                                                {
+                                                  "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
+                                                  "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
+                                                  "Classification": "@body('GetVMRaySample')['sample_classifications']",
+                                                  "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
+                                                  "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
+                                                  "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
+                                                  "Sample ID": "@body('GetVMRaySample')['sample_id']",
+                                                  "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
+                                                }
+                                              ]
                                             },
                                             "Create_HTML_table": {
                                               "runAfter": {
-                                                "Set_Submission_Report_Variable": [
+                                                "Compose_Submission_Report": [
                                                   "Succeeded"
                                                 ]
                                               },
                                               "type": "Table",
                                               "inputs": {
-                                                "from": "@variables('submission_report')",
+                                                "from": "@outputs('Compose_Submission_Report')",
                                                 "format": "HTML"
                                               }
                                             },
@@ -574,15 +661,86 @@
                                                 "method": "post",
                                                 "body": {
                                                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                  "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_each_URL')?['url'],'https://',''),'http://','')}</p><p class=\"editor-paragraph\">@{body('Create_HTML_table')}@{body('Create_HTML_table_2')}</p>"
+                                                  "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_Each_URL_Entry')?['url'],'https://',''),'http://','')}</p><p class=\"editor-paragraph\">@{body('Create_HTML_table')}@{body('Create_HTML_table_2')}<!--VMRaySubmissionId=@{body('GetVMRaySubmission')['submission_id']}--></p>"
                                                 },
                                                 "path": "/Incidents/Comment"
+                                              }
+                                            },
+                                            "Delay_Before_Comment_Retry": {
+                                              "runAfter": {
+                                                "Add_comment_to_incident_(V3)": [
+                                                  "Failed"
+                                                ]
+                                              },
+                                              "type": "Wait",
+                                              "inputs": {
+                                                "interval": {
+                                                  "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 20), 5)",
+                                                  "unit": "Second"
+                                                }
+                                              }
+                                            },
+                                            "Get_existing_comments": {
+                                              "runAfter": {
+                                                "Delay_Before_Comment_Retry": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Http",
+                                              "inputs": {
+                                                "method": "GET",
+                                                "uri": "@concat(parameters('environmentResourceManagerUrl'), triggerBody()?['object']?['id'], '/comments?api-version=2023-02-01')",
+                                                "authentication": {
+                                                  "type": "ManagedServiceIdentity",
+                                                  "audience": "@parameters('environmentResourceManagerUrl')"
+                                                }
+                                              }
+                                            },
+                                            "Post_comment_only_if_missing": {
+                                              "runAfter": {
+                                                "Get_existing_comments": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "If",
+                                              "expression": {
+                                                "and": [
+                                                  {
+                                                    "equals": [
+                                                      "@contains(string(coalesce(body('Get_existing_comments')?['value'], json('[]'))), concat('VMRaySubmissionId=', string(body('GetVMRaySubmission')['submission_id'])))",
+                                                      false
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              "actions": {
+                                                "Retry_add_comment_to_incident": {
+                                                  "type": "ApiConnection",
+                                                  "inputs": {
+                                                    "host": {
+                                                      "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                      }
+                                                    },
+                                                    "method": "post",
+                                                    "body": {
+                                                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                      "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_Each_URL_Entry')?['url'],'https://',''),'http://','')}</p><p class=\"editor-paragraph\">@{body('Create_HTML_table')}@{body('Create_HTML_table_2')}<!--VMRaySubmissionId=@{body('GetVMRaySubmission')['submission_id']}--></p>"
+                                                    },
+                                                    "path": "/Incidents/Comment"
+                                                  }
+                                                }
                                               }
                                             },
                                             "GetVMRayIOCs": {
                                               "runAfter": {
                                                 "Add_comment_to_incident_(V3)": [
-                                                  "Succeeded"
+                                                  "Succeeded",
+                                                  "Failed"
+                                                ],
+                                                "Post_comment_only_if_missing": [
+                                                  "Succeeded",
+                                                  "Skipped"
                                                 ]
                                               },
                                               "type": "Function",
@@ -646,33 +804,30 @@
                                           },
                                           "else": {
                                             "actions": {
-                                              "Set_Submission_Report_Variable_01": {
-                                                "type": "SetVariable",
-                                                "inputs": {
-                                                  "name": "submission_report",
-                                                  "value": [
-                                                    {
-                                                      "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
-                                                      "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
-                                                      "Classification": "@body('GetVMRaySample')['sample_classifications']",
-                                                      "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
-                                                      "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
-                                                      "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
-                                                      "Sample ID": "@body('GetVMRaySample')['sample_id']",
-                                                      "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
-                                                    }
-                                                  ]
-                                                }
+                                              "Compose_Submission_Report_1": {
+                                                "type": "Compose",
+                                                "inputs": [
+                                                  {
+                                                    "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
+                                                    "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
+                                                    "Classification": "@body('GetVMRaySample')['sample_classifications']",
+                                                    "Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
+                                                    "Link to the Full Report": "@body('GetVMRaySample')['sample_webif_url']",
+                                                    "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
+                                                    "Sample ID": "@body('GetVMRaySample')['sample_id']",
+                                                    "Notes": "@body('GetVMRaySample')['sample_verdict_reason_description']"
+                                                  }
+                                                ]
                                               },
                                               "Create_HTML_table_1": {
                                                 "runAfter": {
-                                                  "Set_Submission_Report_Variable_01": [
+                                                  "Compose_Submission_Report_1": [
                                                     "Succeeded"
                                                   ]
                                                 },
                                                 "type": "Table",
                                                 "inputs": {
-                                                  "from": "@variables('submission_report')",
+                                                  "from": "@outputs('Compose_Submission_Report_1')",
                                                   "format": "HTML"
                                                 }
                                               },
@@ -692,9 +847,75 @@
                                                   "method": "post",
                                                   "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_each_URL')?['url'],'https://',''),'http://','')}<br>@{body('Create_HTML_table_1')}@{body('Create_HTML_table_2')}</p>"
+                                                    "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_Each_URL_Entry')?['url'],'https://',''),'http://','')}<br>@{body('Create_HTML_table_1')}@{body('Create_HTML_table_2')}<!--VMRaySubmissionId=@{body('GetVMRaySubmission')['submission_id']}--></p>"
                                                   },
                                                   "path": "/Incidents/Comment"
+                                                }
+                                              },
+                                              "Delay_Before_Comment_Retry_1": {
+                                                "runAfter": {
+                                                  "Add_comment_to_incident_(V3)_1": [
+                                                    "Failed"
+                                                  ]
+                                                },
+                                                "type": "Wait",
+                                                "inputs": {
+                                                  "interval": {
+                                                    "count": "@add(mod(int(items('For_each_submission')['SubmissionID']), 20), 5)",
+                                                    "unit": "Second"
+                                                  }
+                                                }
+                                              },
+                                              "Get_existing_comments_1": {
+                                                "runAfter": {
+                                                  "Delay_Before_Comment_Retry_1": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                  "method": "GET",
+                                                  "uri": "@concat(parameters('environmentResourceManagerUrl'), triggerBody()?['object']?['id'], '/comments?api-version=2023-02-01')",
+                                                  "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "@parameters('environmentResourceManagerUrl')"
+                                                  }
+                                                }
+                                              },
+                                              "Post_comment_only_if_missing_1": {
+                                                "runAfter": {
+                                                  "Get_existing_comments_1": [
+                                                    "Succeeded"
+                                                  ]
+                                                },
+                                                "type": "If",
+                                                "expression": {
+                                                  "and": [
+                                                    {
+                                                      "equals": [
+                                                        "@contains(string(coalesce(body('Get_existing_comments_1')?['value'], json('[]'))), concat('VMRaySubmissionId=', string(body('GetVMRaySubmission')['submission_id'])))",
+                                                        false
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                "actions": {
+                                                  "Retry_add_comment_to_incident_1": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                      "host": {
+                                                        "connection": {
+                                                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                      },
+                                                      "method": "post",
+                                                      "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p class=\"editor-paragraph\">VMRay Submission Details for URL: @{replace(replace(items('For_Each_URL_Entry')?['url'],'https://',''),'http://','')}<br>@{body('Create_HTML_table_1')}@{body('Create_HTML_table_2')}<!--VMRaySubmissionId=@{body('GetVMRaySubmission')['submission_id']}--></p>"
+                                                      },
+                                                      "path": "/Incidents/Comment"
+                                                    }
+                                                  }
                                                 }
                                               }
                                             }
@@ -729,96 +950,33 @@
                                             }
                                           }
                                         },
-                                        "Set_VTIS": {
+                                        "Select_VTIs": {
                                           "runAfter": {
                                             "vmrayenrichcox-GetVMRayVTIs": [
                                               "Succeeded"
                                             ]
                                           },
-                                          "type": "SetVariable",
+                                          "type": "Select",
                                           "inputs": {
-                                            "name": "sample_vtis",
-                                            "value": "@body('vmrayenrichcox-GetVMRayVTIs')['threat_indicators']"
+                                            "from": "@coalesce(body('vmrayenrichcox-GetVMRayVTIs')?['threat_indicators'], json('[]'))",
+                                            "select": {
+                                              "Severity": "@item()?['score']",
+                                              "Category": "@item()?['category']",
+                                              "Operation": "@item()?['operation']",
+                                              "Classifications": "@item()?['classifications']"
+                                            }
                                           }
                                         },
                                         "Create_HTML_table_2": {
                                           "runAfter": {
-                                            "Set_variable": [
+                                            "Select_VTIs": [
                                               "Succeeded"
                                             ]
                                           },
                                           "type": "Table",
                                           "inputs": {
-                                            "from": "@reverse(variables('sorted_vmray_vtis'))",
+                                            "from": "@reverse(sort(body('Select_VTIs'), 'Severity'))",
                                             "format": "HTML"
-                                          }
-                                        },
-                                        "For_each_VTI": {
-                                          "foreach": "@variables('sample_vtis')",
-                                          "actions": {
-                                            "Compose": {
-                                              "type": "Compose",
-                                              "inputs": {
-                                                "Severity": "@items('For_each_VTI')?['score']",
-                                                "Category": "@items('For_each_VTI')?['category']",
-                                                "Operation": "@items('For_each_VTI')?['operation']",
-                                                "Classifications": "@items('For_each_VTI')?['classifications']"
-                                              }
-                                            },
-                                            "Append_to_array_variable": {
-                                              "runAfter": {
-                                                "Compose": [
-                                                  "Succeeded"
-                                                ]
-                                              },
-                                              "type": "AppendToArrayVariable",
-                                              "inputs": {
-                                                "name": "vmray_vtis",
-                                                "value": "@outputs('Compose')"
-                                              }
-                                            }
-                                          },
-                                          "runAfter": {
-                                            "Set_variable_2": [
-                                              "Succeeded"
-                                            ]
-                                          },
-                                          "type": "Foreach"
-                                        },
-                                        "Set_variable": {
-                                          "runAfter": {
-                                            "For_each_VTI": [
-                                              "Succeeded"
-                                            ]
-                                          },
-                                          "type": "SetVariable",
-                                          "inputs": {
-                                            "name": "sorted_vmray_vtis",
-                                            "value": "@sort(variables('vmray_vtis'), 'Severity')"
-                                          }
-                                        },
-                                        "Set_variable_1": {
-                                          "runAfter": {
-                                            "Set_VTIS": [
-                                              "Succeeded"
-                                            ]
-                                          },
-                                          "type": "SetVariable",
-                                          "inputs": {
-                                            "name": "vmray_vtis",
-                                            "value": "@null"
-                                          }
-                                        },
-                                        "Set_variable_2": {
-                                          "runAfter": {
-                                            "Set_variable_1": [
-                                              "Succeeded"
-                                            ]
-                                          },
-                                          "type": "SetVariable",
-                                          "inputs": {
-                                            "name": "sorted_vmray_vtis",
-                                            "value": "@null"
                                           }
                                         }
                                       },
@@ -841,11 +999,11 @@
                                     }
                                   },
                                   "runAfter": {
-                                    "Set_Submission_Status": [
+                                    "Stagger_Poll_Start": [
                                       "Succeeded"
                                     ]
                                   },
-                                  "expression": "@equals(variables('submission_status'),true)",
+                                  "expression": "@equals(coalesce(body('GetVMRaySubmission')?['submission_finished'], false), true)",
                                   "limit": {
                                     "count": 60,
                                     "timeout": "PT1H"
@@ -868,7 +1026,7 @@
                                 "inputs": {
                                   "host": {
                                     "connection": {
-                                      "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                   },
                                   "method": "post",
@@ -895,84 +1053,25 @@
                         }
                       },
                       "runAfter": {
-                        "Entities_-_Get_URLs": [
+                        "Filter_Whitelisted_URLs": [
                           "Succeeded"
                         ]
                       },
-                      "type": "Foreach"
-                    },
-                    "SubmissionReportforTable": {
-                      "runAfter": {
-                        "check_submission_status": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "submission_report",
-                            "type": "array"
-                          }
-                        ]
+                      "type": "Foreach",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 5
+                        }
                       }
                     },
-                    "check_submission_status": {
+                    "URL_Whitelist": {
                       "type": "InitializeVariable",
                       "inputs": {
                         "variables": [
                           {
-                            "name": "submission_status",
-                            "type": "boolean",
-                            "value": false
-                          }
-                        ]
-                      }
-                    },
-                    "Sample_VTIS": {
-                      "runAfter": {
-                        "SubmissionReportforTable": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "sample_vtis",
-                            "type": "array"
-                          }
-                        ]
-                      }
-                    },
-                    "VMRay_VTIS": {
-                      "runAfter": {
-                        "Sample_VTIS": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "vmray_vtis",
-                            "type": "array"
-                          }
-                        ]
-                      }
-                    },
-                    "Sorted_VMRay_VTIS": {
-                      "runAfter": {
-                        "VMRay_VTIS": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "sorted_vmray_vtis",
-                            "type": "array"
+                            "name": "url_whitelist",
+                            "type": "array",
+                            "value": "@if(empty(trim(coalesce(parameters('Whitelisted_URL_Domains'), ''))), json('[]'), split(replace(toLower(trim(parameters('Whitelisted_URL_Domains'))), ' ', ''), ','))"
                           }
                         ]
                       }
@@ -980,6 +1079,9 @@
                   }
                 },
                 "parameters": {
+                  "Whitelisted_URL_Domains": {
+                    "value": "[[parameters('WhitelistedURLDomains')]"
+                  },
                   "$connections": {
                     "value": {
                       "azuresentinel": {
@@ -1038,11 +1140,14 @@
           "metadata": {
             "title": "VMRay URL Analyis",
             "description": "Submits a url or set of urls associated with an incident to VMRay for Analyis.",
-            "prerequisites": "VMRay API Key.",
+            "prerequisites": "VMRay API Key. The VMRay Enrichment Function App deployed to the same resource group as this playbook.",
             "postDeploymentSteps": [
-              "None"
+              "Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace, so it can add incident comments and upload threat indicators.",
+              "Grant the Microsoft Sentinel service principal ('Azure Security Insights') the 'Microsoft Sentinel Automation Contributor' role on this resource group, so the playbook can be run from an incident. Microsoft Sentinel -> Automation -> Manage playbook permissions does this for you.",
+              "Optionally set the 'WhitelistedURLDomains' parameter to a comma-separated list of domains that should never be submitted to VMRay (e.g. microsoft.com,google.com). Subdomains of a listed domain are also skipped.",
+              "Attach the playbook to an automation rule if you want it to run automatically on incident creation."
             ],
-            "lastUpdateTime": "2025-02-20T00:00:00Z",
+            "lastUpdateTime": "2026-08-13T00:00:00Z",
             "entities": [
               "url"
             ],
@@ -1080,7 +1185,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "VMRay-Sandbox_Outlook_Attachment Playbook with template version 3.0.1",
+        "description": "VMRay-Sandbox_Outlook_Attachment Playbook with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -1094,23 +1199,78 @@
             },
             "WorkspaceName": {
               "defaultValue": "",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Log Analytics Workspace name"
+                "description": "Name of the Log Analytics / Microsoft Sentinel workspace. Must live in this resource group."
               }
             },
             "WorkspaceID": {
               "defaultValue": "",
-              "type": "String",
+              "type": "string",
               "metadata": {
-                "description": "Log Analytics Workspace ID"
+                "description": "Log Analytics Workspace ID (GUID). Used for the threat indicator upload."
               }
             },
             "FunctionAppName": {
               "defaultValue": "vmrayenrich",
               "type": "string",
               "metadata": {
-                "description": "Name of the FunctionApp"
+                "description": "Base name of the VMRay Enrichment FunctionApp. A 3-character hash derived from this resource group is appended, so the Function App must live in this resource group."
+              }
+            },
+            "TableName": {
+              "defaultValue": "VMRaySubmissions_CL",
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics custom table to create. Must end with _CL."
+              }
+            },
+            "DataCollectionEndpointName": {
+              "defaultValue": "vmray-dce",
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Data Collection Endpoint to create."
+              }
+            },
+            "DataCollectionRuleName": {
+              "defaultValue": "vmray-submissions-dcr",
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Data Collection Rule to create."
+              }
+            },
+            "RetentionInDays": {
+              "defaultValue": 30,
+              "type": "int",
+              "metadata": {
+                "description": "Interactive retention for the custom table, in days."
+              }
+            },
+            "AnalyticRuleGuid": {
+              "defaultValue": "a7c3f1e2-5b84-4d19-9f6a-2c8e0b41d537",
+              "type": "string",
+              "metadata": {
+                "description": "Stable GUID for the analytics rule. Keep it constant across redeployments so the rule is updated rather than duplicated."
+              }
+            },
+            "AnalyticRuleSeverity": {
+              "defaultValue": "Medium",
+              "allowedValues": [
+                "Informational",
+                "Low",
+                "Medium",
+                "High"
+              ],
+              "type": "string",
+              "metadata": {
+                "description": "Severity assigned to the generated alerts and incidents."
+              }
+            },
+            "AnalyticRuleEnabled": {
+              "defaultValue": true,
+              "type": "bool",
+              "metadata": {
+                "description": "Whether the analytics rule is enabled on deployment."
               }
             }
           },
@@ -1118,17 +1278,234 @@
             "functionappName": "[[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
             "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
             "Office365V1": "[[concat('office365-', parameters('PlaybookName'))]",
-            "subscription": "[[last(split(subscription().id, '/'))]",
-            "resourceGroupName": "[[resourceGroup().name]",
-            "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/office365')]",
-            "_connection-1": "[[variables('connection-1')]",
-            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
-            "_connection-2": "[[variables('connection-2')]",
+            "streamName": "[[concat('Custom-', parameters('TableName'))]",
+            "destinationName": "vmrayLogAnalyticsDestination",
+            "workspaceResourceId": "[[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+            "analyticRuleQuery": "[[concat(parameters('TableName'), '\n| where ingestion_time() > ago(10m)\n| where SampleVerdict in (\"malicious\", \"suspicious\")\n| extend HashAlgorithm = \"SHA256\"\n| extend Classifications = iff(isnull(SampleClassifications), \"\", strcat_array(SampleClassifications, \", \"))\n| extend ThreatNames = iff(isnull(SampleThreatNames), \"\", strcat_array(SampleThreatNames, \", \"))\n| project TimeGenerated, SubmissionId, SampleId, SampleFileName, SampleVerdict, SampleVtiScore, SampleWebifUrl, Classifications, ThreatNames, SampleVerdictReasonCode, SampleVerdictReasonDescription, SampleSha256, SampleMd5, HashAlgorithm, AttachmentName, EmailSubject, EmailSender, EmailRecipients')]",
+            "connection-4": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/office365')]",
+            "_connection-4": "[[variables('connection-4')]",
+            "connection-5": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+            "_connection-5": "[[variables('connection-5')]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
-            "workspace-name": "[parameters('workspace')]",
-            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+            "workspace-name": "[parameters('workspace')]"
           },
           "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[[concat(parameters('WorkspaceName'), '/', parameters('TableName'))]",
+              "properties": {
+                "schema": {
+                  "name": "[[parameters('TableName')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SubmissionId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SubmissionStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SampleFileName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleVerdict",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleVtiScore",
+                      "type": "real"
+                    },
+                    {
+                      "name": "SampleWebifUrl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleClassifications",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "SampleThreatNames",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "SampleVerdictReasonCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleVerdictReasonDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleSha256",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleMd5",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleSha1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AttachmentName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmailSubject",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmailSender",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmailRecipients",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "retentionInDays": "[[parameters('RetentionInDays')]",
+                "totalRetentionInDays": "[[parameters('RetentionInDays')]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionEndpoints",
+              "apiVersion": "2021-09-01-preview",
+              "name": "[[parameters('DataCollectionEndpointName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "networkAcls": {
+                  "publicNetworkAccess": "Enabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2021-09-01-preview",
+              "name": "[[parameters('DataCollectionRuleName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                "[[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), parameters('TableName'))]"
+              ],
+              "properties": {
+                "dataCollectionEndpointId": "[[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                "streamDeclarations": {
+                  "[variables('streamName')]": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "SubmissionId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SubmissionStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SampleFileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleVerdict",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleVtiScore",
+                        "type": "real"
+                      },
+                      {
+                        "name": "SampleWebifUrl",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleClassifications",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "SampleThreatNames",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "SampleVerdictReasonCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleVerdictReasonDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleSha256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleMd5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleSha1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AttachmentName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EmailSubject",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EmailSender",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EmailRecipients",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[[variables('workspaceResourceId')]",
+                      "name": "[[variables('destinationName')]"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "[[variables('streamName')]"
+                    ],
+                    "destinations": [
+                      "[[variables('destinationName')]"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "[[variables('streamName')]"
+                  }
+                ]
+              }
+            },
             {
               "type": "Microsoft.Web/connections",
               "apiVersion": "2016-06-01",
@@ -1137,7 +1514,7 @@
               "properties": {
                 "displayName": "[[variables('Office365V1')]",
                 "api": {
-                  "id": "[[variables('_connection-1')]"
+                  "id": "[[variables('_connection-4')]"
                 }
               }
             },
@@ -1151,7 +1528,7 @@
                 "displayName": "[[variables('AzureSentinelConnectionName')]",
                 "parameterValueType": "Alternative",
                 "api": {
-                  "id": "[[variables('_connection-2')]"
+                  "id": "[[variables('_connection-5')]"
                 }
               }
             },
@@ -1165,7 +1542,9 @@
               },
               "dependsOn": [
                 "[[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
-                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                "[[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
               ],
               "properties": {
                 "state": "Disabled",
@@ -1175,6 +1554,18 @@
                   "parameters": {
                     "Indicator_Expiration_In_Days": {
                       "defaultValue": "30",
+                      "type": "String"
+                    },
+                    "DataCollectionEndpoint": {
+                      "defaultValue": "[variables('blanks')]",
+                      "type": "String"
+                    },
+                    "DataCollectionRuleImmutableId": {
+                      "defaultValue": "[variables('blanks')]",
+                      "type": "String"
+                    },
+                    "StreamName": {
+                      "defaultValue": "Custom-VMRaySubmissions_CL",
                       "type": "String"
                     },
                     "$connections": {
@@ -1221,6 +1612,17 @@
                     }
                   },
                   "actions": {
+                    "Submission_Object": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "submissin_obj",
+                            "type": "array"
+                          }
+                        ]
+                      }
+                    },
                     "Submission_Status": {
                       "runAfter": {
                         "Submission_Object": [
@@ -1238,7 +1640,7 @@
                         ]
                       }
                     },
-                    "Submission_Report": {
+                    "Email_Body": {
                       "runAfter": {
                         "Submission_Status": [
                           "Succeeded"
@@ -1248,51 +1650,8 @@
                       "inputs": {
                         "variables": [
                           {
-                            "name": "submission_report",
-                            "type": "array"
-                          }
-                        ]
-                      }
-                    },
-                    "Email_Body": {
-                      "runAfter": {
-                        "Submission_Report": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
                             "name": "email_body",
                             "type": "string"
-                          }
-                        ]
-                      }
-                    },
-                    "File_Name": {
-                      "runAfter": {
-                        "Email_Body": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "file_name",
-                            "type": "string"
-                          }
-                        ]
-                      }
-                    },
-                    "Submission_Object": {
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "submissin_obj",
-                            "type": "array"
                           }
                         ]
                       }
@@ -1311,7 +1670,7 @@
                               ]
                             },
                             "function": {
-                              "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/VMRayUploadSample')]"
+                              "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionappName'), '/functions/VMRayUploadSample')]"
                             }
                           }
                         },
@@ -1326,13 +1685,13 @@
                             "name": "submissin_obj",
                             "value": {
                               "submission_id": "@body('VMRayUploadSample')['vmray_submission']",
-                              "filename": "@variables('file_name')"
+                              "filename": "@item()?['name']"
                             }
                           }
                         }
                       },
                       "runAfter": {
-                        "File_Name": [
+                        "Email_Body": [
                           "Succeeded"
                         ]
                       },
@@ -1357,7 +1716,7 @@
                                   "submission_id": "@items('For_Every_Submission_Object')['submission_id'][0]['SubmissionID']"
                                 },
                                 "function": {
-                                  "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRaySubmission')]"
+                                  "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionappName'), '/functions/GetVMRaySubmission')]"
                                 }
                               }
                             },
@@ -1370,94 +1729,56 @@
                                       "sample_id": "@body('GetVMRaySubmission')?['submission_sample_id']"
                                     },
                                     "function": {
-                                      "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRaySample')]"
+                                      "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionappName'), '/functions/GetVMRaySample')]"
+                                    }
+                                  }
+                                },
+                                "Send_Result_To_Log_Analytics": {
+                                  "runAfter": {
+                                    "GetVMRaySample": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "POST",
+                                    "uri": "@{parameters('DataCollectionEndpoint')}/dataCollectionRules/@{parameters('DataCollectionRuleImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "User-Agent": "AzureSentinel-VMRay-SandboxOutlookAttachment"
+                                    },
+                                    "body": [
+                                      {
+                                        "TimeGenerated": "@{utcNow()}",
+                                        "SubmissionId": "@body('GetVMRaySubmission')?['submission_id']",
+                                        "SubmissionStatus": "@{body('GetVMRaySubmission')?['submission_status']}",
+                                        "SampleId": "@body('GetVMRaySample')?['sample_id']",
+                                        "SampleFileName": "@{body('GetVMRaySample')?['sample_filename']}",
+                                        "SampleVerdict": "@{body('GetVMRaySample')?['sample_verdict']}",
+                                        "SampleVtiScore": "@body('GetVMRaySample')?['sample_vti_score']",
+                                        "SampleWebifUrl": "@{body('GetVMRaySample')?['sample_webif_url']}",
+                                        "SampleClassifications": "@body('GetVMRaySample')?['sample_classifications']",
+                                        "SampleThreatNames": "@body('GetVMRaySample')?['sample_threat_names']",
+                                        "SampleVerdictReasonCode": "@{body('GetVMRaySample')?['sample_verdict_reason_code']}",
+                                        "SampleVerdictReasonDescription": "@{body('GetVMRaySample')?['sample_verdict_reason_description']}",
+                                        "SampleSha256": "@{body('GetVMRaySample')?['sample_sha256hash']}",
+                                        "SampleMd5": "@{body('GetVMRaySample')?['sample_md5hash']}",
+                                        "SampleSha1": "@{body('GetVMRaySample')?['sample_sha1hash']}",
+                                        "AttachmentName": "@{items('For_Every_Submission_Object')?['filename']}",
+                                        "EmailSubject": "@{triggerBody()?['subject']}",
+                                        "EmailSender": "@{triggerBody()?['from']}",
+                                        "EmailRecipients": "@{triggerBody()?['toRecipients']}"
+                                      }
+                                    ],
+                                    "authentication": {
+                                      "type": "ManagedServiceIdentity",
+                                      "audience": "https://monitor.azure.com"
                                     }
                                   }
                                 },
                                 "Check_If_Sample_Verdict_is_Malicious_or_Suspicious": {
                                   "actions": {
-                                    "Set_submission_report": {
-                                      "type": "SetVariable",
-                                      "inputs": {
-                                        "name": "submission_report",
-                                        "value": [
-                                          {
-                                            "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
-                                            "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
-                                            "Sample ID": "@body('GetVMRaySample')['sample_id']",
-                                            "Sample Classifications": "@body('GetVMRaySample')['sample_classifications']",
-                                            "Sample Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
-                                            "Sample Webif URL": "@body('GetVMRaySample')['sample_webif_url']",
-                                            "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
-                                            "Sample VTI Score": "@body('GetVMRaySample')['sample_vti_score']",
-                                            "Sample Verdict Reason Code": "@body('GetVMRaySample')['sample_verdict_reason_code']",
-                                            "Sample Verdict Reason Description": "@body('GetVMRaySample')['sample_verdict_reason_description']"
-                                          }
-                                        ]
-                                      }
-                                    },
-                                    "Create_HTML_table": {
-                                      "runAfter": {
-                                        "Set_submission_report": [
-                                          "Succeeded"
-                                        ]
-                                      },
-                                      "type": "Table",
-                                      "inputs": {
-                                        "from": "@variables('submission_report')",
-                                        "format": "HTML"
-                                      }
-                                    },
-                                    "Create_incident": {
-                                      "runAfter": {
-                                        "Create_HTML_table": [
-                                          "Succeeded"
-                                        ]
-                                      },
-                                      "type": "ApiConnection",
-                                      "inputs": {
-                                        "host": {
-                                          "connection": {
-                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                          }
-                                        },
-                                        "method": "put",
-                                        "body": {
-                                          "title": "VMRay Email Attachment Scan Submission Details for file - @{body('GetVMRaySample')['sample_filename']}",
-                                          "severity": "Medium",
-                                          "status": "New",
-                                          "description": "VMRay Email Attachment Scan . From:@{triggerBody()?['from']} . To: @{triggerBody()?['toRecipients']}"
-                                        },
-                                        "path": "[[concat('/Incidents/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/workspaces/',parameters('WorkspaceName'))]"
-                                      }
-                                    },
-                                    "Add_comment_to_incident_(V3)": {
-                                      "runAfter": {
-                                        "Create_incident": [
-                                          "Succeeded"
-                                        ]
-                                      },
-                                      "type": "ApiConnection",
-                                      "inputs": {
-                                        "host": {
-                                          "connection": {
-                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                          }
-                                        },
-                                        "method": "post",
-                                        "body": {
-                                          "incidentArmId": "@body('Create_incident')?['id']",
-                                          "message": "<p class=\"editor-paragraph\">VMRay Submission for File - @{items('For_Every_Submission_Object')['filename']}<br>@{body('Create_HTML_table')}</p>"
-                                        },
-                                        "path": "/Incidents/Comment"
-                                      }
-                                    },
                                     "GetVMRayIOCs": {
-                                      "runAfter": {
-                                        "Add_comment_to_incident_(V3)": [
-                                          "Succeeded"
-                                        ]
-                                      },
                                       "type": "Function",
                                       "inputs": {
                                         "body": {
@@ -1467,11 +1788,10 @@
                                             "malicious",
                                             "suspicious"
                                           ],
-                                          "incident_id": "@body('Create_incident')?['properties']?['incidentNumber']",
                                           "valid_until": "@parameters('Indicator_Expiration_In_Days')"
                                         },
                                         "function": {
-                                          "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRayIOCs')]"
+                                          "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionappName'), '/functions/GetVMRayIOCs')]"
                                         }
                                       }
                                     },
@@ -1520,7 +1840,7 @@
                                       "type": "SetVariable",
                                       "inputs": {
                                         "name": "email_body",
-                                        "value": "<p class=\"editor-paragraph\">\n<table style=\"width: 100%; border-collapse: collapse; background-color: #f0f0f0;\">\n<thead>\n<tr>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission Status</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Classifications</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Threat Names</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Webif URL</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample VTI Score</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Code</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Description</th>\n</tr>\n</thead>\n<tbody>\n<tr style=\"background-color: #ffffff; border-bottom: 1px solid #ddd;\">\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_status']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_classifications']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_threat_names']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_webif_url']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_vti_score']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_code']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_description']}</td>\n</tr>\n</tbody>\n</table>\n</p>\n"
+                                        "value": "<p class=\"editor-paragraph\">\n<table style=\"width: 100%; border-collapse: collapse; background-color: #f0f0f0;\">\n<thead>\n<tr>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission Status</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Classifications</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Threat Names</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Webif URL</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample VTI Score</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Code</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Description</th>\n</tr>\n</thead>\n<tbody>\n<tr style=\"background-color: #ffffff; border-bottom: 1px solid #ddd;\">\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_status']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{join(coalesce(body('GetVMRaySample')?['sample_classifications'], createArray()), ', ')}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{join(coalesce(body('GetVMRaySample')?['sample_threat_names'], createArray()), ', ')}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_webif_url']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_vti_score']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_code']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_description']}</td>\n</tr>\n</tbody>\n</table>\n</p>\n"
                                       }
                                     },
                                     "Send_an_email_(V2)": {
@@ -1545,22 +1865,10 @@
                                         },
                                         "path": "/v2/Mail"
                                       }
-                                    },
-                                    "Set_Submission_Status_to_True": {
-                                      "runAfter": {
-                                        "Send_an_email_(V2)": [
-                                          "Succeeded"
-                                        ]
-                                      },
-                                      "type": "SetVariable",
-                                      "inputs": {
-                                        "name": "submission_status",
-                                        "value": true
-                                      }
                                     }
                                   },
                                   "runAfter": {
-                                    "GetVMRaySample": [
+                                    "Send_Result_To_Log_Analytics": [
                                       "Succeeded"
                                     ]
                                   },
@@ -1577,6 +1885,18 @@
                                     ]
                                   },
                                   "type": "If"
+                                },
+                                "Set_Submission_Status_to_True": {
+                                  "runAfter": {
+                                    "Check_If_Sample_Verdict_is_Malicious_or_Suspicious": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "submission_status",
+                                    "value": true
+                                  }
                                 }
                               },
                               "runAfter": {
@@ -1645,6 +1965,15 @@
                   }
                 },
                 "parameters": {
+                  "DataCollectionEndpoint": {
+                    "value": "[[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName')), '2021-09-01-preview').logsIngestion.endpoint]"
+                  },
+                  "DataCollectionRuleImmutableId": {
+                    "value": "[[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName')), '2021-09-01-preview').immutableId]"
+                  },
+                  "StreamName": {
+                    "value": "[[variables('streamName')]"
+                  },
                   "$connections": {
                     "value": {
                       "office365": {
@@ -1668,6 +1997,98 @@
               },
               "tags": {
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+              "apiVersion": "2023-02-01",
+              "name": "[[concat(parameters('WorkspaceName'), '/Microsoft.SecurityInsights/', parameters('AnalyticRuleGuid'))]",
+              "kind": "Scheduled",
+              "dependsOn": [
+                "[[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), parameters('TableName'))]"
+              ],
+              "properties": {
+                "displayName": "VMRay - Malicious or suspicious email attachment",
+                "description": "VMRay sandbox returned a malicious or suspicious verdict for an attachment submitted by the VMRay-Sandbox_Outlook_Attachment playbook.",
+                "severity": "[[parameters('AnalyticRuleSeverity')]",
+                "enabled": "[[parameters('AnalyticRuleEnabled')]",
+                "query": "[[variables('analyticRuleQuery')]",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "InitialAccess",
+                  "Execution"
+                ],
+                "techniques": [
+                  "T1566",
+                  "T1204"
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "VMRay {{SampleVerdict}} attachment - {{SampleFileName}}",
+                  "alertDescriptionFormat": "VMRay returned verdict '{{SampleVerdict}}' for the email attachment {{AttachmentName}}. Full report: {{SampleWebifUrl}} . Sample and submission ids, hashes, classifications, threat names and the sender/recipient are available in the alert's custom details."
+                },
+                "customDetails": {
+                  "SubmissionId": "SubmissionId",
+                  "SampleId": "SampleId",
+                  "SampleVerdict": "SampleVerdict",
+                  "SampleVtiScore": "SampleVtiScore",
+                  "SampleWebifUrl": "SampleWebifUrl",
+                  "Classifications": "Classifications",
+                  "ThreatNames": "ThreatNames",
+                  "VerdictReasonCode": "SampleVerdictReasonCode",
+                  "VerdictReason": "SampleVerdictReasonDescription",
+                  "SampleSha256": "SampleSha256",
+                  "SampleMd5": "SampleMd5",
+                  "AttachmentName": "AttachmentName",
+                  "EmailSubject": "EmailSubject",
+                  "EmailSender": "EmailSender",
+                  "EmailRecipients": "EmailRecipients"
+                },
+                "entityMappings": [
+                  {
+                    "entityType": "File",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "SampleFileName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "FileHash",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Algorithm",
+                        "columnName": "HashAlgorithm"
+                      },
+                      {
+                        "identifier": "Value",
+                        "columnName": "SampleSha256"
+                      }
+                    ]
+                  }
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT5H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [
+                      "FileHash"
+                    ],
+                    "groupByAlertDetails": "[variables('TemplateEmptyArray')]",
+                    "groupByCustomDetails": "[variables('TemplateEmptyArray')]"
+                  }
+                }
               }
             },
             {
@@ -1706,15 +2127,20 @@
             }
           ],
           "metadata": {
-            "title": "VMRay Email Attachment Analyis",
-            "description": "Submits a attachment or set of attachment associated with an office 365 email to VMRay for Analyis.",
-            "prerequisites": "VMRay API Key.",
+            "title": "VMRay Email Attachment Analysis (Defender-visible)",
+            "description": "Submits each attachment of an Office 365 email to VMRay and writes the analysis result to a Log Analytics custom table via the Logs Ingestion API. Unlike the original playbook this variant does NOT create the incident itself: a scheduled analytics rule (also created by this template) turns malicious/suspicious rows into Microsoft Sentinel incidents with File and FileHash entity mappings, so they correlate and surface in the Microsoft Defender portal incident queue. This single template creates the custom table, the Data Collection Endpoint, the Data Collection Rule, the two API connections, the playbook and the analytics rule.",
+            "prerequisites": "VMRay API Key. The VMRay Enrichment Function App deployed to this resource group. A Log Analytics workspace with Microsoft Sentinel enabled, in this resource group.",
             "postDeploymentSteps": [
-              "None"
+              "Grant the playbook's system-assigned managed identity the 'Monitoring Metrics Publisher' role on the Data Collection Rule (see the dataCollectionRuleResourceId and playbookPrincipalId outputs). Without it the ingestion call returns 403.",
+              "Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace, so it can upload threat indicators.",
+              "Authorize the office365 API connection (interactive OAuth sign-in as the mailbox that receives the emails).",
+              "Set the 'Send an email (V2)' recipient - the template ships a placeholder address.",
+              "Enable the playbook - it deploys Disabled."
             ],
-            "lastUpdateTime": "2025-02-20T00:00:00Z",
+            "lastUpdateTime": "2026-08-10T00:00:00Z",
             "entities": [
-              ""
+              "file",
+              "filehash"
             ],
             "tags": [
               "Enrichment"
@@ -1750,7 +2176,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "VMRay data connector with template version 3.0.1",
+        "description": "VMRay data connector with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -1766,7 +2192,7 @@
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId1')]",
-                  "title": "VMRayThreatIntelligence (using Azure Functions)",
+                  "title": "VMRayThreatIntelligence",
                   "publisher": "VMRay",
                   "descriptionMarkdown": "VMRayThreatIntelligence connector automatically generates and feeds threat intelligence for all submissions to VMRay, improving threat detection and incident response in Sentinel. This seamless integration empowers teams to proactively address emerging threats.",
                   "graphQueries": [
@@ -1889,8 +2315,8 @@
                       ]
                     },
                     {
-                        "title": "Deploy VMRay Threat Intelligence Connector",
-                        "description": "1. Ensure you have all the required prerequisites: **Client ID**, **Tenant ID**, **Client Secret**, **VMRay API Key**, and **VMRay Base URL**.\n\n2. To obtain the Client ID, Client Secret, and Tenant ID, [follow these instructions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay#vmray-configurations)\n\n3. For the **Flex Consumption Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeployflex)\n\n4. For the **Premium Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeploypremium)\n\n5. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n\n6. Enter the **Application ID**, **Tenant ID**, **Client Secret**, **VMRay API Key**, **VMRay Initial Fetch Date**, and **TimeInterval**, then deploy."
+                      "description": "1. Ensure you have all the required prerequisites: **Client ID**, **Tenant ID**, **Client Secret**, **VMRay API Key**, and **VMRay Base URL**.\n2. To obtain the Client ID, Client Secret, and Tenant ID, [follow these instructions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay#vmray-configurations)\n3. For the **Flex Consumption Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeployflex)\n\n4. For the **Premium Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeploypremium).",
+                      "title": "Deploy VMRay Threat Intelligence Connector"
                     }
                   ]
                 }
@@ -1930,7 +2356,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_dataConnectorContentId1')]",
         "contentKind": "DataConnector",
-        "displayName": "VMRayThreatIntelligence (using Azure Functions)",
+        "displayName": "VMRayThreatIntelligence",
         "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
         "id": "[variables('_dataConnectorcontentProductId1')]",
         "version": "[variables('dataConnectorVersion1')]"
@@ -1973,7 +2399,7 @@
       "kind": "GenericUI",
       "properties": {
         "connectorUiConfig": {
-          "title": "VMRayThreatIntelligence (using Azure Functions)",
+          "title": "VMRayThreatIntelligence",
           "publisher": "VMRay",
           "descriptionMarkdown": "VMRayThreatIntelligence connector automatically generates and feeds threat intelligence for all submissions to VMRay, improving threat detection and incident response in Sentinel. This seamless integration empowers teams to proactively address emerging threats.",
           "graphQueries": [
@@ -2096,8 +2522,8 @@
               ]
             },
             {
-            "title": "Deploy VMRay Threat Intelligence Connector",
-            "description": "1. Ensure you have all the required prerequisites: **Client ID**, **Tenant ID**, **Client Secret**, **VMRay API Key**, and **VMRay Base URL**.\n2. To obtain the Client ID, Client Secret, and Tenant ID, [follow these instructions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay#vmray-configurations)\n3. For the **Flex Consumption Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeployflex)\n\n4. For the **Premium Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeploypremium)."
+              "description": "1. Ensure you have all the required prerequisites: **Client ID**, **Tenant ID**, **Client Secret**, **VMRay API Key**, and **VMRay Base URL**.\n2. To obtain the Client ID, Client Secret, and Tenant ID, [follow these instructions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay#vmray-configurations)\n3. For the **Flex Consumption Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeployflex)\n\n4. For the **Premium Plan**, click the **Deploy to Azure** button below:\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeploypremium).",
+              "title": "Deploy VMRay Threat Intelligence Connector"
             }
           ],
           "id": "[variables('_uiConfigId1')]"
@@ -2109,12 +2535,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.1",
+        "version": "3.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "VMRay",
         "publisherDisplayName": "VMRay",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p> The VMRay Connector for Microsoft Sentinel enhances security operations by providing enriched threat intelligence, enabling faster and more informed responses to security incidents. The integration has two main parts: first, URL detonation and enrichment, which provides detailed insights into suspicious URLs. Second, it automatically generates and feeds threat intelligence for all submissions to VMRay, improving threat detection and incident response in Sentinel. This seamless integration empowers teams to proactively address emerging threats.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VMRay/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The VMRay Connector for Microsoft Sentinel enhances security operations by providing enriched threat intelligence, enabling faster and more informed responses to security incidents. The integration has two main parts: first, URL detonation and enrichment, which provides detailed insights into suspicious URLs. Second, it automatically generates and feeds threat intelligence for all submissions to VMRay, improving threat detection and incident response in Sentinel. This seamless integration empowers teams to proactively address emerging threats.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -2176,7 +2602,3 @@
   ],
   "outputs": {}
 }
-
-
-
-
