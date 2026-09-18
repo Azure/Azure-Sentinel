@@ -1,0 +1,96 @@
+id: ea0f2cc5-9ee4-45b0-bc19-fdbdf37b4db4
+kind: Scheduled
+name: SAP - Security Audit Log Configuration Change
+description: |
+  Identifies changes for configuration in the Security Audit Log
+
+  Source Action: change any dynamic Security Audit Log Configuration using SM19/RSAU_CONFIG.(Filters/Status/Recording mode etc..).
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Exfiltration
+  - DefenseEvasion
+relevantTechniques: []
+query: |
+  // SAP - Security Audit Log Configuration Change
+  // !!!IMPORTANT!!!
+  // please make sure "Lookup data from the last" parameter is greater than a full user master data update cycle
+  // please keep "Lookup data from the last" to be 7 days to allow coverage of user master data required
+  // actual lookback is set by setting TimeAgo
+  let TimeAgo= 75m;
+  // Audit Log Classes - Audit Log Configuration Events
+  // determine which system roles are relevant for this alert
+  let SelectedSystemRoles =  dynamic(["Production", "UAT"]); //can also do// let SelectedSystemRoles =  dynamic(["All System Roles"]);
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage;
+  // here you can exclude system users which are OK to execute a configuration change
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'AuditLogConfigOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['AuditLogConfigOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  let AuditClasses = dynamic(['AUE', 'AUF', 'AUI', 'AUJ', 'FU0', 'E05', 'AUG']); // Relevant messages
+  // gather all audit log configuration changes
+  let ConfigChanges= materialize(SAPAuditLog
+  | where TimeGenerated > ago(TimeAgo)
+  | where MessageID in (AuditClasses)
+  | where SystemID in ((SelectedSystems | project SystemID))
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | project TimeGenerated, Instance, SystemID, User, MessageText, Email, TerminalIPv6, Host, MessageID, UpdatedOn_t);
+  let SystemRestarts= ConfigChanges | where MessageID == "AUG"
+  | distinct SystemID, Instance, Host, UpdatedOn_t;
+  ConfigChanges
+  // disregard changes that got applied when system restarted
+  | join kind =leftanti SystemRestarts on SystemID, Instance, Host, UpdatedOn_t
+  | lookup (SelectedSystems | project SystemID, SystemRole) on SystemID
+  | summarize FirstChangedOn=min(UpdatedOn_t), LastChangedOn=max(UpdatedOn_t), Events=make_set(MessageText), SystemRole=any(SystemRole) by SystemID, User, Email, TerminalIPv6, BinTime= bin(UpdatedOn_t,1h), Host, Instance
+  | extend AlertName= strcat("SAP audit log configuration change detected in a ", tolower(SystemRole)," system")
+  | extend Dummy= ""
+  | extend AlertRuleUniqueName = 'securityauditlogconfigurationchange'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    Identifies changes for configuration in the Security Audit Log
+
+    Source Action: change any dynamic Security Audit Log Configuration using SM19/RSAU_CONFIG.(Filters/Status/Recording mode etc..).
+
+    *Data Sources: SAPcon -  Audit Log*
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

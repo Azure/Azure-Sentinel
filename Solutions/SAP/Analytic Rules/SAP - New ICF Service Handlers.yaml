@@ -1,0 +1,64 @@
+id: 45ae0492-fe7d-4ba8-addd-ca984ea30bc1
+kind: Scheduled
+name: SAP - New ICF Service Handlers
+description: |
+  Identifies creation of ICF Handlers.
+  Source Action: Assign a new handler to a service using SICF.
+  *Data Sources: SAPcon - Table Data Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPTableDataLog
+      - SAPUsersHeader
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - LateralMovement
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  // New ICF Service Handlers
+  let TimeAgo= 2h;
+  SAPTableDataLog
+  | where TimeGenerated > ago(TimeAgo)
+  | where TableName == "ICFHANDLER"
+  | where TableField == "ICF_NAME" // Service name
+  | where OldValue == "" and NewValue != "" // New value is inserted in name -> new service
+  | order by TimeGenerated desc
+  | project-rename Service = NewValue
+  | lookup SAPUsersHeader() on SystemID, $left.UserName== $right.User
+  | extend TerminalIPv6= iff(isnotempty( LastKnownIP), LastKnownIP, PrimaryIP)
+  | project TimeGenerated, Service, PrimaryIP, PrimaryEmail, KnownIPs, KnownEmails, LastKnownIP, User= UserName, Host, SystemID, Client, Instance
+  | extend Dummy= ''
+  | extend AlertRuleUniqueName = 'newicfservicehandlers'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrimaryEmail
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: SAP - High - New Handlers for  ICF Service {{Service}} created
+    by {{User}} in System {{SystemID}}
+  alertDescriptionFormat: |
+    Identifies creation of ICF Handlers.
+    Source Action: Assign a new handler to a service using SICF.
+    *Data Sources: SAPcon - Table Data Log*
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

@@ -1,0 +1,66 @@
+Contentkind: Function
+Description: SAPSystems
+Function:
+  Title: SAPSystems
+  Version: 3.3.0
+  LastUpdated: '2025-02-16'
+Category: SAPFunctions
+FunctionName: SAPSystems
+FunctionParams:
+  - Name: SelectedSystems
+    Type: dynamic
+    Default: dynamic(["All Systems"])
+  - Name: SelectedSystemRoles
+    Type: dynamic
+    Default: dynamic(["All System Roles"])
+  - Name: SelectedSystemUsage
+    Type: dynamic
+    Default: dynamic(["All Usage Types"])
+FunctionQuery: |
+  // let SelectedSystems =  dynamic(["All Systems"]);//can also do:// let SelectedSystems =  dynamic(["S4P", "B4X", "ODT"]);
+  // let SelectedSystemRoles =  dynamic(["All System Roles"]); //can also do:let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  // let SelectedSystemUsage=  dynamic(["All Usage Types"]); //can also do// let SelectedSystemUsage =  dynamic(["ERP", "CRM"]);
+  let HearbeatTimeAgo = 1d;
+  let SystemRolesDictionary= dynamic({"UP":"Unknown (Production)", "AH":"Agent Heartbeat","P":"Production", "T": "Test", "C": "Customizing", "D": "Demo", "E": "Training/Education", "S": "SAP reference"});
+  let EmptySystems= datatable ( _DTItemId:string, LastUpdatedTimeUTC:datetime, TimeGenerated:datetime, system_id_s: string, SearchKey:string, SystemID:string , SystemRole: string, SystemUsage: string, Priority: int, sap_client_category_s:string, InterfaceAttributes: string )[];
+  // the 'SAP - Systems' watchlist allows for configuring attributes for each system
+  let SAPSystemsFromWL= _GetWatchlist('SAP - Systems')
+  | extend Priority= int(2)
+  | extend SearchKey= trim_start(@"^[ \t]+",trim_end(@"[ \t]+$",SearchKey))
+  | extend SystemID= SearchKey
+  | summarize arg_max(LastUpdatedTimeUTC, *) by SystemID
+  | extend SystemRole= trim_start(@"^[ \t]+",trim_end(@"[ \t]+$",SystemRole))
+  | extend SystemUsage= trim_start(@"^[ \t]+",trim_end(@"[ \t]+$",SystemUsage));
+  // As of agent version 64043801 from November 2022, the hearbeat sends the original system role from SAP
+  let SAPSystemsFromHeartbeat= SAP_HeartBeat_CL
+  | where TimeGenerated > ago(HearbeatTimeAgo)
+  | where system_id_s != "AGENT"
+  | union isfuzzy=true EmptySystems
+  | summarize arg_max(TimeGenerated, *) by system_id_s
+  | extend SystemID= substring(system_id_s,0,3)
+  | summarize arg_max(TimeGenerated, *) by SystemID
+  | order by SystemID
+  | extend SystemRoleCode= column_ifexists("sap_client_category_s","UP")
+  | extend SystemRoleCode= iff(bag_has_key(SystemRolesDictionary,SystemRoleCode), SystemRoleCode, "UP")
+  | extend SystemRole= tostring(SystemRolesDictionary[SystemRoleCode])
+  | project SearchKey= SystemID, Priority= int(0), SystemID, SystemRole;
+  let SAPSystemsFromAuditLog= SAPAuditLog
+  | where TimeGenerated > ago(HearbeatTimeAgo)
+  | distinct SystemID, ClientCategory
+  | extend Priority= int(0)
+  | union isfuzzy=true EmptySystems
+  | extend SystemRoleCode= iff(bag_has_key(SystemRolesDictionary,ClientCategory), ClientCategory, "UP")
+  | extend SystemRole= tostring(SystemRolesDictionary[SystemRoleCode])
+  | project SearchKey= SystemID, Priority= int(1), SystemID, SystemRole;
+  union isfuzzy=true EmptySystems, SAPSystemsFromWL, SAPSystemsFromHeartbeat, SAPSystemsFromAuditLog
+  // allow SystemRole to be controlled by the watchlist so users can set own system role (not the one coming from the hearbeat)
+  | summarize arg_max(Priority, SystemRole), arg_max(Priority, SystemUsage), arg_max(Priority, *)
+  by SystemID, SearchKey
+  | where SearchKey in (SelectedSystems) or tostring(SelectedSystems) contains 'All Systems'
+  | where SystemRole in (SelectedSystemRoles) or tostring(SelectedSystemRoles) contains 'All System Roles'
+  | where SystemUsage in (SelectedSystemUsage) or tostring(SelectedSystemUsage) contains 'All Usage Types'
+  | extend DummyJoinField = 1, SystemUsage=iff(isempty(SystemUsage), "Unknown", SystemUsage)
+  // set "Production" as default, just in case it cannot be inferred from data. This value is considered for analytics purposes only, and not billing purposes.
+  | extend SystemRole= iff(isempty(SystemRole), "Production", SystemRole), InterfaceAttributes
+  | project-away Priority*, LastUpdatedTimeUTC, TimeGenerate*, _DTItemId, *1
+  | where isnotempty( SystemID)

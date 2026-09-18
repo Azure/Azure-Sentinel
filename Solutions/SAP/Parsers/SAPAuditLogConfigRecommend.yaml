@@ -1,0 +1,84 @@
+Contentkind: Function
+Description: SAPAuditLogConfigRecommend
+Function:
+  Title: SAPAuditLogConfigRecommend
+  Version: 3.0.0
+  LastUpdated: '2023-11-17'
+Category: SAPFunctions
+FunctionName: SAPAuditLogConfigRecommend
+FunctionQuery: |
+  // This query aims to give configuration recommendations related to the handling of the anomaly detection rules
+  // performed on the SAP audit log
+  let LearningTime = 14d;
+  // get anomalies from the last 14 days
+  let MaterAnoms= materialize(SAPAuditLogAnomalies(DetectingTime= 0h, LearningTime= LearningTime));
+  let UserRolesProfiles= SAPUsersAssignments()
+  | summarize DirectRoles= make_set_if(DirectRoles, isnotempty( DirectRoles), 50) , ChildRoles= make_set_if(ChildRoles, isnotempty( ChildRoles),20), Profiles= make_set_if(Profiles, array_length(Profiles) > 0, 50) by User, SystemID, ClientID= Client
+  | extend Roles= array_concat(DirectRoles, ChildRoles);
+  // overview of all anomalies
+  let AnomalyCount= MaterAnoms
+      | summarize Count= count() * 1.00
+      | extend
+          Issue= strcat("Total Anomalies counted within the last ", format_timespan(LearningTime, 'd'), ' days'),
+          Recommendation= '',
+          Sort= 100;
+  // daily average
+  let DailyAnomalyCount= MaterAnoms
+      | summarize Count= count() * (1d / LearningTime)
+      | extend
+          Issue= iff(Count > 10, strcat("Daily average anomaly count of ", toint(Count), " is too high"), strcat("Expected daily incident count is ", toint(Count))),
+          Recommendation= 'Consider the recommendations below to further configure your SAP audit log alerting',
+          Sort= 90;
+  let NoiseThreshold= max_of(toscalar(DailyAnomalyCount
+      | project Count) / 10, 10);
+  //  Recommended tags to be added
+  let RecommendedTagsToAdd= MaterAnoms
+      | where isempty(RolesTagsToExclude)
+      | summarize Count= count() * 1.00 by MessageID
+      | where Count > NoiseThreshold
+      | extend
+          Issue= 'Noisey MessageIDs- add tags',
+          Recommendation= strcat("Create Tags for MessageID ", MessageID, " using the SAP_Dynamic_Audit_Log_Monitor_Configuration watchlist"),
+          Sort= 80;
+  // recommended users to assign with tags
+  let RecommendedTagsPerUser= MaterAnoms
+      | where isnotempty(RolesTagsToExclude) and tostring(RolesTagsToExclude)!= '["nan"]'
+      | summarize
+          Count= count() * 1.00,
+          Values= make_set_if(RolesTagsToExclude, isnotempty(RolesTagsToExclude) or tostring(RolesTagsToExclude)!= '["nan"]', 50)
+          by User
+      | where Count > NoiseThreshold
+      | extend
+          Issue= 'Noisey Users',
+          Recommendation= strcat("Add the tags ", tostring(Values), " to user ", User, " using the SAP_User_Config watchlist"),
+          Sort= 70;
+  // recommended profiles to add to Message IDs
+  let RecommendedProfilesToAdd= MaterAnoms
+      | join kind= inner UserRolesProfiles on User, SystemID, ClientID
+      | where array_length(Profiles) > 0
+      | summarize
+          Count= count() * 1.00,
+          Values= make_set(Profiles, 50)
+          by MessageID
+      | where Count > NoiseThreshold
+      | extend
+          Issue= 'Noisey MessageIDs- add profiles',
+          Recommendation= strcat("Add the Profiles ", tostring(Values)," as RolesTagsToExclude next to MessageID  ", MessageID, " in the SAP_Dynamic_Audit_Log_Monitor_Configuration watchlist"),
+          Sort= 60;
+  // recommended Roles to add to Message IDs
+  let RecommendedRolesToAdd= MaterAnoms
+      | join kind= inner UserRolesProfiles on User, SystemID, ClientID
+      | where array_length(Roles) > 0
+      | summarize
+          Count= count() * 1.00,
+          Values= make_set(Roles, 50)
+          by MessageID
+      | where Count > NoiseThreshold
+      | extend
+          Issue= 'Noisey MessageIDs- add roles',
+          Recommendation= strcat("Add the Roles ", tostring(Values)," as RolesTagsToExclude next to MessageID ", MessageID, " in the SAP_Dynamic_Audit_Log_Monitor_Configuration watchlist"),
+          Sort= 50;
+  // query
+  union AnomalyCount, DailyAnomalyCount, RecommendedTagsPerUser, RecommendedTagsToAdd, RecommendedProfilesToAdd, RecommendedRolesToAdd
+  | order by Sort, Count desc
+  | project IncidentCount= toint(Count), Issue, Recommendation
