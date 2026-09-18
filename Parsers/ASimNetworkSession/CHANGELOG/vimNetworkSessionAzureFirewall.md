@@ -2,7 +2,7 @@
 
 ## Version 0.2.1
 
-- (2026-09-18) Use column_ifexists for msg_s in the legacy AzureDiagnostics branch to prevent failures when msg_s is absent
+- (2026-09-18) Use column_ifexists for msg_s in the legacy AzureDiagnostics branch to prevent failures when msg_s is absent - [PR #15159](https://github.com/Azure/Azure-Sentinel/pull/15159/)
 
 ## Version 0.2.0
 
