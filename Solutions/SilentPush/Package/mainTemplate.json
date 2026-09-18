@@ -27,24 +27,45 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "email": "support@silentpush.com",
     "_email": "[variables('email')]",
     "_solutionName": "SilentPush",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.1.0",
     "solutionId": "silentpushinc1618175309468.azure-sentinel-solution-silentpush",
     "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.1.0",
+    "_dataConnectorContentIdConnectorDefinition1": "SilentPushFeedsConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "SilentPushFeedsConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "TemplateEmptyObject": "[json('{}')]",
     "SilentPushCustomConnector": "SilentPushCustomConnector",
     "_SilentPushCustomConnector": "[variables('SilentPushCustomConnector')]",
     "TemplateEmptyArray": "[json('[]')]",
-    "blanks": "[replace('b', 'b', '')]",
     "playbookVersion1": "1.0",
     "playbookContentId1": "SilentPushCustomConnector",
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-lc-',uniquestring(variables('_playbookContentId1'))))]",
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','lc','-', uniqueString(concat(variables('_solutionId'),'-','LogicAppsCustomConnector','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "SilentPush-IPExportEnrichment-Sample": "SilentPush-IPExportEnrichment-Sample",
     "_SilentPush-IPExportEnrichment-Sample": "[variables('SilentPush-IPExportEnrichment-Sample')]",
@@ -84,13 +105,1118 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "SilentPush Feeds",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "SilentPushFeedsConnectorDefinition",
+                  "title": "SilentPush Feeds",
+                  "publisher": "Silent Push",
+                  "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead.",
+                  "graphQueriesTableName": "SLP_Feeds_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "events received",
+                      "legend": "Silent Push Feeds events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Silent Push Feeds events",
+                      "query": "{{graphQueriesTableName}} \n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated) \n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Silent Push API access",
+                        "description": "sign up to https://app.silentpush.com"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect to Silent Push and collect feed",
+                      "description": "In order to start collecting Silent Push feeds, please provide the required information below. Note: the feed you select must export as a CSV file with a header row (e.g. an *_enriched.csv export) -- headerless plaintext indicator lists (e.g. *_ips.txt, *_domains.txt) are not supported here, use the SilentPush Export Enrichment playbooks for those instead.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API key",
+                            "placeholder": "YOUR-SILENT-PUSH-API-KEY",
+                            "type": "password",
+                            "name": "apikey",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Data source",
+                            "placeholder": "organization-exports",
+                            "type": "text",
+                            "name": "datasource"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Feed file name",
+                            "placeholder": "e.g. 01234567-0123-4567-8901-012345678901_enriched.csv",
+                            "type": "text",
+                            "name": "feedname",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectButtonLabel": "Connect",
+                            "disconnectButtonLabel": "Disconnect"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "version": "1.0.0",
+                    "kind": "dataConnector"
+                  }
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "SilentPush",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "SilentPush",
+                  "email": "support@silentpush.com",
+                  "tier": "Partner",
+                  "link": "https://www.silentpush.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "slpDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-SLP_Feeds_CL": {
+                    "columns": [
+                      {
+                        "name": "indicator",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IndicatorType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "feed",
+                        "type": "string"
+                      },
+                      {
+                        "name": "vendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sp_risk_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "density",
+                        "type": "string"
+                      },
+                      {
+                        "name": "tags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asn",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domaininfo.whois_created_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "feed_scope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "feed_category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "subnet",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_ptr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ipv4",
+                        "type": "string"
+                      },
+                      {
+                        "name": "subnet_allocation_age",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asn_allocation_age",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domaininfo.registrar",
+                        "type": "string"
+                      },
+                      {
+                        "name": "nameservers.density",
+                        "type": "string"
+                      },
+                      {
+                        "name": "nameservers.nameserver",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domaininfo.zone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_flags.vpn_tags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_flags.proxy_tags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_flags.is_proxy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_flags.is_vpn",
+                        "type": "string"
+                      },
+                      {
+                        "name": "datasource",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_reputation_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "feed_frequency",
+                        "type": "string"
+                      },
+                      {
+                        "name": "nameservers_tags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host",
+                        "type": "string"
+                      },
+                      {
+                        "name": "subdomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_diversity.ip_diversity_groups",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_diversity.ip_diversity_all",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_diversity.asn_diversity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_urls.results_summary.tranco_rank",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domaininfo.whois_age",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domaininfo.age",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ns_reputation.ns_reputation_max",
+                        "type": "string"
+                      },
+                      {
+                        "name": "nschanges.results_summary.ns_entropy_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ns_reputation.is_parked",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_urls.results_summary.is_url_shortener",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_urls.results_summary.is_dynamic_domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_urls.results_summary.tranco_top10k",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_location.country_code",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asn_takedown_reputation_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "subnet_reputation_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "asn_reputation_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "benign_info.known_benign",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sinkhole_info.known_sinkhole_ip",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_is_dsl_dynamic",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_is_tor_exit_node",
+                        "type": "string"
+                      },
+                      {
+                        "name": "listing_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "last_seen_on",
+                        "type": "string"
+                      },
+                      {
+                        "name": "indicator_hash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "uuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_location.continent_code",
+                        "type": "string"
+                      },
+                      {
+                        "name": "first_seen_on",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "dataSources": "[variables('TemplateEmptyObject')]",
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "silentpush_workspace_destination"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-SLP_Feeds_CL"
+                    ],
+                    "destinations": [
+                      "silentpush_workspace_destination"
+                    ],
+                    "transformKql": "source\n| extend TimeGenerated = iff(isnotempty(first_seen_on), todatetime(first_seen_on), now())\n| project TimeGenerated, indicator, IndicatorType = ['type'], feed, vendor, sp_risk_score, density, tags, asn, domaininfo_whois_created_date = ['domaininfo.whois_created_date'], feed_scope, feed_category, subnet, ip_ptr, asname, ipv4, subnet_allocation_age, asn_allocation_age, domaininfo_registrar = ['domaininfo.registrar'], nameservers_density = ['nameservers.density'], nameservers_nameserver = ['nameservers.nameserver'], domaininfo_zone = ['domaininfo.zone'], ip_flags_vpn_tags = ['ip_flags.vpn_tags'], ip_flags_proxy_tags = ['ip_flags.proxy_tags'], ip_flags_is_proxy = ['ip_flags.is_proxy'], ip_flags_is_vpn = ['ip_flags.is_vpn'], datasource, ip_reputation_score, feed_frequency, nameservers_tags, host, subdomain, domain, ip_diversity_ip_diversity_groups = ['ip_diversity.ip_diversity_groups'], ip_diversity_ip_diversity_all = ['ip_diversity.ip_diversity_all'], ip_diversity_asn_diversity = ['ip_diversity.asn_diversity'], domain_urls_results_summary_tranco_rank = ['domain_urls.results_summary.tranco_rank'], domaininfo_whois_age = ['domaininfo.whois_age'], domaininfo_age = ['domaininfo.age'], ns_reputation_ns_reputation_max = ['ns_reputation.ns_reputation_max'], nschanges_results_summary_ns_entropy_score = ['nschanges.results_summary.ns_entropy_score'], ns_reputation_is_parked = ['ns_reputation.is_parked'], domain_urls_results_summary_is_url_shortener = ['domain_urls.results_summary.is_url_shortener'], domain_urls_results_summary_is_dynamic_domain = ['domain_urls.results_summary.is_dynamic_domain'], domain_urls_results_summary_tranco_top10k = ['domain_urls.results_summary.tranco_top10k'], ip_location_country_code = ['ip_location.country_code'], asn_takedown_reputation_score, subnet_reputation_score, asn_reputation_score, benign_info_known_benign = ['benign_info.known_benign'], sinkhole_info_known_sinkhole_ip = ['sinkhole_info.known_sinkhole_ip'], ip_is_dsl_dynamic, ip_is_tor_exit_node, listing_score, last_seen_on, indicator_hash, uuid, ip_location_continent_code = ['ip_location.continent_code']",
+                    "outputStream": "Custom-SLP_Feeds_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'), '/SLP_Feeds_CL')]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "totalRetentionInDays": 30,
+                "archiveRetentionInDays": 0,
+                "plan": "Analytics",
+                "schema": {
+                  "tableSubType": "DataCollectionRuleBased",
+                  "name": "SLP_Feeds_CL",
+                  "tableType": "CustomLog",
+                  "description": "Silent Push Feeds enriched threat intelligence indicators",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "indicator",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "IndicatorType",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "feed",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "vendor",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "sp_risk_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "density",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "tags",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "asn",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domaininfo_whois_created_date",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "feed_scope",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "feed_category",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "subnet",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_ptr",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "asname",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ipv4",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "subnet_allocation_age",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "asn_allocation_age",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domaininfo_registrar",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "nameservers_density",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "nameservers_nameserver",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domaininfo_zone",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_flags_vpn_tags",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_flags_proxy_tags",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_flags_is_proxy",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_flags_is_vpn",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "datasource",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_reputation_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "feed_frequency",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "nameservers_tags",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "host",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "subdomain",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domain",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_diversity_ip_diversity_groups",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_diversity_ip_diversity_all",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_diversity_asn_diversity",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domain_urls_results_summary_tranco_rank",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domaininfo_whois_age",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domaininfo_age",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ns_reputation_ns_reputation_max",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "nschanges_results_summary_ns_entropy_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ns_reputation_is_parked",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domain_urls_results_summary_is_url_shortener",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domain_urls_results_summary_is_dynamic_domain",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "domain_urls_results_summary_tranco_top10k",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_location_country_code",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "asn_takedown_reputation_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "subnet_reputation_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "asn_reputation_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "benign_info_known_benign",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "sinkhole_info_known_sinkhole_ip",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_is_dsl_dynamic",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_is_tor_exit_node",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "listing_score",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "last_seen_on",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "indicator_hash",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "uuid",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ip_location_continent_code",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    }
+                  ],
+                  "standardColumns": [
+                    {
+                      "name": "TenantId",
+                      "type": "guid",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "SilentPushFeedsConnectorDefinition",
+          "title": "SilentPush Feeds",
+          "publisher": "Silent Push",
+          "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead.",
+          "graphQueriesTableName": "SLP_Feeds_CL",
+          "graphQueries": [
+            {
+              "metricName": "events received",
+              "legend": "Silent Push Feeds events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Silent Push Feeds events",
+              "query": "{{graphQueriesTableName}} \n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated) \n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Silent Push API access",
+                "description": "sign up to https://app.silentpush.com"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect to Silent Push and collect feed",
+              "description": "In order to start collecting Silent Push feeds, please provide the required information below. Note: the feed you select must export as a CSV file with a header row (e.g. an *_enriched.csv export) -- headerless plaintext indicator lists (e.g. *_ips.txt, *_domains.txt) are not supported here, use the SilentPush Export Enrichment playbooks for those instead.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API key",
+                    "placeholder": "YOUR-SILENT-PUSH-API-KEY",
+                    "type": "password",
+                    "name": "apikey",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Data source",
+                    "placeholder": "organization-exports",
+                    "type": "text",
+                    "name": "datasource"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Feed file name",
+                    "placeholder": "e.g. 01234567-0123-4567-8901-012345678901_enriched.csv",
+                    "type": "text",
+                    "name": "feedname",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectButtonLabel": "Connect",
+                    "disconnectButtonLabel": "Disconnect"
+                  }
+                }
+              ]
+            }
+          ],
+          "metadata": {
+            "version": "1.0.0",
+            "kind": "dataConnector"
+          }
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "SilentPush",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "SilentPush",
+          "email": "support@silentpush.com",
+          "tier": "Partner",
+          "link": "https://www.silentpush.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "SilentPush Feeds",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "SilentPush Feeds",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apikey": {
+              "defaultValue": "apikey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "datasource": {
+              "defaultValue": "datasource",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "feedname": {
+              "defaultValue": "feedname",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "SilentPush",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "SilentPush",
+                  "email": "support@silentpush.com",
+                  "tier": "Partner",
+                  "link": "https://www.silentpush.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'SilentPushFeeds', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "SilentPushFeedsConnectorDefinition",
+                "dataType": "SLP_Feeds_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-SLP_Feeds_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKeyName": "x-api-key",
+                  "ApiKey": "[[parameters('apikey')]"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.silentpush.com/api/v1/export/',parameters('datasource'),'/',parameters('feedname'),'/')]",
+                  "httpMethod": "GET",
+                  "headers": {
+                    "User-Agent": "Microsoft/Sentinel (Data Connector)"
+                  },
+                  "timeoutInSeconds": 120,
+                  "retryCount": 2
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "csv",
+                  "HasCsvHeader": true
+                },
+                "isActive": true
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('playbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPushCustomConnector Playbook with template version 3.0.0",
+        "description": "SilentPushCustomConnector Playbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -5108,7 +6234,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-IPExportEnrichment-Sample Playbook with template version 3.0.0",
+        "description": "SilentPush-IPExportEnrichment-Sample Playbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -5284,7 +6410,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -5363,7 +6489,7 @@
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
               "4. Click Save"
             ],
-            "lastUpdateTime": "2026-09-14T10:39:23.401Z",
+            "lastUpdateTime": "2026-09-18T16:36:10.481Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -5395,7 +6521,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-IPExportEnrichment-Full Playbook with template version 3.0.0",
+        "description": "SilentPush-IPExportEnrichment-Full Playbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -5428,7 +6554,7 @@
             "silentPushApiId": "[[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
             "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
             "SentinelContributorRoleId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]",
-            "maxExportSizeBytes": "20000000",
+            "maxExportSizeChars": "20000000",
             "batchSizeLines": "100",
             "connection-1": "[[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
             "_connection-1": "[[variables('connection-1')]",
@@ -5489,9 +6615,9 @@
                     "$connections": {
                       "type": "Object"
                     },
-                    "maxExportSizeBytes": {
+                    "maxExportSizeChars": {
                       "type": "Int",
-                      "defaultValue": "[[int(variables('maxExportSizeBytes'))]"
+                      "defaultValue": "[[int(variables('maxExportSizeChars'))]"
                     },
                     "batchSizeLines": {
                       "type": "Int",
@@ -5571,7 +6697,7 @@
                                   "Succeeded"
                                 ]
                               },
-                              "expression": "@less(outputs('Get_Export_Total_Size'), add(parameters('maxExportSizeBytes'), 1))",
+                              "expression": "@less(outputs('Get_Export_Total_Size'), add(div(mul(parameters('maxExportSizeChars'), 9), 10), 1))",
                               "actions": {
                                 "Get_Lines": {
                                   "type": "Compose",
@@ -5750,7 +6876,7 @@
                                       "runStatus": "Failed",
                                       "error": {
                                         "code": "ExportTooLarge",
-                                        "message": "@concat('Silent Push IOFA IP export exceeded the maximum supported download size (', string(parameters('maxExportSizeBytes')), ' bytes). The export was not processed to avoid excessive run duration/cost.')"
+                                        "message": "@concat('Silent Push IOFA IP export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). The export was not processed to avoid excessive run duration/cost.')"
                                       }
                                     }
                                   }
@@ -5766,7 +6892,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -5869,7 +6995,7 @@
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
               "4. Click Save"
             ],
-            "lastUpdateTime": "2026-09-14T10:39:24.871Z",
+            "lastUpdateTime": "2026-09-18T16:36:12.335Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -5901,7 +7027,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-DomainExportEnrichment-Sample Playbook with template version 3.0.0",
+        "description": "SilentPush-DomainExportEnrichment-Sample Playbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -6077,7 +7203,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -6156,7 +7282,7 @@
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
               "4. Click Save"
             ],
-            "lastUpdateTime": "2026-09-14T10:39:25.284Z",
+            "lastUpdateTime": "2026-09-18T16:36:12.906Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -6188,7 +7314,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-DomainExportEnrichment-Full Playbook with template version 3.0.0",
+        "description": "SilentPush-DomainExportEnrichment-Full Playbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion5')]",
@@ -6221,7 +7347,7 @@
             "silentPushApiId": "[[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
             "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
             "SentinelContributorRoleId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]",
-            "maxExportSizeBytes": "20000000",
+            "maxExportSizeChars": "20000000",
             "batchSizeLines": "100",
             "connection-1": "[[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
             "_connection-1": "[[variables('connection-1')]",
@@ -6282,9 +7408,9 @@
                     "$connections": {
                       "type": "Object"
                     },
-                    "maxExportSizeBytes": {
+                    "maxExportSizeChars": {
                       "type": "Int",
-                      "defaultValue": "[[int(variables('maxExportSizeBytes'))]"
+                      "defaultValue": "[[int(variables('maxExportSizeChars'))]"
                     },
                     "batchSizeLines": {
                       "type": "Int",
@@ -6364,7 +7490,7 @@
                                   "Succeeded"
                                 ]
                               },
-                              "expression": "@less(outputs('Get_Export_Total_Size'), add(parameters('maxExportSizeBytes'), 1))",
+                              "expression": "@less(outputs('Get_Export_Total_Size'), add(div(mul(parameters('maxExportSizeChars'), 9), 10), 1))",
                               "actions": {
                                 "Get_Lines": {
                                   "type": "Compose",
@@ -6526,7 +7652,7 @@
                                       "runStatus": "Failed",
                                       "error": {
                                         "code": "ExportTooLarge",
-                                        "message": "@concat('Silent Push IOFA domain export exceeded the maximum supported download size (', string(parameters('maxExportSizeBytes')), ' bytes). Actual export size: ', string(outputs('Get_Export_Total_Size')), ' bytes. The export was not processed to avoid excessive run duration/cost. Consider running this playbook more frequently to keep exports smaller, or contact Silent Push support if this volume is expected.')"
+                                        "message": "@concat('Silent Push IOFA domain export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). Actual export size: ', string(outputs('Get_Export_Total_Size')), ' characters. The export was not processed to avoid excessive run duration/cost. Consider running this playbook more frequently to keep exports smaller, or contact Silent Push support if this volume is expected.')"
                                       }
                                     }
                                   }
@@ -6542,7 +7668,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host silentpush-feeds.s3.amazonaws.com - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -6645,7 +7771,7 @@
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
               "4. Click Save"
             ],
-            "lastUpdateTime": "2026-09-14T10:39:26.627Z",
+            "lastUpdateTime": "2026-09-18T16:36:14.507Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -6673,12 +7799,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.1.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "SilentPush",
         "publisherDisplayName": "SilentPush",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Silent Push platform focuses on proactive threat intelligence and threat hunting. It offers a comprehensive view of global internet-facing infrastructure, helping organizations detect and counteract cyber threats before they manifest.</p>\n<p><strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Playbooks:</strong> 4</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Silent Push platform focuses on proactive threat intelligence and threat hunting. It offers a comprehensive view of global internet-facing infrastructure, helping organizations detect and counteract cyber threats before they manifest.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Playbooks:</strong> 4</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -6703,6 +7829,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
             {
               "kind": "LogicAppsCustomConnector",
               "contentId": "[variables('_SilentPushCustomConnector')]",
@@ -6731,7 +7862,7 @@
           ]
         },
         "firstPublishDate": "2026-08-20",
-        "lastPublishDate": "2026-08-20",
+        "lastPublishDate": "2026-09-16",
         "providers": [
           "SilentPush"
         ],
