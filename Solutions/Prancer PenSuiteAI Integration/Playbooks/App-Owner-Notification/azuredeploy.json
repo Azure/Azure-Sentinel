@@ -1,0 +1,325 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Prancer-AppOwner-Notification",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook resource."
+      }
+    },
+    "Location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the Logic App and its API connections. Required (no default) since this playbook is nested inside the packaged solution's mainTemplate.json, where a resource-group-derived default would fall outside the range ARM-TTK's Location check recognizes as exempt."
+      }
+    },
+    "OwnerLookupApiUrl": {
+      "type": "string",
+      "defaultValue": "https://REPLACE-ME.example.com/api/owner-lookup",
+      "metadata": {
+        "description": "PLACEHOLDER endpoint for a customer-provided ConfigId-to-owner mapping data source. This is NOT a Prancer-hosted service; the customer must supply an endpoint (or swap this HTTP action for a lookup against their own CMDB/watchlist) that accepts ?configId=<ConfigId> and returns { \"ownerEmail\": \"...\", \"ownerDisplayName\": \"...\" }."
+      }
+    },
+    "OwnerLookupApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PLACEHOLDER API key/token for the owner-lookup endpoint, supplied at deployment time. Never hardcode this value in source control."
+      }
+    },
+    "FallbackNotificationRecipient": {
+      "type": "string",
+      "defaultValue": "secops-oncall@REPLACE-ME.example.com",
+      "metadata": {
+        "description": "Recipient used when no owner can be resolved for the ConfigId."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[parameters('Location')]",
+      "properties": {
+        "displayName": "[variables('Office365ConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('Location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "PrancerAppOwnerNotification",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkflowTrustClass": "fully-autonomous-read-only"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "OwnerLookupApiUrl": {
+              "type": "String",
+              "defaultValue": "[parameters('OwnerLookupApiUrl')]"
+            },
+            "OwnerLookupApiKey": {
+              "type": "SecureString",
+              "defaultValue": "[parameters('OwnerLookupApiKey')]"
+            },
+            "FallbackNotificationRecipient": {
+              "type": "String",
+              "defaultValue": "[parameters('FallbackNotificationRecipient')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident_trigger": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_ConfigId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ConfigId",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Config_ID'], '')}"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_Severity": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Severity",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium')}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_ConfigId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Compute_SLA_deadline_by_severity": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SlaDeadlineUtc",
+                    "type": "string",
+                    "value": "@{if(equals(variables('Severity'), 'Critical'), addHours(utcNow(), 24), if(equals(variables('Severity'), 'High'), addHours(utcNow(), 72), if(equals(variables('Severity'), 'Medium'), addDays(utcNow(), 7), addDays(utcNow(), 14))))}"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_Severity": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "ConfigId_present": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('ConfigId')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Lookup_app_owner_via_HTTP_(customer-provided_endpoint)": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{concat(parameters('OwnerLookupApiUrl'), '?configId=', variables('ConfigId'))}",
+                    "headers": {
+                      "Authorization": "Bearer @{parameters('OwnerLookupApiKey')}"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Parse_owner_lookup_response": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Lookup_app_owner_via_HTTP_(customer-provided_endpoint)')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "ownerEmail": {
+                          "type": "string"
+                        },
+                        "ownerDisplayName": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Lookup_app_owner_via_HTTP_(customer-provided_endpoint)": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Send_owner_notification_email_(V2)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "To": "@{coalesce(body('Parse_owner_lookup_response')?['ownerEmail'], parameters('FallbackNotificationRecipient'))}",
+                      "Subject": "[Prancer] Action required by @{variables('SlaDeadlineUtc')} - @{triggerBody()?['object']?['properties']?['title']}",
+                      "Body": "<p>A new finding was matched to ConfigId <b>@{variables('ConfigId')}</b>, assigned to @{coalesce(body('Parse_owner_lookup_response')?['ownerDisplayName'], 'unassigned - notified fallback recipient')}.</p><p><b>Title:</b> @{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Name'], triggerBody()?['object']?['properties']?['title'])}<br/><b>Severity:</b> @{variables('Severity')}<br/><b>Resource URL:</b> @{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['URL'], '')}<br/><b>Solution:</b> @{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['Solution'], '')}</p><p><b>SLA deadline (by severity):</b> @{variables('SlaDeadlineUtc')}</p>",
+                      "Importance": "@{if(equals(variables('Severity'), 'Critical'), 'High', 'Normal')}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/v2/Mail"
+                  },
+                  "runAfter": {
+                    "Parse_owner_lookup_response": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Add_SLA_comment_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@{triggerBody()?['object']?['id']}",
+                      "message": "App-owner notification sent to @{coalesce(body('Parse_owner_lookup_response')?['ownerEmail'], parameters('FallbackNotificationRecipient'))} for ConfigId @{variables('ConfigId')}. SLA deadline: @{variables('SlaDeadlineUtc')} (severity: @{variables('Severity')})."
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Send_owner_notification_email_(V2)": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Add_no_ConfigId_comment_to_incident_(V3)": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@{triggerBody()?['object']?['id']}",
+                        "message": "No Config_ID custom detail was present on this incident; app-owner lookup and notification skipped."
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    },
+                    "runAfter": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Compute_SLA_deadline_by_severity": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/azuresentinel')]"
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "connectionName": "[variables('Office365ConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/office365')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}

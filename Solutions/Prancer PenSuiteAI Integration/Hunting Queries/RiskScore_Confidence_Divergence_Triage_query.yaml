@@ -1,0 +1,49 @@
+id: c4966f06-d4a5-4c9c-b94d-693ec951d853
+name: RiskScore/Confidence divergence triage queue
+description: |
+  Surfaces SwarmHack findings where RiskScore and Confidence disagree: high RiskScore with low Confidence
+  needs manual verification before it's trusted, while low RiskScore with high Confidence may be
+  systematically underrated. A calibration-monitoring query that only makes sense because SwarmHack has
+  two independent confidence axes to diverge - no competitor in this space has both.
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1592
+query: |
+  // DeviceProduct == 'swarmhack' and isnotempty(RiskScore)/isnotempty(Confidence) run before the
+  // divergence-category classification and DivergenceScore computation.
+  let HighRiskThreshold = 7.0;
+  let LowRiskThreshold = 3.0;
+  let LowConfidenceThreshold = 0.4;
+  let HighConfidenceThreshold = 0.75;
+  PrancerFindings
+  | where DeviceProduct == 'swarmhack'
+  | where isnotempty(RiskScore) and isnotempty(Confidence)
+  | extend DivergenceCategory = case(
+      RiskScore >= HighRiskThreshold and Confidence <= LowConfidenceThreshold, 'high_risk_low_confidence_needs_verification',
+      RiskScore <= LowRiskThreshold and Confidence >= HighConfidenceThreshold, 'low_risk_high_confidence_may_be_underrated',
+      'aligned')
+  | where DivergenceCategory != 'aligned'
+  | extend DivergenceScore = round(abs((RiskScore / 10.0) - Confidence), 3)
+  | project
+      FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, RiskScore, Confidence,
+      DivergenceCategory, DivergenceScore, KillChain, CrownJewels, ResourceID, ResourceUrl, TimeGenerated
+  | order by DivergenceScore desc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
+customDetails:
+  FindingId: FindingId
+  DivergenceCategory: DivergenceCategory
+  DivergenceScore: DivergenceScore
+version: 1.0.0

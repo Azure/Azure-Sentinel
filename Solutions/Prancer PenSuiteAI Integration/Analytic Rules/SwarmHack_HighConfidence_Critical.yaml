@@ -1,0 +1,77 @@
+id: ba3ab960-eb0b-48fb-a28c-75e36df7b4d0
+name: SwarmHack High Confidence Critical Findings From Prancer
+description: |
+  'Confidence-weighted suppression rule for SwarmHack (Prancer's AI-driven autonomous adversarial pentesting engine) findings: surfaces only findings where both independent scoring signals agree the finding is real and severe (RiskScore >= 7.0 and Confidence >= 0.75), rather than alerting on RiskScore alone. Uses RiskScore/Confidence/KillChain/CrownJewels - the four PrancerFindings_CL columns populated exclusively by SwarmHack and otherwise unused by the rest of this package.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  // Confidence-weighted suppression: only surface SwarmHack findings where the risk score
+  // AND the model's confidence in that score both clear a high bar, rather than acting on
+  // RiskScore alone. This is a capability no confidence-less competitor schema can replicate.
+  PrancerFindings
+  | where ScanType == 'swarmhack'
+  | where RiskScore >= 7.0 and Confidence >= 0.75
+  | project
+      Finding_ID = FindingId,
+      Name = Title,
+      Severity,
+      Risk_Score = RiskScore,
+      Confidence,
+      Kill_Chain = KillChain,
+      Crown_Jewels = CrownJewels,
+      URL = ResourceUrl,
+      Resource = ResourceID,
+      Company = CompanyName,
+      Config_ID = ConfigId,
+      Solution = AlertSolution
+customDetails:
+  UniqueFindingId: Finding_ID
+  Risk_Score: Risk_Score
+  Confidence: Confidence
+  Kill_Chain: Kill_Chain
+  Crown_Jewels: Crown_Jewels
+  URL: URL
+  Solution: Solution
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: Resource
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URL
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{Name}} (RiskScore {{Risk_Score}}, Confidence {{Confidence}})"
+  alertDescriptionFormat: "{{Name}} - kill chain: {{Kill_Chain}} - crown jewels: {{Crown_Jewels}}"
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: RemediationSteps
+      value: Solution
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+version: 1.0.0
+kind: Scheduled
