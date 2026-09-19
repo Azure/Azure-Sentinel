@@ -51,7 +51,7 @@
     "API_Base_URL": {
       "type": "String",
       "metadata": {
-        "description": "Base URL of the Check Point Exposure Management API (e.g. https://app.cyberint.io)"
+        "description": "Check Point Exposure Management tenant URL, the same value as the data connector's Argos URL (e.g. https://your_tenant.cyberint.io). Any path is ignored; /alert is added automatically."
       }
     },
     "API_Access_Token": {
@@ -164,9 +164,13 @@
               "type": "Compose",
               "inputs": {
                 "TruePositive": "resolved",
-                "FalsePositive": "false_positive",
                 "BenignPositive": "no_longer_a_threat",
-                "Undetermined": "other"
+                "FalsePositive": "false_positive",
+                "Undetermined": "other",
+                "BenignPositive|SuspiciousActivity": "no_longer_a_threat",
+                "BenignPositive|SuspiciousButExpected": "no_longer_a_threat",
+                "FalsePositive|IncorrectAlertLogic": "false_positive",
+                "FalsePositive|InaccurateData": "irrelevant_alert_subtype"
               },
               "runAfter": {
                 "Initialize_variable_-_AlertRefId": [
@@ -176,7 +180,7 @@
             },
             "Set_ArgosStatus": {
               "type": "Compose",
-              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), 'closed', 'open')",
+              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), 'closed', if(equals(triggerBody()?['object']?['properties']?['status'], 'Active'), 'acknowledged', 'open'))",
               "runAfter": {
                 "Compose_classification_mapping": [
                   "Succeeded"
@@ -185,7 +189,7 @@
             },
             "Set_ArgosClosureReason": {
               "type": "Compose",
-              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), coalesce(outputs('Compose_classification_mapping')?[triggerBody()?['object']?['properties']?['classification']], 'other'), '')",
+              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), coalesce(outputs('Compose_classification_mapping')?[concat(coalesce(triggerBody()?['object']?['properties']?['classification'], ''), '|', coalesce(triggerBody()?['object']?['properties']?['classificationReason'], ''))], outputs('Compose_classification_mapping')?[coalesce(triggerBody()?['object']?['properties']?['classification'], '')], 'other'), '')",
               "runAfter": {
                 "Set_ArgosStatus": [
                   "Succeeded"
@@ -209,7 +213,7 @@
                   "type": "SetVariable",
                   "inputs": {
                     "name": "AlertRefId",
-                    "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                    "value": "@{json(items('For_each_alert')?['properties']?['additionalData']?['Custom Details'])?['ref_id']?[0]}"
                   },
                   "runAfter": {}
                 },
@@ -217,7 +221,7 @@
                   "type": "Http",
                   "inputs": {
                     "method": "PUT",
-                    "uri": "@{parameters('API_Base_URL')}/api/v1/alerts/@{encodeURIComponent(variables('AlertRefId'))}",
+                    "uri": "@{concat(uriScheme(parameters('API_Base_URL')), '://', uriHost(parameters('API_Base_URL')))}/alert/api/v1/alerts/status",
                     "headers": {
                       "Content-Type": "application/json",
                       "Accept": "application/json",
@@ -226,9 +230,10 @@
                       "X-Integration-Version": "1.0"
                     },
                     "body": {
-                      "status": "@{outputs('Set_ArgosStatus')}",
-                      "closure_reason": "@{outputs('Set_ArgosClosureReason')}",
-                      "closure_reason_description": "@{if(equals(outputs('Set_ArgosClosureReason'), 'other'), 'Closed in Microsoft Sentinel', null)}"
+                      "alert_ref_ids": [
+                        "@{variables('AlertRefId')}"
+                      ],
+                      "data": "@if(not(equals(outputs('Set_ArgosStatus'), 'closed')), addProperty(json('{}'), 'status', outputs('Set_ArgosStatus')), if(equals(outputs('Set_ArgosClosureReason'), 'other'), addProperty(addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', 'other'), 'closure_reason_description', if(empty(coalesce(triggerBody()?['object']?['properties']?['classificationComment'], '')), 'undetermined', substring(triggerBody()?['object']?['properties']?['classificationComment'], 0, min(length(triggerBody()?['object']?['properties']?['classificationComment']), 255)))), addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', outputs('Set_ArgosClosureReason'))))"
                     }
                   },
                   "runAfter": {
@@ -268,7 +273,7 @@
                 "method": "post",
                 "body": {
                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                  "message": "<p><strong>CPEM Manual Status Update:</strong><br>Sentinel Status: @{triggerBody()?['object']?['properties']?['status']}<br>Argos Status: @{outputs('Set_ArgosStatus')}<br>Closure Reason: @{outputs('Set_ArgosClosureReason')}<br><br>Results:<br>@{variables('SyncResults')}</p>"
+                  "message": "<p><strong>CPEM Manual Status Update:</strong><br>Microsoft Sentinel Status: @{triggerBody()?['object']?['properties']?['status']}<br>Argos Status: @{outputs('Set_ArgosStatus')}<br>Closure Reason: @{outputs('Set_ArgosClosureReason')}<br><br>Results:<br>@{variables('SyncResults')}</p>"
                 },
                 "path": "/Incidents/Comment"
               },

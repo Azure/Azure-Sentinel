@@ -1,0 +1,281 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Check Point Exposure Management - Inbound Status Sync (Argos \u2192 Microsoft Sentinel)",
+    "description": "Runs on a schedule and mirrors Argos alert status changes onto the Microsoft Sentinel incidents created for them. It reads the latest Argos state from the argsentdc_CL table, finds the incident through the ref_id Custom Detail, and updates the incident status and classification when Argos changed more recently than the incident. Newest change wins.",
+    "prerequisites": [
+      "1. The Check Point Cyberint Alerts data connector must be connected and ingesting into argsentdc_CL.",
+      "2. Incidents must be created by the Check Point Exposure Management - Argos alerts to incidents analytic rule, which provides the ref_id Custom Detail.",
+      "3. The Microsoft Sentinel workspace must be in the resource group given by Workspace_Resource_Group."
+    ],
+    "postDeployment": [
+      "1. Grant the Logic App Managed Identity the **Microsoft Sentinel Responder** role on the workspace resource group. It covers both the log query and the incident updates."
+    ],
+    "lastUpdateTime": "2026-09-17T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Sync",
+      "Incident Update"
+    ],
+    "support": {
+      "tier": "Partner",
+      "name": "Check Point",
+      "link": "https://cyberint.com/customer-support/"
+    },
+    "source": {
+      "type": "solution",
+      "name": "Check Point Exposure Management Alerts"
+    },
+    "author": {
+      "name": "Check Point"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Check Point Exposure Management - Inbound Status Sync",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "Check_Point_EM_InboundStatusSync",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook"
+      }
+    },
+    "Workspace_Name": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace where Microsoft Sentinel is enabled"
+      }
+    },
+    "Workspace_Resource_Group": {
+      "type": "String",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group of the Microsoft Sentinel workspace (default: the playbook's resource group)"
+      }
+    },
+    "Polling_Interval_Minutes": {
+      "type": "Int",
+      "defaultValue": 5,
+      "minValue": 5,
+      "metadata": {
+        "description": "How often to check for Argos status changes, in minutes"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId(parameters('Workspace_Resource_Group'), 'Microsoft.OperationalInsights/workspaces', parameters('Workspace_Name'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Check_Point_EM_InboundStatusSync",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "ArmEndpoint": {
+              "type": "String",
+              "defaultValue": ""
+            },
+            "WorkspacePath": {
+              "type": "String",
+              "defaultValue": ""
+            },
+            "PollingIntervalMinutes": {
+              "type": "Int",
+              "defaultValue": 5
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": "[parameters('Polling_Interval_Minutes')]"
+              }
+            }
+          },
+          "actions": {
+            "Find_incidents_out_of_sync": {
+              "type": "Http",
+              "runAfter": {},
+              "inputs": {
+                "method": "POST",
+                "uri": "@{parameters('ArmEndpoint')}@{parameters('WorkspacePath')}/query?api-version=2017-10-01",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "query": "let ChangedWindow = @{mul(max(parameters('PollingIntervalMinutes'), 10), 3)}m;\nlet Lookback = 90d;\nlet Changed = argsentdc_CL\n    | where ingestion_time() > ago(ChangedWindow)\n    | distinct ref_id = tostring(ref_id);\nlet ArgosHistory = argsentdc_CL\n    | where TimeGenerated > ago(Lookback)\n    | extend ref_id = tostring(ref_id), ArgosStatus = tostring(status)\n    | where ref_id in (Changed)\n    | project ref_id, TimeGenerated, ArgosStatus,\n              ClosureReason = tostring(closure_reason),\n              ClosureDescription = tostring(closure_reason_description);\nlet ArgosState = ArgosHistory\n    | sort by ref_id asc, TimeGenerated asc\n    | extend IsTransition = ref_id != prev(ref_id) or ArgosStatus != prev(ArgosStatus)\n    | where IsTransition\n    | summarize arg_max(TimeGenerated, ArgosStatus) by ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt = TimeGenerated\n    | join kind=inner (ArgosHistory | summarize arg_max(TimeGenerated, ClosureReason, ClosureDescription) by ref_id) on ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt, ClosureReason, ClosureDescription;\nlet AlertRefs = SecurityAlert\n    | where TimeGenerated > ago(Lookback)\n    | where ProviderName == \"ASI Scheduled Alerts\"\n    | extend ref_id = tostring(parse_json(tostring(parse_json(ExtendedProperties)[\"Custom Details\"])).ref_id[0])\n    | where ref_id in (Changed)\n    | distinct SystemAlertId, ref_id;\nlet IncidentRefs = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | mv-expand AlertId = AlertIds to typeof(string)\n    | join kind=inner AlertRefs on $left.AlertId == $right.SystemAlertId\n    | distinct IncidentName, ref_id;\nlet SentinelState = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | where IncidentName in ((IncidentRefs | project IncidentName))\n    | sort by IncidentName asc, LastModifiedTime asc\n    | extend IsCreation = IncidentName != prev(IncidentName)\n    | extend IsTransition = IsCreation or Status != prev(Status)\n    | where IsTransition\n    | summarize arg_max(LastModifiedTime, Status, IsCreation) by IncidentName\n    | project IncidentName, SentinelStatus = Status,\n              SentinelChangedAt = iff(IsCreation, datetime(null), LastModifiedTime);\nArgosState\n| join kind=inner IncidentRefs on ref_id\n| join kind=inner SentinelState on IncidentName\n| extend TargetStatus = case(ArgosStatus == \"open\", \"New\", ArgosStatus == \"acknowledged\", \"Active\", ArgosStatus == \"closed\", \"Closed\", \"\")\n| where isnotempty(TargetStatus) and TargetStatus != SentinelStatus\n| where isnull(SentinelChangedAt) or ArgosChangedAt > SentinelChangedAt\n| extend Classification = case(\n    TargetStatus != \"Closed\", \"\",\n    ClosureReason == \"resolved\", \"TruePositive\",\n    ClosureReason in (\"false_positive\", \"irrelevant_alert_subtype\"), \"FalsePositive\",\n    ClosureReason in (\"no_longer_a_threat\", \"irrelevant\", \"asset_should_not_be_monitored\",\n                      \"asset_belongs_to_my_organization\", \"asm_no_longer_detected\", \"asm_manually_closed\"), \"BenignPositive\",\n    \"Undetermined\")\n| extend ClassificationReason = case(\n    Classification == \"TruePositive\", \"SuspiciousActivity\",\n    Classification == \"BenignPositive\", \"SuspiciousButExpected\",\n    ClosureReason == \"false_positive\", \"IncorrectAlertLogic\",\n    ClosureReason == \"irrelevant_alert_subtype\", \"InaccurateData\",\n    \"\")\n| extend ClassificationComment = iff(TargetStatus != \"Closed\", \"\",\n    substring(iff(isnotempty(ClosureDescription),\n        ClosureDescription,\n        strcat(\"Closed in Check Point Exposure Management (closure reason: \", coalesce(ClosureReason, \"none\"), \")\")), 0, 1000))\n| project IncidentName, RefId = ref_id, ArgosStatus, ClosureReason, TargetStatus,\n          Classification, ClassificationReason, ClassificationComment,\n          ArgosChangedAt, SentinelStatus, SentinelChangedAt",
+                  "timespan": "P90D"
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "@parameters('ArmEndpoint')"
+                }
+              }
+            },
+            "Select_incidents": {
+              "type": "Select",
+              "runAfter": {
+                "Find_incidents_out_of_sync": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "from": "@body('Find_incidents_out_of_sync')?['tables'][0]['rows']",
+                "select": {
+                  "IncidentName": "@item()[0]",
+                  "RefId": "@item()[1]",
+                  "ArgosStatus": "@item()[2]",
+                  "ClosureReason": "@item()[3]",
+                  "TargetStatus": "@item()[4]",
+                  "Classification": "@item()[5]",
+                  "ClassificationReason": "@item()[6]",
+                  "ClassificationComment": "@item()[7]"
+                }
+              }
+            },
+            "For_each_incident": {
+              "type": "Foreach",
+              "foreach": "@body('Select_incidents')",
+              "runAfter": {
+                "Select_incidents": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              },
+              "actions": {
+                "Get_incident": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{parameters('ArmEndpoint')}@{parameters('WorkspacePath')}/providers/Microsoft.SecurityInsights/incidents/@{items('For_each_incident')['IncidentName']}?api-version=2024-03-01",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "@parameters('ArmEndpoint')"
+                    }
+                  }
+                },
+                "Condition_-_Status_differs": {
+                  "type": "If",
+                  "runAfter": {
+                    "Get_incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@body('Get_incident')?['properties']?['status']",
+                            "@items('For_each_incident')['TargetStatus']"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Compose_incident_properties": {
+                      "type": "Compose",
+                      "runAfter": {},
+                      "inputs": "@if(equals(items('For_each_incident')['TargetStatus'], 'Closed'), if(empty(items('For_each_incident')['ClassificationReason']), setProperty(setProperty(setProperty(removeProperty(body('Get_incident')?['properties'], 'classificationReason'), 'status', 'Closed'), 'classification', items('For_each_incident')['Classification']), 'classificationComment', items('For_each_incident')['ClassificationComment']), setProperty(setProperty(setProperty(setProperty(body('Get_incident')?['properties'], 'status', 'Closed'), 'classification', items('For_each_incident')['Classification']), 'classificationReason', items('For_each_incident')['ClassificationReason']), 'classificationComment', items('For_each_incident')['ClassificationComment'])), removeProperty(removeProperty(removeProperty(setProperty(body('Get_incident')?['properties'], 'status', items('For_each_incident')['TargetStatus']), 'classification'), 'classificationReason'), 'classificationComment'))"
+                    },
+                    "Update_incident": {
+                      "type": "Http",
+                      "runAfter": {
+                        "Compose_incident_properties": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "method": "PUT",
+                        "uri": "@{parameters('ArmEndpoint')}@{parameters('WorkspacePath')}/providers/Microsoft.SecurityInsights/incidents/@{items('For_each_incident')['IncidentName']}?api-version=2024-03-01",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "etag": "@body('Get_incident')?['etag']",
+                          "properties": "@outputs('Compose_incident_properties')"
+                        },
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "@parameters('ArmEndpoint')"
+                        }
+                      }
+                    },
+                    "Add_sync_comment": {
+                      "type": "Http",
+                      "runAfter": {
+                        "Update_incident": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "method": "PUT",
+                        "uri": "@{parameters('ArmEndpoint')}@{parameters('WorkspacePath')}/providers/Microsoft.SecurityInsights/incidents/@{items('For_each_incident')['IncidentName']}/comments/@{guid()}?api-version=2024-03-01",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "properties": {
+                            "message": "<p><strong>CPEM Inbound Status Sync:</strong><br>Argos alert @{items('For_each_incident')['RefId']} changed to <strong>@{items('For_each_incident')['ArgosStatus']}</strong>@{if(empty(items('For_each_incident')['ClosureReason']), '', concat(' (closure reason: ', items('For_each_incident')['ClosureReason'], ')'))}.<br>Microsoft Sentinel status changed from @{body('Get_incident')?['properties']?['status']} to @{items('For_each_incident')['TargetStatus']}@{if(empty(items('For_each_incident')['Classification']), '', concat(', classification ', items('For_each_incident')['Classification'], if(empty(items('For_each_incident')['ClassificationReason']), '', concat(' / ', items('For_each_incident')['ClassificationReason']))))}.</p>"
+                          }
+                        },
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "@parameters('ArmEndpoint')"
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "ArmEndpoint": {
+            "value": "[environment().resourceManager]"
+          },
+          "WorkspacePath": {
+            "value": "[substring(variables('workspaceResourceId'), 1)]"
+          },
+          "PollingIntervalMinutes": {
+            "value": "[parameters('Polling_Interval_Minutes')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}
