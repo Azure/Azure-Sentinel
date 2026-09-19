@@ -1,26 +1,30 @@
 id: 2f7c4e91-6b8d-4a3f-9e15-c0d84b7a2f36
 name: Check Point Exposure Management - Argos alerts to incidents
 description: |
-  Creates a Microsoft Sentinel incident for each open Check Point Exposure Management alert
-  ingested into the argsentdc_CL table by the CCP data connector. Each result becomes its own
-  alert, and ref_id is surfaced as a Custom Detail so the CPEM Exporter playbook can map the
-  incident back to the originating Argos alert through
-  properties.alerts[*].properties.additionalData['Custom Details'].
+  Creates a Microsoft Sentinel incident for each Check Point Exposure Management alert that
+  reaches the argsentdc_CL table as open or acknowledged for the first time. Each result becomes
+  its own alert, and ref_id is surfaced as a Custom Detail so the Exporter, ManualStatusUpdate
+  and InboundStatusSync playbooks can map the incident back to the originating Argos alert.
 
-  This rule replaces the Importer playbook's Log Ingestion API path. The Logs Ingestion API
-  does not support writing to the built-in SecurityAlert table, and a scheduled analytic rule
-  produces the attached alert and Custom Details natively, with no data collection endpoint,
-  data collection rule, managed identity or role assignment.
+  The CCP data connector polls on update_date, so every change to an Argos alert adds a new row
+  for the same ref_id. Only the first open or acknowledged row creates an incident; later rows
+  are status updates, which the Check_Point_EM_InboundStatusSync playbook applies to the
+  existing incident. An alert counts as already seen when it had an open or acknowledged row
+  ingested more than 20 minutes earlier.
 
-  Two time filters are needed. The connector's DCR maps the alert's update_date into
-  TimeGenerated, so a row carries a timestamp several minutes older than the moment it becomes
-  queryable, and a TimeGenerated window equal to the run interval would miss it. The wide
-  TimeGenerated bound keeps the row in scope, while the ingestion_time bound stops the rule
-  re-alerting on the same row every cycle. Any remaining repeats are folded into the existing
-  incident by grouping on the ref_id custom detail.
+  Only alerts created within the 47-hour lookback are considered, which is the longest lookback
+  Microsoft Sentinel allows for a rule that runs every 5 minutes. Every earlier row of such an
+  alert falls inside the same lookback, so the already-seen check is complete and an update can
+  never open a second incident. An alert created more than 47 hours before it first reaches the
+  table does not get an incident.
+
+  The ingestion_time bound limits each row to the few runs its arrival window covers, because
+  the DCR maps update_date into TimeGenerated and a row becomes queryable several minutes after
+  that timestamp. Repeats within that window are folded into one incident by grouping on the
+  ref_id custom detail.
 severity: Medium
 queryFrequency: 5m
-queryPeriod: 1d
+queryPeriod: 47h
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -35,11 +39,20 @@ requiredDataConnectors:
     dataTypes:
       - argsentdc_CL
 query: |
+  let ArrivalWindow = 20m;
+  let Lookback = 47h;
+  let SeenBefore = argsentdc_CL
+      | where TimeGenerated > ago(Lookback)
+      | where ingestion_time() <= ago(ArrivalWindow)
+      | where status in ("open", "acknowledged")
+      | distinct ref_id = tostring(ref_id);
   argsentdc_CL
-  | where TimeGenerated > ago(1d)
-  | where ingestion_time() > ago(20m)
-  | summarize arg_max(TimeGenerated, *) by tostring(ref_id)
-  | where status == "open"
+  | where TimeGenerated > ago(Lookback)
+  | where ingestion_time() > ago(ArrivalWindow)
+  | summarize arg_max(TimeGenerated, *) by ref_id = tostring(ref_id)
+  | where status in ("open", "acknowledged")
+  | where todatetime(created_date) > ago(Lookback)
+  | join kind=leftanti SeenBefore on ref_id
   | extend SentinelSeverity = case(
       severity in ("very_high", "critical"), "High",
       severity == "high", "High",
@@ -47,7 +60,7 @@ query: |
       severity == "low", "Low",
       "Informational")
   | project TimeGenerated,
-            RefId = tostring(ref_id),
+            RefId = ref_id,
             AlertTitle = tostring(event_title),
             AlertDescription = tostring(description),
             OriginalSeverity = tostring(severity),
