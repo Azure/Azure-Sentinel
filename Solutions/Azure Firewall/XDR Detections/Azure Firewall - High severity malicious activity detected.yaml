@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 504257c1-81e2-4609-8d40-b395e62f11c7
+    path: Analytic Rules/Azure Firewall - High severity malicious activity detected.yaml
+    version: 1.0.1
+    querySha256: bc4d4c1ae002c6c3ab64610835cc15d63e00d259bc68bd2a77ae5e7dd9ad0932
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Exfiltration
+    - CredentialAccess
+    - CommandAndControl
+    - Execution
+    originalTechniques:
+    - T1190
+    - T1041
+    - T1003
+    - T1204
+properties:
+  id: xdr-high-severity-malicious-activity-detected-504257c1
+  displayName: High severity malicious activity detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TimeWindow   = 90d;    // How far back to look
+      let HitThreshold = 10;     // Minimum hits to alert per SourceIp + Category
+      let MinSeverity  = 1;      // Set Minimum Severity
+      let EnableCategoryFilter    = true;   // Filter 1: use CategoriesOfInterest
+      let EnableDescriptionFilter = false;  // Filter 2: use DescriptionsOfInterest
+      let EnableActionFilter      = false;  // Filter 3: use MatchActions
+      let CategoriesOfInterest    = dynamic([
+          "Targeted Malicious Activity was Detected",
+          "Exploit Kit Activity Detected",
+          "Domain Observed Used for C2 Detected",
+          "Successful Credential Theft Detected",
+          "Malware Command and Control Activity Detected",
+          "Executable code was detected",
+          "A Network Trojan was detected"
+      ]);
+      let DescriptionsOfInterest  = dynamic([
+          "targeted-activity",
+          "exploit-kit",
+          "domain-c2",
+          "credential-theft",
+          "command-and-control",
+          "shellcode-detect",
+          "trojan-activity"
+      ]);
+      let MatchActions = dynamic(["Deny", "alert"]);
+      AZFWIdpsSignature
+      | where TimeGenerated >= ago(TimeWindow)
+      | where Severity >= MinSeverity
+      // Filter 1: Category filter (optional)
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+      // Filter 2: Description filter (optional)
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+      // Filter 3: Action filter (optional)
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+      | summarize
+          StartTime   = min(TimeGenerated),
+          EndTime     = max(TimeGenerated),
+          TotalHits   = count(),
+          MaxSeverity = max(Severity),
+          Actions     = make_set(Action, 5),
+          Signatures  = make_set(SignatureId, 20),
+          Description = make_set(substring(tostring(Description), 0, 120), 3)
+          by SourceIp, ThreatCategory = Category
+      | where TotalHits >= HitThreshold
+      | project
+          StartTime,
+          EndTime,
+          SourceIp,
+          ThreatCategory,
+          TotalHits,
+          MaxSeverity,
+          Actions,
+          Signatures,
+          Description
+      | order by MaxSeverity desc, TotalHits desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: High severity malicious activity detected
+      description: Identifies high severity malicious activity in Azure Firewall IDPS logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190

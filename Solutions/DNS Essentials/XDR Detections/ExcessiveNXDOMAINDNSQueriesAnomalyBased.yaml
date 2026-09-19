@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 02f23312-1a33-4390-8b80-f7cd4df4dea0
+    path: Analytic Rules/ExcessiveNXDOMAINDNSQueriesAnomalyBased.yaml
+    version: 1.0.2
+    querySha256: 9cc382b4a85a106c5e77653998ac7f213cdb5bfd5694bb396778421e4617bf7e
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - ASIM parser availability must be verified in Advanced Hunting
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1008
+properties:
+  id: xdr-detect-excessive-nxdomain-dns-queries-anomaly-based-asim-dns-solution-02f23312
+  displayName: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 2.5;
+      let min_t = ago(14d);
+      let max_t = now();
+      let dt = 1d;
+      let summarizationexist = (
+        union isfuzzy=true
+            (
+            DNS_Summarized_Logs_ip_CL
+            | where EventTime_t > ago(1d)
+            | project v = int(2)
+            ),
+            (
+            print int(1)
+            | project v = print_0
+            )
+        | summarize maxv = max(v)
+        | extend sumexist = (maxv > 1)
+        );
+      let allData = union isfuzzy=true
+            (
+            (datatable(exists: int, sumexist: bool)[1, false]
+            | join (summarizationexist) on sumexist)
+            | join (
+                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)
+                | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+                )
+                on exists
+            | project-away exists, maxv, sum*
+            ),
+            (
+            DNS_Summarized_Logs_ip_CL
+            | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
+            | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
+            );
+      allData
+      | make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, threshold, -1, 'linefit')
+      | mv-expand anomalies, score, baseline, EventTime, EventCount
+      | extend
+        anomalies = toint(anomalies),
+        score = toint(score),
+        baseline = toint(baseline),
+        EventTime = todatetime(EventTime),
+        Total = tolong(EventCount)
+      | where EventTime >= ago(dt)
+      | where score >= threshold * 2
+      | join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)
+        | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
+        on SrcIpAddr
+      | project-away SrcIpAddr1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
+      description: '''This rule makes use of the series decompose anomaly method to generate an alert when client requests
+        excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It
+        utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1008

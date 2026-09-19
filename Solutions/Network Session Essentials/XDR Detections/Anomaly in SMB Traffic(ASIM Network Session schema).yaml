@@ -1,0 +1,81 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8717e498-7b5d-4e23-9e7c-fa4913dbfd79
+    path: Analytic Rules/Anomaly in SMB Traffic(ASIM Network Session schema).yaml
+    version: 1.0.0
+    querySha256: 713d23e8b086724654a1ebb1dcae44870046c1bf28ecb22f6ef8b14fefcf106a
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1021
+    - T1021.002
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-anomaly-in-smb-traffic-asim-network-session-schema-8717e498
+  displayName: Anomaly in SMB Traffic(ASIM Network Session schema)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Define the threshold for deviation
+      let threshold = 50;
+      // Define the time range for the baseline data
+      let starttime = 14d;
+      let endtime = 1d;
+      // Define the SMB ports to monitor
+      let SMBPorts = dynamic(["139", "445"]);
+      // Get the baseline data for user network sessions and Filter for the defined time range
+      let userBaseline = _Im_NetworkSession(starttime=ago(starttime), endtime=ago(endtime))
+        | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports
+        | summarize Count = count() by SrcIpAddr, DstPortNumber // Group by source IP and destination port
+        | summarize AvgCount = avg(Count) by SrcIpAddr, DstPortNumber; // Calculate the average count
+      // Get the recent user activity data and Filter for recent activity
+      let recentUserActivity = _Im_NetworkSession(starttime=ago(endtime))
+        | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports
+        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by SrcIpAddr, DstPortNumber; // Group by source IP and destination port
+      // Join the baseline and recent activity data
+      let UserBehaviorAnalysis = userBaseline
+        | join kind=inner (recentUserActivity) on SrcIpAddr, DstPortNumber
+        | extend Deviation = abs(RecentCount - AvgCount) / AvgCount; // Calculate the deviation
+      // Filter for deviations greater than the threshold
+      UserBehaviorAnalysis
+        | where Deviation > threshold
+        | project SrcIpAddr, DstPortNumber, Deviation, Count = RecentCount; // Project the required columns
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Anomaly in SMB Traffic(ASIM Network Session schema)
+      description: '''This detection detects abnormal SMB traffic, a file-sharing protocol. By calculating the average deviation
+        of SMB connections over last 14 days, flagging sources exceeding 50 average deviations.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+          subTechniques:
+          - T1021.002

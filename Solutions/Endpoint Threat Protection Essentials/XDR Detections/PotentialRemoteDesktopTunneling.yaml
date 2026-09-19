@@ -1,0 +1,67 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d2e8fd50-8d66-11ec-b909-0242ac120002
+    path: Analytic Rules/PotentialRemoteDesktopTunneling.yaml
+    version: 1.0.4
+    querySha256: 10ad6b35880a79f841264ced48e18eae1b8c19ccdff67d90a7f53c5eee514ca5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Host.FullName has no supported Custom Detection field
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1572
+properties:
+  id: xdr-potential-remote-desktop-tunneling-d2e8fd50
+  displayName: Potential Remote Desktop Tunneling
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+         | where EventID in (4624,4625) and LogonType in (10) and IpAddress in ("::1","127.0.0.1")
+         | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonType, IpAddress
+         | extend Name=tostring(split(TargetUserName, "@")[0]), UPNSuffix=tostring(split(TargetUserName, "@")[1])
+         | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Potential Remote Desktop Tunneling
+      description: |-
+        'This query detects remote desktop authentication attempts with a localhost source address, which can indicate a tunneled login.
+        Ref: https://www.mandiant.com/resources/bypassing-network-restrictions-through-rdp-tunneling'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1572

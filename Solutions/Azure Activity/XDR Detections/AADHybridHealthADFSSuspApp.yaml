@@ -1,0 +1,73 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d9938c3b-16f9-444d-bc22-ea9a9110e0fd
+    path: Analytic Rules/AADHybridHealthADFSSuspApp.yaml
+    version: 2.0.3
+    querySha256: ef45fb6f3fca6a4e00954b4f2f90dbad47b8a64583f6e542c8dd86441bfb50f0
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1528
+    - T1550
+properties:
+  id: xdr-microsoft-entra-id-hybrid-health-ad-fs-suspicious-application-d9938c3b
+  displayName: Microsoft Entra ID Hybrid Health AD FS Suspicious Application
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Microsoft Entra ID Connect Health Agent - cf6d7e68-f018-4e0a-a7b3-126e053fb88d
+      // Microsoft Entra ID Connect - cb1056e2-e479-49de-ae31-7812af012ed8
+      let appList = dynamic(['cf6d7e68-f018-4e0a-a7b3-126e053fb88d','cb1056e2-e479-49de-ae31-7812af012ed8']);
+      let operationNamesList = dynamic(['Microsoft.ADHybridHealthService/services/servicemembers/action','Microsoft.ADHybridHealthService/services/delete']);
+      AzureActivity
+      | where CategoryValue =~ 'Administrative'
+      | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
+      | where _ResourceId has 'AdFederationService'
+      | where OperationNameValue in~ (operationNamesList)
+      | extend claimsJson = parse_json(Claims)
+      | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+      | where AppId !in (appList)
+      | project-away claimsJson
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Microsoft Entra ID Hybrid Health AD FS Suspicious Application
+      description: |-
+        'This detection uses AzureActivity logs (Administrative category) to identify a suspicious application adding a server instance to an Microsoft Entra ID Hybrid Health AD FS service or deleting the AD FS service instance.
+        Usually the Microsoft Entra ID Connect Health Agent application with ID cf6d7e68-f018-4e0a-a7b3-126e053fb88d and ID cb1056e2-e479-49de-ae31-7812af012ed8 is used to perform those operations.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528

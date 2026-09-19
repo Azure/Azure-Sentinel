@@ -1,0 +1,74 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 48c026d8-7f36-4a95-9568-6f1420d66e37
+    path: Analytic Rules/SubscriptionMigration.yaml
+    version: 1.0.1
+    querySha256: c208ea8fe23cc3250549ad48dcf26f1346181949c8aae4decdd7d6638562987d
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 20m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1496
+properties:
+  id: xdr-subscription-moved-to-another-tenant-48c026d8
+  displayName: Subscription moved to another tenant
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let queryFrequency = 5m;
+      let eventCapture = "moved from tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) to tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
+      AzureActivity
+      | where ingestion_time() > ago(queryFrequency)
+      | where CategoryValue =~ "Security"
+      | where OperationNameValue =~ "Microsoft.Subscription/updateTenant/action"
+      | extend Properties_d = coalesce(parse_json(Properties), Properties_d)
+      | where isnotempty(Properties_d)
+      | extend Summary = tostring(Properties_d.message)
+      | extend EventCapture = extract_all(eventCapture, Summary)
+      | extend SourceTenantId = iff(isnotempty(EventCapture), EventCapture[0][0], "")
+      | extend DestinationTenantId = iff(isnotempty(EventCapture), EventCapture[0][1], "")
+      | extend
+          Name = split(Caller, "@", 0)[0],
+          UPNSuffix = split(Caller, "@", 1)[0]
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Subscription moved to another tenant
+      description: |-
+        'This detection uses AzureActivity logs (Security category) to identify when a subscription is moved to another tenant.
+        A threat actor may move a subscription into their own tenant to circumvent local resource deployment and logging policies.
+        Once moved, threat actors may deploy resources and perform malicious activities such as crypto mining.
+        This is a technique known as "subscription hijacking". More information can be found here: https://techcommunity.microsoft.com/t5/microsoft-365-defender-blog/hunt-for-compromised-azure-subscriptions-using-microsoft/ba-p/3607121'
+      severity: low
+      entityMappings:
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: _ResourceId
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496

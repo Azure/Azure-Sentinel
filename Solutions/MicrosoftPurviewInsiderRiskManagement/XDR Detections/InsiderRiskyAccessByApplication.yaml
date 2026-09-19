@@ -1,0 +1,68 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 15386bba-dc70-463f-a09f-d392e7731c63
+    path: Analytic Rules/InsiderRiskyAccessByApplication.yaml
+    version: 1.1.4
+    querySha256: 52d8537faeb0038d345fa13b57367beb25181cf830255ee07c29ae33092db26b
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+properties:
+  id: xdr-insider-risk-risky-user-access-by-application-15386bba
+  displayName: Insider Risk_Risky User Access By Application
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SigninLogs
+      | where RiskState == "atRisk"
+      | project UserPrincipalName, Location, AppDisplayName, RiskState
+      | evaluate basket(0.01) // Adjust & Tune Thresholds within Organzational Requirements
+      // | where Percent > 50 // Adjust & Tune Thresholds within Organzational Requirements
+      | where UserPrincipalName <> ""
+      | where AppDisplayName <> ""
+      | project Percent, UserPrincipalName, Location, AppDisplayName, RiskState
+      // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+      | sort by Percent desc
+      | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_Risky User Access By Application
+      description: '''This alert evaluates Microsoft Entra ID Sign in risk via Machine Learning correlations in the basket
+        operator. The basket threshold is adjustable, and the default is set to .01. There is an optional configuration to
+        configure the percentage rates. The correlations are designed to leverage machine learning to identify patterns of
+        risky user application access. There is an option for configuration of correlations against Microsoft Sentinel watchlists.
+        For more information, see [Tutorial: Use risk detections for user sign-ins to trigger Microsoft Entra ID Multi-Factor
+        Authentication or password '
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204

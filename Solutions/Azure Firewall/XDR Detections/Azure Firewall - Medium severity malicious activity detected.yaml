@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dfbe3963-42fb-4ebe-a00c-1cc44e2aa9f0
+    path: Analytic Rules/Azure Firewall - Medium severity malicious activity detected.yaml
+    version: 1.0.1
+    querySha256: 59478c9054be265ddc2432f806d705134bc865b719843406e67e2f597467272a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    - DefenseEvasion
+    - Impact
+    originalTechniques:
+    - T1496
+    - T1204
+    - T1036
+properties:
+  id: xdr-medium-severity-malicious-activity-detected-dfbe3963
+  displayName: Medium severity malicious activity detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TimeWindow   = 90d;
+      let HitThreshold = 10;
+      let MinSeverity  = 2;
+      let EnableCategoryFilter    = true;
+      let EnableDescriptionFilter = false;
+      let EnableActionFilter      = false;
+      let CategoriesOfInterest = dynamic([
+          "Possibly Unwanted Program Detected",
+          "Possible Social Engineering Attempted",
+          "Crypto Currency Mining Activity Detected",
+          "A suspicious filename was detected",
+          "A system call was detected"
+      ]);
+      let DescriptionsOfInterest = dynamic([
+          "pup-activity",
+          "social-engineering",
+          "coin-mining",
+          "suspicious-filename-detect",
+          "system-call-detect"
+      ]);
+      let MatchActions = dynamic(["Deny", "alert"]);
+      AZFWIdpsSignature
+      | where TimeGenerated >= ago(TimeWindow)
+      | where Severity >= MinSeverity
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+      | summarize
+          StartTime   = min(TimeGenerated),
+          EndTime     = max(TimeGenerated),
+          TotalHits   = count(),
+          MaxSeverity = max(Severity),
+          Actions     = make_set(Action, 5),
+          Signatures  = make_set(SignatureId, 20),
+          Description = make_set(substring(tostring(Description), 0, 120), 3)
+          by SourceIp, ThreatCategory = Category
+      | where TotalHits >= HitThreshold
+      | project
+          StartTime,
+          EndTime,
+          SourceIp,
+          ThreatCategory,
+          TotalHits,
+          MaxSeverity,
+          Actions,
+          Signatures,
+          Description
+      | order by MaxSeverity desc, TotalHits desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Medium severity malicious activity detected
+      description: Identifies medium severity malicious activity in Azure Firewall IDPS logs.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496

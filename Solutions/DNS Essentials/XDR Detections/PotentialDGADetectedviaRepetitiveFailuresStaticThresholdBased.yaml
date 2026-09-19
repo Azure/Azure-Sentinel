@@ -1,0 +1,91 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 89ba52fa-96a7-4653-829a-ca49bb13336c
+    path: Analytic Rules/PotentialDGADetectedviaRepetitiveFailuresStaticThresholdBased.yaml
+    version: 1.0.2
+    querySha256: 6c2a75ab7d89592bf25cc936182a7bf8f6fb428f08c4628d660eb55d210a5e76
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 10d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1008
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-potential-dga-domain-generation-algorithm-detected-via-repetitive-failur-89ba52fa
+  displayName: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM
+    DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 100;
+      let lookback = 10d;
+      let referenceendtime = 1d;
+      let nxDomainDnsEvents = (stime: datetime, etime: datetime) {
+        _Im_Dns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
+        | where DnsQueryTypeName in ("A", "AAAA")
+        | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
+        | where DnsQuery !contains "/" and DnsQuery contains "."
+      };
+      nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
+      | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        DNSQueryCount=dcount(DnsQuery)
+        by SrcIpAddr
+      | where DNSQueryCount > threshold
+      // Filter out previously seen IPs
+      | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
+        | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated,1d)
+        | where DNSQueryCount > threshold)
+        on SrcIpAddr
+      // Pull out sample NXDomain responses for those remaining potentially infected IPs
+      | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
+        | summarize by DnsQuery, SrcIpAddr)
+        on SrcIpAddr
+      | summarize
+        StartTimeUtc = min(StartTimeUtc),
+        EndTimeUtc = max(EndTimeUtc),
+        DNSQueries=make_list(DnsQuery, 100)
+        by SrcIpAddr, DNSQueryCount
+      | extend DNSQueryThreshold=threshold
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS
+        Solution)
+      description: '''This rule identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling
+        through possible C2 domains where most C2s are not live). An alert is generated when a new IP address is seen (based
+        on not being seen associated with NXDomain records in prior 10-day baseline period). It utilizes [ASIM](https://aka.ms/AboutASIM)
+        normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1008

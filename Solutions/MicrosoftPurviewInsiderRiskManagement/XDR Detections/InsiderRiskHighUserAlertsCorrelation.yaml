@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a4fb4255-f55b-4c24-b396-976ee075d406
+    path: Analytic Rules/InsiderRiskHighUserAlertsCorrelation.yaml
+    version: 1.1.3
+    querySha256: 4fd5045044e5a5b3ebc7357bb1fce2c107d429daf53d66a66f7dac722144b26a
+    schedule:
+      queryFrequency: 7d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+properties:
+  id: xdr-insider-risk-high-user-security-alert-correlations-a4fb4255
+  displayName: Insider Risk_High User Security Alert Correlations
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let AlertLinks = SecurityAlert
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | summarize AlertLinks=make_set(AlertLink) by UPN;
+      let LastTimeObserved = SecurityIncident
+      | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+      | mv-expand AlertIds
+      | extend AlertId = tostring(AlertIds)
+      | join kind= innerunique (
+                SecurityAlert
+                )
+                on $left.AlertId == $right.SystemAlertId
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | project UPN, AlertName, Severity, ProductName, TimeGenerated | summarize arg_max(AlertName, Severity, ProductName, TimeGenerated) by UPN;
+      SecurityIncident
+      | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+      | mv-expand AlertIds
+      | extend AlertId = tostring(AlertIds)
+      | join kind= innerunique (
+                SecurityAlert
+                )
+                on $left.AlertId == $right.SystemAlertId
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | project UPN, AlertName, Severity, ProductName
+      | evaluate basket(0.001)
+      | where UPN <> ""
+      // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey
+      | project UPN, Percent, AlertName, Severity, ProductName
+      | join (LastTimeObserved) on UPN
+      | sort by Percent desc
+      | extend LastObserved = TimeGenerated
+      | join kind=inner (AlertLinks) on UPN
+      | project UPN, AlertName, Severity, ProductName, Percent, LastObserved, AlertLinks
+      | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  schedule:
+    frequency: P7D
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_High User Security Alert Correlations
+      description: '''This alert joins SecurityAlerts from Microsoft Products with SecurityIncidents from Microsoft Sentinel
+        and Microsoft Defender XDR. This join allows for identifying patterns in user principal names associated with respective
+        security alerts. A machine learning function (Basket) is leveraged with a .001 threshold. Baset finds all frequent
+        patterns of discrete attributes (dimensions) in the data. It returns the frequent patterns passed the frequency threshold.
+        This query evaluates UserPrincipalName for patterns in SecurityAlerts and Reporting Security Tools. This query can
+        be further tuned/confi'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204

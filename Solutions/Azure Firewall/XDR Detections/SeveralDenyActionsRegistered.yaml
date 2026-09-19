@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f8dad4e9-3f19-4d70-ab7f-8f19ccd43a3e
+    path: Analytic Rules/SeveralDenyActionsRegistered.yaml
+    version: 1.1.3
+    querySha256: 3eef65d6db7877e1cf4e0e6991946417507db14858d9b54812044f36ea33159e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Discovery
+    - LateralMovement
+    - CommandAndControl
+    originalTechniques:
+    - T1046
+    - T1071
+    - T1210
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-several-deny-actions-registered-f8dad4e9
+  displayName: Several deny actions registered
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 2;
+      union isfuzzy=true(
+      AZFWApplicationRule
+      | where Action == "Deny"
+      | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+      | where count_ >= threshold),
+      (AZFWNetworkRule
+      | where Action == "Deny"
+      | extend Fqdn = DestinationIp
+      | summarize StartTime = min(TimeGenerated), count_ = dcount(DestinationPort), Protocols = make_set(Protocol) by SourceIp, Fqdn, Action
+      | where count_ >= threshold
+      | extend Protocol = strcat_array(Protocols, "/")),
+      (AZFWFlowTrace
+      | where Action == "Deny"
+      | extend Fqdn = DestinationIp
+      | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+      | where count_ >= threshold),
+      (AZFWIdpsSignature
+      | where Action == "Deny"
+      | extend Fqdn = DestinationIp
+      | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+      | where count_ >= threshold),
+      (AzureDiagnostics
+      | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
+      | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
+      | extend msg_s_replaced1 = replace(@"\.\s",@" ",msg_s_replaced0)
+      | extend msg_a = split(msg_s_replaced1," ")
+      | extend srcAddr_a = split(msg_a[3],":") , destAddr_a = split(msg_a[5],":")
+      | extend Protocol = tostring(msg_a[0]), SourceIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), DestinationIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), Action = tostring(msg_a[7])
+      | where Action == "Deny"
+      | extend Fqdn = iff(DestinationIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",DestinationIp)
+      | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+      | where count_ >= threshold)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Several deny actions registered
+      description: '''Identifies attack pattern when attacker tries to move, or scan, from resource to resource on the network
+        and creates an incident when a source has more than 1 registered deny action in Azure Firewall.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: Fqdn
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

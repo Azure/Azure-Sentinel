@@ -1,0 +1,68 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 15049017-527f-4d3b-b011-b0e99e68ef45
+    path: Analytic Rules/WindowsBinariesExecutedfromNon-DefaultDirectory.yaml
+    version: 1.0.4
+    querySha256: fda4bf8db4520dfa60a3e61d96130c1e9c5e28f2a4b592ca6f7112a03b3d105b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Host.FullName has no supported Custom Detection field
+    - Process has no supported Custom Detection mapping
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-windows-binaries-executed-from-non-default-directory-15049017
+  displayName: Windows Binaries Executed from Non-Default Directory
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let procList = externaldata(Process:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Microsoft_Lolbas_Execution_Binaries.csv"] with (format="csv", ignoreFirstRecord=True);
+      SecurityEvent
+      | where EventID == 4688 and Process has_any (procList) and not (NewProcessName has ("C:\\Windows\\"))
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine
+      | extend Name=tostring(split(SubjectUserName, "@")[0]), UPNSuffix=tostring(split(SubjectUserName, "@")[1])
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Windows Binaries Executed from Non-Default Directory
+      description: "'The query detects Windows binaries, that can be executed from a non-default directory (e.g. C:\\Windows\\\
+        , C:\\Windows\\System32 etc.). \nRef: https://lolbas-project.github.io/'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059

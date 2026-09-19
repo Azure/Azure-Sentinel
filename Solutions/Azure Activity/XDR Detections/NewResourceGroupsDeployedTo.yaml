@@ -1,0 +1,75 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9fb57e58-3ed8-4b89-afcf-c8e786508b1c
+    path: Analytic Rules/NewResourceGroupsDeployedTo.yaml
+    version: 2.0.4
+    querySha256: ea58b9d8528dbbaac6e9e9ec34b6c0198454aff5c78e50b846d33eaa8eace4c4
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1496
+properties:
+  id: xdr-suspicious-resource-deployment-9fb57e58
+  displayName: Suspicious Resource deployment
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all
+      let szOperationNames = dynamic(["Microsoft.Compute/virtualMachines/write", "Microsoft.Resources/deployments/write", "Microsoft.Resources/subscriptions/resourceGroups/write"]);
+      let starttime = 14d;
+      let endtime = 1d;
+      let RareCaller = AzureActivity
+      | where TimeGenerated between (ago(starttime) .. ago(endtime))
+      | where OperationNameValue in~ (szOperationNames)
+      | summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)
+      // Returns all the records from the right side that don't have matches from the left.
+      | join kind=rightantisemi (
+      AzureActivity
+      | where TimeGenerated > ago(endtime)
+      | where OperationNameValue in~ (szOperationNames)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated,100), ActivityStatusValue = make_set(ActivityStatusValue,100), CorrelationIds = make_set(CorrelationId,100), ResourceGroups = make_set(ResourceGroup,100), ResourceIds = make_set(_ResourceId,100), ActivityCountByCallerIPAddress = count()
+      by CallerIpAddress, Caller, OperationNameValue) on CallerIpAddress, Caller, OperationNameValue;
+      RareCaller
+      | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+      | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+      | extend AadUserId = iif(Caller !has '@',Caller,"")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Suspicious Resource deployment
+      description: '''Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen caller.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: AadUserId
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496

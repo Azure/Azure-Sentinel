@@ -1,0 +1,81 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4644baf7-3464-45dd-bd9d-e07687e25f81
+    path: Analytic Rules/Azure Firewall - Multiple Sources Affected by the Same TI Destination.yaml
+    version: 1.1.5
+    querySha256: 21d9c2eb4cce2fe62397a8d3354a1c399a1d8d13126cb42f2459bc0483d98551
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1041
+    - T1071
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-multiple-sources-affected-by-the-same-ti-destination-4644baf7
+  displayName: Multiple Sources Affected by the Same TI Destination
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Timeframe = 1d;
+      let StartTime = ago(Timeframe);
+      let EndTime = now();
+      let MinAffectedThreshold = 5;
+      union isfuzzy=true
+      (AzureDiagnostics
+      | where TimeGenerated  between (StartTime .. EndTime)
+      | where OperationName == "AzureFirewallThreatIntelLog"
+      | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int  "." * "Action: Deny. " ThreatDescription),
+      (AZFWThreatIntel
+      | where TimeGenerated between (StartTime .. EndTime))
+      | extend Fqdn = DestinationIp
+      | summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp, 10000) by Fqdn, ThreatDescription
+      | where array_length(AffectedIps) > MinAffectedThreshold
+      | mv-expand SourceIp = AffectedIps
+      | order by TiTrafficCount desc, Fqdn asc, parse_ipv4(tostring(SourceIp)) asc
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Multiple Sources Affected by the Same TI Destination
+      description: |-
+        'Identifies multiple machines trying to reach out to the same destination blocked by TI in Azure Firewall. This can indicate attack on the organization by the same attack group.
+
+        Configurable Parameters:
+
+        - Minimum affected threshold - alert only if more than this number of hosts affected. Default is set to 5.
+        - Recommendation is to use the new resource specific logs. If you are using both, the TiTraffic Count will be duplicated.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: Fqdn
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

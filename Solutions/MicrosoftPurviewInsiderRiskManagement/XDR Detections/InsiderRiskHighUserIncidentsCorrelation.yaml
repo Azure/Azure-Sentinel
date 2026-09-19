@@ -1,0 +1,120 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 28a75d10-9b75-4192-9863-e452c3ad24db
+    path: Analytic Rules/InsiderRiskHighUserIncidentsCorrelation.yaml
+    version: 1.1.2
+    querySha256: 1589c43ffdc23a896d9bfff95a3b1de156aec90c2d6c85af2769436521d4b1e1
+    schedule:
+      queryFrequency: 7d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+properties:
+  id: xdr-insider-risk-high-user-security-incidents-correlation-28a75d10
+  displayName: Insider Risk_High User Security Incidents Correlation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let PreviousIncidents =
+      SecurityIncident
+      | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+      | mv-expand AlertIds
+      | extend AlertId = tostring(AlertIds)
+      | join kind= innerunique (
+                SecurityAlert
+                )
+                on $left.AlertId == $right.SystemAlertId
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | summarize PreviousIncidents = make_set(IncidentNumber) by UPN;
+      let LastTimeObserved =
+      SecurityIncident
+      | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+      | mv-expand AlertIds
+      | extend AlertId = tostring(AlertIds)
+      | join kind= innerunique (
+                SecurityAlert
+                )
+                on $left.AlertId == $right.SystemAlertId
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | summarize arg_max(TimeGenerated, IncidentName) by UPN;
+        SecurityIncident
+      | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+      | mv-expand AlertIds
+      | extend AlertId = tostring(AlertIds)
+      | join kind= innerunique (
+                SecurityAlert
+                )
+                on $left.AlertId == $right.SystemAlertId
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | summarize count() by UPN, IncidentName, IncidentNumber, IncidentUrl, Severity, ProductName
+      | extend SecurityIncidents = count_
+      | where SecurityIncidents > 5 //Adjust & Tune within Organzational Requirements
+      | join (LastTimeObserved) on UPN
+      | project-rename LastObserved = TimeGenerated, LastIncident = IncidentNumber
+      | project-away IncidentName, count_, UPN1, IncidentName1, Severity, IncidentUrl
+      | join kind=inner (PreviousIncidents) on UPN
+      // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey
+      | project UPN, SecurityIncidents, LastIncident, ProductName, LastObserved, PreviousIncidents
+      | sort by SecurityIncidents desc
+      | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  schedule:
+    frequency: P7D
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_High User Security Incidents Correlation
+      description: '''This alert joins SecurityAlerts to SecurityIncidents to associate Security Alerts and Incidents with
+        user accounts. This aligns all Microsoft Alerting Products with Microsoft Incident Generating Products (Microsoft
+        Sentinel, M365 Defender) for a count of user security incidents over time. The default threshold is 5 security incidents,
+        and this is customizable per the organization''s requirements. Results include UserPrincipalName (UPN), SecurityIncident,
+        LastIncident, ProductName, LastObservedTime, and Previous Incidents. There is an option for configuration of correlations
+        against Microsoft S'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204

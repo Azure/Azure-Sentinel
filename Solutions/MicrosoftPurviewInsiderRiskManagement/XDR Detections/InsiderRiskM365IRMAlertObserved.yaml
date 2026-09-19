@@ -1,0 +1,82 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 69660e65-0e5c-4700-8b99-5caf59786606
+    path: Analytic Rules/InsiderRiskM365IRMAlertObserved.yaml
+    version: 1.1.3
+    querySha256: 01d1c5a74a78c7a2ffaad4e9a0061b3b5b1c4bf46dc5b6818a5d061d10fd5b1c
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+properties:
+  id: xdr-insider-risk-microsoft-purview-insider-risk-management-alert-observed-69660e65
+  displayName: Insider Risk_Microsoft Purview Insider Risk Management Alert Observed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let AlertLinks = SecurityAlert
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+                Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | where UPN <> ""
+      | summarize PreciousSecurityAlertLinks=make_set(AlertLink) by UPN;
+      SecurityAlert
+      | where ProductName == "Microsoft 365 Insider Risk Management"
+          | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+          | mv-expand todynamic(Entities)
+          | where Entities["Type"] =~ "account"
+          | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]),
+              Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+          | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+      | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+      | join kind=inner (AlertLinks) on UPN
+      | extend UserPrincipalName = UPN
+      | extend PreviousAlertsLinks = strcat(PreciousSecurityAlertLinks)
+      // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+      | project UserPrincipalName, AlertName, ProductName, Tactics, Status, AlertLink, PreviousAlertsLinks, TimeGenerated
+      | sort by TimeGenerated desc
+      | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_Microsoft Purview Insider Risk Management Alert Observed
+      description: '''This alert is triggered when a Microsoft Purview Insider Risk Management alert is recieved in Microsoft
+        Sentinel via the Microsoft Purview Insider Risk Management Connector. The alert extracts usernames from security alerts
+        to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time
+        Generated. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information,
+        see [Learn about insider risk management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management)'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204

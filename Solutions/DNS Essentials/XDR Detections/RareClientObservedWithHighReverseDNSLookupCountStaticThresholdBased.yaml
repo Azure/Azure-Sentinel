@@ -1,0 +1,79 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 77b7c820-5f60-4779-8bdb-f06e21add5f1
+    path: Analytic Rules/RareClientObservedWithHighReverseDNSLookupCountStaticThresholdBased.yaml
+    version: 1.0.2
+    querySha256: 7c63dcf93fc3785c40738b393267603f74994d18b6d371c20fb152f5538d0d1f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 10d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - ASIM parser availability must be verified in Advanced Hunting
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1590
+    acceptedReviewReasons:
+    - ASIM parser availability must be verified in Advanced Hunting
+properties:
+  id: xdr-rare-client-observed-with-high-reverse-dns-lookup-count-static-threshold-77b7c820
+  displayName: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      let stime = 10d;
+      let etime = 1d;
+      let SearchDomain = dynamic(["in-addr.arpa"]);
+      _Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
+      | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        DNSQueryCount=dcount(DnsQuery)
+        by SrcIpAddr
+      | where DNSQueryCount > threshold
+      | project StartTimeUtc, EndTimeUtc, SrcIpAddr, DNSQueryCount
+      | join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=ago(etime), domain_has_any=SearchDomain)
+        | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)
+        | where DNSQueryCount > threshold
+        | project SrcIpAddr, DNSQueryCount
+        )
+        on SrcIpAddr
+      | join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
+        | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
+        on SrcIpAddr
+      | extend DNSQuerythreshold = threshold
+      | project-away SrcIpAddr1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+      description: '''This rule identifies clients with high reverse DNS counts, which could be carrying out reconnaissance
+        or discovery activity. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance.
+        It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS
+        schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1590

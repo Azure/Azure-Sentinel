@@ -1,0 +1,93 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8159a8d2-13a5-49af-847b-e062c45ab92b
+    path: Analytic Rules/Azure Firewall - Web Application attack detected.yaml
+    version: 1.0.1
+    querySha256: a2dc48d971b7f855ab1ab2dd2d550472dd8f30d430a9d5e798f31e8de2dd70c9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+properties:
+  id: xdr-web-application-attack-detected-8159a8d2
+  displayName: Web Application attack detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TimeWindow   = 90d;
+      let HitThreshold = 10;
+      let MinSeverity  = 2;
+      let EnableCategoryFilter    = true;
+      let EnableDescriptionFilter = false;
+      let EnableActionFilter      = false;
+      let CategoriesOfInterest = dynamic([
+          "access to a potentially vulnerable web application",
+          "Web Application Attack"
+      ]);
+      let DescriptionsOfInterest = dynamic([
+          "web-application-activity",
+          "web-application-attack"
+      ]);
+      let MatchActions = dynamic(["Deny", "alert"]);
+      AZFWIdpsSignature
+      | where TimeGenerated >= ago(TimeWindow)
+      | where Severity >= MinSeverity
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+      | summarize
+          StartTime   = min(TimeGenerated),
+          EndTime     = max(TimeGenerated),
+          TotalHits   = count(),
+          MaxSeverity = max(Severity),
+          Actions     = make_set(Action, 5),
+          Signatures  = make_set(SignatureId, 20),
+          Description = make_set(substring(tostring(Description), 0, 120), 3)
+          by SourceIp, ThreatCategory = Category
+      | where TotalHits >= HitThreshold
+      | project
+          StartTime,
+          EndTime,
+          SourceIp,
+          ThreatCategory,
+          TotalHits,
+          MaxSeverity,
+          Actions,
+          Signatures,
+          Description
+      | order by MaxSeverity desc, TotalHits desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Web Application attack detected
+      description: Identifies Web application attack in Azure Firewall IDPS logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190

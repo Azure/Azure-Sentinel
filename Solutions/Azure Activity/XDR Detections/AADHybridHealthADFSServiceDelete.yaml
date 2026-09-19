@@ -1,0 +1,69 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 86a036b2-3686-42eb-b417-909fc0867771
+    path: Analytic Rules/AADHybridHealthADFSServiceDelete.yaml
+    version: 2.0.3
+    querySha256: 529442e8642f025f15c32175b32175a6ee91c697d80243e4ae84359810d96185
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1578.003
+properties:
+  id: xdr-microsoft-entra-id-hybrid-health-ad-fs-service-delete-86a036b2
+  displayName: Microsoft Entra ID Hybrid Health AD FS Service Delete
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AzureActivity
+      | where CategoryValue =~ 'Administrative'
+      | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
+      | where _ResourceId has 'AdFederationService'
+      | where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/delete'
+      | extend claimsJson = parse_json(Claims)
+      | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+      | project-away claimsJson
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Microsoft Entra ID Hybrid Health AD FS Service Delete
+      description: |-
+        'This detection uses AzureActivity logs (Administrative category) to identify the deletion of an Microsoft Entra ID Hybrid Health AD FS service instance in a tenant.
+        A threat actor can create a new AD Health ADFS service and create a fake server to spoof AD FS signing logs.
+        The health AD FS service can then be deleted after it is no longer needed via HTTP requests to Azure.
+        More information is available in this blog https://o365blog.com/post/hybridhealthagent/'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1578
+          subTechniques:
+          - T1578.003

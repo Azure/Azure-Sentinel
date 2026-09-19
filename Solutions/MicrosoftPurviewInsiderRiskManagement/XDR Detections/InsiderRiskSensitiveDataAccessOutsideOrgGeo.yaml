@@ -1,0 +1,71 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b81ed294-28cf-48c3-bac8-ac60dcef293b
+    path: Analytic Rules/InsiderRiskSensitiveDataAccessOutsideOrgGeo.yaml
+    version: 1.1.3
+    querySha256: 84a6c8e0ada17a71a8467038a1e282ccfd9078936c93e39465ef1f8a35ed376e
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+properties:
+  id: xdr-insider-risk-sensitive-data-access-outside-organizational-geo-location-b81ed294
+  displayName: Insider Risk_Sensitive Data Access Outside Organizational Geo-location
+  status: disabled
+  queryCondition:
+    queryText: |-
+      InformationProtectionLogs_CL
+      | extend UserPrincipalName = UserId_s
+      | where LabelName_s <> ""
+      | join kind=inner (SigninLogs) on UserPrincipalName
+      | extend City = tostring(LocationDetails.city)
+      // | where City <> "New York" // Configure Location Details within Organizational Requirements
+      | extend State = tostring(LocationDetails.state)
+      // | where State <> "Texas" // Configure Location Details within Organizational Requirements
+      | extend Country_Region = tostring(LocationDetails.countryOrRegion)
+      // | where Country_Region <> "US" // Configure Location Details within Organizational Requirements
+      // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+      | summarize count() by UserPrincipalName, LabelName_s, Activity_s, City, State, Country_Region, TimeGenerated
+      | sort by count_ desc
+      | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_Sensitive Data Access Outside Organizational Geo-location
+      description: '''This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Microsoft Entra
+        ID Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geo-location. Results include User
+        Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is
+        to include (or exclude) Sign in geo-locations (City, State, Country and/or Region) for trusted organizational locations.
+        There is an option for configuration of correlations against Microsoft Sentinel watchlists. Accessing sensitive data
+        from a new or unauthorize'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567

@@ -1,0 +1,95 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c3ffdbe6-2e62-4984-9e80-933ed90b2f6a
+    path: Analytic Rules/Azure Firewall - DDoS attack detected.yaml
+    version: 1.0.1
+    querySha256: 2dd117489fa033963e0581f815d31dd3a86a6e3208732ff3e50f0c4321267665
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1498
+properties:
+  id: xdr-ddos-attack-detected-c3ffdbe6
+  displayName: DDoS attack detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TimeWindow   = 90d;
+      let HitThreshold = 10;
+      let MinSeverity  = 2;
+      let EnableCategoryFilter    = true;
+      let EnableDescriptionFilter = false;
+      let EnableActionFilter      = false;
+      let CategoriesOfInterest = dynamic([
+          "Attempted Denial of Service",
+          "Denial of Service",
+          "Detection of a Denial of Service Attack"
+      ]);
+      let DescriptionsOfInterest = dynamic([
+          "attempted-dos",
+          "successful-dos",
+          "denial-of-service"
+      ]);
+      let MatchActions = dynamic(["Deny", "alert"]);
+      AZFWIdpsSignature
+      | where TimeGenerated >= ago(TimeWindow)
+      | where Severity >= MinSeverity
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+      | summarize
+          StartTime   = min(TimeGenerated),
+          EndTime     = max(TimeGenerated),
+          TotalHits   = count(),
+          MaxSeverity = max(Severity),
+          Actions     = make_set(Action, 5),
+          Signatures  = make_set(SignatureId, 20),
+          Description = make_set(substring(tostring(Description), 0, 120), 3)
+          by SourceIp, ThreatCategory = Category
+      | where TotalHits >= HitThreshold
+      | project
+          StartTime,
+          EndTime,
+          SourceIp,
+          ThreatCategory,
+          TotalHits,
+          MaxSeverity,
+          Actions,
+          Signatures,
+          Description
+      | order by MaxSeverity desc, TotalHits desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: DDoS attack detected
+      description: Identifies DDoS attack in Azure Firewall IDPS logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1498
