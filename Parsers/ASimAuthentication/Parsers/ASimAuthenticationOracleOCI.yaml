@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM parser for Oracle Cloud Infrastructure (OCI) sign-in logs
-  Version: '0.1.0'
-  LastUpdated: Sep 14, 2026
+  Version: '0.2.0'
+  LastUpdated: Sep 21, 2026
 Product:
   Name: Oracle Cloud Infrastructure
 Normalization:
   Schema: Authentication
-  Version: '0.1.3'
+  Version: '1.0.0'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
@@ -16,7 +16,7 @@ References:
   Link: https://docs.oracle.com/en-us/iaas/Content/Audit/Concepts/auditoverview.htm
 Description: |
   This ASIM parser supports normalizing Oracle Cloud Infrastructure (OCI) authentication events, stored in the OCI_LogsV2_CL table, to the ASIM Authentication schema.
-  Covers FederatedLoginRequest, ReceiveSamlSpSsoResonse, SentSamlIdpSsoResonse, InteractiveLogin, AuthenticationUser, FactorMfa, InitiateSSOAuthFactor and SuccessAuthentication events.
+  Covers FederatedLoginRequest, ReceiveSamlSpSsoResponse, SentSamlIdpSsoResponse, InteractiveLogin, AuthenticationUser, FactorMfa, InitiateSSOAuthFactor and SuccessAuthentication events.
 Exceptions:
 - Field: Dst
   Warning: Missing recommended field
@@ -42,33 +42,6 @@ Exceptions:
 ParserName: ASimAuthenticationOracleOCI
 EquivalentBuiltInParser: _ASim_Authentication_OracleOCI
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: targetusername_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: targetappname_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srchostname_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventtype_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresultdetails_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -77,18 +50,10 @@ ParserParams:
     Default: false
 ParserQuery: |
   let AuthEventNames = dynamic(['FederatedLoginRequest', 'InteractiveLogin', 'AuthenticationUser',
-                                'ReceiveSamlSpSsoResonse', 'SentSamlIdpSsoResonse',
+                                'ReceiveSamlSpSsoResonse', 'ReceiveSamlSpSsoResponse',
+                                'SentSamlIdpSsoResonse', 'SentSamlIdpSsoResponse',
                                 'FactorMfa', 'InitiateSSOAuthFactor', 'SuccessAuthentication']);
   let parser = (
-      starttime:                  datetime = datetime(null),
-      endtime:                    datetime = datetime(null),
-      targetusername_has_any:     dynamic  = dynamic([]),
-      targetappname_has_any:      dynamic  = dynamic([]),
-      srcipaddr_has_any_prefix:   dynamic  = dynamic([]),
-      srchostname_has_any:        dynamic  = dynamic([]),
-      eventtype_in:               dynamic  = dynamic([]),
-      eventresultdetails_in:      dynamic  = dynamic([]),
-      eventresult:                string   = '*',
       disabled:                   bool     = false,
       pack:                       bool     = false
   ) {
@@ -96,9 +61,6 @@ ParserQuery: |
       | where not(disabled)
       // -- Authentication events only
       | where data_eventName_s in (AuthEventNames)
-      // -- Time filter
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime)   or TimeGenerated <= endtime)
       // -- Parse response status from nested JSON
       | extend _data    = parse_json(data)
       | extend ResponseStatus = tostring(_data.response.status)
@@ -107,7 +69,8 @@ ParserQuery: |
           EventResult        = case(
               // SAML exchange events: OCI does not emit a standard HTTP 200 for these;
               // the act of logging the event implies the exchange succeeded.
-              data_eventName_s in ('ReceiveSamlSpSsoResonse', 'SentSamlIdpSsoResonse'), 'Success',
+              data_eventName_s in ('ReceiveSamlSpSsoResonse', 'ReceiveSamlSpSsoResponse',
+                                   'SentSamlIdpSsoResonse', 'SentSamlIdpSsoResponse'), 'Success',
               // SuccessAuthentication is always a success acknowledgement by definition.
               data_eventName_s == 'SuccessAuthentication', 'Success',
               ResponseStatus == '200', 'Success',
@@ -118,23 +81,19 @@ ParserQuery: |
               data_eventName_s in ('InteractiveLogin', 'AuthenticationUser')
                   and ResponseStatus == '400', 'Incorrect password',
               '')
-      | where (eventresult == '*' or EventResult =~ eventresult)
-      | where (array_length(eventresultdetails_in) == 0
-               or EventResultDetails has_any (eventresultdetails_in))
       // -- Logon method & event type
       | extend
           EventType   = 'Logon',
           LogonMethod = case(
               data_eventName_s in ('FederatedLoginRequest',
-                                   'ReceiveSamlSpSsoResonse',
-                                   'SentSamlIdpSsoResonse'), 'Other',             // SAML/federation -- no dedicated schema value
+                                   'ReceiveSamlSpSsoResonse', 'ReceiveSamlSpSsoResponse',
+                                   'SentSamlIdpSsoResonse', 'SentSamlIdpSsoResponse'), 'Other',             // SAML/federation -- no dedicated schema value
               data_eventName_s == 'InteractiveLogin',           'Username & Password',
               data_eventName_s == 'AuthenticationUser',         'Username & Password',
               data_eventName_s == 'FactorMfa',                  'Multi factor authentication',
               data_eventName_s == 'InitiateSSOAuthFactor',      'Multi factor authentication',
               data_eventName_s == 'SuccessAuthentication',      'Username & Password',
               '')
-      | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
       // -- Target user
       // principalName is set for InteractiveLogin (the attempted username).
       // FederatedLoginRequest has no principalName until the SAML assertion is
@@ -150,31 +109,22 @@ ParserQuery: |
           TargetUserIdType = 'Other'
       | extend
           TargetUsernameType = iff(TargetUsername contains '@', 'UPN', 'Simple')
-      | where (array_length(targetusername_has_any) == 0
-               or TargetUsername has_any (targetusername_has_any))
-      // targetappname_has_any: not applicable for OCI auth events
-      | where array_length(targetappname_has_any) == 0
-      // srchostname_has_any: not applicable for OCI auth events
-      | where array_length(srchostname_has_any) == 0
       // -- Source IP
       // FederatedLoginRequest may carry X-Forwarded-For (comma-separated).
       // Take the first (original client) IP.
       | extend SrcIpAddr = trim(' ', tostring(split(data_identity_ipAddress_s, ',')[0]))
-      | where (array_length(srcipaddr_has_any_prefix) == 0
-               or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
       | extend Src = SrcIpAddr
       // -- Acting app (caller on behalf of)
       | extend
           ActingAppId     = data_identity_callerId_s,
-          ActingAppName   = data_identity_callerName_s,
-          ActingAppIdType = 'OCID'
+          ActingAppName   = data_identity_callerName_s
       // -- Session
       | extend
           TargetSessionId = tostring(_data.identity.consoleSessionId)
       // -- Source device
       // User-Agent is stored as a single-element JSON array by OCI.
       | extend
-          SrcOriginalUserAgent = tostring(parse_json(data_request_headers_User_Agent_s)[0])
+          HttpUserAgent = tostring(parse_json(data_request_headers_User_Agent_s)[0])
       // -- Additional fields (source-specific, no ASIM column equivalent)
       // Only populated when pack=true; defaults to dynamic({}) (empty dictionary).
       | extend AdditionalFields = iff(
@@ -188,8 +138,9 @@ ParserQuery: |
               'SrcPort',           data_request_headers_X_Real_Port_s,          // source port of the login attempt
               'OpcClientInfo',     data_request_headers_opc_client_info_s,      // OCI SDK / CLI version -- distinguishes automated from interactive logins
               'CompartmentName',   data_compartmentName_s,                      // human-readable compartment name
-              'EventGroupingId',   data_eventGroupingId_s,                      // correlates FederatedLoginRequest / ReceiveSamlSpSsoResonse pairs
-              'AvailabilityDomain', data_availabilityDomain_s                   // AZ where the authentication was processed
+              'EventGroupingId',   data_eventGroupingId_s,                      // correlates FederatedLoginRequest / ReceiveSamlSpSsoResponse pairs
+              'AvailabilityDomain', data_availabilityDomain_s,                  // AZ where the authentication was processed
+              'TenantOcid',        data_identity_tenantId_s                    // OCI tenancy OCID the auth event occurred in
           ),
           dynamic({})
       )
@@ -199,14 +150,13 @@ ParserQuery: |
           EventStartTime      = TimeGenerated,
           EventEndTime        = TimeGenerated,
           EventSchema         = 'Authentication',
-          EventSchemaVersion  = '0.1.3',
+          EventSchemaVersion  = '1.0.0',
           EventVendor         = 'Oracle',
           EventProduct        = 'OCI',
           EventOriginalType   = data_eventName_s,
-          EventOriginalUid    = data_request_id_s,
-          EventUid            = data_request_id_s,
+          EventOriginalUid    = coalesce(data_request_id_s, tostring(_data.request.id)),
+          EventUid            = coalesce(data_request_id_s, tostring(_data.request.id)),
           EventSeverity       = iff(EventResult == 'Failure', 'Low', 'Informational'),
-          TargetTenantId      = data_identity_tenantId_s,
           Dvc                 = 'OCI'
       // -- Project ASIM schema columns only
       | project
@@ -231,29 +181,17 @@ ParserQuery: |
           TargetUserId,
           TargetUserIdType,
           TargetSessionId,
-          TargetTenantId,
           SrcIpAddr,
           IpAddr = SrcIpAddr,
           Src,
-          SrcOriginalUserAgent,
+          HttpUserAgent,
           ActingAppId,
           ActingAppName,
-          ActingAppIdType,
           Dvc,
           AdditionalFields,
-          TenantId,
           Type
   };
   parser(
-      starttime                = starttime,
-      endtime                  = endtime,
-      targetusername_has_any   = targetusername_has_any,
-      targetappname_has_any    = targetappname_has_any,
-      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
-      srchostname_has_any      = srchostname_has_any,
-      eventtype_in             = eventtype_in,
-      eventresultdetails_in    = eventresultdetails_in,
-      eventresult              = eventresult,
-      disabled                 = disabled,
-      pack                     = pack
+      disabled = disabled,
+      pack     = pack
   )

@@ -1,12 +1,12 @@
 Parser:
   Title: Audit Event ASIM parser for Oracle Cloud Infrastructure (OCI) Audit Logs
-  Version: '0.1.1'
-  LastUpdated: Sep 14, 2026
+  Version: '0.2.0'
+  LastUpdated: Sep 21, 2026
 Product:
   Name: Oracle Cloud Infrastructure
 Normalization:
   Schema: AuditEvent
-  Version: '0.1.1'
+  Version: '1.0.0'
 References:
 - Title: ASIM Audit Event Schema
   Link: https://aka.ms/ASimAuditEventDoc
@@ -45,33 +45,6 @@ Exceptions:
 ParserName: ASimAuditEventOracleOCI
 EquivalentBuiltInParser: _ASim_AuditEvent_OracleOCI
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: actorusername_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: operation_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: object_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: newvalue_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventtype_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -80,18 +53,10 @@ ParserParams:
     Default: false
 ParserQuery: |
   let AuthEventNames   = dynamic(['FederatedLoginRequest', 'InteractiveLogin', 'AuthenticationUser',
-                                  'ReceiveSamlSpSsoResonse', 'SentSamlIdpSsoResonse',
+                                  'ReceiveSamlSpSsoResonse', 'ReceiveSamlSpSsoResponse',
+                                  'SentSamlIdpSsoResonse', 'SentSamlIdpSsoResponse',
                                   'FactorMfa', 'InitiateSSOAuthFactor', 'SuccessAuthentication']);
   let parser = (
-      starttime:                  datetime = datetime(null),
-      endtime:                    datetime = datetime(null),
-      srcipaddr_has_any_prefix:   dynamic  = dynamic([]),
-      actorusername_has_any:      dynamic  = dynamic([]),
-      operation_has_any:          dynamic  = dynamic([]),
-      object_has_any:             dynamic  = dynamic([]),
-      newvalue_has_any:           dynamic  = dynamic([]),
-      eventtype_in:               dynamic  = dynamic([]),
-      eventresult:                string   = '*',
       disabled:                   bool     = false,
       pack:                       bool     = false
   ) {
@@ -101,9 +66,6 @@ ParserQuery: |
       | where isnotempty(data_eventName_s)
       | where data_eventName_s !in (AuthEventNames)
       | where isempty(data_sourceAddress_s)
-      // -- Time filter
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime)   or TimeGenerated <= endtime)
       // -- Parse nested JSON
       | extend _data = parse_json(data)
       // -- Result
@@ -119,7 +81,6 @@ ParserQuery: |
               ResponseStatus == '403', 'Forbidden',
               ResponseStatus == '404', 'Not found',
               '')
-      | where (eventresult == '*' or EventResult =~ eventresult)
       // -- Operation & EventType
       | extend Operation = data_eventName_s
       | extend _instanceActionType = tostring(_data.additionalDetails.instanceActionType)
@@ -205,10 +166,6 @@ ParserQuery: |
           Operation endswith '.delete' or
           Operation endswith '.deletecollection', 'Delete',
           'Other')
-      | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
-      | where (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
-      // newvalue_has_any: not applicable for OCI audit
-      | where array_length(newvalue_has_any) == 0
       // -- Actor
       | extend
           ActorUsername     = data_identity_principalName_s,
@@ -225,17 +182,12 @@ ParserQuery: |
               ''),
           ActorUsernameType = iff(data_identity_principalName_s contains '@', 'UPN', 'Simple'),
           ActingAppId       = data_identity_callerId_s,
-          ActingAppName     = data_identity_callerName_s,
-          ActingAppIdType   = 'OCID'
-      | where (array_length(actorusername_has_any) == 0
-               or ActorUsername has_any (actorusername_has_any))
+          ActingAppName     = data_identity_callerName_s
       // -- Source IP
       // OCI may return comma-separated IPs (X-Forwarded-For); take the first.
       // 'localhost' is normalised to the loopback address.
       | extend SrcIpAddr = trim(' ', tostring(split(data_identity_ipAddress_s, ',')[0]))
       | extend SrcIpAddr = iff(SrcIpAddr =~ 'localhost', '127.0.0.1', SrcIpAddr)
-      | where (array_length(srcipaddr_has_any_prefix) == 0
-               or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
       | extend Src = SrcIpAddr
       // -- Object (resource being acted upon)
       // data_resourceId_s is the most reliable source (present on ~38% of events).
@@ -245,6 +197,10 @@ ParserQuery: |
       // OCID as the last resort -- always present, and this is a Mandatory field.
       | extend
           Object = coalesce(
+              data_response_payload_resourceName_s,
+              data_stateChange_current_displayName_s,
+              data_additionalDetails_description_s,
+              source_s,                                  // Container Registry repo name (e.g. repo/image)
               data_resourceId_s,
               data_request_parameters_instanceId_s,
               data_stateChange_current_id_s,
@@ -252,11 +208,14 @@ ParserQuery: |
               data_additionalDetails_volumeId_s,
               tostring(_data.additionalDetails.path),   // Container Registry repo path (pulldockerlayer etc.)
               data_compartmentId_s),                    // List* operations: the compartment being queried
-          ObjectName = coalesce(
-              data_response_payload_resourceName_s,
-              data_stateChange_current_displayName_s,
-              data_additionalDetails_description_s,
-              source_s),                                 // Container Registry repo name (e.g. repo/image)
+          ObjectId = coalesce(
+              data_resourceId_s,
+              data_request_parameters_instanceId_s,
+              data_stateChange_current_id_s,
+              data_additionalDetails_id_s,
+              data_additionalDetails_volumeId_s,
+              tostring(_data.additionalDetails.path),   // Container Registry repo path (pulldockerlayer etc.)
+              data_compartmentId_s),                    // List* operations: the compartment being queried
           ObjectType = case(
               // Cloud infrastructure resources -> 'Cloud'
               Operation contains 'Instance'   or
@@ -285,12 +244,11 @@ ParserQuery: |
               Operation contains 'Tag',            'Policy',
               // Everything else -> 'Other'
               'Other')
-      | where (array_length(object_has_any) == 0 or Object has_any (object_has_any))
       // -- Request details
       // User-Agent is stored as a single-element JSON array by OCI.
       | extend
-          Url                  = coalesce(data_request_path_s, tostring(_data.request.path)),
-          HttpUserAgentOriginal = coalesce(
+          TargetUrl     = coalesce(data_request_path_s, tostring(_data.request.path)),
+          HttpUserAgent = coalesce(
               tostring(parse_json(data_request_headers_User_Agent_s)[0]),
               tostring(_data.request.headers['User-Agent']))
       // -- Additional fields (source-specific, no ASIM column equivalent)
@@ -324,7 +282,8 @@ ParserQuery: |
               'XForwardedFor',      data_request_headers_X_Forwarded_For_s,       // full proxy IP chain
               'ConsoleSessionId',   data_identity_consoleSessionId_s,              // actor's console session
               'WorkRequestId',      data_response_headers_opc_work_request_id_s,  // async work-request ID
-              'LayerDigest',        tostring(_data.additionalDetails.digest)       // Container Registry layer SHA256 digest
+              'LayerDigest',        tostring(_data.additionalDetails.digest),      // Container Registry layer SHA256 digest
+              'TenantOcid',         oracle_tenantid_s                              // OCI tenancy OCID the audit event occurred in
           ),
           dynamic({})
       )
@@ -334,7 +293,7 @@ ParserQuery: |
           EventStartTime      = TimeGenerated,
           EventEndTime        = TimeGenerated,
           EventSchema         = 'AuditEvent',
-          EventSchemaVersion  = '0.1.1',
+          EventSchemaVersion  = '1.0.0',
           EventVendor         = 'Oracle',
           EventProduct        = 'OCI',
           EventOriginalType   = data_eventName_s,
@@ -345,8 +304,6 @@ ParserQuery: |
               EventResult == 'Failure' and ResponseStatus == '403', 'Medium',
               EventResult == 'Failure', 'Low',
               'Informational'),
-          // Scope / tenant
-          EventTenantId       = oracle_tenantid_s,
           DvcScopeId          = oracle_compartmentid_s,
           Dvc                 = 'OCI'
       // -- Project ASIM schema columns only
@@ -367,8 +324,8 @@ ParserQuery: |
           EventResultDetails,
           EventSeverity,
           Operation,
-          Url,
-          HttpUserAgentOriginal,
+          TargetUrl,
+          HttpUserAgent,
           ActorUsername,
           ActorUsernameType,
           ActorUserId,
@@ -376,31 +333,19 @@ ParserQuery: |
           ActorUserType,
           ActingAppId,
           ActingAppName,
-          ActingAppIdType,
           SrcIpAddr,
           IpAddr = SrcIpAddr,
           Src,
           Object,
-          ObjectName,
+          ObjectId,
           ObjectType,
           Dvc,
-          EventTenantId,
           DvcScopeId,
           AdditionalFields,
           User = ActorUsername,
-          TenantId,
           Type
   };
   parser(
-      starttime                = starttime,
-      endtime                  = endtime,
-      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
-      actorusername_has_any    = actorusername_has_any,
-      operation_has_any        = operation_has_any,
-      object_has_any           = object_has_any,
-      newvalue_has_any         = newvalue_has_any,
-      eventtype_in             = eventtype_in,
-      eventresult              = eventresult,
-      disabled                 = disabled,
-      pack                     = pack
+      disabled = disabled,
+      pack     = pack
   )

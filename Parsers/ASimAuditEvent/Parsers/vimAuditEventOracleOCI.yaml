@@ -1,19 +1,22 @@
 Parser:
   Title: Audit Event ASIM filtering parser for Oracle Cloud Infrastructure (OCI) Audit Logs
-  Version: '0.1.1'
-  LastUpdated: Sep 14, 2026
+  Version: '0.2.0'
+  LastUpdated: Sep 21, 2026
 Product:
   Name: Oracle Cloud Infrastructure
 Normalization:
   Schema: AuditEvent
-  Version: '0.1.1'
+  Version: '1.0.0'
 References:
 - Title: ASIM Audit Event Schema
   Link: https://aka.ms/ASimAuditEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
+- Title: OCI Audit events
+  Link: https://docs.oracle.com/en-us/iaas/Content/Audit/Concepts/auditoverview.htm
 Description: |
-  This ASIM parser supports filtering and normalizing Oracle Cloud Infrastructure (OCI) API audit events, stored in the OCI_LogsV2_CL table, to the ASIM AuditEvent schema.
+  This ASIM filtering parser supports normalizing and filtering Oracle Cloud Infrastructure (OCI) API audit events, stored in the OCI_LogsV2_CL table, to the ASIM AuditEvent schema.
+  Excludes authentication events (handled by vimAuthenticationOracleOCI) and VCN flow log rows (handled by the OCI ASIM NetworkSession parser).
 ParserName: vimAuditEventOracleOCI
 EquivalentBuiltInParser: _Im_AuditEvent_OracleOCI
 ParserParams:
@@ -51,6 +54,10 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let AuthEventNames   = dynamic(['FederatedLoginRequest', 'InteractiveLogin', 'AuthenticationUser',
+                                  'ReceiveSamlSpSsoResonse', 'ReceiveSamlSpSsoResponse',
+                                  'SentSamlIdpSsoResonse', 'SentSamlIdpSsoResponse',
+                                  'FactorMfa', 'InitiateSSOAuthFactor', 'SuccessAuthentication']);
   let parser = (
       starttime:                  datetime = datetime(null),
       endtime:                    datetime = datetime(null),
@@ -64,19 +71,303 @@ ParserQuery: |
       disabled:                   bool     = false,
       pack:                       bool     = false
   ) {
-      ASimAuditEventOracleOCI(
-          starttime                = starttime,
-          endtime                  = endtime,
-          srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
-          actorusername_has_any    = actorusername_has_any,
-          operation_has_any        = operation_has_any,
-          object_has_any           = object_has_any,
-          newvalue_has_any         = newvalue_has_any,
-          eventtype_in             = eventtype_in,
-          eventresult              = eventresult,
-          disabled                 = disabled,
-          pack                     = pack
+      OCI_LogsV2_CL
+      | where not(disabled)
+      // -- Audit events only (exclude auth events and flow log rows)
+      | where isnotempty(data_eventName_s)
+      | where data_eventName_s !in (AuthEventNames)
+      | where isempty(data_sourceAddress_s)
+      // -- Time filter
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime)   or TimeGenerated <= endtime)
+      // -- Parse nested JSON
+      | extend _data = parse_json(data)
+      // -- Result
+      | extend ResponseStatus = tostring(_data.response.status)
+      | extend
+          EventResult = case(
+              ResponseStatus == '200', 'Success',
+              ResponseStatus in ('400', '401', '403', '404', '500'), 'Failure',
+              isempty(ResponseStatus), 'NA',
+              'NA'),
+          EventResultDetails = case(
+              ResponseStatus == '401', 'Unauthorised',
+              ResponseStatus == '403', 'Forbidden',
+              ResponseStatus == '404', 'Not found',
+              '')
+      | where (eventresult == '*' or EventResult =~ eventresult)
+      // -- Operation & EventType
+      | extend Operation = data_eventName_s
+      | extend _instanceActionType = tostring(_data.additionalDetails.instanceActionType)
+      | extend EventType = case(
+          // InstanceAction: map sub-type using additionalDetails.instanceActionType (lowercase)
+          Operation == 'InstanceAction' and _instanceActionType =~ 'start',                                                   'Start',
+          Operation == 'InstanceAction' and (_instanceActionType =~ 'stop' or _instanceActionType =~ 'softstop'),             'Stop',
+          Operation == 'InstanceAction' and _instanceActionType =~ 'terminate',                                               'Delete',
+          Operation == 'InstanceAction',                                                                                      'Execute',  // softreset, reset, or unknown
+          // Read operations
+          Operation startswith 'List'        or
+          Operation startswith 'Get'         or
+          Operation startswith 'Describe'    or
+          Operation startswith 'Summarize'   or
+          Operation startswith 'pull'        or  // Container Registry pulls
+          Operation startswith 'read'        or  // Container Registry reads
+          Operation startswith 'Read'        or
+          Operation startswith 'search'      or  // search* / Search*
+          Operation startswith 'Search'      or
+          Operation startswith 'filter'      or  // filterLogs
+          Operation startswith 'Filter'      or
+          Operation startswith 'Retrieve'    or
+          Operation startswith 'Request'     or
+          Operation startswith 'Check'       or  // CheckDataSafeEnable
+          Operation startswith 'UserAssessment' or  // UserAssessmentPasswordExpiryDate
+          Operation startswith 'Warehouse',      'Read',  // WarehouseWhiteListedInfo
+          // Create / provision
+          Operation startswith 'Create'      or
+          Operation startswith 'Launch'      or
+          Operation startswith 'Automatic'   or
+          Operation startswith 'Copy'        or  // CopyBootVolumeBackup, CopyVolumeBackup
+          Operation startswith 'Schedule'    or  // ScheduledUpgrade, ScheduleVaultDeletion, ScheduleKeyDeletion
+          Operation == 'SuccessCreate',          'Create',
+          // Delete
+          Operation startswith 'Delete'      or
+          Operation startswith 'Terminate'   or
+          Operation startswith 'Release'     or  // ReleaseCloudShellHost
+          Operation == 'SuccessDelete',          'Delete',
+          // Enable
+          Operation startswith 'Activate'    or
+          Operation startswith 'Resume'      or  // ResumeAuditTrail
+          Operation == 'enable_process_automation', 'Enable',
+          // Disable
+          Operation startswith 'Deactivate',     'Disable',  // DeactivateUser, DeactivatedApp
+          // Stop
+          Operation startswith 'Stop'        or  // StopAuditTrail, StopAutonomousDatabase
+          Operation startswith 'stop',           'Stop',     // stopAnalyticsInstance (lowercase)
+          // Set / modify (config and membership changes)
+          Operation startswith 'Update'      or
+          Operation startswith 'Modify'      or
+          Operation startswith 'Patch'       or
+          Operation startswith 'Attach'      or
+          Operation startswith 'Detach'      or
+          Operation startswith 'Add'         or  // AddUserToGroup, AddApprole
+          Operation startswith 'Remove'      or  // RemoveUserFromGroup, RemoveApprole
+          Operation startswith 'Send'        or  // SendVerificationEmail
+          Operation startswith 'Sent'        or
+          Operation startswith 'StateChange' or  // StateChangeTargetDatabase
+          Operation startswith 'change'      or  // changeAnalyticsInstanceNetworkEndpoint (lowercase)
+          Operation startswith 'Assign'      or  // AssignCloudShellHost
+          Operation startswith 'Replace',        'Set',  // ReplaceManagedappconnectiontester, ReplaceTenantschema
+          // Execute / action
+          Operation endswith   'Action'      or
+          Operation startswith 'generate'    or
+          Operation startswith 'Execute'     or
+          Operation startswith 'Access'      or  // AccessApp
+          Operation startswith 'Initiate'    or  // InitiateSSOAuthFactor
+          Operation startswith 'Cancel'      or
+          Operation startswith 'job.'        or  // job.failed, job.succeeded
+          Operation startswith 'Job'         or  // JobRunning
+          Operation startswith 'Calculate'   or  // CalculateAuditVolumeCollected/Available
+          Operation startswith 'Audit'       or  // AuditCollectionWarning
+          Operation startswith 'Acquire'     or  // AcquireInternalUsage
+          Operation == 'InstanceConsoleConnected'        or
+          Operation == 'EmailNotificationDeliveryStatus' or
+          Operation == 'push_billing_details',               'Execute',
+          // Upload (OCI agent data uploads)
+          Operation startswith 'Upload',         'Create',
+          // Kubernetes / OKE events: verb is the last dot-delimited segment
+          Operation endswith '.update' or
+          Operation endswith '.patch',           'Set',
+          Operation endswith '.create',          'Create',
+          Operation endswith '.delete' or
+          Operation endswith '.deletecollection', 'Delete',
+          'Other')
+      | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+      | where (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+      // newvalue_has_any: not applicable for OCI audit
+      | where array_length(newvalue_has_any) == 0
+      // -- Actor
+      | extend
+          ActorUsername     = data_identity_principalName_s,
+          ActorUserId       = data_identity_principalId_s,
+          ActorUserIdType   = 'Other',
+          ActorUserType     = case(
+              data_identity_authType_s == 'fed',      'Regular',  // federated human user
+              data_identity_authType_s =~ 'USER',     'Regular',  // human user (case variant)
+              data_identity_authType_s == 'natv',     'Regular',  // native IDCS user
+              data_identity_authType_s == 'instance', 'Machine',  // instance principal
+              data_identity_authType_s == 'resource', 'Machine',  // resource principal
+              data_identity_authType_s == 'service',  'Machine',  // OCI service-to-service
+              data_identity_authType_s == 'none',     'System',
+              ''),
+          ActorUsernameType = iff(data_identity_principalName_s contains '@', 'UPN', 'Simple'),
+          ActingAppId       = data_identity_callerId_s,
+          ActingAppName     = data_identity_callerName_s
+      | where (array_length(actorusername_has_any) == 0
+               or ActorUsername has_any (actorusername_has_any))
+      // -- Source IP
+      // OCI may return comma-separated IPs (X-Forwarded-For); take the first.
+      // 'localhost' is normalised to the loopback address.
+      | extend SrcIpAddr = trim(' ', tostring(split(data_identity_ipAddress_s, ',')[0]))
+      | extend SrcIpAddr = iff(SrcIpAddr =~ 'localhost', '127.0.0.1', SrcIpAddr)
+      | where (array_length(srcipaddr_has_any_prefix) == 0
+               or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+      | extend Src = SrcIpAddr
+      // -- Object (resource being acted upon)
+      // data_resourceId_s is the most reliable source (present on ~38% of events).
+      // Fall back to request parameters, stateChange, and additionalDetails.
+      // Read-only List* operations (e.g. ListInstances) act on a compartment
+      // scope rather than a single resource, so fall back to the compartment
+      // OCID as the last resort -- always present, and this is a Mandatory field.
+      | extend
+          Object = coalesce(
+              data_response_payload_resourceName_s,
+              data_stateChange_current_displayName_s,
+              data_additionalDetails_description_s,
+              source_s,                                  // Container Registry repo name (e.g. repo/image)
+              data_resourceId_s,
+              data_request_parameters_instanceId_s,
+              data_stateChange_current_id_s,
+              data_additionalDetails_id_s,
+              data_additionalDetails_volumeId_s,
+              tostring(_data.additionalDetails.path),   // Container Registry repo path (pulldockerlayer etc.)
+              data_compartmentId_s),                    // List* operations: the compartment being queried
+          ObjectId = coalesce(
+              data_resourceId_s,
+              data_request_parameters_instanceId_s,
+              data_stateChange_current_id_s,
+              data_additionalDetails_id_s,
+              data_additionalDetails_volumeId_s,
+              tostring(_data.additionalDetails.path),   // Container Registry repo path (pulldockerlayer etc.)
+              data_compartmentId_s),                    // List* operations: the compartment being queried
+          ObjectType = case(
+              // Cloud infrastructure resources -> 'Cloud'
+              Operation contains 'Instance'   or
+              Operation contains 'Bucket'     or
+              Operation contains 'Namespace'  or
+              Operation in ('pulldockerlayer', 'readdockerrepositorymanifest',
+                            'getcontainerimage', 'pushcontainerimage') or
+              Operation contains 'Volume'     or
+              Operation contains 'Image'      or
+              Operation contains 'Database'   or
+              Operation contains 'Autonomous' or
+              Operation contains 'DbSystem'   or
+              Operation contains 'DbHome'     or
+              Operation contains 'DbNode'     or
+              ((Operation startswith 'List' or Operation startswith 'Get' or
+                Operation startswith 'Create' or Operation startswith 'Update' or
+                Operation startswith 'Delete') and Operation contains 'Db') or
+              Operation contains 'Backup'     or
+              Operation contains 'Compartment' or
+              Operation contains 'Tenancy'    or
+              Operation contains 'Tenant'     or
+              Operation contains 'Vnic'       or
+              Operation contains 'Subnet'     or
+              Operation contains 'Vcn',           'Cloud',
+              // Policy, config and metadata -> 'Policy'
+              Operation contains 'Tag',            'Policy',
+              // Everything else -> 'Other'
+              'Other')
+      | where (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+      // -- Request details
+      // User-Agent is stored as a single-element JSON array by OCI.
+      | extend
+          TargetUrl     = coalesce(data_request_path_s, tostring(_data.request.path)),
+          HttpUserAgent = coalesce(
+              tostring(parse_json(data_request_headers_User_Agent_s)[0]),
+              tostring(_data.request.headers['User-Agent']))
+      // -- Additional fields (source-specific, no ASIM column equivalent)
+      // Only populated when pack=true; defaults to dynamic({}) (empty dictionary).
+      | extend AdditionalFields = iff(
+          pack,
+          bag_pack(
+              'CompartmentName',    data_compartmentName_s,               // human-readable compartment name
+              'AvailabilityDomain', data_availabilityDomain_s,            // AZ where action occurred
+              'HttpMethod',         data_action_s,                         // raw HTTP verb (GET/PUT/...)
+              'EventGroupingId',    data_eventGroupingId_s,                // correlates related events
+              'InstanceShape',      data_additionalDetails_shape_s,        // VM shape / SKU
+              'LifecycleState',     data_additionalDetails_lifeCycleState_s, // resource state at event time
+              'ResourceType',       data_additionalDetails_type_s,         // fine-grained resource type
+              'HomeRegion',         data_additionalDetails_homeRegionKey_s, // resource home region
+              'ImageId',            data_additionalDetails_imageId_s,      // compute image OCID
+              'Namespace',          data_additionalDetails_namespace_s,    // OCI object-storage namespace
+              'StateChange', bag_pack(
+                  'LifecycleState',   data_stateChange_current_lifecycleState_s,   // state after mutation
+                  'CompartmentId',    data_stateChange_current_compartmentId_s,    // detects cross-compartment moves
+                  'IsEnabled',        data_stateChange_current_isEnabled_b,        // enable/disable state after change
+                  'LifecycleDetails', data_stateChange_current_lifecycleDetails_s, // extra context alongside lifecycle state
+                  'InstanceId',       data_stateChange_current_instanceId_s,       // instance OCID in stateChange context
+                  'UserId',           data_stateChange_current_userId_s,           // user OCID affected by the change
+                  'UserName',         data_stateChange_current_userName_s,         // username affected by the change
+                  'KeyId',            data_stateChange_current_keyId_s,            // KMS key involved (vault events)
+                  'LogGroupId',       data_stateChange_current_logGroupId_s,       // log group (logging config changes)
+                  'LogType',          data_stateChange_current_logType_s,          // log type (logging config changes)
+                  'TenancyId',        data_stateChange_current_tenancyId_s         // tenancy-level change context
+              ),
+              'XForwardedFor',      data_request_headers_X_Forwarded_For_s,       // full proxy IP chain
+              'ConsoleSessionId',   data_identity_consoleSessionId_s,              // actor's console session
+              'WorkRequestId',      data_response_headers_opc_work_request_id_s,  // async work-request ID
+              'LayerDigest',        tostring(_data.additionalDetails.digest),      // Container Registry layer SHA256 digest
+              'TenantOcid',         oracle_tenantid_s                              // OCI tenancy OCID the audit event occurred in
+          ),
+          dynamic({})
       )
+      // -- Event metadata
+      | extend
+          EventCount          = int(1),
+          EventStartTime      = TimeGenerated,
+          EventEndTime        = TimeGenerated,
+          EventSchema         = 'AuditEvent',
+          EventSchemaVersion  = '1.0.0',
+          EventVendor         = 'Oracle',
+          EventProduct        = 'OCI',
+          EventOriginalType   = data_eventName_s,
+          EventOriginalUid    = coalesce(data_request_id_s, tostring(_data.request.id)),
+          EventUid            = coalesce(data_request_id_s, tostring(_data.request.id)),
+          EventSeverity       = case(
+              EventResult == 'Failure' and ResponseStatus == '401', 'Medium',
+              EventResult == 'Failure' and ResponseStatus == '403', 'Medium',
+              EventResult == 'Failure', 'Low',
+              'Informational'),
+          DvcScopeId          = oracle_compartmentid_s,
+          Dvc                 = 'OCI'
+      // -- Project ASIM schema columns only
+      | project
+          TimeGenerated,
+          EventCount,
+          EventStartTime,
+          EventEndTime,
+          EventType,
+          EventSchema,
+          EventSchemaVersion,
+          EventVendor,
+          EventProduct,
+          EventOriginalType,
+          EventOriginalUid,
+          EventUid,
+          EventResult,
+          EventResultDetails,
+          EventSeverity,
+          Operation,
+          TargetUrl,
+          HttpUserAgent,
+          ActorUsername,
+          ActorUsernameType,
+          ActorUserId,
+          ActorUserIdType,
+          ActorUserType,
+          ActingAppId,
+          ActingAppName,
+          SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Src,
+          Object,
+          ObjectId,
+          ObjectType,
+          Dvc,
+          DvcScopeId,
+          AdditionalFields,
+          User = ActorUsername,
+          Type
   };
   parser(
       starttime                = starttime,
