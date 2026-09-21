@@ -4,9 +4,7 @@
 
 ## Overview
 
-This solution integrates **Check Point Exposure Management** with **Microsoft Sentinel**. Argos alerts become Microsoft Sentinel incidents, and status changes made in Argos are mirrored onto those incidents.
-
-> **Microsoft Sentinel → Argos sync is not available in this version.** The Argos API accepts its token only as a cookie, and Azure Logic Apps removes the `Cookie` header from outgoing requests, so no playbook can authenticate to Argos. See [Known Limitations](#known-limitations).
+This solution integrates **Check Point Exposure Management** with **Microsoft Sentinel** and keeps alert status in sync in both directions. Argos alerts become Microsoft Sentinel incidents, status changes made in either system are mirrored to the other, and SOC teams can enrich and respond to alerts from Microsoft Sentinel.
 
 ### What's Included
 
@@ -14,7 +12,7 @@ This solution integrates **Check Point Exposure Management** with **Microsoft Se
 |-----------|-------------|
 | **Data Connector** (CCP) | Polls the Argos Alerts API every 5 minutes for alerts created or changed in that window |
 | **2 Analytic Rules** | Creates an incident per Argos alert; detects ingestion gaps |
-| **6 Playbook templates** | Inbound status sync, enrichment and response |
+| **9 Playbook templates** | Status sync in both directions, enrichment, response, and the automation rule that wires outbound sync |
 | **1 Parser** | `CPEMAlerts`: latest state of each alert with category metadata |
 | **1 Workbook** | Alert overview, status distribution, and sync health monitoring |
 
@@ -24,43 +22,41 @@ This solution integrates **Check Point Exposure Management** with **Microsoft Se
             ┌──────────────────────────────────────┐
             │  Check Point Exposure Management     │
             │  (Argos Alerts API)                  │
-            └───────┬──────────────────────────────┘
-                    │ POST /alerts (update_date window)
-                    ▼
-          ┌───────────────────┐
-          │ CCP data connector│
-          └─────────┬─────────┘
-                    ▼
-          ┌───────────────────┐
-          │ argsentdc_CL      │
-          │ one row per change│
-          └──┬─────────────┬──┘
-             │             │
-   first seen│             │later changes
-             ▼             ▼
-  ┌────────────────┐ ┌───────────────────┐
-  │ Analytic rule  │ │ InboundStatusSync │
-  │ Argos alerts   │ │ (Argos → Sentinel)│
-  │ to incidents   │ └─────────┬─────────┘
-  └────────┬───────┘           │
-           ▼                   ▼
-      ┌────────────────────────────┐
-      │ Microsoft Sentinel         │
-      │ incidents (ref_id Custom   │
-      │ Detail)                    │
-      └────────────────────────────┘
+            └───────┬──────────────────────▲───────┘
+                    │ POST /alerts          │ GET /alerts/{ref_id}
+                    │ (update_date window)  │ PUT /alerts/status
+                    ▼                       │
+          ┌───────────────────┐   ┌─────────┴──────────┐
+          │ CCP data connector│   │ Exporter           │
+          └─────────┬─────────┘   │ (Sentinel → Argos) │
+                    ▼             └─────────▲──────────┘
+          ┌───────────────────┐             │ Automation rule:
+          │ argsentdc_CL      │             │ status changed
+          │ one row per change│             │
+          └──┬─────────────┬──┘   ┌─────────┴──────────┐
+             │             │      │ Microsoft Sentinel │
+   first seen│             │later │ incidents          │
+             ▼             ▼      └──▲──────────────▲──┘
+  ┌────────────────┐ ┌──────────────┴────┐          │
+  │ Analytic rule  │ │ InboundStatusSync │          │
+  │ Argos alerts   │ │ (Argos → Sentinel)│          │
+  │ to incidents   ├─┼───────────────────┼──────────┘
+  └────────────────┘ └───────────────────┘  creates incident + alert
+                                            with ref_id Custom Detail
 ```
 
 **How the sync works:**
 - **Ingestion.** The CCP connector filters on `update_date`, so every change to an Argos alert (new, acknowledged, closed, reopened) adds a row to `argsentdc_CL`. The latest row per `ref_id` is the current Argos state.
-- **Incident creation.** The **Argos alerts to incidents** rule creates one incident the first time an alert appears as `open` or `acknowledged`, with `ref_id` as a Custom Detail.
-- **Argos → Microsoft Sentinel.** **Check_Point_EM_InboundStatusSync** runs every 5 minutes, compares the latest Argos state with the incident, and updates the incident status and classification when they differ. It runs entirely inside Azure and needs no Argos credentials.
-- **Microsoft Sentinel → Argos.** Not available; see [Known Limitations](#known-limitations).
+- **Incident creation.** The **Argos alerts to incidents** rule creates one incident the first time an alert appears as `open` or `acknowledged`, with `ref_id` as a Custom Detail. Later rows for the same alert never create another incident.
+- **Argos → Microsoft Sentinel.** **Check_Point_EM_InboundStatusSync** runs every 5 minutes, compares the latest Argos state with the incident, and updates the incident status and classification when they differ.
+- **Microsoft Sentinel → Argos.** The automation rule runs **Check_Point_EM_Exporter** whenever an incident's status changes. The Exporter updates the Argos alert through `PUT /alert/api/v1/alerts/status`.
+- **Conflicts.** The newest change wins. InboundStatusSync only overwrites an incident whose last status change is older than the Argos change.
+- **Loop prevention.** The Exporter reads the Argos alert first and sends nothing when Argos already has the target state, so a change applied by InboundStatusSync is not echoed back.
 
 ## Prerequisites
 
 1. **Microsoft Sentinel** enabled on a Log Analytics workspace.
-2. A **Check Point Exposure Management API token** and your tenant URL (for example `https://your_tenant.cyberint.io`), for the data connector.
+2. A **Check Point Exposure Management API token** and your tenant URL (for example `https://your_tenant.cyberint.io`). The connector and every playbook take this same URL; the service path (`/alert`, `/takedown`) is added automatically.
 3. **Owner** or **User Access Administrator** on the resource group, to grant the playbooks' managed identities their role.
 
 ## Deployment
@@ -80,13 +76,25 @@ In **Analytics > Rule templates**, create rules from:
 - **Check Point Exposure Management - Argos alerts to incidents** (required for sync)
 - **Check Point Exposure Management - Alert Ingestion Anomaly** (recommended)
 
-### Step 4: Create the inbound status sync playbook
+### Step 4: Create the sync playbooks
 
-Create it from **Automation > Playbook templates**, or deploy the standalone template:
+Create them from **Automation > Playbook templates**, or deploy the standalone templates:
 
 | Playbook | Deploy | Required parameters |
 |----------|--------|---------------------|
+| **Check_Point_EM_Exporter** | [![Deploy](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FSync%2FCPEM_OutboundSync%2Fazuredeploy.json) | `API_Base_URL`, `API_Access_Token` |
 | **Check_Point_EM_InboundStatusSync** | [![Deploy](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FSync%2FCPEM_InboundStatusSync%2Fazuredeploy.json) | `Workspace_Name` |
+| **Check_Point_EM_ManualStatusUpdate** | [![Deploy](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FSync%2FCPEM_ManualStatusUpdate%2Fazuredeploy.json) | `API_Base_URL`, `API_Access_Token` |
+| **Check_Point_EM_AutomationRules** | [![Deploy](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FSync%2FCPEM_AutomationRules%2Fazuredeploy.json) | `Sentinel_Workspace_Resource_Id` (deploy after the Exporter) |
+
+Get the workspace resource ID with:
+
+```bash
+az monitor log-analytics workspace show \
+  --resource-group <rg-name> \
+  --workspace-name <workspace-name> \
+  --query id -o tsv
+```
 
 ### Step 5: Enrichment and response playbooks (optional)
 
@@ -103,7 +111,7 @@ Create it from **Automation > Playbook templates**, or deploy the standalone tem
 Every playbook that reads or updates incidents needs **Microsoft Sentinel Responder** on the workspace resource group. For InboundStatusSync this one role also covers the log query.
 
 ```bash
-for PB in Check_Point_EM_InboundStatusSync; do
+for PB in Check_Point_EM_Exporter Check_Point_EM_InboundStatusSync Check_Point_EM_ManualStatusUpdate; do
   PRINCIPAL_ID=$(az logic workflow show --resource-group <rg-name> --name $PB --query identity.principalId -o tsv)
   az role assignment create \
     --assignee-object-id $PRINCIPAL_ID \
@@ -120,10 +128,9 @@ Add any enrichment or response playbooks you deployed to the list.
 Content Hub updates templates, not the resources already created from them:
 
 1. **Disconnect and reconnect the data connector.** A connector connected under 3.1.x keeps filtering on `created_date` and never sees status changes.
-2. **Create the `Check_Point_EM_InboundStatusSync` playbook** and grant it **Microsoft Sentinel Responder**.
-3. **Stop the outbound sync.** The `Check_Point_EM_Exporter` and `Check_Point_EM_ManualStatusUpdate` playbooks are no longer shipped, and any existing copies cannot authenticate to Argos (see Known Limitations). Disable the automation rule that runs the Exporter so it stops producing failed runs and misleading incident comments.
-4. **Disable or delete the `Check_Point_EM_Importer` Logic App**, its API connections and its data collection endpoint. It is no longer part of the solution, and left running it creates incidents with no alerts, which can never sync.
-5. **Review custom queries on `argsentdc_CL`.** The table now holds one row per alert change; use `summarize arg_max(TimeGenerated, *) by ref_id` or the `CPEMAlerts` parser for the current state.
+2. **Recreate the Exporter, ManualStatusUpdate and AutomationRules playbooks** from their updated templates, and create **InboundStatusSync**.
+3. **Disable or delete the `Check_Point_EM_Importer` Logic App**, its API connections and its data collection endpoint. It is no longer part of the solution, and left running it creates incidents with no alerts, which can never sync.
+4. **Review custom queries on `argsentdc_CL`.** The table now holds one row per alert change; use `summarize arg_max(TimeGenerated, *) by ref_id` or the `CPEMAlerts` parser for the current state.
 
 ### Verify data flow
 
@@ -138,18 +145,40 @@ Then open the **Check Point Exposure Management - Alert Overview** workbook.
 
 ## Playbook Reference
 
+### Status sync
+
+| Playbook | Trigger | Direction | Description |
+|----------|---------|-----------|-------------|
+| **Check_Point_EM_InboundStatusSync** | Recurrence (5 min) | Argos → Microsoft Sentinel | Applies Argos status changes to incidents |
+| **Check_Point_EM_Exporter** | Automation rule | Microsoft Sentinel → Argos | Pushes incident status changes to Argos |
+| **Check_Point_EM_ManualStatusUpdate** | Manual | Microsoft Sentinel → Argos | Pushes the current incident status on demand |
+| **Check_Point_EM_AutomationRules** | — | — | Automation rule that runs the Exporter on every status change |
+
+### Enrichment and response
+
 | Playbook | Trigger | Description |
 |----------|---------|-------------|
-| **Check_Point_EM_InboundStatusSync** | Recurrence (5 min) | Applies Argos status changes to the matching incidents. Needs no Argos credentials |
 | **Check_Point_EM_FetchAttachments** | Manual | Fetches alert attachments and analysis reports |
 | **Check_Point_EM_IOCEnrichment** | Automation rule | Enriches IPs, domains, hashes, URLs via Check Point threat intel |
 | **Check_Point_EM_CredentialLeakResponse** | Manual/Automation | Validates leaked credential alerts |
 | **Check_Point_EM_VulnerabilityMonitoring** | Manual/Automation | Enriches CVE and vulnerability alerts |
 | **Check_Point_EM_PhishingTakedown** | Manual/Automation | Requests phishing site takedown |
 
-Every playbook except InboundStatusSync calls the Argos API and is therefore affected by the authentication limitation below.
+## Status Mapping
 
-## Status Mapping (Argos → Microsoft Sentinel)
+### Microsoft Sentinel → Argos (Exporter, ManualStatusUpdate)
+
+| Microsoft Sentinel status | Classification / reason | Argos status | Argos closure reason |
+|---|---|---|---|
+| New | — | `open` | — |
+| Active | — | `acknowledged` | — |
+| Closed | True Positive | `closed` | `resolved` |
+| Closed | Benign Positive | `closed` | `no_longer_a_threat` |
+| Closed | False Positive / Incorrect alert logic | `closed` | `false_positive` |
+| Closed | False Positive / Inaccurate data | `closed` | `irrelevant_alert_subtype` |
+| Closed | Undetermined | `closed` | `other`, with the classification comment as the description (`undetermined` when empty) |
+
+### Argos → Microsoft Sentinel (InboundStatusSync)
 
 | Argos status | Argos closure reason | Microsoft Sentinel status | Classification / reason |
 |---|---|---|---|
@@ -161,16 +190,15 @@ Every playbook except InboundStatusSync calls the Argos API and is therefore aff
 | `closed` | `no_longer_a_threat`, `irrelevant`, `asset_should_not_be_monitored`, `asset_belongs_to_my_organization`, `asm_no_longer_detected`, `asm_manually_closed` | Closed | Benign Positive / Suspicious but expected |
 | `closed` | `other` or none | Closed | Undetermined |
 
-On close, the Argos closure reason description (or the closure reason itself when there is none) becomes the classification comment.
+On close, the Argos closure reason description (or the closure reason itself when there is no description) becomes the classification comment.
 
 ## Known Limitations
 
-- **Microsoft Sentinel → Argos sync is not available.** The Argos API accepts its token only as a cookie (`Cookie: access_token=…`); it rejects the token in `Authorization`, `X-Api-Key` and query-string form. Azure Logic Apps removes the `Cookie` header from outgoing HTTP requests, so no playbook can authenticate to Argos, and status changes made in Microsoft Sentinel are not sent back. The data connector is unaffected, because the Codeless Connector Platform sends the key itself. This also affects the enrichment and response playbooks, whose Argos calls return HTTP 401. Restoring outbound sync requires the Argos API to accept the token in a normal request header.
 - **Only an alert's latest change is visible.** The Argos API filters on an alert's current `update_date`, so the connector sees the state an alert is in when it polls, not every intermediate change. If another integration or script rewrites the same alerts more often than the connector polls (every 5 minutes), each poll can find nothing new and changes are missed until the rewriting stops.
 - **The Argos API quota is shared per token.** Argos allows 5,000 requests per 24 hours (and 60 per minute) per API token. The connector uses about 288 requests a day, and each Exporter run makes one read and at most one write per Argos alert. Other integrations using the same token draw from the same quota; when it runs out, polling and status sync stop until requests age out of the 24-hour window. Use a dedicated token for this solution.
 - **Incidents are only created for alerts first seen within 47 hours of creation.** This is the longest lookback Microsoft Sentinel allows for a rule that runs every 5 minutes.
 - **Only status is mirrored.** Changing the closure reason of an alert that is already closed on both sides is not re-synced.
-- **Sync latency is about 10–15 minutes** from Argos to Microsoft Sentinel: one connector poll plus one InboundStatusSync run.
+- **Sync latency is about 10–15 minutes** in each direction from Argos: one connector poll plus one InboundStatusSync run. Microsoft Sentinel changes reach Argos within about a minute.
 
 ## Troubleshooting
 
@@ -186,9 +214,11 @@ On close, the Argos closure reason description (or the closure reason itself whe
 2. Check the **Check_Point_EM_InboundStatusSync** run history. A 403 on `Find_incidents_out_of_sync` or `Get_incident` means the managed identity lacks **Microsoft Sentinel Responder**.
 3. The incident must have been created by the **Argos alerts to incidents** rule; incidents without the `ref_id` Custom Detail cannot be matched.
 
-### Playbook calls to Argos fail with HTTP 401
+### Microsoft Sentinel changes don't reach Argos
 
-Expected in this version: Azure Logic Apps removes the `Cookie` header the Argos API needs. See **Known Limitations**.
+1. Verify the **Check Point EM - Sync incident status to Argos on status change** automation rule is enabled in **Automation**.
+2. Check the Exporter run history and the comment it adds to the incident. `already <status> in Argos, no update sent` means Argos already matched; an HTTP code other than 200 means the Argos call failed.
+3. Confirm the Exporter's managed identity has **Microsoft Sentinel Responder**.
 
 ## Data Schema
 

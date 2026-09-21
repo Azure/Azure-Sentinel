@@ -2,9 +2,7 @@
 
 ## Summary
 
-Runs on a schedule and mirrors Argos alert status changes onto the Microsoft Sentinel incidents created for them.
-
-It uses its managed identity for both the workspace query and the incident update, so it needs no Argos credentials. Sync in the other direction, Microsoft Sentinel to Argos, is not available in this version; see **Known Limitations** in the solution README.
+Runs on a schedule and mirrors Argos alert status changes onto the Microsoft Sentinel incidents created for them. Together with the **Check_Point_EM_Exporter** playbook, it keeps alert and incident status identical in both systems.
 
 **Flow:**
 1. Runs every `Polling_Interval_Minutes` (default 5).
@@ -19,6 +17,8 @@ It uses its managed identity for both the workspace query and the incident updat
    - skips it if its status already matches, which covers the few minutes before the `SecurityIncident` table catches up
    - otherwise updates its status and, on close, its classification and classification comment
    - adds a comment describing the change
+
+Changes applied here fire the **Check_Point_EM_AutomationRules** rule. The Exporter then finds Argos already in that state and sends nothing, so no loop occurs.
 
 ## Prerequisites
 

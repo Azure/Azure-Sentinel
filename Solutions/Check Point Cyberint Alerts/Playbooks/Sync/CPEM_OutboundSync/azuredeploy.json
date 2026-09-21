@@ -38,7 +38,7 @@
           "Reads the Argos alert before updating and skips alerts already in the target state, replacing the argos-importer-synced tag check.",
           "Treats an Argos closure reason that maps to the incident's classification as already in sync, so reasons such as asset_should_not_be_monitored are not overwritten.",
           "Syncs each ref_id once per run instead of once per attached alert.",
-          "Handles a failed Argos read explicitly: the in-sync check only runs on a successful read, a failed read takes its own branch that still sends the update so the status converges, and the sync comment names the failure."
+          "Reports a failed Argos read explicitly in the sync comment; the update is still sent so the status converges."
         ]
       },
       {
@@ -292,10 +292,10 @@
                         "uri": "@{concat(uriScheme(parameters('API_Base_URL')), '://', uriHost(parameters('API_Base_URL')))}/alert/api/v1/alerts/@{encodeURIComponent(variables('AlertRefId'))}",
                         "headers": {
                           "Accept": "application/json",
-                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
                           "X-Integration-Type": "Azure Sentinel",
                           "X-Integration-Version": "1.1.0"
-                        }
+                        },
+                        "cookie": "access_token=@{parameters('API_Access_Token')}"
                       },
                       "runAfter": {
                         "Set_AlertRefId": [
@@ -303,94 +303,46 @@
                         ]
                       }
                     },
-                    "Condition_-_Argos_read_succeeded": {
+                    "Condition_-_Already_in_sync": {
                       "type": "If",
-                      "runAfter": {
-                        "Get_Argos_Alert": [
-                          "Succeeded",
-                          "Failed",
-                          "TimedOut"
-                        ]
-                      },
                       "expression": {
                         "and": [
                           {
                             "equals": [
-                              "@actions('Get_Argos_Alert')?['status']",
-                              "Succeeded"
+                              "@body('Get_Argos_Alert')?['alert']?['status']",
+                              "@variables('ArgosStatus')"
+                            ]
+                          },
+                          {
+                            "or": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@variables('ArgosStatus')",
+                                    "closed"
+                                  ]
+                                }
+                              },
+                              {
+                                "equals": [
+                                  "@coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')",
+                                  "@variables('ArgosClosureReason')"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@coalesce(outputs('Compose_argos_reason_to_classification')?[coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')], '')",
+                                  "@if(equals(triggerBody()?['object']?['properties']?['classification'], 'FalsePositive'), concat('FalsePositive|', coalesce(triggerBody()?['object']?['properties']?['classificationReason'], '')), coalesce(triggerBody()?['object']?['properties']?['classification'], ''))"
+                                ]
+                              }
                             ]
                           }
                         ]
                       },
-                      "actions": {
-                        "Condition_-_Already_in_sync": {
-                          "type": "If",
-                          "expression": {
-                            "and": [
-                              {
-                                "equals": [
-                                  "@body('Get_Argos_Alert')?['alert']?['status']",
-                                  "@variables('ArgosStatus')"
-                                ]
-                              },
-                              {
-                                "or": [
-                                  {
-                                    "not": {
-                                      "equals": [
-                                        "@variables('ArgosStatus')",
-                                        "closed"
-                                      ]
-                                    }
-                                  },
-                                  {
-                                    "equals": [
-                                      "@coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')",
-                                      "@variables('ArgosClosureReason')"
-                                    ]
-                                  },
-                                  {
-                                    "equals": [
-                                      "@coalesce(outputs('Compose_argos_reason_to_classification')?[coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')], '')",
-                                      "@if(equals(triggerBody()?['object']?['properties']?['classification'], 'FalsePositive'), concat('FalsePositive|', coalesce(triggerBody()?['object']?['properties']?['classificationReason'], '')), coalesce(triggerBody()?['object']?['properties']?['classification'], ''))"
-                                    ]
-                                  }
-                                ]
-                              }
-                            ]
-                          },
-                          "actions": {},
-                          "else": {
-                            "actions": {
-                              "Update_Argos_Alert_Status": {
-                                "type": "Http",
-                                "inputs": {
-                                  "method": "PUT",
-                                  "uri": "@{concat(uriScheme(parameters('API_Base_URL')), '://', uriHost(parameters('API_Base_URL')))}/alert/api/v1/alerts/status",
-                                  "headers": {
-                                    "Content-Type": "application/json",
-                                    "Accept": "application/json",
-                                    "Cookie": "access_token=@{parameters('API_Access_Token')}",
-                                    "X-Integration-Type": "Azure Sentinel",
-                                    "X-Integration-Version": "1.0"
-                                  },
-                                  "body": {
-                                    "alert_ref_ids": [
-                                      "@{variables('AlertRefId')}"
-                                    ],
-                                    "data": "@if(not(equals(variables('ArgosStatus'), 'closed')), addProperty(json('{}'), 'status', variables('ArgosStatus')), if(equals(variables('ArgosClosureReason'), 'other'), addProperty(addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', 'other'), 'closure_reason_description', if(empty(coalesce(triggerBody()?['object']?['properties']?['classificationComment'], '')), 'undetermined', substring(triggerBody()?['object']?['properties']?['classificationComment'], 0, min(length(triggerBody()?['object']?['properties']?['classificationComment']), 255)))), addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', variables('ArgosClosureReason'))))"
-                                  }
-                                },
-                                "runAfter": {}
-                              }
-                            }
-                          },
-                          "runAfter": {}
-                        }
-                      },
+                      "actions": {},
                       "else": {
                         "actions": {
-                          "Update_Argos_Alert_Status_after_failed_read": {
+                          "Update_Argos_Alert_Status": {
                             "type": "Http",
                             "inputs": {
                               "method": "PUT",
@@ -398,7 +350,6 @@
                               "headers": {
                                 "Content-Type": "application/json",
                                 "Accept": "application/json",
-                                "Cookie": "access_token=@{parameters('API_Access_Token')}",
                                 "X-Integration-Type": "Azure Sentinel",
                                 "X-Integration-Version": "1.0"
                               },
@@ -407,21 +358,28 @@
                                   "@{variables('AlertRefId')}"
                                 ],
                                 "data": "@if(not(equals(variables('ArgosStatus'), 'closed')), addProperty(json('{}'), 'status', variables('ArgosStatus')), if(equals(variables('ArgosClosureReason'), 'other'), addProperty(addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', 'other'), 'closure_reason_description', if(empty(coalesce(triggerBody()?['object']?['properties']?['classificationComment'], '')), 'undetermined', substring(triggerBody()?['object']?['properties']?['classificationComment'], 0, min(length(triggerBody()?['object']?['properties']?['classificationComment']), 255)))), addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', variables('ArgosClosureReason'))))"
-                              }
+                              },
+                              "cookie": "access_token=@{parameters('API_Access_Token')}"
                             },
                             "runAfter": {}
                           }
                         }
+                      },
+                      "runAfter": {
+                        "Get_Argos_Alert": [
+                          "Succeeded",
+                          "Failed"
+                        ]
                       }
                     },
                     "Append_sync_result": {
                       "type": "AppendToStringVariable",
                       "inputs": {
                         "name": "SyncResults",
-                        "value": "Alert @{variables('AlertRefId')}: @{if(not(equals(actions('Get_Argos_Alert')?['status'], 'Succeeded')), concat('could not read the alert from Argos (HTTP ', coalesce(string(outputs('Get_Argos_Alert')?['statusCode']), 'error'), '), sent the update without it (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status_after_failed_read')?['statusCode']), 'error'), ')'), if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')')))}\n"
+                        "value": "Alert @{variables('AlertRefId')}: @{if(equals(actions('Get_Argos_Alert')?['status'], 'Failed'), concat('could not read the alert from Argos (HTTP ', coalesce(string(outputs('Get_Argos_Alert')?['statusCode']), 'error'), '), sent the update anyway (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'error'), ')'), if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')')))}\n"
                       },
                       "runAfter": {
-                        "Condition_-_Argos_read_succeeded": [
+                        "Condition_-_Already_in_sync": [
                           "Succeeded",
                           "Failed"
                         ]

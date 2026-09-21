@@ -1,8 +1,5 @@
 # Check Point Exposure Management - Exporter (Sentinel → Argos)
 
-
-> **Not shipped in solution 3.2.0.** The Argos API accepts its token only as a cookie, and Azure Logic Apps removes the `Cookie` header from outgoing requests, so this playbook cannot authenticate to Argos (HTTP 401). The template is kept here for the day the Argos API accepts the token in a normal request header. See **Known Limitations** in the solution README.
-
 ## Summary
 
 When a Microsoft Sentinel incident status changes, this playbook pushes the new status to the corresponding Argos alert(s). It maps the incident status, classification and classification reason to the Argos status and closure reason.
@@ -54,6 +51,10 @@ Several Argos closure reasons map to Benign Positive in the inbound direction (`
 ## Loop Prevention
 
 The **Check_Point_EM_InboundStatusSync** playbook applies Argos changes to incidents, which fires this playbook again. Because the Exporter reads the Argos alert first and skips alerts already in the target state, those changes are not sent back.
+
+## Authentication
+
+The Argos token is sent in the HTTP action's `cookie` input, not as a `Cookie` request header: Azure Logic Apps removes `Cookie` from the headers of outgoing requests, which makes Argos reject the call with HTTP 401.
 
 ## API Endpoints Used
 
