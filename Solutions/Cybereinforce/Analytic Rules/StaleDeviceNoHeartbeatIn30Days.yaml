@@ -1,0 +1,33 @@
+id: a6d51bc1-bf51-47d1-9885-b81762cd6306
+name: CTE - Stale Device (No Heartbeat in 30 Days)
+description: |
+  A device is still marked active in the Devices table but has not sent a heartbeat in 30+ days. Emitted once per device by the daily tenant health-check job (api/src/functions/tenantHealthChecks.js); clears automatically if the device checks in again, so it can re-fire after a later gap.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 24h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  CybereinforceCTE_CL
+  | where EventType == "device.stale_heartbeat"
+  | extend d = parse_json(Details)
+  | extend
+      DeviceId = tostring(d.deviceId),
+      HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat("cte-device-", substring(EntityId, 0, 8))),
+      LastSeen = tostring(d.lastSeen)
+  | project TimeGenerated, TenantId, DeviceId, HostName, LastSeen, Severity, Category, Source
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+version: 1.0.0
+kind: Scheduled

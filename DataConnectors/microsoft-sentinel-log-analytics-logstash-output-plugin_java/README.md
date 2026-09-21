@@ -3,8 +3,9 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.  
 
-Plugin version: v2.3.0  
-Released on: 2026-06-17  
+Plugin version: v2.5.1
+
+Released on: 2026-09-10
 
 This plugin is currently in development and is free to use. We request and appreciate feedback from users.  
 
@@ -19,7 +20,7 @@ This plugin is currently in development and is free to use. We request and appre
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.  
 
-The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.3.0-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.5.1-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
 
 If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 
@@ -114,6 +115,19 @@ Add the `microsoft-sentinel-log-analytics-logstash-output-plugin` block to the `
 | `dcr_id` | The immutable ID of your Data Collection Rule |  
 | `stream_name` | The stream name from your DCR (e.g., `Custom-MyTableRawData_CL`) |  
 
+`data_collection_endpoint` must use HTTPS and must match the selected
+`azure_cloud`:
+
+| Azure cloud | Required endpoint host suffix |
+|---|---|
+| `AzurePublicCloud` | `.ingest.monitor.azure.com` |
+| `AzureUSGovernment` | `.ingest.monitor.azure.us` |
+| `AzureChinaCloud` | `.ingest.monitor.azure.cn` |
+| `AzureGermanyCloud` | `.ingest.monitor.azure.de` |
+
+User information, ports other than 443, non-root paths, query strings, and fragments
+are not accepted in the endpoint URL.
+
 ---
 
 ### Authentication Examples
@@ -150,7 +164,7 @@ When running on an Azure VM with a system-assigned managed identity, omit `clien
 
 #### Option 3: Client Secret + Sovereign Cloud
 
-To authenticate against a sovereign cloud, add `azure_cloud`. Supported values: `AzurePublicCloud` (default), `AzureUSGovernment`, `AzureChinaCloud`, `AzureGermanyCloud`.  
+To authenticate against a sovereign cloud, add `azure_cloud`. Supported values: `AzurePublicCloud` (default), `AzureUSGovernment`, `AzureChinaCloud`, `AzureGermanyCloud`. The plugin uses this value for both the Microsoft Entra authority and the Azure Monitor Logs Ingestion token audience.
 
     output {
       microsoft-sentinel-log-analytics-logstash-output-plugin {
@@ -210,9 +224,14 @@ A complete `logstash.conf` using client secret auth with a Beats input:
 | Key | Default | Description |  
 |---|---|---|  
 | `azure_cloud` | `AzurePublicCloud` | Azure cloud environment |  
+| `proxy` | *(none)* | Optional. Base HTTP proxy URL applied to all plugin traffic. Format: `[http://][user:password@]host:port`. When unset, no proxy is used and behavior is unchanged |  
+| `proxy_aad` | *(value of `proxy`)* | Optional. HTTP proxy URL used only for Microsoft Entra ID (AAD) authentication/token traffic. Falls back to `proxy` when unset |  
+| `proxy_endpoint` | *(value of `proxy`)* | Optional. HTTP proxy URL used only for traffic to the Data Collection Endpoint. Falls back to `proxy` when unset |  
 | `keys_to_keep` | *(all)* | Array of field names to send (subset filtering) |  
 | `max_retries_num` | `3` | Max retry attempts for failed sends |  
 | `initial_wait_time_seconds` | `1` | Initial backoff between retries |  
+| `connect_timeout_seconds` | `15` | Timeout for establishing the connection to the ingestion endpoint. Bounds how long an upload can block in the connect phase; a resulting timeout is retried |  
+| `write_timeout_seconds` | `60` | Timeout for sending the request body to the ingestion endpoint. Bounds how long an upload can block in the write phase; a resulting timeout is retried |  
 | `max_graceful_shutdown_time_seconds` | `60` | Max wait for graceful shutdown |  
 | `max_waiting_time_for_batch_seconds` | `10` | Max wait before flushing a batch |  
 | `max_waiting_for_unifier_time_seconds` | `10` | Max wait before flushing the unifier |  
@@ -224,6 +243,34 @@ A complete `logstash.conf` using client secret auth with a Beats input:
 | `sender_workers_count` | *(auto)* | Number of sender threads |  
 | `unifier_workers_count` | *(auto)* | Number of unifier threads |  
 | `id` | `None` | A custom identification tag to be added to sent-batches logs |  
+
+### Proxy configuration
+
+The proxy settings are **optional** and scoped to this plugin only. If you do not set any of them, the plugin behaves exactly as before and sends traffic directly (no proxy). This is useful when a single Logstash instance has multiple outputs and only the Microsoft Sentinel output needs to traverse a corporate proxy.
+
+- `proxy` — base proxy applied to both authentication and ingestion traffic.
+- `proxy_aad` — overrides the proxy used for Microsoft Entra ID (AAD) token requests; falls back to `proxy`.
+- `proxy_endpoint` — overrides the proxy used for Data Collection Endpoint traffic; falls back to `proxy`.
+
+Proxy URLs use the format `[http://][user:password@]host:port`. The scheme is optional and defaults to `http`; both host and port are required. Example:
+
+    output {
+      microsoft-sentinel-log-analytics-logstash-output-plugin {
+        data_collection_endpoint => "https://my-dce.eastus2-1.ingest.monitor.azure.com"
+        dcr_id                   => "dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        stream_name              => "Custom-MyTableRawData_CL"
+        client_id                => "<your-app-client-id>"
+        client_secret            => "<your-app-client-secret>"
+        tenant_id                => "<your-azure-tenant-id>"
+        proxy                    => "http://proxyhost:8080"
+      }
+    }
+
+Security note: if your proxy requires credentials, store them in the Logstash KeyStore rather than placing them in plaintext in the configuration file.
+
+## Troubleshooting upload failures
+
+Starting with version 2.5.1, Azure Monitor upload failure logs include the inner HTTP status, Azure service error code and message, `x-ms-request-id`, `x-ms-client-request-id`, and the SDK-reported failed-log count. Event payloads and failed event contents are not written to the logs.
 
 ## Known issues
  

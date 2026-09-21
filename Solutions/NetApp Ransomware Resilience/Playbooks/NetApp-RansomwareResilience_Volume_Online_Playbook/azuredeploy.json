@@ -1,0 +1,528 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "NetApp Ransomware Resilience Volume Online Playbook",
+    "description": "This playbook takes a NetApp volume online by calling the NetApp Ransomware Resilience take-volume-online API endpoint after obtaining an authentication token from the NetApp Auth playbook.",
+    "prerequisites": [
+      "1. NetApp Ransomware Resilience Auth Playbook must be deployed first and functioning correctly",
+      "2. Valid NetApp Ransomware Resilience API credentials must be configured in the Auth Playbook",
+      "3. Caller must provide volume_id, agent_id, and system_id in the request body"
+    ],
+    "postDeployment": [
+      "1. Test the playbook with valid volume_id, agent_id, and system_id payload",
+      "2. Confirm that successful and failed API responses are returned with matching status codes"
+    ],
+    "lastUpdateTime": "2026-06-30T00:00:00.000Z",
+    "entities": [
+      "Host"
+    ],
+    "tags": [
+      "NetApp",
+      "RansomwareResilience",
+      "Playbook",
+      "Volume",
+      "Online"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "NetApp"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "NetApp-RansomwareResilience-Volume-Online",
+      "metadata": {
+        "description": "Name of the Logic App playbook to be created"
+      }
+    },
+    "NetAppRansomwareResilienceAuthPlaybookName": {
+      "type": "string",
+      "defaultValue": "NetApp-RansomwareResilience-Auth",
+      "metadata": {
+        "description": "Name of the NetApp Ransomware Resilience authentication playbook"
+      }
+    }
+  },
+  "variables": {
+    "NetAppApiBaseUrl": "https://api.bluexp.netapp.com",
+    "AuthPlaybookTriggerResourceId": "[resourceId('Microsoft.Logic/workflows/triggers', trim(parameters('NetAppRansomwareResilienceAuthPlaybookName')), 'manual')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "NetApp-RansomwareResilience-Volume-Online",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "authPlaybookName": {
+              "defaultValue": "[parameters('NetAppRansomwareResilienceAuthPlaybookName')]",
+              "type": "String"
+            },
+            "netAppApiBaseUrl": {
+              "defaultValue": "[variables('NetAppApiBaseUrl')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "volume_id": {
+                      "type": "string",
+                      "description": "ID of Volume"
+                    },
+                    "agent_id": {
+                      "type": "string",
+                      "description": "Console Agent ID"
+                    },
+                    "system_id": {
+                      "type": "string",
+                      "description": "System ID"
+                    }
+                  },
+                  "required": [
+                    "volume_id",
+                    "agent_id",
+                    "system_id"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VolumeId",
+                    "type": "string",
+                    "value": "@triggerBody()?['volume_id']"
+                  },
+                  {
+                    "name": "AgentId",
+                    "type": "string",
+                    "value": "@triggerBody()?['agent_id']"
+                  },
+                  {
+                    "name": "SystemId",
+                    "type": "string",
+                    "value": "@triggerBody()?['system_id']"
+                  },
+                  {
+                    "name": "AccountId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Token",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ErrorStatusCode",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "ErrorMessage",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ErrorDetails",
+                    "type": "object"
+                  },
+                  {
+                    "name": "ResponseStatusCode",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "ResponseBody",
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "Call_Auth_Playbook": {
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "[listCallbackUrl(variables('AuthPlaybookTriggerResourceId'), '2019-05-01').value]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "caller_info": {
+                    "playbook_name": "@workflow().name",
+                    "correlation_id": "@workflow().run.name",
+                    "request_id": "@guid()"
+                  }
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 3,
+                  "interval": "PT5S",
+                  "minimumInterval": "PT5S",
+                  "maximumInterval": "PT30S"
+                },
+                "timeout": "PT30S"
+              }
+            },
+            "Check_Auth_Success": {
+              "runAfter": {
+                "Call_Auth_Playbook": [
+                  "Succeeded",
+                  "Failed",
+                  "TimedOut"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "equals": [
+                  "@actions('Call_Auth_Playbook')['status']",
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Parse_Auth_Response": {
+                  "runAfter": {},
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Call_Auth_Playbook')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "access_token": {
+                          "type": "string"
+                        },
+                        "account_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "access_token",
+                        "account_id"
+                      ]
+                    }
+                  }
+                },
+                "Handle_Parse_Auth_Error": {
+                  "runAfter": {
+                    "Parse_Auth_Response": [
+                      "Failed"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorStatusCode",
+                    "value": 401
+                  }
+                },
+                "Set_Parse_Auth_Error_Message": {
+                  "runAfter": {
+                    "Handle_Parse_Auth_Error": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorMessage",
+                    "value": "Authentication playbook returned invalid response"
+                  }
+                },
+                "Set_Parse_Auth_Error_Details": {
+                  "runAfter": {
+                    "Set_Parse_Auth_Error_Message": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorDetails",
+                    "value": "@body('Call_Auth_Playbook')"
+                  }
+                },
+                "Set_Token": {
+                  "runAfter": {
+                    "Parse_Auth_Response": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "Token",
+                    "value": "@body('Parse_Auth_Response')?['access_token']"
+                  }
+                },
+                "Set_Account_ID": {
+                  "runAfter": {
+                    "Set_Token": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "AccountId",
+                    "value": "@body('Parse_Auth_Response')?['account_id']"
+                  }
+                },
+                "Submit_Volume_Online": {
+                  "runAfter": {
+                    "Set_Account_ID": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat(parameters('netAppApiBaseUrl'), '/v1/services/rps/v1/account/', variables('AccountId'), '/storage/take-volume-online')}",
+                    "headers": {
+                      "Authorization": "Bearer @{variables('Token')}",
+                      "Content-Type": "application/json",
+                      "accept": "application/json"
+                    },
+                    "body": {
+                      "volume_id": "@variables('VolumeId')",
+                      "agent_id": "@variables('AgentId')",
+                      "system_id": "@variables('SystemId')"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT5S",
+                      "minimumInterval": "PT5S",
+                      "maximumInterval": "PT30S"
+                    },
+                    "timeout": "PT45S"
+                  }
+                },
+                "Check_Volume_Online_Success": {
+                  "runAfter": {
+                    "Submit_Volume_Online": [
+                      "Succeeded",
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@actions('Submit_Volume_Online')['status']",
+                          "Succeeded"
+                        ]
+                      },
+                      {
+                        "greaterOrEquals": [
+                          "@outputs('Submit_Volume_Online')['statusCode']",
+                          200
+                        ]
+                      },
+                      {
+                        "less": [
+                          "@outputs('Submit_Volume_Online')['statusCode']",
+                          300
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Set_Response_Status": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "ResponseStatusCode",
+                        "value": "@outputs('Submit_Volume_Online')['statusCode']"
+                      }
+                    },
+                    "Set_Response_Body": {
+                      "runAfter": {
+                        "Set_Response_Status": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "ResponseBody",
+                        "value": "@body('Submit_Volume_Online')"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Handle_Volume_Online_Error": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "ErrorStatusCode",
+                          "value": "@if(equals(actions('Submit_Volume_Online')['status'], 'Succeeded'), outputs('Submit_Volume_Online')['statusCode'], 500)"
+                        }
+                      },
+                      "Set_Volume_Online_Error_Message": {
+                        "runAfter": {
+                          "Handle_Volume_Online_Error": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "ErrorMessage",
+                          "value": "@if(equals(actions('Submit_Volume_Online')['status'], 'Failed'), 'Volume online API request failed', if(equals(actions('Submit_Volume_Online')['status'], 'TimedOut'), 'Volume online API request timed out', 'Volume online API returned error response'))"
+                        }
+                      },
+                      "Set_Volume_Online_Error_Details": {
+                        "runAfter": {
+                          "Set_Volume_Online_Error_Message": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "ErrorDetails",
+                          "value": "@body('Submit_Volume_Online')"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Handle_Auth_Error": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "ErrorStatusCode",
+                      "value": 401
+                    }
+                  },
+                  "Set_Auth_Error_Message": {
+                    "runAfter": {
+                      "Handle_Auth_Error": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "ErrorMessage",
+                      "value": "@if(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), 'Authentication playbook API request failed', 'Authentication playbook API request timed out')"
+                    }
+                  },
+                  "Set_Auth_Error_Details": {
+                    "runAfter": {
+                      "Set_Auth_Error_Message": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "ErrorDetails",
+                      "value": "@body('Call_Auth_Playbook')"
+                    }
+                  }
+                }
+              }
+            },
+            "Return_Response": {
+              "runAfter": {
+                "Check_Auth_Success": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "greater": [
+                  "@variables('ResponseStatusCode')",
+                  0
+                ]
+              },
+              "actions": {
+                "Return_Success": {
+                  "runAfter": {},
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "statusCode": "@variables('ResponseStatusCode')",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": "@variables('ResponseBody')"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Return_Error": {
+                    "runAfter": {},
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                      "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "success": false,
+                        "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
+                        "message": "@if(empty(variables('ErrorMessage')), 'An unexpected error occurred', variables('ErrorMessage'))",
+                        "details": "@variables('ErrorDetails')"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookUrl": {
+      "type": "string",
+      "value": "[concat('https://portal.azure.com/#resource', resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')))]"
+    },
+    "TriggerUrl": {
+      "type": "string",
+      "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('PlaybookName'), 'manual'), '2019-05-01').value]"
+    }
+  }
+}

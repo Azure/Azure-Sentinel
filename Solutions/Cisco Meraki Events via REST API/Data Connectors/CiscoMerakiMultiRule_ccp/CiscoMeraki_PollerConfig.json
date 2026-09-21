@@ -15,9 +15,9 @@
         "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/organizations')]",
         "httpMethod": "GET",
         "rateLimitQPS": 10,
-        "queryWindowInMin": 60,
+        "queryWindowInMin": 1440,
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Content-Type": "application/json",
           "Accept": "application/json"
@@ -68,9 +68,9 @@
         "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/organizations/',parameters('organizationId'),'/networks')]",
         "httpMethod": "GET",
         "rateLimitQPS": 10,
-        "queryWindowInMin": 60,
+        "queryWindowInMin": 1440,
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Content-Type": "application/json",
           "Accept": "application/json"
@@ -122,9 +122,9 @@
         "httpMethod": "GET",
         "rateLimitQPS": 10,
         "queryWindowInMin": 60,
-        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+        "queryTimeFormat": "UnixTimestamp",
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Content-Type": "application/json",
           "Accept": "application/json"
@@ -150,7 +150,7 @@
         "nextSteps": [
           {
             "stepId": "network_clients",
-            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | mvexpand res | project networkId = tostring(res['id'])"
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project networkId = tostring(res['id'])"
           }
         ]
       },
@@ -161,17 +161,18 @@
             "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/networks/$networkId$/clients')]",
             "httpMethod": "GET",
             "rateLimitQPS": 10,
-            "queryWindowInMin": 5,
+            "queryWindowInMin": 60,
+            "queryTimeFormat": "UnixTimestamp",
             "retryCount": 3,
-            "timeoutInSeconds": 60,
+            "timeoutInSeconds": 30,
             "headers": {
               "Content-Type": "application/json",
               "Accept": "application/json"
             },
             "queryParameters": {
-              "timespan": "2592000",
               "perPage": "5000"
-            }
+            },
+            "startTimeAttributeName": "t0"
           },
           "response": {
             "eventsJsonPaths": [
@@ -183,7 +184,7 @@
             "pagingType": "LinkHeader",
             "linkHeaderTokenJsonPath": "Link",
             "pageSize": 5000,
-            "pageSizeParameterName": "perPage"
+            "pageSizeParaName": "perPage"
           }
         }
       },
@@ -220,7 +221,7 @@
         "queryWindowInMin": 60,
         "queryTimeFormat": "UnixTimestamp",
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Content-Type": "application/json",
           "Accept": "application/json"
@@ -246,7 +247,7 @@
         "nextSteps": [
           {
             "stepId": "air_marshal_events",
-            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | mvexpand res | project networkId = tostring(res['id'])"
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | where res['productTypes'] has 'wireless' | project networkId = tostring(res['id'])"
           }
         ]
       },
@@ -257,16 +258,15 @@
             "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/networks/$networkId$/wireless/airMarshal')]",
             "httpMethod": "GET",
             "rateLimitQPS": 10,
-            "queryWindowInMin": 5,
+            "queryWindowInMin": 15,
+            "queryTimeFormat": "UnixTimestamp",
             "retryCount": 3,
-            "timeoutInSeconds": 60,
+            "timeoutInSeconds": 30,
             "headers": {
               "Content-Type": "application/json",
               "Accept": "application/json"
             },
-            "queryParameters": {
-              "timespan": "604800"
-            }
+            "startTimeAttributeName": "t0"
           },
           "response": {
             "eventsJsonPaths": [
@@ -309,7 +309,7 @@
         "queryWindowInMin": 5,
         "queryTimeFormat": "UnixTimestamp",
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Accept": "application/json"
         },
@@ -372,7 +372,7 @@
         "queryWindowInMin": 5,
         "queryTimeFormat": "UnixTimestamp",
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Accept": "application/json"
         },
@@ -437,7 +437,7 @@
         "queryWindowInMin": 5,
         "queryTimeFormat": "UnixTimestamp",
         "retryCount": 3,
-        "timeoutInSeconds": 60,
+        "timeoutInSeconds": 30,
         "headers": {
           "Accept": "application/json"
         },
@@ -468,8 +468,7 @@
       },
       "addOnAttributes": {
         "organization": "[[parameters('organizationId')]",
-        "dataType": "Security Events (IDS)",
-        "idsEventType": "Notable",
+        "dataType": "Security Events",
         "eventProduct": "Meraki",
         "eventVendor": "Cisco",
         "eventSchemaVersion": "0.1.1",
@@ -477,5 +476,65 @@
       }
     },
     "condition": "[[contains(parameters('selectedDataTypes'), 'ASimNetworkSessionLogs')]"
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2024-09-01",
+    "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','CiscoMerakiFileScannedEvents' , uniqueString(parameters('organizationId')) )]",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "APIKey",
+        "ApiKey": "[[parameters('apiKey')]",
+        "ApiKeyName": "X-Cisco-Meraki-API-Key"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('apiBaseUrl'),'/organizations/',parameters('organizationId'),'/appliance/security/events')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 2,
+        "queryWindowInMin": 5,
+        "queryTimeFormat": "UnixTimestamp",
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "headers": {
+          "Accept": "application/json"
+        },
+        "queryParameters": {
+          "perPage": "1000"
+        },
+        "startTimeAttributeName": "t0",
+        "endTimeAttributeName": "t1"
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "LinkHeader",
+        "linkHeaderTokenJsonPath": "Link",
+        "pageSize": 1000,
+        "pageSizeParameterName": "perPage"
+      },
+      "connectorDefinitionName": "CiscoMerakiConnector",
+      "dataType": "CiscoMerakiFileScannedEvents",
+      "dcrConfig": {
+        "streamName": "Custom-CiscoMerakiFileScannedEvents_CL",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      },
+      "addOnAttributes": {
+        "organization": "[[parameters('organizationId')]",
+        "dataType": "File Scanned Events",
+        "eventProduct": "Meraki",
+        "eventVendor": "Cisco",
+        "eventType": "File Scanned",
+        "eventSchemaVersion": "0.1.1",
+        "eventCount": "1"
+      }
+    },
+    "condition": "[[contains(parameters('selectedDataTypes'), 'CiscoMerakiFileScannedEvents')]"
   }
 ]

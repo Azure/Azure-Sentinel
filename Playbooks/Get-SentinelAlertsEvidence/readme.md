@@ -15,7 +15,7 @@ https://docs.microsoft.com/azure/event-hubs/event-hubs-create or use an existing
 After deployment, you can run this playbook manually on an incident or attach this playbook to an **automation rule** so it runs when the incident is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Fincident-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Fincident-trigger%2Fazuredeploy.json)
 
 
 **Deploy with alert trigger**
@@ -23,7 +23,7 @@ After deployment, you can run this playbook manually on an incident or attach th
 After deployment, you can run this playbook manually on an alert or attach it to an **automation rule** so it will rune when an alert is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Falert-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-SentinelAlertsEvidence%2Falert-trigger%2Fazuredeploy.json)
 <br><br>
 
 # Post-deployment

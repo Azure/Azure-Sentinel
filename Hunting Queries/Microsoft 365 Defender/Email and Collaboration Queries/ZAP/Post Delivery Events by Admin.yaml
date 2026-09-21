@@ -14,32 +14,16 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let TimeStart = startofday(ago(30d));
-  let TimeEnd = startofday(now());
-  let baseQuery = EmailPostDeliveryEvents
-  | where Timestamp >= TimeStart
-  | where ActionTrigger has "AdminAction";
-  let sdelete=baseQuery
-  | where Action has 'Soft Delete'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-  | extend Details = "Soft Delete";
-  let hdelete=baseQuery
-  | where Action has 'Hard Delete'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-  | extend Details = "Hard Delete";
-  let mtojunk=baseQuery
-  | where Action has 'Moved to junk folder'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-  | extend Details = "Moved to junk folder";
-  let mtoinbox=baseQuery
-  | where Action has 'Moved to inbox'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-  | extend Details = "Moved to inbox";
-  let qrel=baseQuery
-  | where Action has 'Quarantine release'
-  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-  | extend Details = "Quarantine release";
-  union sdelete,hdelete,mtojunk,mtoinbox,qrel
-  | project Count, Details, Timestamp
+  let gran = 1d;
+  let minTime = startofday(ago(30d));
+  let maxTime = startofday(now());
+  let agg = materialize(EmailPostDeliveryEvents
+      | where Timestamp >= minTime and Timestamp < maxTime
+      | where ActionTrigger has "AdminAction"
+      | summarize ["Soft Delete"] = countif(Action has 'Soft Delete'), ["Hard Delete"] = countif(Action has 'Hard Delete'), ["Moved to junk folder"] = countif(Action has 'Moved to junk folder'), ["Moved to inbox"] = countif(Action has 'Moved to inbox'), ["Quarantine release"] = countif(Action has 'Quarantine release') by Timestamp = bin(Timestamp, gran));
+  range Timestamp from minTime to maxTime - 1d step gran
+  | join kind=leftouter (agg) on Timestamp
+  | project Timestamp, ["Soft Delete"] = coalesce(["Soft Delete"], 0), ["Hard Delete"] = coalesce(["Hard Delete"], 0), ["Moved to junk folder"] = coalesce(["Moved to junk folder"], 0), ["Moved to inbox"] = coalesce(["Moved to inbox"], 0), ["Quarantine release"] = coalesce(["Quarantine release"], 0)
+  | sort by Timestamp asc
   | render timechart
-version: 1.0.0
+version: 1.1.0

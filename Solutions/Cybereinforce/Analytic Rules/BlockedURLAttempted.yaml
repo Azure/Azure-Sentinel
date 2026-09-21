@@ -1,0 +1,53 @@
+id: 1747715b-1a94-411a-a2b5-d8c40422767c
+name: CTE - Blocked URL Attempted
+description: |
+  Cybereinforce blocked a URL/domain access attempt on an enrolled device based on a configured policy pattern (non-threat-intel match).
+severity: Low
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1189
+query: |
+  CybereinforceCTE_CL
+  | where EventType == "block.url"
+  | extend d = parse_json(Details)
+  | extend
+      DeviceId = tostring(d.deviceId),
+      HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat("cte-device-", substring(EntityId, 0, 8))),
+      DeviceUser = tostring(d.deviceUser),
+      DeviceOs = tostring(d.deviceOs),
+      DeviceVersion = tostring(d.deviceVersion),
+      RuleId = tostring(d.ruleId),
+      RuleName = iff(isnotempty(tostring(d.ruleName)), tostring(d.ruleName), "Pattern Match"),
+      Pattern = tostring(d.pattern),
+      Url = tostring(d.url),
+      Action = tostring(d.action),
+      IsIoc = tobool(d.ioc),
+      ClientIp = tostring(split(tostring(d.clientIp), ":")[0]),
+      ClientPort = tostring(split(tostring(d.clientIp), ":")[1]),
+      UserAgent = tostring(d.userAgent)
+  | where RuleName != "Cybereinforce Threat Intelligence"
+  | project TimeGenerated, TenantId, DeviceId, HostName, DeviceUser, DeviceOs, DeviceVersion, RuleId, RuleName, Pattern, Url, Action, IsIoc, ClientIp, ClientPort, UserAgent, Severity, Category, Source
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
+kind: Scheduled

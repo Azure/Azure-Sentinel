@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                      |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------------|
+| 3.4.0       | 20-07-2026                     | Re-added EntraEligibleMembers table (Preview) now that backend ingestion is deployed to all regions |
 | 3.3.1       | 01-07-2026                     | Removed EntraEligibleMembers table (Preview) |
 | 3.3.0       | 27-06-2026                     | Added EntraEligibleMembers table |
 | 3.1.0       | 22-06-2026                     | Added EntraSponsors and EntraOwners tables |

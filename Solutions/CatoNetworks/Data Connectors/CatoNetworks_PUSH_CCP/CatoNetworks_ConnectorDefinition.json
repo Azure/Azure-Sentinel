@@ -1,0 +1,177 @@
+{
+  "name": "CatoNetworksEventsPush",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "CatoNetworksEventsPush",
+      "title": "Cato Networks Events (Push)",
+      "publisher": "Cato Networks",
+      "descriptionMarkdown": "The [Cato Networks](https://www.catonetworks.com/) connector pushes security and networking telemetry from the Cato Management Application into Microsoft Sentinel in near real time, using the Codeless Connector Framework (CCF) Push pattern. Data lands in a custom Log Analytics table, ready for hunting, analytics, and visualization. See the [Cato Event Schema](https://knowledge.catonetworks.com/docs/cato-event-schema) for the fields carried on each record.",
+      "graphQueries": [
+        {
+          "metricName": "Cato events",
+          "legend": "CatoNetworksEvents_CL",
+          "baseQuery": "CatoNetworksEvents_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All Cato events",
+          "query": "CatoNetworksEvents_CL\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Security events by event type",
+          "query": "CatoNetworksEvents_CL\n | where event_type == 'Security'\n | summarize count() by event_sub_type\n | sort by count_ desc"
+        },
+        {
+          "description": "Blocked traffic in the last 24 hours",
+          "query": "CatoNetworksEvents_CL\n | where TimeGenerated > ago(24h)\n | where action == 'Block'\n | sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "CatoNetworksEvents_CL",
+          "lastDataReceivedQuery": "CatoNetworksEvents_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "CatoNetworksEvents_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+          },
+          {
+            "name": "Cato Management Application",
+            "description": "An administrator account on the Cato Management Application with permission to create a Microsoft Sentinel data-out connector."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "This connector enables the Cato Cloud to push events directly to Microsoft Sentinel via the Azure Monitor Logs Ingestion API.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application\nClicking on \"Deploy\" will trigger the creation of a Log Analytics table and a Data Collection Rule (DCR).\nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n#### One connector per workspace\n\nThe Data Collection Rule and the `CatoNetworksEvents_CL` table are named from this workspace, so deploying the connector again in the same Log Analytics workspace reuses them rather than creating a second set. A workspace holds one Cato connector.\n\nEvents from more than one Cato account can be sent to the same connector; they share the table and are distinguished by `account_id` and `account_name`. To keep feeds in separate tables, with their own retention or access control, use a separate Log Analytics workspace for each."
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy Cato Networks connector resources",
+                "applicationDisplayName": "Cato Networks Events Push Connector Application"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure the connector in the Cato Management Application",
+          "description": "In the Cato Management Application, go to Resources > Integrations > Configured Integrations, click New, select Microsoft Sentinel, and enter the values below. For full setup instructions, see [Integrating Cato Events with Microsoft Sentinel](https://knowledge.catonetworks.com/docs/integrating-cato-events-with-microsoft-sentinel).",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [
+                  "TenantId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Application ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Application ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Secret"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint Uri",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Rule Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Events Stream Name",
+                "value": "Custom-CatoNetworksEvents"
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Keeping the schema up to date",
+          "description": "Cato periodically adds fields to its event schema. Because upgrading this solution leaves your connector's existing custom table and Data Collection Rule unchanged, new fields must be applied separately using the dedicated schema update template.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Apply the current schema\n\n[Deploy the schema update](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcatonetworks%2Fcato-sentinel-ccf%2Fmain%2FupdateTemplate.json)\n\nSelect the subscription and the resource group holding this workspace, then enter the workspace name. That is the only value you supply.\n\nYour ingestion URL, Entra application and client secret are unchanged, and nothing has to be re-entered in the Cato Management Application. Ingestion continues throughout.\n\nAllow up to 30 minutes for new fields to start arriving. Events are still accepted during that window and the new fields are simply empty, so confirm with a query rather than assuming a failure."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

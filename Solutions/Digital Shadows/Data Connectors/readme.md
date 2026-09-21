@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This folder contains the Azure function time trigger code for Digital Shadows-Microsoft Sentinel connector. The connector will run periodically and ingest the Digital Shadows incidents and alerts data into the Microsoft Sentinel logs custom table `DigitalShadows_CL`. After the data has been ingested, Analytic rule will promote the data and create the Microsoft Sentinel incidents out of them. Analytic rule will also trigger playbooks, `status-and-severity-update` and `add-comments`. The playbooks will change the status and severity and add comments to Microsoft Sentinel incidents according to the latest Digital Shadows data logged. The data can be visualized in the Workbook labelled `Digital Shadows workbook`.
+This folder contains the Azure function time trigger code for Digital Shadows-Microsoft Sentinel connector. The connector will run periodically and ingest the Digital Shadows incidents and alerts data into the Microsoft Sentinel logs custom table `DigitalShadows_V2_CL` via the Logs Ingestion API. The Function Apps authenticate to Azure Monitor using their system-assigned managed identity (granted the `Monitoring Metrics Publisher` role on the Data Collection Rule). After the data has been ingested, Analytic rule will promote the data and create the Microsoft Sentinel incidents out of them. Analytic rule will also trigger playbooks, `status-and-severity-update` and `add-comments`. The playbooks will change the status and severity and add comments to Microsoft Sentinel incidents according to the latest Digital Shadows data logged. The data can be visualized in the Workbook labelled `Digital Shadows workbook`.
 
 ## Folders
 

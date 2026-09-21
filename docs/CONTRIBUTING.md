@@ -1,1 +1,3 @@
 First off, thanks for contributing to Orion repo hosted in Azure organization!
+
+The contribution guidelines for this repository are maintained in the `Azure-Sentinel/README.md` file. Please refer to the [Contribution Guidelines](https://github.com/Azure/Azure-Sentinel/blob/70d13ec638f559d8347efa93258bbc1018d53cfb/README.md#contribution-guidelines) for the latest instructions and guidance on contributing.

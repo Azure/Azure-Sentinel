@@ -1,0 +1,38 @@
+id: 9f1c2a44-7d18-4f5b-9c33-2a6e5b8d1c07
+name: HoneyLabs high-confidence indicator seen for the first time
+description: |
+  'Surfaces hosts that contacted a HoneyLabs indicator backed by heavy evidence (Confidence 80 or above, meaning ten or more observed attacks) where that IP has not been seen in your logs in the preceding 14 days. First contact with a well-evidenced attacker is a stronger hunting lead than repeat background noise.'
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let lookBack = 14d;
+  let recent = 1d;
+  let HoneyLabs_IPs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs' and Confidence >= 80
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ip = tostring(ObservableValue);
+  let seenBefore = CommonSecurityLog
+    | where TimeGenerated between (ago(lookBack) .. ago(recent))
+  | where isnotempty(SourceIP)
+  | extend ip = SourceIP
+    | distinct ip;
+  HoneyLabs_IPs
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(recent)
+    | where isnotempty(SourceIP)
+    | extend ip = SourceIP
+  ) on $left.TI_ip == $right.ip
+  | where ip !in (seenBefore)
+  | summarize Events = count(), Hosts = dcount(DeviceName), FirstSeen = min(TimeGenerated) by TI_ip, Confidence
+  | extend HoneyLabsReport = strcat('https://honeylabs.net/lookup/', TI_ip)
+  | sort by Confidence desc, Events desc

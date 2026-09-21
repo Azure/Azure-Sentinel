@@ -1,14 +1,23 @@
-Commvault Cloud - Microsoft Sentinel Integration
-===============================================
+Commvault Security IQ - Microsoft Sentinel Integration
+======================================================
 
-This SOAR integration connects Commvault Cloud with Microsoft Sentinel to enable automated incident creation and response through Analytic Rules and Playbooks.
+This integration connects Commvault Cloud with Microsoft Sentinel to enable anomaly ingestion, incident creation, investigation, and response through analytic rules, playbooks, and the Commvault Security Investigation Agent.
+
+## Table of Contents
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Required Azure Resources](#required-azure-resources)
+- [Installation](#installation)
+- [Using Commvault Security Investigation Agent](#using-commvault-security-investigation-agent)
+- [Automation Account and Runbooks Setup](#automation-account-and-runbooks-setup)
+- [Support](#support)
 
 ## Overview
 This solution provides:
-- **Data Ingestion**: Automated collection of Commvault security events and anomalies
-- **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault security events
-- **AI Powered Insights**: AI-driven coorelation of Commvault Threat Scan and Risk Analysis events with Sentinel Data Lake signals from tools like CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation.
-- **Incident Response**: Playbooks for automated remediation actions (disable users, disable data aging, etc.)
+- **Data Ingestion**: Automated collection of Commvault client anomaly events via the Codeless Connector Framework
+- **Incident Creation**: Creation of Microsoft Sentinel incidents from Commvault anomaly detections after the analytic rule is created and enabled
+- **AI-powered Insights**: Use the Commvault Security Investigation Agent in Microsoft Security Copilot to correlate Commvault anomaly events with signals from tools such as CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation
+- **Incident Response**: Playbook templates for remediation actions such as disabling users, disabling SAML identity providers, and disabling data aging
 
 ## Prerequisites
 Before beginning the installation, ensure you have:
@@ -23,107 +32,86 @@ Before beginning the installation, ensure you have:
 - **Microsoft Sentinel**: An active Sentinel workspace deployed in your Azure environment
 - **Log Analytics Workspace**: A Log Analytics workspace associated with your Sentinel instance
 - **Azure Cloud Shell**: Access to Azure Cloud Shell with PowerShell support
+- **Response automation resources**: A Key Vault and an Automation Account are required only if you deploy and use the included incident response playbooks
 
 ## Required Azure Resources
-The following Azure resources will be created or configured during this installation:
 
-### Key Vault
-- **Purpose**: Securely stores Commvault credentials and API endpoints
-- **Required Secrets**:
-  - `access-token`: Your Commvault Cloud access token
-  - `environment-endpoint-url`: Your Commvault Cloud API endpoint URL (Commvault/Metallic endpoint URL : https://`hostname`/commandcenter/api )
-  - `refresh-token`: Your Commvault Cloud refresh token
+The **Commvault Security IQ (via Codeless Connector Framework)** data connector collects Commvault anomaly events in Microsoft Sentinel. After you connect the connector, events are available in the `CommvaultAlertsCCF_CL` table.
 
-Installation
-------------
+After you select **Add connector** and click **Connect**, Microsoft Sentinel creates the connector resources and starts polling the Commvault API.
 
-**1\. Create Access Token in Commvault:**
+The included response playbooks have separate prerequisites: they use an Azure Key Vault to retrieve Commvault credentials and an Azure Automation Account to run the remediation runbooks. These resources are not required for CCF data ingestion.
 
-*   Follow the instructions in [Creating an Access Token / Refresh Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
-*   Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
+If you use the response playbooks, create the following secrets in the Key Vault that you provide during playbook deployment:
+- `access-token`: The Commvault API token
+- `environment-endpoint-url`: The Commvault API base URL, including `/commandcenter/api`
 
-**2\. Create KeyVault:**
+## Installation
 
-*   Azure Portal -> KeyVault -> Create -> Basics (select subscription, RG).
+1. **Create an API token in Commvault:**
 
-**3\. Create KeyVault Secrets:**
+   - Follow the instructions in [Creating an Access Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
+   - Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
+   - Copy the generated **API token**; you will need it in step 4.
 
-*   Go to Azure Portal -> KeyVault -> Secrets
-*   Create following secrets each by clicking on Generate/Import -> Manual:
+> **Important — Token Expiry:** API tokens expire after **120 minutes** by default. Since the CCF connector stores the token as a static credential with no automatic refresh, the connector will stop ingesting data once the token expires. To avoid this, increase the token expiry **before** generating the token:
+> 1. In Commvault Command Center, go to **Manage** > **Company** and select your company.
+> 2. On the **Overview** tab, scroll down to the **Settings** tile and click **Add**.
+> 3. In the **Name** box, enter `AccessTokenExpiryInMinutes`. Set **Category** to `CommServDB.Console` and **Type** to `Integer`.
+> 4. In the **Value** box, enter `43200` (30 days) or your preferred duration in minutes (max: `43200`).
+> 5. Click **Save**, then generate the API token — the new expiry will apply.
 
-| Name | Value | Enabled | Action |
-|---|---|---|---|
-| `"access-token"` | (Your Commvault/Metallic access token) | Yes | Create |
-| `"refresh-token"` | (Your Commvault/Metallic refresh token) | Yes | Create |
-| `"environment-endpoint-url"` | (Your Commvault/Metallic endpoint's URL) | Yes | Create |
+2. **Install the Commvault Security IQ solution:**
 
-**4\. Install Commvault Cloud Solution:**
+   - In Microsoft Sentinel, open **Content hub**, search for **Commvault Security IQ**, and select **Install**.
 
-*   Sentinel -> [Your Workspace] -> Content hub -> Search "Commvault Cloud" -> Install.
+3. **Open the CCF data connector:**
 
-**5\. Configure Data Connector:**
+   - In Microsoft Sentinel, open **Data connectors**, search for **Commvault Security IQ (via Codeless Connector Framework)**, and open the connector page.
 
-*   Commvault Cloud -> CommvaultSecurityIQ (using Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
-*   For a detailed step-by-step guide and post-deployment steps, refer to [DataConnector.md](./DataConnector.md).
-*   The deployment creates the following resources:
-    - Azure Function App with System-Assigned Managed Identity
-    - Data Collection Endpoint (DCE)
-    - Data Collection Rule (DCR)
-    - Custom Log Analytics Table (`CommvaultAlerts_CL`)
-    - Storage Account for Function App
-    - Application Insights for monitoring
-    - Role assignment for Managed Identity on DCR
+4. **Configure the connection:**
 
+    - Under **Configuration**, enter the following:
+       - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL including the `/commandcenter/api` path (for example, `https://your-commvault-endpoint/commandcenter/api`).
+       - **API token**: The API token generated in step 1.
+    - Click **Connect**.
 
-### Configurable Environment Variables ( Optional )
-
-The following environment variables can be optionally configured to customize the Function App behavior:
-
-| Variable Name | Default Value | Description |
-|---------------|---------------|-------------|
-| `NumberOfDaysToBackfill` | 7 | Number of days to backfill data on initial run |
-| `ShowAllEvents` | false | Include all events (true/false) |
-| `AZURE_CLIENT_ID` | - | Managed Identity Client ID (uses DefaultAzureCredential if not set) |
-
-**Configuration Notes:**
-- These variables are optional - the Function App will work with default values if not specified
-- **By default, only security-relevant events are collected**: The data connector filters for Commvault events related to anomalies and malware/ransomware threats as documented in the [Threat Indicators Dashboard](https://documentation.commvault.com/2024e/commcell-console/threat_indicators_dashboard.html) . Use `ShowAllEvents` to disable filtering of events. It is recommended to have data retention policy, when allowing all events , so the log analytics workspace is not bloated with events.
-- Event level filters control which Commvault events are collected based on severity
-- `NumberOfDaysToBackfill` determines how far back to collect events on the first run only
-- `AZURE_CLIENT_ID` is only needed if using a specific Managed Identity instead of the default
+The connector polls Commvault every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table in your Log Analytics workspace.
 
 ### Incident Detection and Response Setup Steps
 
-**6\. Create Analytic Rules:**
+5. **Create and enable the analytic rule:**
 
-*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "Commvault Cloud Alert" -> Create Rule -> Next -> Save.
+   - In **Content hub**, open **Commvault Security IQ** -> **Manage** -> **Commvault Cloud Alert** -> **Create Rule** -> **Next** -> **Save**.
+   - Enable the rule after confirming that data is available in `CommvaultAlertsCCF_CL`.
 
-**7\. Create Playbooks:**
+6. **Create the response playbooks:**
 
-*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "logic-app-disable-data-aging" -> Configuration -> "Commvault Disable Data Aging Logic App Playbook" -> Create Playbook -> Next -> Enter keyvaultName -> Create Playbook.
-*   Repeat for other playbooks.
+   - In **Content hub**, open **Commvault Security IQ** -> **Manage**, select a playbook, and choose **Configuration** -> **Create Playbook** -> **Next** -> **Create**.
+   - Repeat for the other playbooks. During deployment, provide the Key Vault name when prompted and ensure the required secrets are present.
+   - Create Microsoft Sentinel automation rules that invoke the relevant playbooks for matching incidents.
 
-**8\. Add Additional Permissions:**
+7. **Configure permissions:**
 
-*   After completing all the steps, ensure that the necessary additional permissions are configured.
-*   Follow the instructions in [Permissions.md](./Permissions.md) to grant the required permissions for the Logic Apps.
-*   Additionally, refer to **6. Post-Deployment Steps** in [DataConnector.md](./DataConnector.md) to ensure the Function App has the necessary permissions to access the Key Vault.
+   - After deploying the playbooks, configure the required managed identity permissions.
+   - Follow [Permissions.md](./Permissions.md) to grant the Logic Apps access to the Automation Account and Key Vault.
 
 ## Using Commvault Security Investigation Agent
 
-1. Go to https://securitycopilot.microsoft.com/agents
+1. Go to <https://securitycopilot.microsoft.com/agents>.
 2. Search for “Commvault Security Investigation Agent”
 3. Click on “Set up” Agent
 4. Click on “Go to Agent”
-5. Click on “Run” => “One time”
-6. Provide “Hostname” and click “Submit”
-> Note: Hostname is the name of the server that we want to check for events of Commvault and partners like Netskope, CrowdStrike and Palo Alto.
+5. Click **Run** -> **One time**.
+6. Provide the **Hostname** and click **Submit**.
+
+> **Note:** The hostname is the server whose Commvault and partner events you want to investigate. Availability of the agent and partner signals depends on the applicable Microsoft Security Copilot configuration and connected data sources.
 
 ## Automation Account and Runbooks Setup
 
 ### Why is an Automation Account Required?
 
-The **Automation Account** is essential for automated incident response in this solution. When Commvault security events trigger incidents in Microsoft Sentinel, the Logic App playbooks use automation runbooks to perform immediate remediation actions via Commvault APIs:
+The **Automation Account** is required for the included incident response playbooks. When Commvault security events trigger incidents in Microsoft Sentinel, the Logic App playbooks use automation runbooks to perform remediation actions through the Commvault APIs:
 
 - **Commvault_Disable_IDP**: Automatically disables SAML identity providers when authentication compromise is detected
 - **Commvault_Disable_User**: Automatically disables specific user accounts that show signs of compromise  
@@ -154,7 +142,7 @@ If you prefer to set up the automation infrastructure manually instead of using 
 
 ### Automated Setup (Recommended)
 
-For easier deployment, use the provided PowerShell script that automates the entire automation account and runbook setup:
+For easier deployment, use the provided PowerShell script to create the Automation Account and publish the runbooks:
 
 ```powershell
 ./Setup-CommvaultAutomation.ps1
@@ -171,4 +159,8 @@ For easier deployment, use the provided PowerShell script that automates the ent
 3. Execute: `./Setup-CommvaultAutomation.ps1`
 4. Follow the prompts to select your subscription and resource group
 
-This script eliminates manual steps and ensures consistent deployment of the automation infrastructure required for incident response.
+This script creates the Automation Account if it does not exist and publishes the three runbooks. It does not create the Key Vault, populate the required secrets, create the playbooks, or assign Logic App permissions; complete those steps separately using the instructions above and in [Permissions.md](./Permissions.md).
+
+## Support
+
+For support, contact Commvault at [support@commvault.com](mailto:support@commvault.com) or visit [Commvault Support](https://www.commvault.com/support).

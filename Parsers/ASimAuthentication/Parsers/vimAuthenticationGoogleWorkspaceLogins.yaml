@@ -1,0 +1,229 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Google Workspace Logins
+  Version: '0.1.0'
+  LastUpdated: Jul 16, 2026
+Product:
+  Name: Google Workspace
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Google Workspace documentation
+  Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/login#login
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the Google Workspace login activities ingested in 'GoogleWorkspaceReports' table (via Codeless Connector Framework) to the ASIM Authentication normalized schema. 
+ParserName: vimAuthenticationGoogleWorkspaceLogins
+EquivalentBuiltInParser: _Im_Authentication_GoogleWorkspaceLogins
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+        let GoogleWorkspaceLoginParser = (
+            starttime: datetime = datetime(null),
+            endtime: datetime = datetime(null),
+            username_has_any: dynamic = dynamic([]),
+            targetappname_has_any: dynamic = dynamic([]),
+            srcipaddr_has_any_prefix: dynamic = dynamic([]),
+            srchostname_has_any: dynamic = dynamic([]),
+            eventtype_in: dynamic = dynamic([]),
+            eventresultdetails_in: dynamic = dynamic([]),
+            eventresult: string = '*',
+            disabled: bool = false,
+            pack: bool = false
+        )
+        {
+            GoogleWorkspaceReports
+            | where not(disabled)
+            | where IdApplicationName == "login"
+            | where EventType in ("login", "logout")
+            | where EventName in (
+                "login_success",
+                "login_failure",
+                "logout",
+                "risky_sensitive_action_allowed",
+                "risky_sensitive_action_blocked",
+                "suspicious_login",
+                "suspicious_login_less_secure_app",
+                "suspicious_programmatic_login",
+                "user_signed_out_due_to_suspicious_session_cookie"
+                )
+            | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and (array_length(username_has_any) == 0 or ActorEmail has_any (username_has_any))
+            and (array_length(srcipaddr_has_any_prefix) == 0
+                or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+                or ipv6_is_in_any_range(SrcIpAddr, srcipaddr_has_any_prefix))
+            and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+            and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source        
+            | extend EventParametersJson = parse_json(EventParameters)
+            | extend
+                LoginType = tostring(EventParametersJson.login_type),
+                SensitiveActionName = tostring(EventParametersJson.sensitive_action_name),
+                Challenges = iff(
+                    isempty(tostring(EventParametersJson.login_challenge_method)),
+                    dynamic(["none"]),
+                    EventParametersJson.login_challenge_method
+                )
+            | extend
+                EventVendor = "Google",
+                Dvc = "Google Workspace",
+                EventUid = _ItemId,
+                EventProduct = "Google Workspace",
+                EventSchema = "Authentication",
+                EventSchemaVersion = "0.1.4",
+                EventCount = int(1),
+                EventStartTime = TimeGenerated,
+                EventEndTime = TimeGenerated,
+                EventMessage = case(
+                    EventName == "login_failure",
+                        strcat(ActorEmail, " failed to login."),
+                    EventName == "login_success",
+                        strcat(ActorEmail, " logged in."),
+                    EventName == "risky_sensitive_action_allowed",
+                        strcat(ActorEmail, " was allowed to attempt sensitive action: ", SensitiveActionName, ". This action might be restricted based on privileges or other limitations."),
+                    EventName == "risky_sensitive_action_blocked",
+                        strcat(ActorEmail, " wasn't allowed to attempt sensitive action: ", SensitiveActionName, "."),
+                    EventName == "logout",
+                        strcat(ActorEmail, " logged out."),
+                    EventName == "suspicious_login",
+                        strcat("Google has detected a suspicious login for ", ActorEmail),
+                    EventName == "suspicious_login_less_secure_app",
+                        strcat("Google has detected a suspicious login for ", ActorEmail, " from a less secure app."),
+                    EventName == "suspicious_programmatic_login",
+                        strcat("Google has detected a suspicious programmatic login for ", ActorEmail),
+                    EventName == "user_signed_out_due_to_suspicious_session_cookie",
+                        strcat("Suspicious session cookie detected for user ", ActorEmail),
+                    ""
+                ),
+                EventType = case(
+                    EventName in ("logout", "user_signed_out_due_to_suspicious_session_cookie"), "Logoff",
+                    "Logon"
+                ),
+                EventResult = case(
+                    EventName in ("login_success", "risky_sensitive_action_allowed", "logout", "user_signed_out_due_to_suspicious_session_cookie"), "Success",
+                    EventName in ("login_failure", "risky_sensitive_action_blocked", "suspicious_login", "suspicious_login_less_secure_app", "suspicious_programmatic_login"), "Failure",
+                    ""
+                ),
+                EventResultDetails = case(
+                    EventName in ("suspicious_login_less_secure_app", "suspicious_programmatic_login", "risky_sensitive_action_blocked"), "Logon violates policy",
+                    "Other"
+                ),
+                TargetUsernameType = "UPN",
+                TargetUserIdType = "Other",
+                Src = SrcIpAddr,
+                IpAddr = SrcIpAddr
+            | extend HasMFA = Challenges has_any (
+                "security_key", "security_key_otp", "passkey", "userless_fido",
+                "google_authenticator", "google_prompt", "device_prompt",
+                "idv_preregistered_phone", "idv_any_phone", "backup_code",
+                "offline_otp", "internal_two_factor", "cross_device", "web_approval"
+                )
+            | extend LogonMethod = case(
+                HasMFA, "Multi factor authentication",
+                LoginType == "google_password", "Username & Password",
+                "Other"
+                ),
+                LogonProtocol = case(
+                    LoginType == "saml", "SAML",
+                    Challenges has_any ("saml"), "SAML",
+                    Challenges has_any ("oidc"), "OpenID Connect",
+                    "Other"
+                )
+            | where (array_length(eventtype_in) == 0 or EventType in (eventtype_in))
+            | where (eventresult == '*' or EventResult == eventresult)
+            | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in (eventresultdetails_in))
+            | project-rename
+                EventOriginalUid = IdUniqueQualifier,
+                TargetUserId = ActorProfileId,
+                TargetUsername = ActorEmail,
+                SrcGeoCountry = NetworkInfoRegionCode,
+                SrcGeoRegion = NetworkInfoSubdivisionCode
+            | extend AdditionalFields = iff(
+                pack == true,
+                bag_pack(
+                    "LoginType", LoginType,
+                    "LoginChallengeMethods", Challenges,
+                    "SensitiveActionName", SensitiveActionName
+                ),
+                dynamic({})
+            )
+            | project
+                TimeGenerated,
+                Type,
+                EventMessage,
+                EventStartTime,
+                EventEndTime,
+                EventType,
+                EventResult,
+                EventResultDetails,
+                LogonProtocol,
+                LogonMethod,
+                EventUid,
+                EventOriginalUid,
+                EventProduct,
+                EventVendor,
+                EventSchema,
+                EventSchemaVersion,
+                EventCount,
+                TargetUsername,
+                TargetUsernameType,
+                TargetUserId,
+                TargetUserIdType,
+                Dvc,
+                Src,
+                SrcIpAddr,
+                IpAddr,
+                SrcGeoCountry,
+                SrcGeoRegion,
+                AdditionalFields
+        };
+        GoogleWorkspaceLoginParser(
+            starttime = starttime,
+            endtime = endtime,
+            username_has_any = username_has_any,
+            targetappname_has_any = targetappname_has_any,
+            srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+            srchostname_has_any = srchostname_has_any,
+            eventtype_in = eventtype_in,
+            eventresultdetails_in = eventresultdetails_in,
+            eventresult = eventresult,
+            disabled = disabled,
+            pack = pack
+        )

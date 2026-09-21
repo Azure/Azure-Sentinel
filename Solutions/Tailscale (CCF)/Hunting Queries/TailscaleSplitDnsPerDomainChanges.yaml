@@ -1,0 +1,43 @@
+id: e7f8a9b0-3456-7890-12ab-cdef12345012
+name: "Tailscale: Split-DNS per-domain change history"
+description: Identifies the per-domain Split-DNS change history from the audit log. For each modification event, expands Old and New documents and surfaces which domains were added, removed, or changed.
+description-detailed: |
+  Identifies the per-domain Split-DNS change history from the audit log. For each modification event, expands the Old and New documents and surfaces which domains were added, removed, or had their resolver IPs changed. Useful for forensic review after a suspected DNS hijack and for confirming that a planned DNS migration deployed as intended.
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+tactics:
+  - DefenseEvasion
+  - CommandAndControl
+relevantTechniques:
+  - T1556
+  - T1568
+query: |
+  Tailscale_Audit_CL
+  | where Action == "UPDATE"
+  | where tostring(Target.type) == "TAILNET"
+  | where tostring(Target.property) == "DNS_SPLIT_DNS"
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend OldKeys = bag_keys(Old), NewKeys = bag_keys(New)
+  | extend AllDomains = set_union(OldKeys, NewKeys)
+  | mv-expand Domain = AllDomains to typeof(string)
+  | extend OldResolvers = Old[Domain], NewResolvers = New[Domain]
+  | extend Change = case(
+      isnull(OldResolvers) and isnotnull(NewResolvers), "added",
+      isnotnull(OldResolvers) and isnull(NewResolvers), "removed",
+      tostring(OldResolvers) != tostring(NewResolvers), "resolvers-changed",
+      "unchanged")
+  | where Change != "unchanged"
+  | project TimeGenerated, ActorLogin, Domain, Change, OldResolvers, NewResolvers
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+version: 1.0.0

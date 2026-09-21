@@ -1,0 +1,122 @@
+id: 17b75367-3b4e-4292-b985-30112acc2de0
+name: Member or owner added to a role-assignable group within 24 hours of its creation
+description: |
+  Identifies members or owners added to a role-assignable group within 24 hours of its creation, a pattern used to grant privileged access without generating a direct role-assignment audit event.
+description-detailed: |
+  Group role-assignability (isAssignableToRole set to true) can only be set at
+  group creation time, not added to an existing group. This chains two
+  individually low-signal events into a high-confidence indicator of privilege
+  escalation: an attacker who holds Privileged Role Administrator or Global
+  Administrator access creates a role-assignable group, then immediately adds
+  an account, often their own, or a service principal, as a member or owner.
+  That account inherits any directory role later assigned to the group without
+  ever generating an "Add member to role" audit event for itself, since the
+  role is granted to the group as a whole.
+  The group identity for "Add member to group" and "Add owner to group" events
+  is read from the "Group.ObjectID" and "Group.DisplayName" modifiedProperties
+  on the added principal's TargetResources entry rather than from a fixed
+  array index, matching the extraction pattern used elsewhere in this repo for
+  the same operations, since TargetResources ordering is not guaranteed to
+  place the group first.
+  Investigate whether the creation and the membership change were part of the
+  same documented change, whether the added identity already holds other
+  privileged access, and whether the group is subsequently assigned a
+  directory role.
+  References:
+  - https://learn.microsoft.com/entra/identity/role-based-access-control/groups-concept
+  - https://attack.mitre.org/techniques/T1098/003/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1098.003
+query: |
+  let timeframe = 1d;
+  let creationLookback = 14d;
+  let window = 24h;
+  let RecentlyCreatedRoleAssignableGroups =
+      AuditLogs
+      | where TimeGenerated >= ago(timeframe + creationLookback) and TimeGenerated < ago(0h)
+      | where Category =~ "GroupManagement"
+      | where OperationName =~ "Add group"
+      | where Result =~ "success"
+      | mv-expand ModProp = TargetResources[0].modifiedProperties
+      | extend PropName = tostring(ModProp.displayName)
+      | extend NewValue = tostring(ModProp.newValue)
+      | where PropName has "IsAssignableToRole" or NewValue has "isAssignableToRole"
+      | where NewValue has "true"
+      | extend GroupId = tolower(tostring(TargetResources[0].id))
+      | where isnotempty(GroupId)
+      | project GroupId, CreationTime = TimeGenerated;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "GroupManagement"
+  | where OperationName in~ ("Add member to group", "Add owner to group")
+  | where Result =~ "success"
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | mv-apply TargetResource = TargetResources on (
+        where TargetResource.type =~ "User"
+        | extend AddedUpn = tostring(TargetResource.userPrincipalName),
+                 AddedId  = tostring(TargetResource.id),
+                 Properties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = Properties on (
+        where Property.displayName =~ "Group.ObjectID"
+        | extend GroupId = tolower(trim('"', tostring(Property.newValue)))
+    )
+  | mv-apply Property = Properties on (
+        where Property.displayName =~ "Group.DisplayName"
+        | extend GroupName = trim('"', tostring(Property.newValue))
+    )
+  | where isnotempty(GroupId)
+  | join kind=inner RecentlyCreatedRoleAssignableGroups on GroupId
+  | where TimeGenerated >= CreationTime and TimeGenerated <= CreationTime + window
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      OperationName,
+      GroupName,
+      GroupId,
+      CreationTime,
+      AddedUpn,
+      AddedId,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

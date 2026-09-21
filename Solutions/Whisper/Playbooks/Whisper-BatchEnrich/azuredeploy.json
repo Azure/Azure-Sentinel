@@ -1,0 +1,751 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Whisper Security - Batch Indicator Enrichment",
+    "description": "Microsoft Sentinel incident trigger playbook that extracts all IP and DNS entities from an incident, collects them into a single array (capped at 50), then iterates through indicators calling explain() for each. Results are posted as an incident comment with an enrichment summary table.",
+    "prerequisites": [
+      "Microsoft Sentinel workspace",
+      "Whisper API key stored in Azure Key Vault",
+      "Key Vault secret URI for the Whisper API key"
+    ],
+    "lastUpdateTime": "2026-07-13T00:00:00.000Z",
+    "support": {
+      "tier": "partner"
+    },
+    "version": "1.0.0",
+    "author": {
+      "name": "Whisper Security"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Whisper-BatchEnrich",
+      "metadata": {
+        "description": "Name of the Logic App playbook"
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Key Vault that holds the Whisper API key"
+      }
+    },
+    "keyVaultSecretUri": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Full Key Vault secret URI for the Whisper API key"
+      }
+    }
+  },
+  "variables": {
+    "sentinelConnectionName": "azuresentinel-batchenrich",
+    "keyvaultConnectionName": "keyvault-batchenrich"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('sentinelConnectionName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelWorkspaceId": "[parameters('workspace')]"
+      },
+      "properties": {
+        "displayName": "Microsoft Sentinel - Batch Enrich",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('keyvaultConnectionName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelWorkspaceId": "[parameters('workspace')]"
+      },
+      "properties": {
+        "displayName": "Key Vault - Whisper API Key",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'keyvault')]"
+        },
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('keyVaultName')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "Whisper-BatchEnrich",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[parameters('workspace')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "keyVaultSecretUri": {
+              "type": "securestring"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Indicators_Array": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "indicators",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_Results": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "enrichResults",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_Indicators_Array": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Entities_-_Get_IPs": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/ip"
+              },
+              "runAfter": {
+                "Initialize_Results": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Entities_-_Get_DNS": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/dnsresolution"
+              },
+              "runAfter": {
+                "Initialize_Results": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Collect_IP_Indicators": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "actions": {
+                "Compose_IP_For_Batch": {
+                  "type": "Compose",
+                  "inputs": "@items('Collect_IP_Indicators')?['Address']",
+                  "runAfter": {}
+                },
+                "Validate_IP_For_Batch": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "MATCH"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "RETURN"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "DELETE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "MERGE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "CREATE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "SET "
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "REMOVE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_IP_For_Batch')))",
+                            "DETACH"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "equals": [
+                            "@length(string(outputs('Compose_IP_For_Batch')))",
+                            0
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Append_IP_To_Indicators": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "indicators",
+                        "value": "@outputs('Compose_IP_For_Batch')"
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Log_Blocked_IP_Batch": {
+                        "type": "Compose",
+                        "inputs": {
+                          "status": "blocked",
+                          "reason": "Cypher injection keyword detected or empty indicator",
+                          "indicator": "@outputs('Compose_IP_For_Batch')",
+                          "timestamp": "@{utcNow()}"
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Compose_IP_For_Batch": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Collect_DNS_Indicators": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_DNS')?['Dnsresolutions']",
+              "actions": {
+                "Compose_Domain_For_Batch": {
+                  "type": "Compose",
+                  "inputs": "@items('Collect_DNS_Indicators')?['DomainName']",
+                  "runAfter": {}
+                },
+                "Validate_Domain_For_Batch": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "MATCH"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "RETURN"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "DELETE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "MERGE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "CREATE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "SET "
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "REMOVE"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains": [
+                            "@toUpper(string(outputs('Compose_Domain_For_Batch')))",
+                            "DETACH"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "equals": [
+                            "@length(string(outputs('Compose_Domain_For_Batch')))",
+                            0
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Append_Domain_To_Indicators": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "indicators",
+                        "value": "@outputs('Compose_Domain_For_Batch')"
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Log_Blocked_Domain_Batch": {
+                        "type": "Compose",
+                        "inputs": {
+                          "status": "blocked",
+                          "reason": "Cypher injection keyword detected or empty indicator",
+                          "indicator": "@outputs('Compose_Domain_For_Batch')",
+                          "timestamp": "@{utcNow()}"
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Compose_Domain_For_Batch": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Entities_-_Get_DNS": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Cap_Indicators_At_50": {
+              "type": "Compose",
+              "inputs": "@take(variables('indicators'), 50)",
+              "runAfter": {
+                "Collect_IP_Indicators": [
+                  "Succeeded"
+                ],
+                "Collect_DNS_Indicators": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Check_Indicators_Not_Empty": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(outputs('Cap_Indicators_At_50'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Batch_Enrich_Scope": {
+                  "type": "Scope",
+                  "actions": {
+                    "Get_API_Key": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/secrets/@{encodeURIComponent(last(split(parameters('keyVaultSecretUri'), '/')))}/value"
+                      },
+                      "runAfter": {},
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "outputs"
+                          ]
+                        }
+                      }
+                    },
+                    "For_Each_Indicator": {
+                      "type": "Foreach",
+                      "foreach": "@outputs('Cap_Indicators_At_50')",
+                      "actions": {
+                        "Call_Whisper_Explain": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "https://graph.whisper.security/api/query",
+                            "headers": {
+                              "Content-Type": "application/json",
+                              "X-API-Key": "@body('Get_API_Key')?['value']"
+                            },
+                            "body": {
+                              "query": "CALL explain(\"@{items('For_Each_Indicator')}\")"
+                            },
+                            "retryPolicy": {
+                              "type": "exponential",
+                              "count": 3,
+                              "interval": "PT10S",
+                              "maximumInterval": "PT1M"
+                            }
+                          },
+                          "runAfter": {},
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
+                          }
+                        },
+                        "Parse_Explain_Response": {
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('Call_Whisper_Explain')",
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "rows": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Call_Whisper_Explain": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Append_Result": {
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "enrichResults",
+                            "value": "@first(body('Parse_Explain_Response')?['rows'])"
+                          },
+                          "runAfter": {
+                            "Parse_Explain_Response": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Get_API_Key": [
+                          "Succeeded"
+                        ]
+                      },
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 5
+                        }
+                      }
+                    },
+                    "Compose_Batch_Result": {
+                      "type": "Compose",
+                      "inputs": {
+                        "indicatorCount": "@length(outputs('Cap_Indicators_At_50'))",
+                        "resultCount": "@length(variables('enrichResults'))",
+                        "rows": "@variables('enrichResults')"
+                      },
+                      "runAfter": {
+                        "For_Each_Indicator": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Format_Incident_Comment": {
+                      "type": "Compose",
+                      "inputs": "<h3>Whisper Security - Batch Indicator Enrichment</h3><table><tr><th>Field</th><th>Value</th></tr><tr><td>Indicators Submitted</td><td>@{outputs('Compose_Batch_Result')?['indicatorCount']}</td></tr><tr><td>Results Returned</td><td>@{outputs('Compose_Batch_Result')?['resultCount']}</td></tr></table><p>Batch enrichment completed for all incident entities (IPs and domains) using individual explain() calls.</p><p><em>Enriched by Whisper Security at @{utcNow()}</em></p>",
+                      "runAfter": {
+                        "Compose_Batch_Result": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Add_Incident_Comment_Success": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{outputs('Format_Incident_Comment')}</p>"
+                        },
+                        "path": "/Incidents/Comment"
+                      },
+                      "runAfter": {
+                        "Format_Incident_Comment": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "Handle_Error_Scope": {
+                  "type": "Scope",
+                  "runAfter": {
+                    "Batch_Enrich_Scope": [
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "actions": {
+                    "Log_Error_Details": {
+                      "type": "Compose",
+                      "inputs": {
+                        "status": "error",
+                        "indicatorCount": "@length(outputs('Cap_Indicators_At_50'))",
+                        "error": "@{result('Batch_Enrich_Scope')}",
+                        "timestamp": "@{utcNow()}"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_Incident_Comment_Error": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>Whisper Security batch enrichment failed for @{length(outputs('Cap_Indicators_At_50'))} indicators. Check playbook run history for details.</p>"
+                        },
+                        "path": "/Incidents/Comment"
+                      },
+                      "runAfter": {
+                        "Log_Error_Details": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Log_No_Indicators": {
+                    "type": "Compose",
+                    "inputs": {
+                      "status": "skipped",
+                      "reason": "No valid indicators found in incident entities",
+                      "timestamp": "@{utcNow()}"
+                    },
+                    "runAfter": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Cap_Indicators_At_50": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                "connectionName": "[variables('sentinelConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                "connectionName": "[variables('keyvaultConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "keyVaultSecretUri": {
+            "value": "[parameters('keyVaultSecretUri')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "logicAppManagedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]"
+    }
+  }
+}

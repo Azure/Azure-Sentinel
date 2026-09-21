@@ -1,0 +1,290 @@
+{
+  "name": "FortyTwoCrunchAPIProtection",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "FortyTwoCrunchAPIProtection",
+      "title": "42Crunch API Protection (Push Connector via Codeless Connector Framework)",
+      "publisher": "Microsoft Corporation",
+      "descriptionMarkdown": "Connects the 42Crunch API protection to Microsoft Sentinel via the Azure Monitor DCE/DCR REST API interface. The integration uses Docker containers (API Firewall and Log Forwarder) to forward API traffic logs to Microsoft Sentinel for threat detection and analysis.",
+      "graphQueries": [
+        {
+          "metricName": "Total API firewall events received",
+          "legend": "42Crunch API Firewall",
+          "baseQuery": "FortyTwoCrunchAPIProtectionV2"
+        },
+        {
+          "metricName": "Rate-limited requests",
+          "legend": "Rate-Limited (HTTP 429)",
+          "baseQuery": "FortyTwoCrunchAPIProtectionV2 | where Status == 429"
+        },
+        {
+          "metricName": "Blocked/failed requests",
+          "legend": "Blocked Requests (4xx/5xx)",
+          "baseQuery": "FortyTwoCrunchAPIProtectionV2 | where Status >= 400"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get 10 latest API firewall events",
+          "query": "FortyTwoCrunchAPIProtectionV2 | take 10"
+        },
+        {
+          "description": "API requests that were rate-limited",
+          "query": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated >= ago(30d)\n| where Status == 429"
+        },
+        {
+          "description": "API requests generating a server error",
+          "query": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated >= ago(30d)\n| where Status >= 500 and Status <= 599"
+        },
+        {
+          "description": "API requests failing JWT validation",
+          "query": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated >= ago(30d)\n| where ErrorMessage contains \"missing\" and ErrorMessage contains \"x-access-token\""
+        },
+        {
+          "description": "Top source IPs by request count",
+          "query": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated >= ago(24h)\n| summarize RequestCount = count() by SourceIp\n| top 10 by RequestCount desc"
+        },
+        {
+          "description": "API requests by HTTP status code",
+          "query": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated >= ago(24h)\n| summarize Count = count() by Status\n| order by Count desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "FortyTwoCrunchAPIProtectionV2",
+          "lastDataReceivedQuery": "FortyTwoCrunchAPIProtectionV2\n| where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "FortyTwoCrunchAPIProtectionV2 | where TimeGenerated > ago(7d) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft.Insights/dataCollectionEndpoints",
+            "description": "Data Collection Endpoint is required for the modern push connector to receive data from the external security system."
+          },
+          {
+            "name": "Microsoft.Insights/dataCollectionRules",
+            "description": "Data Collection Rule is required to define the schema and transformations for incoming data."
+          },
+          {
+            "name": "Microsoft.Authorization/roleAssignments",
+            "description": "Role assignment is required to grant the Entra application permissions to send data to the Data Collection Rule."
+          },
+          {
+            "name": "42Crunch API Firewall requirement",
+            "description": "The 42Crunch API Firewall and Log Forwarder Docker containers must be deployed and running. Obtain your API Firewall token (42C_FIREWALL_TOKEN) and platform URL (42C_PLATFORM_URL) from the 42Crunch platform at https://platform.42crunch.com. Full deployment instructions are available at https://github.com/42Crunch/azure-sentinel-integration."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy 42Crunch API Protection connector resources",
+                "applicationDisplayName": "42Crunch API Protection (Push Connector via Codeless Connector Framework)"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "TenantId"
+                ],
+                "label": "Tenant ID (Directory ID)",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "label": "Entra App Registration Application ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "label": "Entra App Registration Secret",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "label": "Data Collection Endpoint Url",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "label": "Data Collection Rule Immutable ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [],
+                "label": "Stream Name (FortyTwoCrunchAPIProtectionV2)",
+                "value": "Custom-FortyTwoCrunchAPIProtectionV2_CL"
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Keep these values secure. You will need them to configure your external security system.",
+                "visible": true,
+                "inline": true
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure your external system to push logs",
+          "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **FortyTwoCrunchAPIProtectionV2** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nFortyTwoCrunchAPIProtectionV2\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "After deploying the Azure resources, configure the **42Crunch Log Forwarder** Docker container to send data to the deployed DCE/DCR endpoints instead of the legacy HTTP Data Collector API."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Update Docker Compose / Helm Chart Environment Variables\n\n> **Note:** This step applies if you already have an existing 42Crunch Log Forwarder deployment using the legacy HTTP Data Collector API. Migrate it by replacing the legacy `WORKSPACE_ID` and `WORKSPACE_KEY` environment variables with the new DCE/DCR configuration:\n\n```yaml\nenvironment:\n  # Legacy (remove these):\n  # - WORKSPACE_ID=<workspace-id>\n  # - WORKSPACE_KEY=<primary-key>\n\n  # New CCF Push Connector configuration:\n  - DCE_ENDPOINT=<data-collection-endpoint-url>\n  - DCR_IMMUTABLE_ID=<data-collection-rule-immutable-id>\n  - DCR_STREAM_NAME=Custom-FortyTwoCrunchAPIProtectionV2_CL\n\n  # 42Crunch platform credentials (unchanged):\n  - 42C_FIREWALL_TOKEN=<your-firewall-token>\n  - 42C_PLATFORM_URL=<your-platform-url>\n```"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "> **Note:** If you don't have an existing Docker deployment or need an example to follow, use the steps below."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 1. Download the sample deployment\n\nDownload the [`sample-deployment`](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/42Crunch%20API%20Protection/sample-deployment) folder from the Azure-Sentinel repository. It contains the `docker-compose.yml`, `.env.example`, and log forwarder used to send data to Microsoft Sentinel."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 2. Create your `.env` file\n\nCopy `.env.example` to `.env` and fill in your values before running `docker compose up`.\n\n- By default this sample runs in **online mode** and requires a 42Crunch platform token.\n- To run in **offline mode** (no token required), set `PROTECTION_TOKEN=NOTUSED` and uncomment `PLATFORM_CONNECTIVITY=NONE` in `docker-compose.yml`.\n\n> **SECURITY:** Do **NOT** put `CLIENT_SECRET` in the `.env` file. Pass it as a shell environment variable instead. Docker Compose merges shell environment variables with the `.env` file automatically.\n\n```powershell\n# PowerShell\n$env:CLIENT_SECRET = (Read-Host -Prompt \"CLIENT_SECRET\" -AsSecureString | ConvertFrom-SecureString -AsPlainText)\ndocker compose up --build\n```\n\n```bash\n# Bash/Linux\nread -rs CLIENT_SECRET && export CLIENT_SECRET\ndocker compose up --build\n```"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 3. Obtain your 42Crunch protection token\n\nFrom the 42Crunch platform ([platform.42crunch.com](https://platform.42crunch.com)):\n\n- **Online mode:** get the token from **Protect > your API > Protection > Firewall Instances > Add instance**.\n- **Offline mode** (no platform account): set `PROTECTION_TOKEN=NOTUSED` and uncomment `PLATFORM_CONNECTIVITY=NONE` in `docker-compose.yml`."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "The DCE endpoint URL and DCR immutable ID are displayed after deploying the ARM resources in Step 1. For full configuration details, refer to the [42Crunch Microsoft Sentinel Integration](https://github.com/42Crunch/azure-sentinel-integration) documentation."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "For a complete migration guide, see the [42Crunch API Protection Migration Guide](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/42Crunch%20API%20Protection/Migration_Guide.md)."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Important: Connection Status\n\nThis is a **push-based connector** - it receives data from the 42Crunch Log Forwarder and does not maintain an active polling connection. The connector shows as **Connected** when data has been received within the last 7 days."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Uninstall connector",
+          "description": "Follow these steps to disconnect and delete the connector instance.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Delete the Connector Instance"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "1. To disconnect the connector and revoke its access, select the **Revoke access** button.\n2. Return to the **Data connectors** page, select the connector's overflow menu (the three dots), and choose **Delete** to remove the connector instance.\n3. Navigate to the **Content hub**, locate the corresponding solution, and delete it to complete the removal."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This removes the push connector instance. Historical data in your Log Analytics workspace will be retained."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

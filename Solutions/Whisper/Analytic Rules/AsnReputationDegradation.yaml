@@ -1,0 +1,52 @@
+id: 32e7bcab-4424-516e-9c7c-dbe868144494
+name: Whisper Security - ASN Reputation Degradation
+description: |
+  Detects autonomous systems whose reputation score has increased by more than 20 points in the last 24 hours. Higher scores indicate worse reputation, so a score increase signals degradation that may indicate adversary use of the network.
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperASNReputation_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583
+query: |
+  // MITRE ATT&CK: T1583.002 - Acquire Infrastructure: DNS Server
+  // Tactic: Resource Development
+  // Detects ASN reputation degradation (score increase > 20 points in 24h)
+  // Note: Higher reputationScore = worse reputation
+  let degradationThreshold = 20;
+  let currentScores = WhisperASNReputation_CL
+      | where TimeGenerated > ago(1h)
+      | summarize (LatestTime, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount) = arg_max(TimeGenerated, reputationScore, reputationLevel, asnName, country, prefixCount, peerCount) by asn
+      | project asn, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount;
+  let previousScores = WhisperASNReputation_CL
+      | where TimeGenerated between (ago(1d) .. ago(1h))
+      | summarize (PreviousTime, PreviousScore) = arg_max(TimeGenerated, reputationScore) by asn
+      | project asn, PreviousScore;
+  currentScores
+      | join kind=inner (previousScores) on asn
+      | extend ScoreDelta = CurrentScore - PreviousScore
+      | where ScoreDelta > degradationThreshold
+      | project TimeGenerated = now(), ASN = asn, AsnName, OldScore = PreviousScore, NewScore = CurrentScore, ScoreDelta, CurrentLevel, Country, PrefixCount, PeerCount
+customDetails:
+  ASN: ASN
+  AsnName: AsnName
+  OldScore: OldScore
+  NewScore: NewScore
+  ScoreDelta: ScoreDelta
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

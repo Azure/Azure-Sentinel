@@ -1,0 +1,330 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "fromTemplateId": "sentinel-CayosoftGuardianThreats",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 28800000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "objectType",
+            "version": "KqlParameterItem/1.0",
+            "name": "ObjectTypeFilter",
+            "label": "System",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"Active Directory\", \"label\": \"Active Directory\"}, {\"value\": \"Entra ID\", \"label\": \"Entra ID\"}, {\"value\": \"Exchange Online\", \"label\": \"Exchange Online\"}, {\"value\": \"Exchange\", \"label\": \"Exchange\"}, {\"value\": \"Azure resources\", \"label\": \"Azure resources\"}, {\"value\": \"Hybrid\", \"label\": \"Hybrid\"}, {\"value\": \"Intune\", \"label\": \"Intune\"}, {\"value\": \"VMware Hypervisor ESXi\", \"label\": \"VMware Hypervisor ESXi\"}, {\"value\": \"Active Directory Certificate Services (ADCS)\", \"label\": \"Active Directory Certificate Services (ADCS)\"}]"
+          },
+          {
+            "id": "severityFilter",
+            "version": "KqlParameterItem/1.0",
+            "name": "SeverityFilter",
+            "label": "Severity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"high\", \"label\": \"High\"}, {\"value\": \"medium\", \"label\": \"Medium\"}, {\"value\": \"low\", \"label\": \"Low\"}, {\"value\": \"informational\", \"label\": \"Informational\"}]"
+          },
+          {
+            "id": "timeBin_chart",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeBin",
+            "label": "Aggregation (Alert Volume chart only)",
+            "type": 2,
+            "isRequired": true,
+            "value": "1h",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"1h\",\"label\":\"1 Hour\",\"selected\":true},{\"value\":\"1d\",\"label\":\"1 Day\"},{\"value\":\"5d\",\"label\":\"5 Days\"}]"
+          },
+          {
+            "id": "IncidentStatusFilter",
+            "version": "KqlParameterItem/1.0",
+            "name": "IncidentStatusFilter",
+            "label": "Incident status (incidents only)",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"New\", \"label\": \"New\"}, {\"value\": \"Active\", \"label\": \"In Progress\"}, {\"value\": \"Closed\", \"label\": \"Resolved\"}]"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters_bar"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Shared ThreatId -> System mapping, reused so every visual filters System the same way.\nlet ThreatSystemMap = CayosoftThreatAlerts_CL\n| summarize arg_max(TimeGenerated, Categories) by ThreatId\n| mv-expand Cat = Categories\n| where tostring(Cat.name) == 'System'\n| extend SystemName = tostring(Cat.value)\n| summarize SystemNames = make_set(SystemName) by ThreatId;\nSecurityAlert\n| where TimeGenerated {TimeRange}\n| where ProductName == 'Azure Sentinel'\n| where AlertName startswith 'THREAT! CTD-00'\n| extend ThreatId = extract('CTD-00[0-9]+', 0, AlertName)\n| where isnotempty(ThreatId)\n| join kind=inner (ThreatSystemMap) on ThreatId\n| mv-expand SystemName = SystemNames to typeof(string)\n| where SystemName in ({ObjectTypeFilter})\n// dedupe: one alert can map to several System values, count it once per severity\n| distinct SystemAlertId, AlertSeverity\n| summarize Count = count() by AlertSeverity\n| extend SortOrder = case(AlertSeverity == 'High', 1, AlertSeverity == 'Medium', 2, AlertSeverity == 'Low', 3, AlertSeverity == 'Informational', 4, 5)\n| project AlertSeverity, Count, SortOrder\n| order by SortOrder asc",
+        "size": 1,
+        "title": "Total Alerts by Severity",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "AlertSeverity",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": false,
+          "sortCriteriaField": "SortOrder",
+          "sortOrderField": 1
+        }
+      },
+      "customWidth": "50",
+      "name": "query_severity_tiles_total"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Shared ThreatId -> System mapping, reused so every visual filters System the same way.\nlet ThreatSystemMap = CayosoftThreatAlerts_CL\n| summarize arg_max(TimeGenerated, Categories) by ThreatId\n| mv-expand Cat = Categories\n| where tostring(Cat.name) == 'System'\n| extend SystemName = tostring(Cat.value)\n| summarize SystemNames = make_set(SystemName) by ThreatId;\nSecurityAlert\n| where TimeGenerated {TimeRange}\n| where ProductName == 'Azure Sentinel'\n| where AlertName startswith 'THREAT! CTD-00'\n| extend ThreatId = extract('CTD-00[0-9]+', 0, AlertName)\n| where isnotempty(ThreatId)\n| join kind=inner (ThreatSystemMap) on ThreatId\n| mv-expand SystemName = SystemNames to typeof(string)\n| where SystemName in ({ObjectTypeFilter})\n// intentional: an alert covering several systems contributes to each slice\n| summarize Count = count() by SystemName",
+        "size": 5,
+        "title": "Alerts by system type",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "chartSettings": {
+          "showMetrics": false,
+          "showLegend": true,
+          "simpleLegendSettings": {
+            "position": "right"
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "query_system_donut"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Incidents & alerts, filtered by Category (System) via CayosoftThreatAlerts_CL.\n// One CTD-xxxxxx threat type always maps to the same System category,\n// so it is enough to take one (latest) record per ThreatId.\nlet MatchingThreatIds = CayosoftThreatAlerts_CL\n| summarize arg_max(TimeGenerated, Categories) by ThreatId\n| mv-expand Cat = Categories\n| where tostring(Cat.name) == 'System' and tostring(Cat.value) has_any ({ObjectTypeFilter})\n| distinct ThreatId;\nlet FilteredIncidents = SecurityIncident\n| where TimeGenerated {TimeRange}\n| where Title startswith 'THREAT! CTD-00'\n| where Status in ({IncidentStatusFilter})\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| extend ThreatId = extract('CTD-00[0-9]+', 0, Title)\n| where ThreatId in (MatchingThreatIds)\n| mv-expand AlertIds\n| extend SystemAlertId = tostring(AlertIds)\n| project IncidentNumber=ProviderIncidentId, IncidentUrl = tostring(AdditionalData.providerIncidentUrl), SystemAlertId, IncidentStatus = Status;\nSecurityAlert\n| where TimeGenerated {TimeRange}\n| where ProductName == 'Azure Sentinel'\n| where AlertName startswith 'THREAT! CTD-00'\n| extend ThreatId = extract('CTD-00[0-9]+', 0, AlertName)\n| where tolower(AlertSeverity) in ({SeverityFilter})\n| extend Details = tolower(strcat('https://www.cayosoft.com/threat-directory/', ThreatId, '/'))\n| join kind=inner (FilteredIncidents) on SystemAlertId\n| project TimeGenerated, Severity=tolower(AlertSeverity), ThreatId, Subject=AlertName, IncidentNumber, IncidentUrl, Details, IncidentStatus\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Incidents & recent alerts",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Severity",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "high",
+                    "representation": "orange",
+                    "text": "High"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "medium",
+                    "representation": "yellow",
+                    "text": "Medium"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "low",
+                    "representation": "blue",
+                    "text": "Low"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "informational",
+                    "representation": "gray",
+                    "text": "Informational"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": "",
+                    "representation": "gray",
+                    "text": "{0}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "IncidentStatus",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "New",
+                    "representation": "blue",
+                    "text": "New"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Active",
+                    "representation": "yellow",
+                    "text": "In Progress"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Closed",
+                    "representation": "green",
+                    "text": "Resolved"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": "",
+                    "representation": "gray",
+                    "text": "{0}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "IncidentUrl",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "View incident"
+              }
+            },
+            {
+              "columnMatch": "IncidentNumber",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "Details",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Threat details"
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "treeType": 1,
+            "groupBy": [
+              "ThreatId",
+              "IncidentNumber"
+            ],
+            "expandTopLevel": false
+          },
+          "sortBy": [
+            {
+              "itemKey": "TimeGenerated",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "TimeGenerated",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "name": "query_alerts_table_flat"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Shared ThreatId -> System mapping, reused so every visual filters System the same way.\nlet ThreatSystemMap = CayosoftThreatAlerts_CL\n| summarize arg_max(TimeGenerated, Categories) by ThreatId\n| mv-expand Cat = Categories\n| where tostring(Cat.name) == 'System'\n| extend SystemName = tostring(Cat.value)\n| summarize SystemNames = make_set(SystemName) by ThreatId;\nSecurityAlert\n| where TimeGenerated {TimeRange}\n| where ProductName == 'Azure Sentinel'\n| where AlertName startswith 'THREAT! CTD-00'\n| extend ThreatId = extract('CTD-00[0-9]+', 0, AlertName)\n| where isnotempty(ThreatId)\n| join kind=inner (ThreatSystemMap) on ThreatId\n| mv-expand SystemName = SystemNames to typeof(string)\n| where SystemName in ({ObjectTypeFilter})\n// dedupe before binning: one alert can map to several System values\n| distinct SystemAlertId, TimeGenerated, AlertSeverity\n| summarize Count = count() by bin(TimeGenerated, {TimeBin}), AlertSeverity",
+        "size": 0,
+        "title": "Alert Volume over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "customWidth": "100",
+      "name": "query_time_area"
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Monitor"
+  ]
+}

@@ -113,7 +113,6 @@ namespace IncidentConsumer
         {
             log.LogInformation("queueItem --> " + queueItem);
             string token = GetAccessTokenAsync($"{ARM_ENDPOINT}.default", log).Result;
-            log.LogInformation("token --> " + token);
             string subscription = Environment.GetEnvironmentVariable("subscription");
             string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");
             string workspace = Environment.GetEnvironmentVariable("Workspace");

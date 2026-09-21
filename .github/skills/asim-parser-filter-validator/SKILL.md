@@ -40,7 +40,7 @@ AgentEvent, AlertEvent, AssetEntity, AuditEvent, Authentication, DhcpEvent, Dns,
 ## How to run
 
 ```powershell
-.\.github\skills\asim-parser-filter-validator\scripts\asimFilterTest.ps1 -ParserFile "{PathToFilterParserKQL}" -SchemaName "{SchemaName}" -WorkspaceId "{your-workspace-guid}"
+.\scripts\asimFilterTest.ps1 -ParserFile "{PathToFilterParserKQL}" -SchemaName "{SchemaName}" -WorkspaceId "{your-workspace-guid}"
 ```
 
 ## Prerequisites

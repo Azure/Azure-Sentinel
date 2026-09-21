@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **CiscoDuo** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-ciscoduo-parser)"
+        "json": "**NOTE**: This workbook uses the Cisco Duo CCF tables **DuoAuthentication_CL**, **DuoActivity_CL**, and **DuoTelephony_CL**. Enable the corresponding CCF data connectors to populate each data source."
       },
       "name": "text - 8"
     },
@@ -59,7 +59,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+        "query": "union isfuzzy=true DuoAuthentication_CL, DuoActivity_CL, DuoTelephony_CL\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
         "size": 0,
         "title": "Events Over Time",
         "color": "greenDark",
@@ -84,7 +84,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\n| summarize count() by SrcGeoCountry",
+        "query": "union isfuzzy=true\n    (DuoAuthentication_CL | project Country = AccessDeviceCountry),\n    (DuoActivity_CL | project Country = AccessDeviceCountry)\n| where isnotempty(Country)\n| summarize count() by Country",
         "size": 0,
         "title": "Countries summary",
         "timeContext": {
@@ -102,7 +102,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let tot_dvc = CiscoDuo\r\n| summarize e_count=dcount(SrcHostname)\r\n| extend Title='Authentication Devices';\r\nlet tot_usr = CiscoDuo\r\n| where EventType =~ 'authentication'\r\n| where EventResult =~ 'success'\r\n| summarize e_count=dcount(DstUserName)\r\n| extend Title='Total Users';\r\nlet tot_adm = CiscoDuo\r\n| where EventType =~ 'administrator'\r\n| summarize e_count=dcount(DstUserName)\r\n| extend Title='Admin users';\r\nunion isfuzzy=true tot_dvc, tot_usr, tot_adm\r\n| order by e_count",
+        "query": "let tot_dvc = DuoAuthentication_CL\r\n| summarize e_count=dcount(AuthDeviceName)\r\n| extend Title='Authentication Devices';\r\nlet tot_usr = DuoAuthentication_CL\r\n| where Result =~ 'success'\r\n| summarize e_count=dcount(UserName)\r\n| extend Title='Total Users';\r\nlet tot_adm = DuoActivity_CL\r\n| where ActorType =~ 'admin'\r\n| summarize e_count=dcount(ActorName)\r\n| extend Title='Admin users';\r\nunion isfuzzy=true tot_dvc, tot_usr, tot_adm\r\n| order by e_count",
         "size": 3,
         "title": "Summary",
         "timeContext": {
@@ -152,7 +152,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\r\n| where isnotempty(SrcIpAddr)\r\n| summarize count() by SrcIpAddr",
+        "query": "union isfuzzy=true\r\n    (DuoAuthentication_CL | project SourceAddress = AccessDeviceIp),\r\n    (DuoActivity_CL | project SourceAddress = AccessDeviceIp)\r\n| where isnotempty(SourceAddress)\r\n| summarize count() by SourceAddress",
         "size": 3,
         "title": "Source Addresses",
         "timeContext": {
@@ -174,7 +174,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\r\n| where isnotempty(DstUserName)\r\n| summarize count() by DstUserName\r\n| top 10 by count_",
+        "query": "DuoAuthentication_CL\r\n| where isnotempty(UserName)\r\n| summarize count() by UserName\r\n| top 10 by count_",
         "size": 3,
         "title": "Top Users",
         "timeContext": {
@@ -206,7 +206,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\n| where EventType =~ 'authentication'\n| where EventResult =~ 'success'\n| summarize e_count = count() by SrcDvcOs\n| project-rename  DeviceOS=SrcDvcOs",
+        "query": "DuoAuthentication_CL\n| where Result =~ 'success'\n| where isnotempty(AccessDeviceOs)\n| summarize e_count = count() by AccessDeviceOs\n| project-rename DeviceOS = AccessDeviceOs\n| order by e_count desc",
         "size": 0,
         "title": "Device OS Types",
         "timeContext": {
@@ -215,35 +215,7 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "User",
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "TotalMailsReceived",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto"
-            },
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "maximumSignificantDigits": 3,
-                "maximumFractionDigits": 2
-              }
-            }
-          },
-          "secondaryContent": {
-            "columnMatch": "Trend",
-            "formatter": 10,
-            "formatOptions": {
-              "palette": "magenta"
-            }
-          },
-          "showBorder": false
-        }
+        "visualization": "piechart"
       },
       "customWidth": "30",
       "name": "query - 10"
@@ -252,7 +224,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\r\n| where DvcAction in~ ('admin_login', 'admin_login_error')\r\n| project TimeGenerated, DstUserName, Result=strcat(iff(DvcAction =~ 'admin_login_error', '❌', '✅'))\r\n",
+        "query": "DuoActivity_CL\r\n| where ActionName =~ 'admin_login'\r\n| extend Result = case(OutcomeResult =~ 'SUCCESS', '✅', OutcomeResult =~ 'FAILURE', '❌', 'Unknown')\r\n| project TimeGenerated, ActorName, Result\r\n",
         "size": 3,
         "title": "Admin login status",
         "timeContext": {
@@ -270,7 +242,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\r\n| where EventType =~ 'authentication'\r\n| project TimeGenerated, DstUserName, Result=strcat(iff(EventResult =~ 'success', '✅', '❌'))",
+        "query": "DuoAuthentication_CL\r\n| project TimeGenerated, UserName, Result=strcat(iff(Result =~ 'success', '✅', '❌'))",
         "size": 0,
         "title": "User authentication status",
         "timeContext": {
@@ -294,7 +266,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CiscoDuo\n| where DvcAction =~ 'user_create'\n| project SrcUserName",
+        "title": "User creation activity",
+        "query": "DuoActivity_CL\n| where ActionName =~ 'user_create'\n| project TargetName, ActorName, AccessDeviceIp",
         "size": 0,
         "timeContext": {
           "durationMs": 7776000000
@@ -308,10 +281,10 @@
         },
         "tileSettings": {
           "titleContent": {
-            "columnMatch": "Title"
+            "columnMatch": "TargetName"
           },
           "subtitleContent": {
-            "columnMatch": "SrcIpAddr",
+            "columnMatch": "AccessDeviceIp",
             "formatter": 12,
             "formatOptions": {
               "palette": "purpleDark"

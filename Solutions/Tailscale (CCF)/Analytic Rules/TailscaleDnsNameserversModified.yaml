@@ -1,0 +1,45 @@
+id: c5d6e7f8-2345-6789-01ab-cdef12345011
+name: "Tailscale: DNS nameservers modified"
+description: |
+  Identifies when the tailnet's global DNS nameserver list is modified. Adding an attacker-controlled resolver as a tailnet-wide nameserver enables broad DNS hijacking for every device using MagicDNS resolution.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - CommandAndControl
+relevantTechniques:
+  - T1556
+  - T1568
+query: |
+  Tailscale_Audit_CL
+  | where Action == "UPDATE"
+  | where tostring(Target.type) == "TAILNET"
+  | where tostring(Target.property) == "DNS_NAMESERVERS"
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend OldServers = Old.dns
+  | extend NewServers = New.dns
+  | extend Added = set_difference(NewServers, OldServers)
+  | extend Removed = set_difference(OldServers, NewServers)
+  | project TimeGenerated, ActorLogin, OldServers, NewServers, Added, Removed, Origin
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

@@ -28,6 +28,22 @@ This lab deploys **custom detection rules** to Microsoft Defender XDR via the Mi
 
 ### Create a User-Assigned Managed Identity (UAMI)
 
+#### Automated setup (Azure Cloud Shell Bash)
+
+The setup script creates or reuses `SentinelDetectionRulesIdentity`, waits for
+the managed identity service principal to become available in Microsoft Graph,
+grants and verifies `CustomDetection.ReadWrite.All`, and prints the resource ID
+required by the deployment template.
+
+Open Azure Cloud Shell, select **Bash**, and run:
+
+    curl -fsSLo sentinel-training-lab-onboarding.sh \
+      https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Microsoft-Sentinel-Training-Lab/Tools/sentinel-training-lab-onboarding.sh
+
+    bash sentinel-training-lab-onboarding.sh <your-resource-group>
+
+To perform the setup manually with PowerShell, continue with the steps below.
+
 > **Tip — Use GitHub Copilot:** You can complete this entire setup by pasting the following prompt into GitHub Copilot Chat in VS Code:
 >
 > *"Create a User-Assigned Managed Identity called SentinelDetectionRulesIdentity in my resource group, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, and give me the full resource ID to use during deployment."*

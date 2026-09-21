@@ -1,0 +1,36 @@
+id: 6a2f9b58-c31d-4e07-9d84-3f5b1c7e2a90
+name: Contact from a source probing a specific CVE
+description: |
+  'Surfaces hosts that were contacted by an IP HoneyLabs observed probing a specific CVE exploit path, and lists the CVEs that source went after. Available on paid HoneyLabs plans, where the attacker collection also carries CVE probers. This is the query to run when you want to know whether the vulnerabilities being probed in the wild right now line up with what you actually expose: cross-reference the CVE column against your own asset inventory and patch state.'
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Reconnaissance
+  - InitialAccess
+relevantTechniques:
+  - T1595
+  - T1190
+query: |
+  let lookBack = 14d;
+  let recent = 1d;
+  let CVE_Probers = ThreatIntelIndicators
+    | where TimeGenerated >= ago(lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where Data.labels has 'cve-probing'
+    | extend TI_ip = tostring(ObservableValue),
+             CVEs = strcat_array(todynamic(tostring(Data.labels)), ', ');
+  CVE_Probers
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(recent)
+    | where isnotempty(SourceIP)
+    | extend ip = SourceIP
+  ) on $left.TI_ip == $right.ip
+  | summarize Events = count(), Hosts = dcount(DeviceName), HostList = make_set(DeviceName, 20),
+      LastSeen = max(TimeGenerated) by TI_ip, CVEs, Confidence
+  | extend HoneyLabsReport = strcat('https://honeylabs.net/lookup/', TI_ip)
+  | sort by Confidence desc, Events desc

@@ -1,0 +1,80 @@
+id: d52687ac-ac56-523b-aa88-45bd2498904b
+name: Whisper - Shared Infrastructure Clustering
+description: |
+  Discovers threat actor infrastructure clusters by grouping indicators by shared ASN, prefix, registrar, or nameserver with elevated threat scores.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+  - WhisperThreatIntel_CL
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583.003
+query: |
+  // MITRE ATT&CK: T1583.003 - Resource Development: Acquire Infrastructure: Virtual Private Server
+  // Tactic: ResourceDevelopment
+  // Groups indicators by shared infrastructure attributes (ASN, prefix,
+  // registrar, nameserver) and identifies clusters with elevated threat scores.
+  let lookback = 30d;
+  let minClusterSize = 3;
+  let minAvgThreatScore = 30;
+  let infraWithThreats = WhisperInfraContext_CL
+  | where TimeGenerated > ago(lookback)
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | join kind=leftouter (
+      WhisperThreatIntel_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | project indicator, threatScore, threatLevel, isThreat
+  ) on indicator
+  | extend threatScore = coalesce(threatScore, real(0));
+  let asnClusters = infraWithThreats
+  | where isnotempty(asns)
+  | summarize
+      clusterIndicators = make_set(indicator, 100),
+      indicatorCount = dcount(indicator),
+      avgThreatScore = avg(threatScore),
+      maxThreatScore = max(threatScore),
+      threatCount = countif(isThreat == true)
+      by clusterKey = asns
+  | extend clusterType = "ASN"
+  | where indicatorCount >= minClusterSize and avgThreatScore >= minAvgThreatScore;
+  let registrarClusters = infraWithThreats
+  | where isnotempty(registrar)
+  | summarize
+      clusterIndicators = make_set(indicator, 100),
+      indicatorCount = dcount(indicator),
+      avgThreatScore = avg(threatScore),
+      maxThreatScore = max(threatScore),
+      threatCount = countif(isThreat == true)
+      by clusterKey = registrar
+  | extend clusterType = "Registrar"
+  | where indicatorCount >= minClusterSize and avgThreatScore >= minAvgThreatScore;
+  let nameserverClusters = infraWithThreats
+  | where isnotempty(nameservers)
+  | summarize
+      clusterIndicators = make_set(indicator, 100),
+      indicatorCount = dcount(indicator),
+      avgThreatScore = avg(threatScore),
+      maxThreatScore = max(threatScore),
+      threatCount = countif(isThreat == true)
+      by clusterKey = nameservers
+  | extend clusterType = "Nameserver"
+  | where indicatorCount >= minClusterSize and avgThreatScore >= minAvgThreatScore;
+  union asnClusters, registrarClusters, nameserverClusters
+  | project
+      clusterType,
+      clusterKey,
+      indicatorCount,
+      avgThreatScore,
+      maxThreatScore,
+      threatCount,
+      clusterIndicators
+  | sort by avgThreatScore desc, indicatorCount desc
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: pivotValue
+version: 1.0.0

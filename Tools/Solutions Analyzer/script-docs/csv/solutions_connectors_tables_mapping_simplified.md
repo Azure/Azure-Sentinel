@@ -8,6 +8,8 @@
 
 Three-column edge list connecting solutions to their connectors to the tables those connectors ingest into. The most compact way to traverse the solution → connector → table graph.
 
+Internal Sentinel tables are excluded from connector attribution edges by default (for example `SecurityAlert`, `SecurityIncident`) to avoid false ingestion mappings from status/health queries. TI tables remain allowlisted (`ThreatIntelIndicators`, `ThreatIntelObjects`, `ThreatIntelligenceIndicator`).
+
 ## Use Cases
 
 - **Graph queries** — fast lookup "which tables does solution X ingest?" or "which solutions use table Y?"

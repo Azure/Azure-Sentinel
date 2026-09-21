@@ -40,10 +40,22 @@ Parsers are KQL functions that follow a clear flow: **Filter → Parse → Map**
 - Use indexes so only relevant extents are scanned.
 - Filter early on native columns before parsing to improve performance.
 - Use high-performance parsing operators (`split`, `parse-kv`, `parse`) and avoid regular expressions for string parsing.
-- Normalize values with `iff`, `case`, or lookup tables rather than copying source values directly.
+- Normalize values with `iff`, `case`, or query-local lookup tables rather than copying source values directly.
 - Use `project-rename` for mapping, `extend` for calculated or normalized fields.
 - Try to map as many fields as possible, including optional ones. This increases usefulness and future-proofs the parser for schema changes.
 - Do not use `project-away` to remove unmapped columns. Use `project` instead, as `project-away` does not protect the parser from schema changes in the source data.
+
+### Prohibited patterns
+
+ASIM parsers must read event records from one declared source table. Query-local static mappings created with `datatable` and applied with `lookup` are allowed because they do not read or correlate additional event records. Each lookup key must be unique so the mapping cannot fan out a source record. Do not use:
+
+- **Same-table enrichment** — including a second read of the source table, a self-join, or a tabular subquery that correlates event records.
+- **Cross-table enrichment** — including reading event records from another workspace table, a watchlist, `externaldata`, or another external tabular source.
+- **One-to-many fan-out** — each source record must produce at most one normalized record. Do not expand one record into multiple normalized records; this indicates that the connector or source event shape must be corrected.
+- **Any `mv-*` operator** — including `mv-expand` and `mv-apply`.
+- **Event-record aggregation, reaggregation, correlation, or deduplication** — including `summarize`, `distinct`, `arg_min`, `arg_max`, or any other operation that combines source records or collapses expanded rows.
+
+Use values available on the current source row, constants, and query-local static lookup mappings while preserving event-record cardinality. Prefer scalar expressions, scalar dynamic-value access, and direct parsing. If a field cannot be mapped without prohibited event enrichment, fan-out, `mv-*`, or event-record aggregation, leave it unmapped.
 
 ### Parsing operators by performance ranking
 
@@ -61,6 +73,16 @@ Parsers are KQL functions that follow a clear flow: **Filter → Parse → Map**
 ### Required columns
 
 - Include the column `Type` in the output of the ASIM parser. This column indicates the source table name.
+- Determine the placeholder entity fields applicable to the parser from the target schema and `Common` rows in `ASimTester.csv`. Include every defined column whose name ends in `EntityKey` or `AdditionalIds`, as well as `AdditionalEntities` when it is defined for the schema.
+- Preserve the exact field names and casing from `ASimTester.csv`. Entity fields are role-specific (for example, `ActorUserEntityKey`, `SrcSystemEntityKey`, and `ActorUserAdditionalIds`); do not replace them with generic names such as `entityKey` or `AdditionalIds`.
+- Until mappings for these fields are defined, set every `*EntityKey` field to an empty string and every `*AdditionalIds` field and `AdditionalEntities` to an empty dynamic array. For example:
+
+  ```kusto
+  ActorUserEntityKey = "",
+  SrcSystemEntityKey = "",
+  ActorUserAdditionalIds = dynamic([]),
+  AdditionalEntities = dynamic([])
+  ```
 
 ### Required parameters
 

@@ -12,6 +12,6 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASim{schema}ARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASim{schema}ARMgov)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASim{schema}ARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://aka.ms/ASim{schema}ARMgov)
 
 <br>
