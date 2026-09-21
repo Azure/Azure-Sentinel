@@ -6,10 +6,6 @@
             "defaultValue": "GIBTIA_HI_Threat",
             "type": "string"
         },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
-        },
         "GIBUsername": {
             "type": "string",
             "metadata": {
@@ -37,34 +33,197 @@
                 "description": "Records per API call (1-10). Lower default due to larger record size."
             }
         },
-        "WorkspaceId": {
-            "type": "string",
+        "RecordsPerWrite": {
+            "defaultValue": 10,
+            "minValue": 1,
+            "maxValue": 500,
+            "type": "int",
             "metadata": {
-                "description": "Log Analytics workspace ID (GUID)."
+                "description": "Records per Logs Ingestion API call (the API accepts at most 1 MB per call). Default 10 is sized from the largest hi/threat records seen. Lower it if Write_chunk_to_table fails with HTTP 413."
             }
         },
         "WorkspaceName": {
             "type": "string",
             "metadata": {
-                "description": "Log Analytics workspace name."
+                "description": "Log Analytics workspace name. Must be in this resource group: the template creates the GIBCollectionTracking_CL table in it, points the Data Collection Rule at it, and reads the seqUpdate cursor from it."
+            }
+        },
+        "WorkspaceLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Leave as is unless your Log Analytics workspace is in a different Azure region from this resource group. The Data Collection Rule must be created in the workspace's region; the default is this resource group's region."
+            }
+        },
+        "AssignRoles": {
+            "defaultValue": true,
+            "type": "bool",
+            "metadata": {
+                "description": "true (default): the template grants this playbook's managed identity Monitoring Metrics Publisher on its Data Collection Rule and Log Analytics Reader on the workspace, so it works as soon as it is enabled. Requires the deploying account to hold Owner or User Access Administrator on the resource group. Set false if it does not, and assign those two roles by hand after deployment."
             }
         }
     },
     "variables": {
-        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+        "DcrName": "[concat('gib-hi-threat-', uniqueString(resourceGroup().id, parameters('PlaybookName')))]",
+        "DcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "TrackingTableName": "GIBCollectionTracking_CL",
+        "TrackingStreamName": "Custom-GIBCollectionTracking",
+        "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "LogAnalyticsReaderRoleId": "73c42c96-874c-492b-b04d-ab87d138a893",
+        "ContextTableName": "GIBHIThreat_CL",
+        "ContextStreamName": "Custom-GIBHIThreat"
     },
     "resources": [
         {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
-            "location": "[resourceGroup().location]",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2025-07-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('TrackingTableName'))]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                "schema": {
+                    "name": "[variables('TrackingTableName')]",
+                    "description": "Group-IB TI seqUpdate cursor, one row per collector write. Shared by all GIBTIA collectors. Do not add columns: it breaks legacy Data Collector ingestion.",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "CollectionName_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SeqUpdate_d",
+                            "type": "real"
+                        }
+                    ]
                 }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2025-07-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('ContextTableName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('ContextTableName')]",
+                    "description": "Group-IB TI hi/threat. Record = the full API item; *_s/*_d/*_b/*_t columns are promoted from Record by the DCR transform.",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Record",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "id_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "title_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "countries_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "threatActor_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "datePublished_t",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "severity_s",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tlp_s",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "[variables('DcrName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "tags": {
+                "GIBTIA-Playbook": "[parameters('PlaybookName')]"
+            },
+            "kind": "Direct",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('TrackingTableName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('ContextTableName'))]"
+            ],
+            "properties": {
+                "description": "Group-IB TI: Logs Ingestion destination for this playbook's seqUpdate cursor and its hi/threat context table. kind=Direct; api-version 2023-03-11 is deliberate (see DEV_NOTES).",
+                "streamDeclarations": {
+                    "Custom-GIBCollectionTracking": {
+                        "columns": [
+                            {
+                                "name": "CollectionName_s",
+                                "type": "string"
+                            },
+                            {
+                                "name": "SeqUpdate_d",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-GIBHIThreat": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('WorkspaceResourceId')]",
+                            "name": "gibWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('TrackingStreamName')]"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "[concat('Custom-', variables('TrackingTableName'))]"
+                    },
+                    {
+                        "streams": [
+                            "[variables('ContextStreamName')]"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), ['title_s'] = tostring(r['title']), description_s = tostring(r.description), sectors_s = tostring(r.sectors), countries_s = tostring(r.countries), threatActor_s = tostring(r.threatActor.name), datePublished_t = todatetime(r.datePublished), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "[concat('Custom-', variables('ContextTableName'))]"
+                    }
+                ]
             }
         },
         {
@@ -73,22 +232,24 @@
             "name": "[parameters('PlaybookName')]",
             "tags": {
                 "hidden-SentinelTemplateName": "GIBTIA_HI_Threat",
-                "hidden-SentinelTemplateVersion": "2.0"
+                "hidden-SentinelTemplateVersion": "2.1"
             },
             "metadata": {
                 "title": "Group-IB TI - Hacker intelligence threat collector",
                 "description": "Polls the Group-IB Threat Intelligence hi/threat collection hourly using incremental seqUpdate paging and writes hacker-intelligence threat reports to the GIBHIThreat_CL custom table in Log Analytics for use in analytics rules and hunting queries.",
                 "prerequisites": [
                     "A Group-IB Threat Intelligence subscription with API access to the hi/threat collection.",
-                    "A Log Analytics workspace connected to Microsoft Sentinel."
+                    "A Log Analytics workspace connected to Microsoft Sentinel.",
+                    "The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.",
+                    "The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false."
                 ],
                 "postDeployment": [
-                    "1. Authorize the Azure Monitor Logs and Azure Log Analytics Data Collector API connections.",
-                    "2. Assign both the Microsoft Sentinel Contributor and Log Analytics Contributor roles to the playbook's managed identity at workspace scope. Both are required.",
-                    "3. Set the GIBUsername, GIBApiKey, StartDate and LimitPerPortion parameters.",
-                    "4. Enable the Logic App. It deploys in a Disabled state by design. Records appear in GIBHIThreat_CL after the first successful run."
+                    "1. Nothing to authorize: the playbook writes to Log Analytics through the Data Collection Rule this template created, using its managed identity. With AssignRoles left at true the template has also assigned the playbook's two roles (Monitoring Metrics Publisher on that rule, Log Analytics Reader on the workspace); with AssignRoles=false, assign them by hand.",
+                    "2. Set the GIBUsername, GIBApiKey, StartDate and LimitPerPortion parameters.",
+                    "3. Wait 5-15 minutes for the role assignments to propagate, then enable the Logic App. It deploys in a Disabled state by design.",
+                    "4. Upgrading from 2.0: convert the workspace's GIB* tables once with migrate-tables.sh before redeploying (see the Playbooks readme)."
                 ],
-                "lastUpdateTime": "2026-09-02T00:00:00.000Z",
+                "lastUpdateTime": "2026-09-21T00:00:00.000Z",
                 "entities": [],
                 "tags": [
                     "Group-IB",
@@ -102,6 +263,16 @@
                         "notes": [
                             "Replaces the deprecated Microsoft Security Graph API implementation. Indicators are submitted with Upload_Indicators_V2 using a managed identity and land in the ThreatIntelIndicators table."
                         ]
+                    },
+                    {
+                        "version": "2.1",
+                        "title": "Logs Ingestion API",
+                        "notes": [
+                            "Log Analytics writes moved from the retired HTTP Data Collector API connector to the Logs Ingestion API. The template now creates a Data Collection Rule and the playbook writes through it with its managed identity: no API connection to authorize and no workspace key.",
+                            "The template assigns the playbook's roles (Monitoring Metrics Publisher on its Data Collection Rule, Log Analytics Reader on the workspace); set AssignRoles=false to assign them by hand.",
+                            "Context tables now hold the full record in a Record column plus a few promoted fields, written in chunks of RecordsPerWrite records per call.",
+                            "The unused WorkspaceId parameter is removed. Upgrading from 2.0 requires a one-time table conversion (migrate-tables.sh) before redeploying; see the Playbooks readme."
+                        ]
                     }
                 ],
                 "support": {
@@ -112,19 +283,12 @@
                 }
             },
             "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
-            ],
             "properties": {
                 "state": "Disabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        },
                         "GIBUsername": {
                             "defaultValue": "[parameters('GIBUsername')]",
                             "type": "String"
@@ -141,9 +305,17 @@
                             "defaultValue": "[parameters('LimitPerPortion')]",
                             "type": "Int"
                         },
-                        "WorkspaceId": {
-                            "defaultValue": "[parameters('WorkspaceId')]",
-                            "type": "String"
+                        "RecordsPerWrite": {
+                            "type": "Int",
+                            "defaultValue": "[parameters('RecordsPerWrite')]"
+                        },
+                        "DcrEndpoint": {
+                            "type": "String",
+                            "defaultValue": "[reference(variables('DcrResourceId'), '2023-03-11').endpoints.logsIngestion]"
+                        },
+                        "DcrImmutableId": {
+                            "type": "String",
+                            "defaultValue": "[reference(variables('DcrResourceId'), '2023-03-11').immutableId]"
                         }
                     },
                     "triggers": {
@@ -434,7 +606,9 @@
                                                         "type": "AppendToArrayVariable",
                                                         "inputs": {
                                                             "name": "RecordsArray",
-                                                            "value": "@items('For_each_item')"
+                                                            "value": {
+                                                                "Record": "@items('For_each_item')"
+                                                            }
                                                         },
                                                         "runAfter": {}
                                                     }
@@ -445,21 +619,33 @@
                                                     ]
                                                 }
                                             },
-                                            "Write_batch_to_table": {
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": "@{string(variables('RecordsArray'))}",
-                                                    "headers": {
-                                                        "Log-Type": "GIBHIThreat",
-                                                        "time-generated-field": ""
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/api/logs"
+                                            "For_each_chunk": {
+                                                "type": "Foreach",
+                                                "foreach": "@chunk(variables('RecordsArray'), parameters('RecordsPerWrite'))",
+                                                "actions": {
+                                                    "Write_chunk_to_table": {
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "method": "POST",
+                                                            "uri": "@{concat(parameters('DcrEndpoint'), '/dataCollectionRules/', parameters('DcrImmutableId'), '/streams/Custom-GIBHIThreat?api-version=2023-01-01')}",
+                                                            "headers": {
+                                                                "Content-Type": "application/json"
+                                                            },
+                                                            "body": "@items('For_each_chunk')",
+                                                            "authentication": {
+                                                                "type": "ManagedServiceIdentity",
+                                                                "audience": "https://monitor.azure.com"
+                                                            },
+                                                            "retryPolicy": {
+                                                                "type": "exponential",
+                                                                "count": 10,
+                                                                "interval": "PT20S",
+                                                                "minimumInterval": "PT10S",
+                                                                "maximumInterval": "PT1H"
+                                                            }
+                                                        },
+                                                        "runAfter": {}
+                                                    }
                                                 },
                                                 "runAfter": {
                                                     "For_each_item": [
@@ -474,7 +660,7 @@
                                                     "value": []
                                                 },
                                                 "runAfter": {
-                                                    "Write_batch_to_table": [
+                                                    "For_each_chunk": [
                                                         "Succeeded"
                                                     ]
                                                 }
@@ -495,20 +681,30 @@
                             }
                         },
                         "Save_tracking_record": {
-                            "type": "ApiConnection",
+                            "type": "Http",
                             "inputs": {
-                                "body": "{\"CollectionName\": \"hi/threat\", \"SeqUpdate\": @{variables('seqUpdate')}}",
+                                "method": "POST",
+                                "uri": "@{concat(parameters('DcrEndpoint'), '/dataCollectionRules/', parameters('DcrImmutableId'), '/streams/Custom-GIBCollectionTracking?api-version=2023-01-01')}",
                                 "headers": {
-                                    "Log-Type": "GIBCollectionTracking",
-                                    "time-generated-field": ""
+                                    "Content-Type": "application/json"
                                 },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                "body": [
+                                    {
+                                        "CollectionName_s": "hi/threat",
+                                        "SeqUpdate_d": "@variables('seqUpdate')"
                                     }
+                                ],
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://monitor.azure.com"
                                 },
-                                "method": "post",
-                                "path": "/api/logs"
+                                "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 10,
+                                    "interval": "PT20S",
+                                    "minimumInterval": "PT10S",
+                                    "maximumInterval": "PT1H"
+                                }
                             },
                             "runAfter": {
                                 "Until": [
@@ -518,21 +714,44 @@
                         }
                     },
                     "outputs": {}
-                },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
-                            }
-                        }
-                    }
                 }
             },
             "identity": {
                 "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[variables('DcrResourceId')]"
+            ]
+        },
+        {
+            "condition": "[parameters('AssignRoles')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), variables('MonitoringMetricsPublisherRoleId'), variables('DcrResourceId'))]",
+            "scope": "[variables('DcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[variables('DcrResourceId')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('MonitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "condition": "[parameters('AssignRoles')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), variables('LogAnalyticsReaderRoleId'), variables('WorkspaceResourceId'))]",
+            "scope": "[variables('WorkspaceResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('LogAnalyticsReaderRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             }
         }
     ]
