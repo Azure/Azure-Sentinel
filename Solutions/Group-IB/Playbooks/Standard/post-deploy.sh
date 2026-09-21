@@ -22,18 +22,30 @@
 #
 # What this script does, in order:
 #   1. Discovers your deployment (subscription, location, MSI, workspace ID).
-#   2. Assigns the two required workspace roles to the Logic App's MSI:
-#        - Microsoft Sentinel Contributor   (Sentinel TI upload + LA query)
-#        - Log Analytics Contributor        (data-plane writes to GIB*_CL)
+#   2. Assigns the two required roles to the Logic App's MSI:
+#        - Microsoft Sentinel Contributor   on the workspace (TI upload + cursor query)
+#        - Monitoring Metrics Publisher     on the Data Collection Rule created by
+#                                           infrastructure-arm.json (Logs Ingestion
+#                                           API writes). Usually already granted by
+#                                           the ARM template (AssignRoles=true); the
+#                                           script only fills the gap if not.
+#      Log Analytics Contributor is no longer needed: the collectors write through
+#      the Logs Ingestion API, not the retired Data Collector connector.
 #   3. Builds a placeholder connections.json (api.id-only) so the Designer
 #      can render workflows at the next step, then zip-deploys the workflows.
-#   4. PROMPTS YOU to do two Designer "Add new" binds (the only manual step).
-#   5. Polls Azure for the two new connection resources to gain populated
-#      connectionRuntimeUrl values.
-#   6. Writes the final connections.json with `azuresentinel` and
-#      `azureloganalyticsdatacollector` as bare-name keys pointing at the
-#      Designer-created resources, and zip-deploys again.
+#   4. PROMPTS YOU to do ONE Designer "Add new" bind (the only manual step):
+#      the `azuresentinel` connection used by Upload_Indicators_V2.
+#   5. Polls Azure for the new connection resource to gain a populated
+#      connectionRuntimeUrl value.
+#   6. Writes the final connections.json with `azuresentinel` as a bare-name key
+#      pointing at the Designer-created resource, and zip-deploys again.
 #   7. Restarts the Logic App.
+#
+# Upgrading a workspace that ran the pre-release (Data Collector) package:
+#   run migrate-tables.sh <rg> <workspace> (next to this script in the delivery package, at Playbooks/migrate-tables.sh in the
+#   source tree) BEFORE deploying infrastructure-arm.json,
+#   so the existing GIB*_CL tables are converted and the template can update their
+#   schemas. New workspaces need nothing: the template creates the tables.
 #
 set -euo pipefail
 
@@ -99,11 +111,23 @@ echo "  Workspace:       $WS_NAME"
 
 # ---------- Phase 2: assign MSI roles ----------
 echo
-echo "=== Phase 2 — Assigning MSI roles on workspace ==="
+echo "=== Phase 2 — Assigning MSI roles ==="
+# The DCR is tagged with the Logic App name by infrastructure-arm.json.
+# (az's monitor-control-service extension rejects kind=Direct DCRs, so use the
+# generic resource commands.)
+DCR_ID=$(az resource list -g "$RG" --resource-type Microsoft.Insights/dataCollectionRules \
+           --query "[?tags.\"GIBTIA-LogicApp\"=='$APP'].id" -o tsv | head -n1)
+if [ -z "$DCR_ID" ]; then
+  echo "  !! No Data Collection Rule tagged GIBTIA-LogicApp=$APP found in $RG." >&2
+  echo "     Deploy infrastructure-arm.json first; it creates the DCR the collectors write to." >&2
+  exit 1
+fi
+echo "  DCR:             $DCR_ID"
 ROLE_FAILED=0
-for role in "Microsoft Sentinel Contributor" "Log Analytics Contributor"; do
+for spec in "Microsoft Sentinel Contributor|$WS_ID" "Monitoring Metrics Publisher|$DCR_ID"; do
+  role="${spec%%|*}"; scope="${spec##*|}"
   ROLE_ERR="$BUILD_DIR/.role-err"
-  if az role assignment create --assignee "$MSI" --role "$role" --scope "$WS_ID" --output none 2>"$ROLE_ERR"; then
+  if az role assignment create --assignee "$MSI" --role "$role" --scope "$scope" --output none 2>"$ROLE_ERR"; then
     echo "  Assigned: $role"
   # An existing assignment is the only benign failure. Anything else -- most often
   # the deploying principal lacking Owner/User Access Administrator -- must be
@@ -123,9 +147,10 @@ if [ "$ROLE_FAILED" -eq 1 ]; then
   echo
   echo "  !! One or more role assignments FAILED (see errors above)."
   echo "     This is NOT propagation lag and will not resolve on its own."
-  echo "     Workflows will 401 on Upload_Indicators_V2 and 403 on Log Analytics writes."
-  echo "     Assign both roles at the workspace scope with an account holding"
-  echo "     Owner or User Access Administrator, then re-run this script."
+  echo "     Workflows will 401 on Upload_Indicators_V2 and 403 on the DCR writes."
+  echo "     Assign Sentinel Contributor on the workspace and Monitoring Metrics"
+  echo "     Publisher on the DCR with an account holding Owner or User Access"
+  echo "     Administrator, then re-run this script."
   echo
 fi
 echo "  RBAC propagation takes 5-15 minutes; the rest of the script proceeds in parallel."
@@ -139,11 +164,6 @@ cat > "$BUILD_DIR/connections.json" <<EOF
         "azuresentinel": {
             "api": {
                 "id": "/subscriptions/$SUB/providers/Microsoft.Web/locations/$LOC/managedApis/azuresentinel"
-            }
-        },
-        "azureloganalyticsdatacollector": {
-            "api": {
-                "id": "/subscriptions/$SUB/providers/Microsoft.Web/locations/$LOC/managedApis/azureloganalyticsdatacollector"
             }
         }
     },
@@ -176,24 +196,18 @@ In the Azure Portal (or the Defender portal):
   5. Click Create.
   6. Click 'Save' in the top toolbar of the Designer.
 
-  7. Logic App → Workflows → GIBTIA_IOC_Primary_Updated → Designer.
-  8. Click the action 'Save_seqUpdate_in_loop'.
-  9. Right-pane Connection section → 'Add new'.
- 10. Authentication: Managed identity → System-assigned managed identity.
- 11. Click Create.
- 12. Click 'Save' in the top toolbar of the Designer.
-
-Both saves should produce a green "Workflow saved" toast.
+The save should produce a green "Workflow saved" toast. (The Log Analytics
+bind that earlier versions needed is gone: collectors write to the Data
+Collection Rule with the managed identity and need no connection.)
 
 INSTRUCTIONS
 
-read -p "Press ENTER once both Designer binds are saved..." -r _
+read -p "Press ENTER once the Designer bind is saved..." -r _
 
 # ---------- Phase 5: poll for new connection resources ----------
 echo
 echo "=== Phase 5 — Polling for Designer-created connections ==="
 SENTINEL_NAME="" SENTINEL_URL="" SENTINEL_ID=""
-LA_NAME=""       LA_URL=""       LA_ID=""
 
 find_conn_with_url() {
   local connector_substring="$1"
@@ -219,29 +233,20 @@ for attempt in $(seq 1 30); do
       SENTINEL_ID="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Web/connections/$SENTINEL_NAME"
     fi
   fi
-  if [ -z "$LA_URL" ]; then
-    if hit=$(find_conn_with_url "azureloganalyticsdatacollector"); then
-      LA_NAME="${hit%%|*}"
-      LA_URL="${hit##*|}"
-      LA_ID="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Web/connections/$LA_NAME"
-    fi
-  fi
-
-  if [ -n "$SENTINEL_URL" ] && [ -n "$LA_URL" ]; then
-    echo "  Found both:"
+  if [ -n "$SENTINEL_URL" ]; then
+    echo "  Found:"
     echo "    Sentinel:  $SENTINEL_NAME"
-    echo "    LA:        $LA_NAME"
     break
   fi
 
-  echo "  Attempt $attempt/30 — connections not yet ready; waiting 30s..."
+  echo "  Attempt $attempt/30 — connection not yet ready; waiting 30s..."
   sleep 30
 done
 
-if [ -z "$SENTINEL_URL" ] || [ -z "$LA_URL" ]; then
+if [ -z "$SENTINEL_URL" ]; then
   cat >&2 <<ERR
-ERROR: timed out (~15 min) waiting for connectionRuntimeUrl on one or both connections.
-       Verify the Designer-binds saved successfully (Designer → workflow → Saved toast),
+ERROR: timed out (~15 min) waiting for connectionRuntimeUrl on the Sentinel connection.
+       Verify the Designer bind saved successfully (Designer → workflow → Saved toast),
        then re-run this script. Already-assigned roles will be skipped.
 ERR
   exit 1
@@ -270,18 +275,6 @@ cat > "$BUILD_DIR/connections.json" <<EOF
                     "audience": "https://management.core.windows.net/"
                 }
             }
-        },
-        "azureloganalyticsdatacollector": {
-            "api": {
-                "id": "/subscriptions/$SUB/providers/Microsoft.Web/locations/$LOC/managedApis/azureloganalyticsdatacollector"
-            },
-            "connection": {
-                "id": "$LA_ID"
-            },
-            "authentication": {
-                "type": "ManagedServiceIdentity"
-            },
-            "connectionRuntimeUrl": "$LA_URL"
         }
     },
     "serviceProviderConnections": {}
@@ -314,7 +307,7 @@ Post-deploy complete.
 Resources:
   Logic App:                 $APP
   Sentinel connection:       $SENTINEL_NAME
-  LA Data Collector conn:    $LA_NAME
+  Data Collection Rule:      $DCR_ID
 
 Allow 5-15 minutes for:
   - RBAC propagation (workspace roles)
@@ -322,8 +315,9 @@ Allow 5-15 minutes for:
 
 Then verify:
   1. Logic App → Workflows → GIBTIA_IOC_Primary_Updated → 'Run Trigger'
-  2. Check Run history; the first run's Query_Last_SeqUpdate returns 400
-     (expected — tracking table doesn't exist yet; first-run path kicks in).
+  2. Check Run history; the first run's Query_Last_SeqUpdate returns 200 with
+     no rows (the template pre-creates the tables) and the first-run path
+     seeds from StartDate. Save_seqUpdate_in_loop returns 204 per page.
   3. Within 5 min the IndicatorProcessor adapter fires automatically.
   4. Confirm in Log Analytics:
        ThreatIntelIndicators

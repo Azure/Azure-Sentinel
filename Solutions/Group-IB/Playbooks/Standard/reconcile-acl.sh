@@ -88,13 +88,19 @@ echo "  Policy:     $POLICY_NAME"
 echo
 
 echo "=== Phase 2 — Finding Standard-package managed API connections ==="
+# Only V2 connections carry access policies, and only the Standard Designer creates
+# V2 connections. Consumption ARM templates deployed into the same resource group
+# create V1 connections with names like azuresentinel-GIBTIA_<Playbook>; those have
+# no policies and the API rejects any attempt to set one ("Access policies are not
+# supported in 'V1' api connection"). Select by kind, not by name.
 CONNS=$(az resource list -g "$RG" --resource-type Microsoft.Web/connections \
-  --query "[?contains(name, 'azuresentinel') || contains(name, 'azureloganalyticsdatacollector')].name" \
+  --query "[?contains(name, 'azuresentinel') && kind=='V2'].name" \
   -o tsv)
 
 if [ -z "$CONNS" ]; then
-  echo "ERROR: No managed API connections matching azuresentinel*/azureloganalyticsdatacollector* found in '$RG'." >&2
-  echo "       Has the Designer-bind step completed?" >&2
+  echo "ERROR: No V2 managed API connections matching azuresentinel* found in '$RG'." >&2
+  echo "       Has the Designer-bind step completed? (Consumption playbooks' V1 connections" >&2
+  echo "       in this resource group are deliberately ignored.)" >&2
   exit 1
 fi
 

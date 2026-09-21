@@ -38,8 +38,10 @@
         "WorkspaceId": {
             "type": "string",
             "metadata": {
-                "description": "Log Analytics workspace ID (GUID)."
-            }
+                "description": "Log Analytics workspace ID (GUID) of the Sentinel workspace — Log Analytics workspace → Overview → Workspace ID. Used by GIBTIA_IndicatorProcessor_v2's Upload_Indicators_V2 path; an empty value fails at runtime with 404."
+            },
+            "minLength": 36,
+            "maxLength": 36
         },
         "WorkspaceName": {
             "type": "string",
@@ -62,7 +64,11 @@
         },
         "IOCTypeFilter": {
             "defaultValue": "all",
-            "allowedValues": ["all", "network", "file"],
+            "allowedValues": [
+                "all",
+                "network",
+                "file"
+            ],
             "type": "string",
             "metadata": {
                 "description": "IOC Primary filter: all, network (IP/domain/URL only), or file (hashes only)."
@@ -70,7 +76,10 @@
         },
         "UseRiskScoreAsConfidence": {
             "defaultValue": "false",
-            "allowedValues": ["true", "false"],
+            "allowedValues": [
+                "true",
+                "false"
+            ],
             "type": "string",
             "metadata": {
                 "description": "When true, IOC Primary uses each entry's GIB riskScore as the STIX confidence."
@@ -85,7 +94,10 @@
         },
         "UseAdmiraltyConfidence": {
             "defaultValue": "false",
-            "allowedValues": ["true", "false"],
+            "allowedValues": [
+                "true",
+                "false"
+            ],
             "type": "string",
             "metadata": {
                 "description": "When true, IOC Primary derives STIX confidence by parsing evaluation.admiraltyCode (e.g. \"C3\") via the Admiralty Code lookup tables and emitting (reliability + credibility) / 2. Highest precedence — falls through to UseRiskScoreAsConfidence / FixedConfidence when admiraltyCode is missing or malformed on a record."
@@ -93,7 +105,10 @@
         },
         "HasPasswordFilter": {
             "defaultValue": "1",
-            "allowedValues": ["1", "0"],
+            "allowedValues": [
+                "1",
+                "0"
+            ],
             "type": "string",
             "metadata": {
                 "description": "compromised/breacheddb only. 1 = only ingest breach records that carry a leaked password (default, matches the password-notification use case). 0 = collect all breach records regardless of password presence."
@@ -101,7 +116,11 @@
         },
         "AccountFeedType": {
             "defaultValue": "unique",
-            "allowedValues": ["unique", "combolist", "all"],
+            "allowedValues": [
+                "unique",
+                "combolist",
+                "all"
+            ],
             "type": "string",
             "metadata": {
                 "description": "compromised/account_group only. Feed type: 'unique' (default) = only unique credentials (unique=1&combolist=0); 'combolist' = only combo-list credentials (unique=0&combolist=1); 'all' = every credential (no unique/combolist filter)."
@@ -109,10 +128,36 @@
         },
         "ProbableCorporateAccessFilter": {
             "defaultValue": "0",
-            "allowedValues": ["1", "0"],
+            "allowedValues": [
+                "1",
+                "0"
+            ],
             "type": "string",
             "metadata": {
                 "description": "compromised/account_group only. 1 = return only probable corporate-access credentials (&probable_corporate_access=1). 0 = no corporate-access filter (default). Independent of AccountFeedType."
+            }
+        },
+        "DcrName": {
+            "defaultValue": "gibtia-logs-ingestion",
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "metadata": {
+                "description": "Name of the Data Collection Rule this template creates for all 26 collectors (letters, digits and hyphens only, 3-30 characters). The workflows read its ingestion endpoint and immutable ID from the DcrEndpoint / DcrImmutableId app settings, which this template fills in."
+            }
+        },
+        "WorkspaceLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Leave as is unless your Log Analytics workspace is in a different Azure region from this resource group. The Data Collection Rule must be created in the workspace's region; the default is this resource group's region."
+            }
+        },
+        "AssignRoles": {
+            "defaultValue": true,
+            "type": "bool",
+            "metadata": {
+                "description": "true (default): the template grants the Logic App's managed identity Monitoring Metrics Publisher on the Data Collection Rule, so collectors can write as soon as they run. Requires the deploying account to hold Owner or User Access Administrator on the resource group. Set false if it does not, and assign that role by hand (post-deploy.sh does it too). Microsoft Sentinel Contributor on the workspace is still assigned by post-deploy.sh or by hand."
             }
         }
     },
@@ -149,6 +194,347 @@
             }
         },
         {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2025-07-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('Tables')[copyIndex()].name)]",
+            "copy": {
+                "name": "gibTables",
+                "count": "[length(variables('Tables'))]"
+            },
+            "properties": {
+                "schema": {
+                    "name": "[variables('Tables')[copyIndex()].name]",
+                    "columns": "[variables('Tables')[copyIndex()].columns]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "[parameters('DcrName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "tags": {
+                "GIBTIA-LogicApp": "[parameters('LogicAppName')]"
+            },
+            "kind": "Direct",
+            "dependsOn": [
+                "gibTables"
+            ],
+            "properties": {
+                "description": "Group-IB TI (Standard package): Logs Ingestion destination for the seqUpdate cursor and the 14 context tables of all collectors in one Logic App. kind=Direct; api-version 2023-03-11 is deliberate (see DEV_NOTES).",
+                "streamDeclarations": {
+                    "Custom-GIBCollectionTracking": {
+                        "columns": [
+                            {
+                                "name": "CollectionName_s",
+                                "type": "string"
+                            },
+                            {
+                                "name": "SeqUpdate_d",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "Custom-GIBAPTThreat": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBHIThreat": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBAPTThreatActor": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBHIThreatActor": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBHIOpenThreat": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "text_s",
+                                "type": "string"
+                            },
+                            {
+                                "name": "textTruncated_b",
+                                "type": "boolean"
+                            }
+                        ]
+                    },
+                    "Custom-GIBOSIPublicLeak": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "data_s",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataTruncated_b",
+                                "type": "boolean"
+                            }
+                        ]
+                    },
+                    "Custom-GIBOSIVulnerability": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBMalwareReport": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBCompromisedAccount": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBCompromisedBreachedDB": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBCompromisedBankCard": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBCompromisedMaskedCard": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBCompromisedSPD": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "Custom-GIBOSIGitRepository": {
+                        "columns": [
+                            {
+                                "name": "Record",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "Files",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "FilesTruncated",
+                                "type": "boolean"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('WorkspaceResourceId')]",
+                            "name": "gibWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-GIBCollectionTracking"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-GIBCollectionTracking_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBAPTThreat"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), ['title_s'] = tostring(r['title']), description_s = tostring(r.description), sectors_s = tostring(r.sectors), countries_s = tostring(r.countries), threatActor_s = tostring(r.threatActor.name), datePublished_t = todatetime(r.datePublished), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBAPTThreat_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBHIThreat"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), ['title_s'] = tostring(r['title']), description_s = tostring(r.description), sectors_s = tostring(r.sectors), countries_s = tostring(r.countries), threatActor_s = tostring(r.threatActor.name), datePublished_t = todatetime(r.datePublished), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBHIThreat_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBAPTThreatActor"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), name_s = tostring(r.name), country_s = tostring(r.country), aliases_s = tostring(r.aliases), isAPT_b = tobool(r.isAPT), updatedAt_t = todatetime(r.updatedAt) | project-away r",
+                        "outputStream": "Custom-GIBAPTThreatActor_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBHIThreatActor"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), name_s = tostring(r.name), country_s = tostring(r.country), aliases_s = tostring(r.aliases), isAPT_b = tobool(r.isAPT), updatedAt_t = todatetime(r.updatedAt) | project-away r",
+                        "outputStream": "Custom-GIBHIThreatActor_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBHIOpenThreat"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), ['title_s'] = tostring(r['title']), source_s = tostring(r.source), sourceType_s = tostring(r.sourceType), link_s = tostring(r.link), dateDetected_t = todatetime(r.dateDetected), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBHIOpenThreat_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBOSIPublicLeak"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), hash_s = tostring(r.hash), language_s = tostring(r.language), linkList_s = tostring(r.linkList), created_t = todatetime(r.created), updated_t = todatetime(r.updated), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBOSIPublicLeak_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBOSIVulnerability"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), ['title_s'] = tostring(r['title']), description_s = tostring(r.description), affectedSoftware_s = tostring(r.affectedSoftware), cveList_s = tostring(r.cveList), hasExploit_b = tobool(r.hasExploit), exploitCount_d = toreal(r.exploitCount), cvssScore_d = toreal(r.cvss.score), mergedCvss_d = toreal(r.mergedCvss), epssScore_d = toreal(r.epss.epss), darkwebMentions_d = toreal(array_length(r.darkweb)), datePublished_t = todatetime(r.datePublished), dateModified_t = todatetime(r.dateModified), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBOSIVulnerability_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBMalwareReport"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), name_s = tostring(r.name), category_s = tostring(r.category), platform_s = tostring(r.platform), threatLevel_s = tostring(r.threatLevel), shortDescription_s = tostring(r.shortDescription), updatedAt_t = todatetime(r.updatedAt) | project-away r",
+                        "outputStream": "Custom-GIBMalwareReport_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBCompromisedAccount"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), login_s = tostring(r.login), password_s = tostring(r.password), domain_s = tostring(r.parsedLogin.domain), serviceDomain_s = tostring(r.service.domain), source_s = tostring(r.source), dateFirstSeen_t = todatetime(r.dateFirstSeen), dateLastSeen_t = todatetime(r.dateLastSeen), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBCompromisedAccount_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBCompromisedBreachedDB"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), leakName_s = tostring(r.leakName), email_s = tostring(r.email), password_s = tostring(r.password), description_s = tostring(r.description), leakPublished_t = todatetime(r.leakPublished), uploadTime_t = todatetime(r.uploadTime), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBCompromisedBreachedDB_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBCompromisedBankCard"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), cardNumber_s = tostring(r.cardInfo.number), cardBin_s = tostring(r.cardInfo.bin), cardSystem_s = tostring(r.cardInfo.system), baseName_s = tostring(r.baseName), dateFirstSeen_t = todatetime(r.dateFirstSeen), dateLastSeen_t = todatetime(r.dateLastSeen), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBCompromisedBankCard_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBCompromisedMaskedCard"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), cardNumber_s = tostring(r.cardInfo.number), cardBin_s = tostring(r.cardInfo.bin), cardSystem_s = tostring(r.cardInfo.system), baseName_s = tostring(r.baseName), sourceType_s = tostring(r.sourceType), dateDetected_t = todatetime(r.dateDetected), dateCompromised_t = todatetime(r.dateCompromised), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBCompromisedMaskedCard_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBCompromisedSPD"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend id_s = tostring(r.id), type_s = tostring(r.type), serviceType_s = tostring(r.serviceType), ownerName_s = tostring(r.ownerName), value_s = tostring(r.value), illegalScore_d = toreal(r.illegalScore), firstSeenAt_t = todatetime(r.firstSeenAt), lastSeenAt_t = todatetime(r.lastSeenAt), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp) | project-away r",
+                        "outputStream": "Custom-GIBCompromisedSPD_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-GIBOSIGitRepository"
+                        ],
+                        "destinations": [
+                            "gibWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now(), r = parse_json(Record) | extend name_s = tostring(r.name), source_s = tostring(r.source), id_s = tostring(r.id), dateDetected_t = todatetime(r.dateDetected), dateCreated_t = todatetime(r.dateCreated), severity_s = tostring(r.evaluation.severity), tlp_s = tostring(r.evaluation.tlp), filesCount_d = toreal(r.numberOf.files) | project-away r",
+                        "outputStream": "Custom-GIBOSIGitRepository_CL"
+                    }
+                ]
+            }
+        },
+        {
             "type": "Microsoft.Web/sites",
             "apiVersion": "2022-03-01",
             "name": "[parameters('LogicAppName')]",
@@ -159,7 +545,8 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccountName'))]",
-                "[resourceId('Microsoft.Web/serverfarms', parameters('AppServicePlanName'))]"
+                "[resourceId('Microsoft.Web/serverfarms', parameters('AppServicePlanName'))]",
+                "[variables('DcrResourceId')]"
             ],
             "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('AppServicePlanName'))]",
@@ -259,10 +646,760 @@
                         {
                             "name": "ProbableCorporateAccessFilter",
                             "value": "[parameters('ProbableCorporateAccessFilter')]"
+                        },
+                        {
+                            "name": "DcrEndpoint",
+                            "value": "[reference(variables('DcrResourceId'), '2023-03-11').endpoints.logsIngestion]"
+                        },
+                        {
+                            "name": "DcrImmutableId",
+                            "value": "[reference(variables('DcrResourceId'), '2023-03-11').immutableId]"
                         }
                     ]
                 }
             }
+        },
+        {
+            "condition": "[parameters('AssignRoles')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Web/sites', parameters('LogicAppName')), variables('MonitoringMetricsPublisherRoleId'), variables('DcrResourceId'))]",
+            "scope": "[variables('DcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('LogicAppName'))]",
+                "[variables('DcrResourceId')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('MonitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('LogicAppName')), '2022-03-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
         }
-    ]
+    ],
+    "variables": {
+        "DcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName'))]",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "Tables": [
+            {
+                "name": "GIBCollectionTracking_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "CollectionName_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "SeqUpdate_d",
+                        "type": "real"
+                    }
+                ]
+            },
+            {
+                "name": "GIBAPTThreat_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "title_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "description_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "sectors_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "countries_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "threatActor_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "datePublished_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBHIThreat_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "title_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "description_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "sectors_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "countries_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "threatActor_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "datePublished_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBAPTThreatActor_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "name_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "country_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "aliases_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "isAPT_b",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "updatedAt_t",
+                        "type": "datetime"
+                    }
+                ]
+            },
+            {
+                "name": "GIBHIThreatActor_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "name_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "country_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "aliases_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "isAPT_b",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "updatedAt_t",
+                        "type": "datetime"
+                    }
+                ]
+            },
+            {
+                "name": "GIBHIOpenThreat_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "text_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "textTruncated_b",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "title_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "source_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "sourceType_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "link_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dateDetected_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBOSIPublicLeak_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "data_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dataTruncated_b",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "hash_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "language_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "linkList_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "created_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "updated_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBOSIVulnerability_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "title_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "description_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "affectedSoftware_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cveList_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "hasExploit_b",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "exploitCount_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "cvssScore_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "mergedCvss_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "epssScore_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "darkwebMentions_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "datePublished_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "dateModified_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBMalwareReport_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "name_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "category_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "platform_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "threatLevel_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "shortDescription_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "updatedAt_t",
+                        "type": "datetime"
+                    }
+                ]
+            },
+            {
+                "name": "GIBCompromisedAccount_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "login_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "password_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "domain_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "serviceDomain_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "source_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dateFirstSeen_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "dateLastSeen_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBCompromisedBreachedDB_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "leakName_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "email_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "password_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "description_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "leakPublished_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "uploadTime_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBCompromisedBankCard_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardNumber_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardBin_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardSystem_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "baseName_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dateFirstSeen_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "dateLastSeen_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBCompromisedMaskedCard_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardNumber_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardBin_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "cardSystem_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "baseName_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "sourceType_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dateDetected_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "dateCompromised_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBCompromisedSPD_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "type_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "serviceType_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "ownerName_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "value_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "illegalScore_d",
+                        "type": "real"
+                    },
+                    {
+                        "name": "firstSeenAt_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "lastSeenAt_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    }
+                ]
+            },
+            {
+                "name": "GIBOSIGitRepository_CL",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "Record",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "Files",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "FilesTruncated",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "name_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "source_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "id_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "dateDetected_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "dateCreated_t",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "severity_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "tlp_s",
+                        "type": "string"
+                    },
+                    {
+                        "name": "filesCount_d",
+                        "type": "real"
+                    }
+                ]
+            }
+        ]
+    }
 }
