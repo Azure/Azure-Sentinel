@@ -1,5 +1,8 @@
 # Check Point Exposure Management - Automation Rules for Bi-Directional Sync
 
+
+> **Not shipped in solution 3.2.0.** The Argos API accepts its token only as a cookie, and Azure Logic Apps removes the `Cookie` header from outgoing requests, so this playbook cannot authenticate to Argos (HTTP 401). The template is kept here for the day the Argos API accepts the token in a normal request header. See **Known Limitations** in the solution README.
+
 ## Summary
 
 Deploys a Microsoft Sentinel automation rule that runs the **Check_Point_EM_Exporter** playbook whenever an incident's status changes.
