@@ -129,8 +129,50 @@ Content Hub updates templates, not the resources already created from them:
 
 1. **Disconnect and reconnect the data connector.** A connector connected under 3.1.x keeps filtering on `created_date` and never sees status changes.
 2. **Recreate the Exporter, ManualStatusUpdate and AutomationRules playbooks** from their updated templates, and create **InboundStatusSync**.
-3. **Disable or delete the `Check_Point_EM_Importer` Logic App**, its API connections and its data collection endpoint. It is no longer part of the solution, and left running it creates incidents with no alerts, which can never sync.
+3. **Remove the Importer resources** (see below). The update does not delete them, and the playbook left running creates incidents with no alerts, which can never sync.
 4. **Review custom queries on `argsentdc_CL`.** The table now holds one row per alert change; use `summarize arg_max(TimeGenerated, *) by ref_id` or the `CPEMAlerts` parser for the current state.
+
+### Removing the Importer after upgrading
+
+The `Check_Point_EM_Importer` playbook was replaced by the **Argos alerts to incidents** analytic rule. Updating the solution stops offering the template, but it does not touch what a previous version already created: the Logic App, its API connections and its data collection endpoint stay, and the Logic App keeps running on its recurrence. Remove them once, after the update.
+
+**In the portal:** delete the **Check_Point_EM_Importer** Logic App in the solution's resource group, together with the API connections named after it (`azuremonitorlogs-Check_Point_EM_Importer`, `MicrosoftSentinel-Check_Point_EM_Importer` or `azuresentinel-Check_Point_EM_Importer`) and the data collection endpoint named `cpem-importer-dce-…`. Also delete any automation rule that ran it.
+
+**Or with the Azure CLI**, replacing the resource group, and running it once per Importer playbook if more than one was created:
+
+```bash
+RG=<resource-group>
+PB=Check_Point_EM_Importer
+
+# 1. Stop it first, so nothing runs while the rest is removed
+az logic workflow update -g $RG -n $PB --state Disabled
+
+# 2. Check what belongs to it
+az resource list -g $RG --query "[?contains(name,'$PB') || starts_with(name,'cpem-importer-')].{name:name,type:type}" -o table
+
+# 3. Delete the playbook, its connections and its data collection endpoint
+az logic workflow delete -g $RG -n $PB --yes
+for C in azuremonitorlogs-$PB MicrosoftSentinel-$PB azuresentinel-$PB; do
+  az resource delete -g $RG -n $C --resource-type Microsoft.Web/connections 2>/dev/null
+done
+for R in $(az resource list -g $RG --query "[?starts_with(name,'cpem-importer-')].name" -o tsv); do
+  az resource delete -g $RG -n $R --resource-type Microsoft.Insights/dataCollectionEndpoints
+done
+```
+
+Nothing else needs cleaning: the Importer's data collection rule was always rejected at creation, which is why it never ingested, and the incidents it created stay as they are. Closing them is optional; they carry no `ref_id`, so neither sync direction touches them.
+
+**Check for leftovers** with:
+
+```kusto
+SecurityIncident
+| where CreatedTime > ago(7d)
+| summarize arg_max(TimeGenerated, *) by IncidentNumber
+| where array_length(AlertIds) == 0
+| project IncidentNumber, Title, CreatedTime
+```
+
+Incidents with no alerts appearing after the upgrade mean an Importer playbook is still running.
 
 ### Verify data flow
 
