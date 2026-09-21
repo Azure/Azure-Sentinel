@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.9       | 15-09-2026                     |Updated the CiscoASA workbook and analytic rules to incorporate FTD logs alongside ASA logs.                       |
 | 3.0.8       | 22-08-2026                     | Added new detection rule for Possible Data Exfilteration  			  				  |
 | 3.0.7       | 01-09-2025                     | Updates to the `template_CiscoAsaAma.json` file to reflect the general availability of the Cisco ASA/FTD via AMA connector  					  				  |
 | 3.0.6       | 10-07-2025                     | Preview tag removed from Connector title  					  				  |
