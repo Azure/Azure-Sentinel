@@ -53,7 +53,7 @@
             "name": "[parameters('PlaybookName')]",
             "tags": {
                 "hidden-SentinelTemplateName": "GIBTIA_Enrich_WHOIS",
-                "hidden-SentinelTemplateVersion": "2.0"
+                "hidden-SentinelTemplateVersion": "2.1"
             },
             "metadata": {
                 "title": "Group-IB TI - Enrich incident with WHOIS data",
@@ -68,7 +68,7 @@
                     "3. Set the GIBUsername and GIBApiKey parameters.",
                     "4. Attach the playbook to an automation rule so it runs when an incident is created."
                 ],
-                "lastUpdateTime": "2026-09-02T00:00:00.000Z",
+                "lastUpdateTime": "2026-09-21T00:00:00.000Z",
                 "entities": [
                     "ip",
                     "dns"
@@ -83,6 +83,13 @@
                         "title": "Rebuilt for the current Group-IB TI API",
                         "notes": [
                             "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
+                        ]
+                    },
+                    {
+                        "version": "2.1",
+                        "title": "Review fixes",
+                        "notes": [
+                            "The ThreatIntelIndicators lookup now matches the quoted STIX value exactly (contains strcat) instead of the term-based has, which also matched parent domains."
                         ]
                     }
                 ],
@@ -249,7 +256,7 @@
                                             "Content-Type": "application/json"
                                         },
                                         "body": {
-                                            "query": "ThreatIntelIndicators | where Pattern has 'ipv4-addr:value' and Pattern has '@{replace(coalesce(items('For_Each_IP')?['properties']?['address'], ''), '''', '''''')}' | where ValidUntil > now() | project Labels, Confidence | take 1"
+                                            "query": "ThreatIntelIndicators | where Pattern has 'ipv4-addr:value' and Pattern contains strcat(\"'\", '@{replace(coalesce(items('For_Each_IP')?['properties']?['address'], ''), '''', '''''')}', \"'\") | where ValidUntil > now() | project Labels, Confidence | take 1"
                                         },
                                         "authentication": {
                                             "type": "ManagedServiceIdentity",
@@ -262,7 +269,7 @@
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
                                         "name": "Segments",
-                                        "value": "<b>IP: @{items('For_Each_IP')?['properties']?['address']}</b><br>GIB TI: @{if(greater(length(coalesce(body('TI_Lookup_IP')?['tables']?[0]?['rows'], json('[]'))), 0), concat(string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[0]), ' | confidence: ', string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[1])), 'Not in GIB ThreatIntelIndicators')}<br>WHOIS: @{coalesce(body('WHOIS_IP')?['whois_summary']?['asn'], 'n/a')} | @{coalesce(body('WHOIS_IP')?['whois_summary']?['isp'], 'n/a')} | Country: @{coalesce(body('WHOIS_IP')?['whois_summary']?['country'], 'n/a')} | Range: @{coalesce(body('WHOIS_IP')?['start'], 'n/a')} \u2013 @{coalesce(body('WHOIS_IP')?['end'], 'n/a')}<br><br>"
+                                        "value": "<b>IP: @{items('For_Each_IP')?['properties']?['address']}</b><br>GIB TI: @{if(greater(length(coalesce(body('TI_Lookup_IP')?['tables']?[0]?['rows'], json('[]'))), 0), concat(string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[0]), ' | confidence: ', string(body('TI_Lookup_IP')?['tables'][0]?['rows'][0]?[1])), 'Not in GIB ThreatIntelIndicators')}<br>WHOIS: @{coalesce(body('WHOIS_IP')?['whois_summary']?['asn'], 'n/a')} | @{coalesce(body('WHOIS_IP')?['whois_summary']?['isp'], 'n/a')} | Country: @{coalesce(body('WHOIS_IP')?['whois_summary']?['country'], 'n/a')} | Range: @{coalesce(body('WHOIS_IP')?['start'], 'n/a')} – @{coalesce(body('WHOIS_IP')?['end'], 'n/a')}<br><br>"
                                     },
                                     "runAfter": {
                                         "WHOIS_IP": [
@@ -333,7 +340,7 @@
                                             "Content-Type": "application/json"
                                         },
                                         "body": {
-                                            "query": "ThreatIntelIndicators | where Pattern has 'domain-name:value' and Pattern has '@{replace(coalesce(items('For_Each_Domain')?['properties']?['domainName'], ''), '''', '''''')}' | where ValidUntil > now() | project Labels, Confidence | take 1"
+                                            "query": "ThreatIntelIndicators | where Pattern has 'domain-name:value' and Pattern contains strcat(\"'\", '@{replace(coalesce(items('For_Each_Domain')?['properties']?['domainName'], ''), '''', '''''')}', \"'\") | where ValidUntil > now() | project Labels, Confidence | take 1"
                                         },
                                         "authentication": {
                                             "type": "ManagedServiceIdentity",
@@ -418,7 +425,7 @@
                                                 "type": "SetVariable",
                                                 "inputs": {
                                                     "name": "Chunk",
-                                                    "value": "@if(greater(length(items('Pack_Segments')), 29000), concat(substring(items('Pack_Segments'), 0, 28950), '<br>[record truncated \u2014 see Group-IB portal]'), items('Pack_Segments'))"
+                                                    "value": "@if(greater(length(items('Pack_Segments')), 29000), concat(substring(items('Pack_Segments'), 0, 28950), '<br>[record truncated — see Group-IB portal]'), items('Pack_Segments'))"
                                                 },
                                                 "runAfter": {
                                                     "Condition_Flush_NonEmpty": [
@@ -484,7 +491,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p><b>Group-IB TI \u2014 WHOIS &amp; Indicator Enrichment@{if(greater(length(variables('Chunks')), 1), concat(' (part ', string(variables('PartNum')), ' of ', string(length(variables('Chunks'))), ')'), '')}</b><br><br>@{items('Post_Comments')}</p>"
+                                            "message": "<p><b>Group-IB TI — WHOIS &amp; Indicator Enrichment@{if(greater(length(variables('Chunks')), 1), concat(' (part ', string(variables('PartNum')), ' of ', string(length(variables('Chunks'))), ')'), '')}</b><br><br>@{items('Post_Comments')}</p>"
                                         },
                                         "host": {
                                             "connection": {
