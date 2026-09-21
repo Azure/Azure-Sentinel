@@ -205,10 +205,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CheckPointCyberintAlerts",
                     "dataTypes": [
                       "argsentdc_CL"
-                    ]
+                    ],
+                    "connectorId": "CheckPointCyberintAlerts"
                   }
                 ],
                 "tactics": [
@@ -225,13 +225,13 @@
                   "alertDisplayNameFormat": "Check Point Exposure Management - Ingestion gap detected ({{GapMinutes}} minutes)"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
-                    "enabled": true,
-                    "matchingMethod": "AllEntities",
                     "lookbackDuration": "24h",
-                    "reopenClosedIncident": false
-                  }
+                    "reopenClosedIncident": false,
+                    "enabled": true,
+                    "matchingMethod": "AllEntities"
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -314,10 +314,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CheckPointCyberintAlerts",
                     "dataTypes": [
                       "argsentdc_CL"
-                    ]
+                    ],
+                    "connectorId": "CheckPointCyberintAlerts"
                   }
                 ],
                 "tactics": [
@@ -332,29 +332,29 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "confidence": "Confidence",
                   "recommendation": "Recommendation",
+                  "confidence": "Confidence",
                   "argos_severity": "OriginalSeverity",
                   "category": "Category",
                   "event_type": "EventType",
                   "ref_id": "RefId"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "{{AlertTitle}}",
                   "alertSeverityColumnName": "SentinelSeverity",
-                  "alertDescriptionFormat": "{{AlertDescription}}"
+                  "alertDescriptionFormat": "{{AlertDescription}}",
+                  "alertDisplayNameFormat": "{{AlertTitle}}"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
-                    "enabled": true,
-                    "matchingMethod": "Selected",
+                    "lookbackDuration": "1d",
                     "groupByCustomDetails": [
                       "ref_id"
                     ],
-                    "lookbackDuration": "1d",
-                    "reopenClosedIncident": false
-                  }
+                    "reopenClosedIncident": false,
+                    "enabled": true,
+                    "matchingMethod": "Selected"
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -1380,45 +1380,91 @@
                                 ]
                               }
                             },
-                            "Condition_-_Already_in_sync": {
+                            "Condition_-_Argos_read_succeeded": {
                               "type": "If",
+                              "runAfter": {
+                                "Get_Argos_Alert": [
+                                  "Succeeded",
+                                  "Failed",
+                                  "TimedOut"
+                                ]
+                              },
                               "expression": {
                                 "and": [
                                   {
                                     "equals": [
-                                      "@body('Get_Argos_Alert')?['alert']?['status']",
-                                      "@variables('ArgosStatus')"
-                                    ]
-                                  },
-                                  {
-                                    "or": [
-                                      {
-                                        "not": {
-                                          "equals": [
-                                            "@variables('ArgosStatus')",
-                                            "closed"
-                                          ]
-                                        }
-                                      },
-                                      {
-                                        "equals": [
-                                          "@coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')",
-                                          "@variables('ArgosClosureReason')"
-                                        ]
-                                      },
-                                      {
-                                        "equals": [
-                                          "@coalesce(outputs('Compose_argos_reason_to_classification')?[coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')], '')",
-                                          "@if(equals(triggerBody()?['object']?['properties']?['classification'], 'FalsePositive'), concat('FalsePositive|', coalesce(triggerBody()?['object']?['properties']?['classificationReason'], '')), coalesce(triggerBody()?['object']?['properties']?['classification'], ''))"
-                                        ]
-                                      }
+                                      "@actions('Get_Argos_Alert')?['status']",
+                                      "Succeeded"
                                     ]
                                   }
                                 ]
                               },
+                              "actions": {
+                                "Condition_-_Already_in_sync": {
+                                  "type": "If",
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "equals": [
+                                          "@body('Get_Argos_Alert')?['alert']?['status']",
+                                          "@variables('ArgosStatus')"
+                                        ]
+                                      },
+                                      {
+                                        "or": [
+                                          {
+                                            "not": {
+                                              "equals": [
+                                                "@variables('ArgosStatus')",
+                                                "closed"
+                                              ]
+                                            }
+                                          },
+                                          {
+                                            "equals": [
+                                              "@coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')",
+                                              "@variables('ArgosClosureReason')"
+                                            ]
+                                          },
+                                          {
+                                            "equals": [
+                                              "@coalesce(outputs('Compose_argos_reason_to_classification')?[coalesce(body('Get_Argos_Alert')?['alert']?['closure_reason'], '')], '')",
+                                              "@if(equals(triggerBody()?['object']?['properties']?['classification'], 'FalsePositive'), concat('FalsePositive|', coalesce(triggerBody()?['object']?['properties']?['classificationReason'], '')), coalesce(triggerBody()?['object']?['properties']?['classification'], ''))"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Update_Argos_Alert_Status": {
+                                        "type": "Http",
+                                        "inputs": {
+                                          "method": "PUT",
+                                          "uri": "@{concat(uriScheme(parameters('API_Base_URL')), '://', uriHost(parameters('API_Base_URL')))}/alert/api/v1/alerts/status",
+                                          "headers": {
+                                            "Content-Type": "application/json",
+                                            "Accept": "application/json",
+                                            "X-Integration-Type": "Azure Sentinel",
+                                            "X-Integration-Version": "1.0"
+                                          },
+                                          "body": {
+                                            "alert_ref_ids": [
+                                              "@{variables('AlertRefId')}"
+                                            ],
+                                            "data": "@if(not(equals(variables('ArgosStatus'), 'closed')), addProperty(json('{}'), 'status', variables('ArgosStatus')), if(equals(variables('ArgosClosureReason'), 'other'), addProperty(addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', 'other'), 'closure_reason_description', if(empty(coalesce(triggerBody()?['object']?['properties']?['classificationComment'], '')), 'undetermined', substring(triggerBody()?['object']?['properties']?['classificationComment'], 0, min(length(triggerBody()?['object']?['properties']?['classificationComment']), 255)))), addProperty(addProperty(json('{}'), 'status', 'closed'), 'closure_reason', variables('ArgosClosureReason'))))"
+                                          },
+                                          "cookie": "access_token=@{parameters('API_Access_Token')}"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
                               "else": {
                                 "actions": {
-                                  "Update_Argos_Alert_Status": {
+                                  "Update_Argos_Alert_Status_after_failed_read": {
                                     "type": "Http",
                                     "inputs": {
                                       "method": "PUT",
@@ -1439,22 +1485,16 @@
                                     }
                                   }
                                 }
-                              },
-                              "runAfter": {
-                                "Get_Argos_Alert": [
-                                  "Succeeded",
-                                  "Failed"
-                                ]
                               }
                             },
                             "Append_sync_result": {
                               "type": "AppendToStringVariable",
                               "inputs": {
                                 "name": "SyncResults",
-                                "value": "Alert @{variables('AlertRefId')}: @{if(equals(actions('Get_Argos_Alert')?['status'], 'Failed'), concat('could not read the alert from Argos (HTTP ', coalesce(string(outputs('Get_Argos_Alert')?['statusCode']), 'error'), '), sent the update anyway (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'error'), ')'), if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')')))}\n"
+                                "value": "Alert @{variables('AlertRefId')}: @{if(not(equals(actions('Get_Argos_Alert')?['status'], 'Succeeded')), concat('could not read the alert from Argos (HTTP ', coalesce(string(outputs('Get_Argos_Alert')?['statusCode']), 'error'), '), sent the update without it (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status_after_failed_read')?['statusCode']), 'error'), ')'), if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')')))}\n"
                               },
                               "runAfter": {
-                                "Condition_-_Already_in_sync": [
+                                "Condition_-_Argos_read_succeeded": [
                                   "Succeeded",
                                   "Failed"
                                 ]
