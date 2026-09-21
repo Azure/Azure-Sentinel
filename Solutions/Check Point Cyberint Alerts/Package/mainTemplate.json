@@ -221,17 +221,17 @@
                   "aggregationKind": "SingleAlert"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Check Point Exposure Management - Ingestion gap detected ({{GapMinutes}} minutes)",
-                  "alertDescriptionFormat": "{{Message}}"
+                  "alertDescriptionFormat": "{{Message}}",
+                  "alertDisplayNameFormat": "Check Point Exposure Management - Ingestion gap detected ({{GapMinutes}} minutes)"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
                     "lookbackDuration": "24h",
-                    "enabled": true,
-                    "matchingMethod": "AllEntities"
-                  }
+                    "matchingMethod": "AllEntities",
+                    "reopenClosedIncident": false,
+                    "enabled": true
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -332,29 +332,29 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "recommendation": "Recommendation",
-                  "confidence": "Confidence",
-                  "category": "Category",
                   "argos_severity": "OriginalSeverity",
                   "ref_id": "RefId",
-                  "event_type": "EventType"
+                  "category": "Category",
+                  "event_type": "EventType",
+                  "confidence": "Confidence",
+                  "recommendation": "Recommendation"
                 },
                 "alertDetailsOverride": {
-                  "alertSeverityColumnName": "SentinelSeverity",
                   "alertDescriptionFormat": "{{AlertDescription}}",
+                  "alertSeverityColumnName": "SentinelSeverity",
                   "alertDisplayNameFormat": "{{AlertTitle}}"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
-                    "reopenClosedIncident": false,
-                    "lookbackDuration": "1d",
                     "groupByCustomDetails": [
                       "ref_id"
                     ],
-                    "enabled": true,
-                    "matchingMethod": "Selected"
-                  }
+                    "lookbackDuration": "1d",
+                    "matchingMethod": "Selected",
+                    "reopenClosedIncident": false,
+                    "enabled": true
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -821,6 +821,15 @@
               "metadata": {
                 "description": "How often to check for Argos status changes, in minutes"
               }
+            },
+            "Lookback_Days": {
+              "type": "Int",
+              "defaultValue": 30,
+              "minValue": 1,
+              "maxValue": 90,
+              "metadata": {
+                "description": "How far back to look for an alert's status history and its incident, in days. Lower values scan less data; an alert whose matching incident is older than this is no longer synced."
+              }
             }
           },
           "variables": {
@@ -859,6 +868,10 @@
                     "PollingIntervalMinutes": {
                       "type": "Int",
                       "defaultValue": 5
+                    },
+                    "LookbackDays": {
+                      "type": "Int",
+                      "defaultValue": 30
                     }
                   },
                   "triggers": {
@@ -880,8 +893,8 @@
                           "Content-Type": "application/json"
                         },
                         "body": {
-                          "query": "let ChangedWindow = @{mul(max(parameters('PollingIntervalMinutes'), 10), 3)}m;\nlet Lookback = 90d;\nlet Changed = argsentdc_CL\n    | where ingestion_time() > ago(ChangedWindow)\n    | distinct ref_id = tostring(ref_id);\nlet ArgosHistory = argsentdc_CL\n    | where TimeGenerated > ago(Lookback)\n    | extend ref_id = tostring(ref_id), ArgosStatus = tostring(status)\n    | where ref_id in (Changed)\n    | project ref_id, TimeGenerated, ArgosStatus,\n              ClosureReason = tostring(closure_reason),\n              ClosureDescription = tostring(closure_reason_description);\nlet ArgosState = ArgosHistory\n    | sort by ref_id asc, TimeGenerated asc\n    | extend IsTransition = ref_id != prev(ref_id) or ArgosStatus != prev(ArgosStatus)\n    | where IsTransition\n    | summarize arg_max(TimeGenerated, ArgosStatus) by ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt = TimeGenerated\n    | join kind=inner (ArgosHistory | summarize arg_max(TimeGenerated, ClosureReason, ClosureDescription) by ref_id) on ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt, ClosureReason, ClosureDescription;\nlet AlertRefs = SecurityAlert\n    | where TimeGenerated > ago(Lookback)\n    | where ProviderName == \"ASI Scheduled Alerts\"\n    | extend ref_id = tostring(parse_json(tostring(parse_json(ExtendedProperties)[\"Custom Details\"])).ref_id[0])\n    | where ref_id in (Changed)\n    | distinct SystemAlertId, ref_id;\nlet IncidentRefs = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | mv-expand AlertId = AlertIds to typeof(string)\n    | join kind=inner AlertRefs on $left.AlertId == $right.SystemAlertId\n    | distinct IncidentName, ref_id;\nlet SentinelState = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | where IncidentName in ((IncidentRefs | project IncidentName))\n    | sort by IncidentName asc, LastModifiedTime asc\n    | extend IsCreation = IncidentName != prev(IncidentName)\n    | extend IsTransition = IsCreation or Status != prev(Status)\n    | where IsTransition\n    | summarize arg_max(LastModifiedTime, Status, IsCreation) by IncidentName\n    | project IncidentName, SentinelStatus = Status,\n              SentinelChangedAt = iff(IsCreation, datetime(null), LastModifiedTime);\nArgosState\n| join kind=inner IncidentRefs on ref_id\n| join kind=inner SentinelState on IncidentName\n| extend TargetStatus = case(ArgosStatus == \"open\", \"New\", ArgosStatus == \"acknowledged\", \"Active\", ArgosStatus == \"closed\", \"Closed\", \"\")\n| where isnotempty(TargetStatus) and TargetStatus != SentinelStatus\n| where isnull(SentinelChangedAt) or ArgosChangedAt > SentinelChangedAt\n| extend Classification = case(\n    TargetStatus != \"Closed\", \"\",\n    ClosureReason == \"resolved\", \"TruePositive\",\n    ClosureReason in (\"false_positive\", \"irrelevant_alert_subtype\"), \"FalsePositive\",\n    ClosureReason in (\"no_longer_a_threat\", \"irrelevant\", \"asset_should_not_be_monitored\",\n                      \"asset_belongs_to_my_organization\", \"asm_no_longer_detected\", \"asm_manually_closed\"), \"BenignPositive\",\n    \"Undetermined\")\n| extend ClassificationReason = case(\n    Classification == \"TruePositive\", \"SuspiciousActivity\",\n    Classification == \"BenignPositive\", \"SuspiciousButExpected\",\n    ClosureReason == \"false_positive\", \"IncorrectAlertLogic\",\n    ClosureReason == \"irrelevant_alert_subtype\", \"InaccurateData\",\n    \"\")\n| extend ClassificationComment = iff(TargetStatus != \"Closed\", \"\",\n    substring(iff(isnotempty(ClosureDescription),\n        ClosureDescription,\n        strcat(\"Closed in Check Point Exposure Management (closure reason: \", coalesce(ClosureReason, \"none\"), \")\")), 0, 1000))\n| project IncidentName, RefId = ref_id, ArgosStatus, ClosureReason, TargetStatus,\n          Classification, ClassificationReason, ClassificationComment,\n          ArgosChangedAt, SentinelStatus, SentinelChangedAt",
-                          "timespan": "P90D"
+                          "query": "let ChangedWindow = @{mul(max(parameters('PollingIntervalMinutes'), 10), 3)}m;\nlet Lookback = @{parameters('LookbackDays')}d;\nlet Changed = argsentdc_CL\n    | where ingestion_time() > ago(ChangedWindow)\n    | distinct ref_id = tostring(ref_id);\nlet ArgosHistory = argsentdc_CL\n    | where TimeGenerated > ago(Lookback)\n    | extend ref_id = tostring(ref_id), ArgosStatus = tostring(status)\n    | where ref_id in (Changed)\n    | project ref_id, TimeGenerated, ArgosStatus,\n              ClosureReason = tostring(closure_reason),\n              ClosureDescription = tostring(closure_reason_description);\nlet ArgosState = ArgosHistory\n    | sort by ref_id asc, TimeGenerated asc\n    | extend IsTransition = ref_id != prev(ref_id) or ArgosStatus != prev(ArgosStatus)\n    | where IsTransition\n    | summarize arg_max(TimeGenerated, ArgosStatus) by ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt = TimeGenerated\n    | join kind=inner (ArgosHistory | summarize arg_max(TimeGenerated, ClosureReason, ClosureDescription) by ref_id) on ref_id\n    | project ref_id, ArgosStatus, ArgosChangedAt, ClosureReason, ClosureDescription;\nlet AlertRefs = SecurityAlert\n    | where TimeGenerated > ago(Lookback)\n    | where ProviderName == \"ASI Scheduled Alerts\"\n    | extend ref_id = tostring(parse_json(tostring(parse_json(ExtendedProperties)[\"Custom Details\"])).ref_id[0])\n    | where ref_id in (Changed)\n    | distinct SystemAlertId, ref_id;\nlet IncidentRefs = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | mv-expand AlertId = AlertIds to typeof(string)\n    | join kind=inner AlertRefs on $left.AlertId == $right.SystemAlertId\n    | distinct IncidentName, ref_id;\nlet SentinelState = SecurityIncident\n    | where TimeGenerated > ago(Lookback)\n    | where IncidentName in ((IncidentRefs | project IncidentName))\n    | sort by IncidentName asc, LastModifiedTime asc\n    | extend IsCreation = IncidentName != prev(IncidentName)\n    | extend IsTransition = IsCreation or Status != prev(Status)\n    | where IsTransition\n    | summarize arg_max(LastModifiedTime, Status, IsCreation) by IncidentName\n    | project IncidentName, SentinelStatus = Status,\n              SentinelChangedAt = iff(IsCreation, datetime(null), LastModifiedTime);\nArgosState\n| join kind=inner IncidentRefs on ref_id\n| join kind=inner SentinelState on IncidentName\n| extend TargetStatus = case(ArgosStatus == \"open\", \"New\", ArgosStatus == \"acknowledged\", \"Active\", ArgosStatus == \"closed\", \"Closed\", \"\")\n| where isnotempty(TargetStatus) and TargetStatus != SentinelStatus\n| where isnull(SentinelChangedAt) or ArgosChangedAt > SentinelChangedAt\n| extend Classification = case(\n    TargetStatus != \"Closed\", \"\",\n    ClosureReason == \"resolved\", \"TruePositive\",\n    ClosureReason in (\"false_positive\", \"irrelevant_alert_subtype\"), \"FalsePositive\",\n    ClosureReason in (\"no_longer_a_threat\", \"irrelevant\", \"asset_should_not_be_monitored\",\n                      \"asset_belongs_to_my_organization\", \"asm_no_longer_detected\", \"asm_manually_closed\"), \"BenignPositive\",\n    \"Undetermined\")\n| extend ClassificationReason = case(\n    Classification == \"TruePositive\", \"SuspiciousActivity\",\n    Classification == \"BenignPositive\", \"SuspiciousButExpected\",\n    ClosureReason == \"false_positive\", \"IncorrectAlertLogic\",\n    ClosureReason == \"irrelevant_alert_subtype\", \"InaccurateData\",\n    \"\")\n| extend ClassificationComment = iff(TargetStatus != \"Closed\", \"\",\n    substring(iff(isnotempty(ClosureDescription),\n        ClosureDescription,\n        strcat(\"Closed in Check Point Exposure Management (closure reason: \", coalesce(ClosureReason, \"none\"), \")\")), 0, 1000))\n| project IncidentName, RefId = ref_id, ArgosStatus, ClosureReason, TargetStatus,\n          Classification, ClassificationReason, ClassificationComment,\n          ArgosChangedAt, SentinelStatus, SentinelChangedAt",
+                          "timespan": "@{concat('P', parameters('LookbackDays'), 'D')}"
                         },
                         "authentication": {
                           "type": "ManagedServiceIdentity",
@@ -1021,6 +1034,9 @@
                   },
                   "PollingIntervalMinutes": {
                     "value": "[[parameters('Polling_Interval_Minutes')]"
+                  },
+                  "LookbackDays": {
+                    "value": "[[parameters('Lookback_Days')]"
                   }
                 }
               }
@@ -1355,7 +1371,7 @@
                                   "Accept": "application/json",
                                   "Cookie": "access_token=@{parameters('API_Access_Token')}",
                                   "X-Integration-Type": "Azure Sentinel",
-                                  "X-Integration-Version": "1.0"
+                                  "X-Integration-Version": "1.1.0"
                                 }
                               },
                               "runAfter": {
@@ -1435,7 +1451,7 @@
                               "type": "AppendToStringVariable",
                               "inputs": {
                                 "name": "SyncResults",
-                                "value": "Alert @{variables('AlertRefId')}: @{if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')'))}\n"
+                                "value": "Alert @{variables('AlertRefId')}: @{if(equals(actions('Get_Argos_Alert')?['status'], 'Failed'), concat('could not read the alert from Argos (HTTP ', coalesce(string(outputs('Get_Argos_Alert')?['statusCode']), 'error'), '), sent the update anyway (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'error'), ')'), if(equals(actions('Update_Argos_Alert_Status')?['status'], 'Skipped'), concat('already ', variables('ArgosStatus'), ' in Argos, no update sent'), concat(variables('ArgosStatus'), ' (HTTP ', coalesce(string(outputs('Update_Argos_Alert_Status')?['statusCode']), 'Error'), ')')))}\n"
                               },
                               "runAfter": {
                                 "Condition_-_Already_in_sync": [
@@ -1629,7 +1645,8 @@
                 "notes": [
                   "Reads the Argos alert before updating and skips alerts already in the target state, replacing the argos-importer-synced tag check.",
                   "Treats an Argos closure reason that maps to the incident's classification as already in sync, so reasons such as asset_should_not_be_monitored are not overwritten.",
-                  "Syncs each ref_id once per run instead of once per attached alert."
+                  "Syncs each ref_id once per run instead of once per attached alert.",
+                  "Reports a failed Argos read explicitly in the sync comment; the update is still sent so the status converges."
                 ]
               },
               {

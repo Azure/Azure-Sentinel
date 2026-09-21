@@ -6,7 +6,7 @@ Runs on a schedule and mirrors Argos alert status changes onto the Microsoft Sen
 
 **Flow:**
 1. Runs every `Polling_Interval_Minutes` (default 5).
-2. Queries the workspace for alerts that received a new row in `argsentdc_CL` recently. The look-back is three times the polling interval, and at least 30 minutes.
+2. Queries the workspace for alerts that received a new row in `argsentdc_CL` recently. The look-back is three times the polling interval, and at least 30 minutes. History and incident matching go back `Lookback_Days` (default 30).
 3. For each such alert:
    - takes its current Argos status and the time that status was set, from the alert's row history
    - finds the incident through the `ref_id` Custom Detail on the incident's alert
@@ -38,6 +38,7 @@ Changes applied here fire the **Check_Point_EM_AutomationRules** rule. The Expor
 | **Workspace_Name** | Yes | Name of the Log Analytics workspace where Microsoft Sentinel is enabled |
 | **Workspace_Resource_Group** | No | Resource group of the workspace (default: the playbook's resource group) |
 | **Polling_Interval_Minutes** | No | How often to check for Argos status changes, in minutes (default: `5`, minimum `5`) |
+| **Lookback_Days** | No | How far back to look for an alert's status history and its incident, in days (default: `30`, maximum `90`). Lower values scan less data |
 
 The playbook needs no API token or API connection. It calls the Azure Monitor query API and the Microsoft Sentinel incidents API with its managed identity.
 
@@ -63,8 +64,9 @@ On close, the classification comment is the Argos `closure_reason_description`, 
 
 - **It only sees what the connector ingests.** The connector reads an alert's current state when it polls. If another integration rewrites the same Argos alerts more often than every 5 minutes, or the token's Argos quota (5,000 requests per day) is used up by other clients, changes can arrive late or not at all. See **Known Limitations** in the solution README.
 - **Only status is mirrored.** A different closure reason on an alert that is already closed on both sides is not re-synced.
-- **The Argos change time comes from the alert's rows in `argsentdc_CL`.** If the row that recorded a status change is older than the 90-day query range, the oldest remaining row stands in for it.
-- **Incidents older than 90 days are not matched.**
+- **Only a status change triggers an update.** If Argos changes only the closure reason of an alert that is already closed, and the incident is already Closed, the incident's classification is left as it is.
+- **The Argos change time comes from the alert's rows in `argsentdc_CL`.** If the row that recorded a status change is older than `Lookback_Days`, the oldest remaining row stands in for it.
+- **Incidents older than `Lookback_Days` are not matched.**
 
 ## APIs Used
 
