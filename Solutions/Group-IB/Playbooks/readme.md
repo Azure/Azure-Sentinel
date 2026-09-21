@@ -13,8 +13,8 @@ The integration ships in two functionally-equivalent packages — pick one based
 
 | Package         | What it is                                                                                                                                                                                   | Best for                                                                                                 | Operator guide                                   |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| **Consumption** | 30 separate Logic Apps, each deployed from its own `GIBTIA_<Name>/azuredeploy.json` ARM template. Per-action billing, individual scaling and management per playbook.        | Lighter setups, partial-coverage installs, predictable per-action cost.                                  | [USER_GUIDE.md](USER_GUIDE.md)                   |
-| **Standard**    | One Standard Logic App (`Microsoft.Web/sites` + WS1 plan) hosting all 30 playbooks as nested workflows. Single shared Managed Identity, fixed plan billing. Source in `Playbooks/Standard/`. | Production installs running most/all playbooks, predictable monthly cost, single point of admin and IAM. | [USER_GUIDE_STANDARD.md](USER_GUIDE_STANDARD.md) |
+| **Consumption** | 37 separate Logic Apps, each deployed from its own `GIBTIA_<Name>/azuredeploy.json` ARM template. Per-action billing, individual scaling and management per playbook.        | Lighter setups, partial-coverage installs, predictable per-action cost.                                  | [USER_GUIDE.md](USER_GUIDE.md)                   |
+| **Standard**    | One Standard Logic App (`Microsoft.Web/sites` + WS1 plan) hosting all 37 playbooks as nested workflows. Single shared Managed Identity, fixed plan billing. Source in `Playbooks/Standard/`. | Production installs running most/all playbooks, predictable monthly cost, single point of admin and IAM. | [USER_GUIDE_STANDARD.md](USER_GUIDE_STANDARD.md) |
 
 Both packages produce identical downstream Sentinel content (same indicators in `ThreatIntelIndicators`, same `GIB*_CL` context tables). Only the wrapper around the workflow definitions differs.
 
@@ -33,10 +33,10 @@ cd Playbooks/Standard
 The script (~310 lines, bash):
 
 1. Discovers your deployment from the deployed Logic App.
-2. Assigns the two required MSI roles (`Microsoft Sentinel Contributor` + `Log Analytics Contributor`) on the workspace.
+2. Assigns the two required MSI roles: `Microsoft Sentinel Contributor` on the workspace and `Monitoring Metrics Publisher` on the Data Collection Rule that `infrastructure-arm.json` creates (usually already granted by the template).
 3. Generates a placeholder `connections.json` so the Designer can render workflows, and zip-deploys the workflows.
 4. Pauses and instructs you through the **one** manual Designer-bind step (~2 minutes of Portal clicks).
-5. Polls Azure for the two new connection resources to gain populated `connectionRuntimeUrl` values (typically 1-5 minutes).
+5. Polls Azure for the new Sentinel connection resource to gain a populated `connectionRuntimeUrl` value (typically 1-5 minutes).
 6. Writes the final `connections.json` and redeploys.
 7. Restarts the Logic App.
 
@@ -103,15 +103,22 @@ you need. Each button deploys a single playbook.
 
 Perform these steps for **each** deployed playbook.
 
-1. **Authorize the API connections.** Open the playbook's resource group, select each
-   `Microsoft.Web/connections` resource created alongside the Logic App, then **Edit API
-   connection → Authorize → Save**. Collectors use *Azure Monitor Logs* and *Azure Log
-   Analytics Data Collector*; enrichment playbooks use *Microsoft Sentinel*.
-2. **Assign the managed identity its roles**, at **workspace scope**:
-   - Collectors and the indicator processor: **Microsoft Sentinel Contributor** *and*
-     **Log Analytics Contributor**. Both are required — Sentinel Contributor alone returns 403
-     on Log Analytics data-plane writes.
-   - Enrichment playbooks: **Microsoft Sentinel Responder**, so they can add incident comments.
+1. **Authorize the API connection** — enrichment playbooks and the indicator processor only.
+   Their `azuresentinel` connection is created with managed-identity authentication, so there
+   is nothing to enter; it only needs to exist. **Collectors have no API connection**: they write
+   to Log Analytics through a Data Collection Rule their template creates, using their managed
+   identity (Logs Ingestion API). No workspace key is used anywhere.
+2. **Roles.** Each collector template assigns its playbook's two roles itself
+   (**Monitoring Metrics Publisher** on its Data Collection Rule, **Log Analytics Reader** on the
+   workspace) when `AssignRoles` is left at `true`; that needs Owner or User Access Administrator
+   on the resource group. Deploy with `AssignRoles=false` to assign them by hand instead.
+   Assign the rest at **workspace scope**:
+   - Indicator processor: **Microsoft Sentinel Contributor** (uploads to Sentinel TI).
+   - Enrichment playbooks: **Microsoft Sentinel Responder**, so they can add incident comments;
+     the WHOIS variants also need **Log Analytics Reader** for their `ThreatIntelIndicators` lookup.
+   - **Upgrading from 2.0?** Convert the workspace's `GIB*` tables once with `migrate-tables.sh`
+     (this folder) before redeploying any collector; the 2.0 tables are classic tables that a
+     Data Collection Rule cannot write to. See USER_GUIDE.md §10.
    - Role propagation takes 5–15 minutes. Early `401`/`403` responses during that window are
      expected and the built-in retry policy generally absorbs them.
 3. **Set the parameters** — `GIBUsername`, `GIBApiKey`, and for collectors `StartDate` (first-run
@@ -198,7 +205,7 @@ All playbooks authenticate to Azure services using **Managed Identity** — no O
 | Service                                  | Auth method                                        | Required role                  |
 | ---------------------------------------- | -------------------------------------------------- | ------------------------------ |
 | Log Analytics query (seqUpdate read)     | Managed Identity → ARM endpoint                    | Log Analytics Reader           |
-| Log Analytics Data Collector API (write) | Workspace ID + Primary Key (in parameters)         | N/A — key-based                |
+| Log Analytics write (Logs Ingestion API) | Managed Identity → the playbook's Data Collection Rule | Monitoring Metrics Publisher (on the DCR) |
 | Sentinel Threat Intelligence upload      | Managed Identity → azuresentinel connector         | Microsoft Sentinel Contributor |
 | Group-IB TI API                          | HTTP Basic Auth (username + API key in parameters) | N/A — Group-IB-side credential |
 
@@ -279,5 +286,5 @@ All indicators submitted to Sentinel Threat Intelligence are STIX 2.1 compliant,
 | Azure subscription       | Active subscription with resource group containing a Sentinel workspace                                           |
 | Microsoft Sentinel       | Enabled on a Log Analytics workspace                                                                              |
 | Group-IB TI subscription | Active Group-IB TI portal access with API key; access to specific collections depends on your subscription tier   |
-| Logic App region         | Must be in a region supported by the `azuresentinel` managed API and `azureloganalyticsdatacollector` managed API |
-| Permissions              | Ability to create Logic App resources, assign IAM roles on the workspace, and deploy ARM templates                |
+| Logic App region         | Must be in a region supported by the `azuresentinel` managed API; the Data Collection Rule is created in the workspace's region |
+| Permissions              | Ability to deploy ARM templates and create Logic App resources; Owner or User Access Administrator on the resource group so the templates can create role assignments (or `AssignRoles=false` and assign by hand) |

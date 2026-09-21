@@ -71,33 +71,16 @@ Gather the following values before starting the deployment. You will need them m
 | **Subscription ID**       | Azure Portal → top search bar → "Subscriptions" → click your subscription → copy the Subscription ID field                                                               | `a1b2c3d4-...`          |
 | **Resource Group name**   | The resource group where your Sentinel workspace lives                                                                                                                   | `rg-sentinel-prod`      |
 | **Workspace name**        | Log Analytics workspace → Overview page → the resource name at the top                                                                                                   | `la-sentinel-workspace` |
-| **Workspace ID (GUID)**   | Log Analytics workspace → Overview → "Workspace ID" field                                                                                                                | `b5c6d7e8-...`          |
-| **Workspace primary key** | See instructions below                                                                                                                                                   | (long base64 string)    |
+| **Workspace ID (GUID)**   | Log Analytics workspace → Overview → "Workspace ID" field. Needed only by the Indicator Processor.                                                                        | `b5c6d7e8-...`          |
 | **Group-IB login email**  | Your Group-IB TI portal login                                                                                                                                            | `analyst@company.com`   |
 | **Group-IB API key**      | Group-IB portal → Profile → API keys                                                                                                                                     | (alphanumeric string)   |
 | **StartDate**             | Choose a date in `YYYY-MM-DD` format to begin the initial data pull. Use a recent date (e.g. 30 days ago) for testing, or a further-back date for a historical backfill. | `2025-01-01`            |
 
-### Getting the workspace primary key
+### No workspace key is needed
 
-The primary key is used only by the Log Analytics Data Collector connection (to write tracking records). It is not used for the MSI-authenticated queries.
+Collectors write their `seqUpdate` cursor and context records to Log Analytics through the **Logs Ingestion API**: each collector's template creates a small Data Collection Rule (DCR) and the playbook posts to it with its own Managed Identity. There is no Log Analytics API connection to authorize and no workspace key to collect. (Versions before 2.1 used the HTTP Data Collector API connector, which Microsoft retired; if you are upgrading from one of those, see [§10 — Upgrading from version 2.0](#upgrading-from-version-20-data-collector-api).)
 
-**Method 1 — Azure Cloud Shell (recommended):**
-
-1. In the Azure Portal, click the **Cloud Shell** icon (`>_`) in the top navigation bar.
-2. If prompted, select **Bash** and create a storage account if this is your first time.
-3. Run the following command (replace the placeholders with your values):
-
-```bash
-az monitor log-analytics workspace get-shared-keys \
-  --resource-group YOUR_RESOURCE_GROUP_NAME \
-  --workspace-name YOUR_WORKSPACE_NAME
-```
-
-4. Copy the `primarySharedKey` value from the output.
-
-**Method 2 — Azure Portal (older UI):**
-
-Log Analytics workspace → left menu → **Agents** → expand **Log Analytics agent instructions** → the Primary key is listed there.
+One consequence for the deploying account: each collector template also **assigns its playbook's two roles** (Monitoring Metrics Publisher on the DCR, Log Analytics Reader on the workspace). Creating role assignments needs **Owner** or **User Access Administrator** on the resource group. If your account only has Contributor, deploy with the `AssignRoles` parameter set to `false` and assign the two roles by hand as described in §4.4.
 
 ---
 
@@ -125,7 +108,7 @@ The `GIBTIA_IndicatorProcessor_v2` playbook is the central receiving point for a
    | **Resource group** | The resource group where Sentinel lives                                                       |
    | `PlaybookName`     | Leave as default: `GIBTIA_IndicatorProcessor_v2`                                              |
    | `UserName`         | Your Azure AD email address (informational — used as the display name for the API connection) |
-   | `WorkspaceId`      | Your Log Analytics workspace ID (GUID)                                                        |
+   | `WorkspaceId`      | Your Log Analytics workspace ID (GUID). Required — the template refuses an empty value, because an empty ID would only fail at runtime with a 404 on every upload |
 
 6. Click **Review + create**, then **Create**. Wait for the deployment to complete (typically 30–60 seconds).
 
@@ -177,7 +160,6 @@ The `GIBTIA_IOC_Primary_Updated` playbook polls the `ioc/primary/updated` Group-
    | Parameter                        | Value                            | Notes                                                                      |
    | -------------------------------- | -------------------------------- | -------------------------------------------------------------------------- |
    | `PlaybookName`                   | `GIBTIA_IOC_Primary_Updated`     | Leave as default                                                           |
-   | `UserName`                       | Your Azure AD email              | Informational only                                                         |
    | `GIBUsername`                    | Your Group-IB portal login email | e.g. `analyst@company.com`                                                 |
    | `GIBApiKey`                      | Your Group-IB personal API key   | Stored as securestring in the Logic App                                    |
    | `StartDate`                      | `YYYY-MM-DD`                     | Starting date for initial data pull                                        |
@@ -187,38 +169,35 @@ The `GIBTIA_IOC_Primary_Updated` playbook polls the `ioc/primary/updated` Group-
    | `FixedConfidence`                | `-1`                             | Set to a value between 0–100 to apply a fixed confidence to all indicators. Used when neither `UseAdmiraltyConfidence` nor `UseRiskScoreAsConfidence` supplies a value. Leave at `-1` to omit confidence entirely. |
    | `UseAdmiraltyConfidence`       | `false`                          | Set to `true` to derive STIX confidence by parsing `evaluation.admiraltyCode` (e.g. `"C3"`) via the Admiralty Code translation tables (`reliability: A=100, B=80, C=60, D=40, E=20, F=0`; `credibility: 1=100, 2=80, 3=60, 4=40, 5=20, 6=0`) and emitting `(reliability + credibility) / 2`. **Highest precedence** — falls through to `UseRiskScoreAsConfidence` / `FixedConfidence` when `admiraltyCode` is missing, wrong length, or contains a letter/digit outside the lookup table. The other evaluation fields (`admiraltyCode`, `credibility`, `reliability`, `TLP`, `TTL`) are always surfaced when present: `admiraltyCode`/`credibility`/`reliability` appear in the `Tags` column as `admiralty:C3`/`credibility:60`/`reliability:60`, the per-entry/item-level `riskScore` appears as `risk-score:<n>` regardless of confidence mode, `TLP` becomes `object_marking_refs`, and `TTL` (in days) drives `ValidUntil` instead of the 90-day fallback. |
    | `IndicatorProcessorPlaybookName` | `GIBTIA_IndicatorProcessor_v2`   | Must match the adapter name exactly                                        |
-   | `WorkspaceName`                  | Your workspace name              | For constructing the ARM query URL                                         |
+   | `WorkspaceId`                    | Your workspace GUID              | For MSI query calls                                                        |
+   | `WorkspaceName`                  | Your workspace name              | Must be in the same resource group: the template creates the cursor table in it and points the DCR at it |
+   | `WorkspaceLocation`              | leave as is                      | The DCR must be created in the workspace's region; the default is this resource group's region. Change it only if your workspace is in a different region |
+   | `AssignRoles`                    | `true`                           | The template grants the playbook's identity its two roles. Set `false` only if your account cannot create role assignments (see §4.4) |
 
-4. Click **Review + create** → **Create**.
+4. Click **Review + create** → **Create**. The deployment creates the Logic App, its Data Collection Rule (named `gib-ioc-primary-<hash>`, tagged with the playbook name), the `GIBCollectionTracking_CL` table if it does not exist, and the two role assignments.
 
 ---
 
-### 4.4 Authorize API connections — IOC Primary Collector
+### 4.4 Roles and connections — IOC Primary Collector
 
-After deployment, two API connections must be configured. Find them in the same resource group.
+There is **no API connection to authorize** for collectors. The cursor write goes to the collector's Data Collection Rule over HTTPS with the Logic App's Managed Identity; the cursor read is an HTTPS query signed the same way. Two roles make that work, and with `AssignRoles` left at `true` the template has already assigned both:
 
-\*\*`azureloganalyticsdatacollector-GIBTIA_IOC_Primary_Updated`\*\*
+| Role | Scope | Why |
+|---|---|---|
+| **Monitoring Metrics Publisher** | the playbook's Data Collection Rule | write access for the Logs Ingestion API |
+| **Log Analytics Reader** | the workspace | the `seqUpdate` cursor query at the start of each run. Without it the step returns **403** and the playbook silently re-pulls from `StartDate` every run |
 
-This connection writes the seqUpdate tracking record after each run.
+Verify: `GIBTIA_IOC_Primary_Updated` Logic App → **Identity** → **Azure role assignments** → both rows present.
 
-1. Navigate to the resource group → find `azureloganalyticsdatacollector-GIBTIA_IOC_Primary_Updated` → click it.
-2. In the left menu, click **Edit API connection**.
-3. Enter your **Workspace ID** and **Workspace Key** in the respective fields.
-4. Click **Save**.
+#### If you deployed with `AssignRoles=false`
 
-> The collector also queries Log Analytics for its last `seqUpdate` on each run, but that call is signed directly with the Logic App's Managed Identity — there is no `azuremonitorlogs` API connection to authorize. The MSI needs a workspace role instead; see the next subsection.
-
-#### Assign the Managed Identity role — IOC Primary Collector
-
-The collector reads its last `seqUpdate` from Log Analytics by signing an HTTPS query with the Logic App's Managed Identity. Without a read role on the workspace this step returns **403** on every run, and the playbook silently falls back to the first-run path (re-pulling from `StartDate` and never advancing).
+Assign the two roles by hand:
 
 1. `GIBTIA_IOC_Primary_Updated` Logic App → left menu → **Identity** → verify **System assigned** is **On**.
-2. Go to your **Log Analytics workspace** → **Access control (IAM)** → **+ Add role assignment**.
-3. Role: **Log Analytics Reader** *(or **Microsoft Sentinel Contributor** if you prefer a single role on this Logic App — Contributor includes the read permission)*.
-4. Members → **Managed identity** → search for `GIBTIA_IOC_Primary_Updated` → select it.
-5. Click **Review + assign**.
+2. Monitor → **Data Collection Rules** → open the rule tagged `GIBTIA-Playbook: GIBTIA_IOC_Primary_Updated` → **Access control (IAM)** → **+ Add role assignment** → **Monitoring Metrics Publisher** → Members → **Managed identity** → search for `GIBTIA_IOC_Primary_Updated` → **Review + assign**.
+3. Your **Log Analytics workspace** → **Access control (IAM)** → **+ Add role assignment** → **Log Analytics Reader** → the same managed identity → **Review + assign**.
 
-Allow ~1 minute for the role assignment to propagate before triggering a run.
+Allow 5–15 minutes for the DCR assignment to propagate before triggering a run: Azure Monitor RBAC is slower than workspace RBAC, and an early run fails the cursor write with **403** that looks like a bug and is not.
 
 #### Enable the playbooks
 
@@ -294,11 +273,9 @@ Each additional indicator collector follows the same deployment pattern. Deploy 
 
 1. Azure Portal → **"Deploy a custom template"** → **"Build your own template in the editor"**.
 2. Paste the playbook JSON → Save.
-3. Fill parameters: `GIBUsername`, `GIBApiKey`, `StartDate`, `WorkspaceId`, `WorkspaceName`. Leave `LimitPerPortion` at 10 for initial testing. Set `IndicatorProcessorPlaybookName` to `GIBTIA_IndicatorProcessor_v2`.
-4. Review + create → Create.
-5. Authorize `azureloganalyticsdatacollector-<PlaybookName>` connection (enter Workspace ID + Key).
-6. **Assign the Managed Identity role.** Same procedure as the "Assign the Managed Identity role — IOC Primary Collector" subsection in §4.4, but selecting **this** collector's Logic App as the member. Role: **Log Analytics Reader**. Required so the collector can query its last `seqUpdate` — without it the playbook re-pulls from `StartDate` on every run.
-7. Logic App → Overview → **Enable**.
+3. Fill parameters: `GIBUsername`, `GIBApiKey`, `StartDate`, `WorkspaceName`. Leave `LimitPerPortion` at 10 for initial testing, `WorkspaceLocation` and `AssignRoles` at their defaults. Set `IndicatorProcessorPlaybookName` to `GIBTIA_IndicatorProcessor_v2`.
+4. Review + create → Create. The template creates the collector's Data Collection Rule and assigns its two roles (see §4.4; if you used `AssignRoles=false`, assign them by hand now).
+5. Wait 5–15 minutes for the role assignments to propagate, then Logic App → Overview → **Enable**.
 
 **Available additional indicator collectors:**
 
@@ -338,13 +315,14 @@ Context playbooks write full intelligence records to Log Analytics custom tables
    | `GIBApiKey`       | Group-IB API key                             |
    | `StartDate`       | `YYYY-MM-DD`                                 |
    | `LimitPerPortion` | `10` for testing, max per collection (see table above) |
-   | `WorkspaceId`     | Workspace GUID                               |
-   | `WorkspaceName`   | Workspace name                               |
+   | `RecordsPerWrite` | Leave the default. Records per Logs Ingestion API call (1 MB limit); lower it only if a write fails with HTTP 413 |
+   | `WorkspaceName`   | Workspace name (same resource group)         |
+   | `WorkspaceLocation`, `AssignRoles` | Leave the defaults (see §4.4)  |
 
-4. Review + create → Create.
-5. Authorize `azureloganalyticsdatacollector-<PlaybookName>` connection (enter Workspace ID + Key).
-6. **Assign the Managed Identity role.** Same procedure as the "Assign the Managed Identity role — IOC Primary Collector" subsection in §4.4, but selecting this context collector's Logic App as the member. Role: **Log Analytics Reader**. Required so the collector can query its last `seqUpdate` — without it the playbook re-pulls from `StartDate` on every run.
-7. Logic App → Overview → **Enable**.
+4. Review + create → Create. The template creates the collector's Data Collection Rule, its `GIB*_CL` table with the schema below, and assigns its two roles (see §4.4).
+5. Wait 5–15 minutes for the role assignments to propagate, then Logic App → Overview → **Enable**.
+
+**Table schema.** Each context table holds the full Group-IB record in a `Record` column (dynamic) plus a few fields promoted to their own columns for filtering (for example `title_s`, `severity_s`, `tlp_s`, dates as `*_t`). Anything not promoted is reachable as `Record.<field>` — nothing Group-IB adds to a record is ever dropped. Feeds with a large free-text field keep it in its own column (`Files` for git repositories, `text_s` for open threats, `data_s` for public leaks), cut at 60 000 characters with a `…Truncated` flag.
 
 **Available context playbooks:**
 
@@ -871,7 +849,7 @@ GIBOSIVulnerability_CL
 | where TimeGenerated > ago(1h)
 | where hasExploit_b == true
 | where mergedCvss_d >= 9.0
-| where DarkwebMentions_d > 0
+| where darkwebMentions_d > 0
 | project TimeGenerated, cveId_s, mergedCvss_d, title_s, affectedSoftware_s, darkwebMentions_d
 ```
 
@@ -1270,7 +1248,7 @@ The three enrichers above are **incident-triggered**: they enrich *every* matchi
 | `GIBTIA_Enrich_WHOIS_Single_IP` | Enrich_WHOIS | IP |
 | `GIBTIA_Enrich_WHOIS_Single_Domain` | Enrich_WHOIS | Domain (DNS) |
 
-Templates: `Playbooks/GIBTIA_<Name>/azuredeploy.json`. **Deploy, authorize the `azuresentinel-<PlaybookName>` connection, assign roles, and enable them exactly like the bulk enrichers** ([§4.8](#48-deploy-enrichment-playbooks), [§4.9](#49-assign-roles-for-enrichment-playbooks)): **Microsoft Sentinel Contributor** on all seven, plus **Log Analytics Reader** on the two `Enrich_WHOIS_Single_*` (they query `ThreatIntelIndicators`; the two use the `WorkspaceName` parameter). Score_IP and IOC single variants need no Log Analytics role.
+Templates: `Playbooks/GIBTIA_<name>/azuredeploy.json`. **Deploy, authorize the `azuresentinel-<PlaybookName>` connection, assign roles, and enable them exactly like the bulk enrichers** ([§4.8](#48-deploy-enrichment-playbooks), [§4.9](#49-assign-roles-for-enrichment-playbooks)): **Microsoft Sentinel Contributor** on all seven, plus **Log Analytics Reader** on the two `Enrich_WHOIS_Single_*` (they query `ThreatIntelIndicators`; the two use the `WorkspaceName` parameter). Score_IP and IOC single variants need no Log Analytics role.
 
 **How an analyst runs one:**
 
@@ -1379,16 +1357,27 @@ az role assignment create \
 
 ---
 
-### azureloganalyticsdatacollector connection shows as error
+### Cursor or context-table write fails with 403
 
-**Symptom:** The API connection resource shows a red error state, and the playbook fails on the `Save_tracking_record` step.
+**Symptom:** `Save_tracking_record`, `Save_seqUpdate_in_loop` or `Write_chunk_to_table` returns **403** on every run.
 
-**Cause:** The Workspace ID and/or Workspace Key entered in the connection are incorrect, or the key has been rotated.
+**Cause:** The playbook's identity does not hold **Monitoring Metrics Publisher** on its Data Collection Rule, or the assignment has not propagated yet (5–15 minutes for Azure Monitor).
 
-**Resolution:**
+**Resolution:** Logic App → **Identity** → **Azure role assignments**. If the DCR row is missing, add it as in §4.4. If it is present and the run is less than 15 minutes old, wait and rerun.
 
-1. Log Analytics workspace → **Agents** page → copy the current Primary Key.
-2. Navigate to the API connection resource → **Edit API connection** → re-enter the Workspace ID and Key → **Save**.
+### Context-table write fails with 413
+
+**Symptom:** `Write_chunk_to_table` fails with **413 Request Entity Too Large**.
+
+**Cause:** One call exceeded the Logs Ingestion API's 1 MB limit. Records in this feed are larger than the default `RecordsPerWrite` assumes.
+
+**Resolution:** Redeploy the collector with a lower `RecordsPerWrite` (halve it). The write is not retried automatically, so the affected page is re-fetched on the next run.
+
+### Deployment fails on a `roleAssignments` resource with AuthorizationFailed
+
+**Cause:** The deploying account lacks Owner or User Access Administrator on the resource group, which creating role assignments requires.
+
+**Resolution:** Redeploy with `AssignRoles=false` and assign the two roles by hand (§4.4), or deploy with an account that holds one of those roles.
 
 ---
 
@@ -1426,13 +1415,19 @@ Group-IB API keys may be rotated for security reasons. When you rotate the key i
    - Or redeploy the ARM template with the new key value.
 2. The key is stored as a securestring parameter inside each Logic App. It is not visible in the portal after saving.
 
-### Rotating the Log Analytics workspace key
+### Upgrading from version 2.0 (Data Collector API)
 
-If you rotate the workspace primary key:
+Version 2.0 wrote to Log Analytics through the HTTP Data Collector API connector, which Microsoft retired in September 2026. Version 2.1 writes through Data Collection Rules. A workspace that ran 2.0 holds its `GIB*_CL` tables as *classic* tables, which a DCR cannot write to, so the upgrade has one extra step and one ordering rule:
 
-1. Get the new key: Cloud Shell → `az monitor log-analytics workspace get-shared-keys ...`
-2. Update each `azureloganalyticsdatacollector-*` API connection:
-   - Navigate to the connection → **Edit API connection** → enter new key → **Save**.
+1. **Convert the tables once**, before redeploying any collector. From Cloud Shell, with `Playbooks/migrate-tables.sh` from this repository:
+   ```bash
+   ./migrate-tables.sh <resource-group> <workspace-name>
+   ```
+   It converts every existing `GIB*` table (the cursor table and the context tables), keeps their data, and skips tables that do not exist. The conversion cannot be undone; it does not need to be.
+2. **Redeploy each collector** with its 2.1 template, same `PlaybookName`, so the existing Logic App is updated in place and keeps its identity and cursor. Do this promptly after step 1: a converted table keeps accepting the old connector's writes only until its schema changes, and the 2.1 template changes the context tables' schemas.
+3. Delete the orphaned `azureloganalyticsdatacollector-*` API connections; nothing uses them. The **Log Analytics Contributor** role, if you had assigned it, is no longer needed.
+
+A workspace that never ran 2.0 needs none of this: the templates create the tables DCR-based from the start. Do not delete and recreate a table instead of converting it — Log Analytics soft-deletes tables for 14 days and a same-name recreate can restore the classic definition.
 
 ### Adjusting LimitPerPortion
 

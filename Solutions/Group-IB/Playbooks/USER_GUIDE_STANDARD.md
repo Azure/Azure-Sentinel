@@ -27,7 +27,7 @@ This guide covers the **Standard Logic Apps** deployment package in `Playbooks/S
 
 ## 1. Overview
 
-The Standard package packs **all 29 workflows** into a **single Standard Logic App** running on a `WorkflowStandard` (WS1) App Service plan. One App Service plan, one Storage account, one Logic App, one shared Managed Identity, two managed API connections — and 29 workflows that share them.
+The Standard package packs **all 37 workflows** into a **single Standard Logic App** running on a `WorkflowStandard` (WS1) App Service plan. One App Service plan, one Storage account, one Logic App, one shared Managed Identity, one managed API connection (Sentinel), one Data Collection Rule — and 37 workflows that share them.
 
 ```
 +--------------------------------------------------+
@@ -43,10 +43,13 @@ The Standard package packs **all 29 workflows** into a **single Standard Logic A
 |     GIBTIA_Enrich_WHOIS/           (Webhook)     |
 |     GIBTIA_Enrich_IOC/             (Webhook)     |
 |     GIBTIA_Score_IP/               (Webhook)     |
+|     GIBTIA_Score_IP_Single/        (Entity)      |
+|     GIBTIA_Enrich_IOC_Single_*/    (Entity) x4   |
+|     GIBTIA_Enrich_WHOIS_Single_*/  (Entity) x2   |
 +--------------------------------------------------+
             |                          |
             v                          v
-  azuresentinel-1              azureloganalyticsdatacollector-1
+  azuresentinel-1              (Data Collection Rule: gibtia-logs-ingestion)
   (MI auth)                    (MI auth)
             |                          |
             v                          v
@@ -61,9 +64,9 @@ The 29 workflows break down as:
 | **Adapter** | 1 | `GIBTIA_IndicatorProcessor_v2` — Batch trigger; uploads STIX indicators to Sentinel TI |
 | **Indicator collectors** | 12 | `GIBTIA_IOC_Primary_Updated`, `GIBTIA_Malware_cnc`, `GIBTIA_Attacks_phishing`, `GIBTIA_Suspicious_ip_*` (5), … — hourly recurrence, transform records into STIX 2.1 indicators, batch-send to the adapter |
 | **Context collectors** | 14 | `GIBTIA_APT_Threats`, `GIBTIA_OSI_Vulnerability`, `GIBTIA_HI_*`, `GIBTIA_Compromised_BankCard`, `GIBTIA_Compromised_BreachedDB`, … — hourly recurrence, write raw records to Log Analytics custom tables |
-| **Enrichment playbooks** | 3 | `GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`, `GIBTIA_Score_IP` — triggered by Sentinel incident webhook, post enrichment as incident comments |
+| **Enrichment playbooks** | 10 | `GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`, `GIBTIA_Score_IP` — triggered by Sentinel incident webhook, post enrichment as incident comments; plus their seven **single-entity** variants (`GIBTIA_Score_IP_Single`, `GIBTIA_Enrich_IOC_Single_{IP,Domain,URL,FileHash}`, `GIBTIA_Enrich_WHOIS_Single_{IP,Domain}`) — entity-triggered, run by hand from an entity's **Run playbook** menu, cannot be attached to automation rules |
 
-> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/GIBTIA_Score_IP/azuredeploy.json`).
+> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/azuredeploy-GIBTIA_Score_IP.json`).
 
 See [§A. Full workflow catalog](#a-full-workflow-catalog) at the bottom of this guide for the complete list with collection slugs and destination tables.
 
@@ -77,7 +80,7 @@ See [§A. Full workflow catalog](#a-full-workflow-catalog) at the bottom of this
 | ------------------------------------ | ------------------------------------------------------ | ------------------------------------------- |
 | Resources to manage                  | 1 Logic App + 1 plan + 1 storage account               | 30 Logic Apps                               |
 | IAM (Managed Identity role)          | **1 assignment** on the shared MSI                     | 30 assignments (one per Logic App)          |
-| Workflow count                       | 30 (includes `GIBTIA_Score_IP`, `GIBTIA_Compromised_BreachedDB`)   | 30 (`Score_IP` now shipped as `GIBTIA_Score_IP/azuredeploy.json`)                |
+| Workflow count                       | 37 (identical set to Consumption, one Logic App)       | 37 Logic Apps                               |
 | Cost model                           | Fixed (App Service plan, even when idle)               | Per-action billing                          |
 | Predictability under high IOC volume | More predictable — no surprise per-action spend        | Variable — bills scale with execution count |
 | Deployment cadence                   | Single zip deploy / VS Code push                       | 30 separate ARM template deploys            |
@@ -121,12 +124,11 @@ You will need these before starting:
 | Resource Group name   | Where your Sentinel workspace lives                                                                                                 |
 | Workspace name        | Log Analytics workspace → Overview → top of page                                                                                    |
 | Workspace ID (GUID)   | Log Analytics workspace → Overview → **Workspace ID**                                                                               |
-| Workspace primary key | Cloud Shell → `az monitor log-analytics workspace get-shared-keys --resource-group <rg> --workspace-name <ws>` → `primarySharedKey` |
 | GIB Username          | Group-IB TI portal login                                                                                                            |
 | GIB API key           | Group-IB TI portal → personal settings → API token                                                                                  |
 | `StartDate`           | First-run cursor, format `YYYY-MM-DD`. Used by every collector to convert into an initial `seqUpdate`.                              |
 
-> **Note on the workspace key.** You do **not** need one. The Standard Logic App writes the seqUpdate tracking record and context records via the `azureloganalyticsdatacollector` connection using the Logic App's **Managed Identity** — which is why §3 requires the `Log Analytics Contributor` role. Earlier versions collected a `WorkspaceKey` deployment parameter; it was never referenced by any workflow and has been removed rather than left to sit in app settings in cleartext.
+> **Note on the workspace key.** You do **not** need one. The Standard Logic App writes the seqUpdate tracking record and context records through a **Data Collection Rule** that `infrastructure-arm.json` creates, using the Logic App's **Managed Identity** (Logs Ingestion API). There is no Log Analytics API connection and no key. Versions before 2.1 used the retired HTTP Data Collector connector; upgrading from one of those needs a one-time table conversion — see [§5.8](#58-upgrading-from-version-20-data-collector-api).
 
 ---
 
@@ -198,24 +200,24 @@ Deploy:
 
 > **If you're using §5.3 Path A (`post-deploy.sh`), skip the manual steps in this section** — the script's Phase 2 runs the equivalent `az role assignment create` commands for you. Read the role descriptions and "Why two roles?" callout below to understand what's being assigned, then move on to §5.3.
 
-The Standard Logic App's MSI needs three permissions on the Sentinel workspace:
+The Standard Logic App's MSI needs three permissions, on two resources:
 
-| Capability                                                         | Role                                             | Used by                                                                                                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Upload indicators to Sentinel TI                                   | **Microsoft Sentinel Contributor**               | The `Upload_Indicators_V2` action in `GIBTIA_IndicatorProcessor_v2`                                                                                          |
-| Query Log Analytics for `seqUpdate` checkpoint                     | (included in **Microsoft Sentinel Contributor**) | Every collector's `Query_Last_SeqUpdate` step (direct HTTP + MSI)                                                                                            |
-| Write seqUpdate tracking record + context records to Log Analytics | **Log Analytics Contributor**                    | Every collector's `Save_seqUpdate_in_loop` / `Save_tracking_record` / context-table writes (via the `azureloganalyticsdatacollector` connector with MI auth) |
+| Capability                                                         | Role                                             | Scope | Used by                                                                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| Upload indicators to Sentinel TI                                   | **Microsoft Sentinel Contributor**               | workspace | The `Upload_Indicators_V2` action in `GIBTIA_IndicatorProcessor_v2`                                                |
+| Query Log Analytics for `seqUpdate` checkpoint                     | (included in **Microsoft Sentinel Contributor**) | workspace | Every collector's `Query_Last_SeqUpdate` step (direct HTTP + MSI)                                                  |
+| Write seqUpdate tracking record + context records to Log Analytics | **Monitoring Metrics Publisher**                 | the Data Collection Rule | Every collector's `Save_seqUpdate_in_loop` / `Save_tracking_record` / `Write_chunk_to_table` (Logs Ingestion API, direct HTTP + MSI) |
 
-Steps (do both):
+`infrastructure-arm.json` assigns the DCR role itself when its `AssignRoles` parameter is left at `true` (the default; it requires the deploying account to hold Owner or User Access Administrator on the resource group). Sentinel Contributor is assigned by `post-deploy.sh` or by hand:
 
 1. Logic App → left menu → **Identity** → confirm **System assigned** is **On**.
 2. Go to your **Log Analytics workspace** → **Access control (IAM)** → **+ Add role assignment**.
 3. Add **Microsoft Sentinel Contributor**:
    - Members → **Managed identity** → search for `GIBTIA-Standard` → select → **Review + assign**.
-4. Repeat **+ Add role assignment** for **Log Analytics Contributor**: same member, same workspace scope.
-5. Allow **5–10 minutes** for both assignments to propagate. Azure RBAC is eventually-consistent — the new roles aren't active immediately. First Upload_Indicators_V2 invocations may return **401 Unauthorized** until propagation completes; the action's retry policy (10 retries, exponential backoff up to 1 hour) typically catches up automatically.
+4. Only if you deployed with `AssignRoles=false`: Monitor → **Data Collection Rules** → the rule tagged `GIBTIA-LogicApp: GIBTIA-Standard` → **Access control (IAM)** → **+ Add role assignment** → **Monitoring Metrics Publisher** → same managed identity.
+5. Allow **5–15 minutes** for the assignments to propagate. Azure RBAC is eventually-consistent, and Azure Monitor's is the slower of the two. First `Upload_Indicators_V2` invocations may return **401 Unauthorized** until propagation completes; the action's retry policy (10 retries, exponential backoff up to 1 hour) typically catches up automatically.
 
-> **Why two roles?** Microsoft Sentinel Contributor covers the Sentinel TI upload path and includes workspace _read_ permission for the seqUpdate query — but it does **not** include data-plane _write_ access to Log Analytics custom tables. Log Analytics Contributor provides that. Both roles are required for the integration to function end-to-end on Standard with MI auth.
+> **No Log Analytics Contributor.** Versions before 2.1 needed it for the Data Collector connector's writes. The Logs Ingestion API authorises writes on the DCR instead, so that workspace-wide role is no longer required; remove it from upgraded deployments if you like.
 
 > **⚠️ If you ever delete and re-deploy the Logic App resource, you must redo §5.2.** Each Logic App resource gets a **new** system-assigned Managed Identity with a fresh principal ID. The previous role assignments on the workspace still exist as ARM resources but reference the _old_ principal ID, which no longer corresponds to anything. Symptoms of forgetting this step: `Upload_Indicators_V2` returns **401**, `Query_Last_SeqUpdate` falls through to the `sequence_list` first-run path on every run (workflow looks like it succeeds but never advances seqUpdate). Confirm role assignments after any redeploy: `az role assignment list --assignee $(az webapp identity show -g <rg> -n <app> --query principalId -o tsv) --scope <workspace-resource-id>`.
 
@@ -272,7 +274,7 @@ The script proceeds through 7 phases. Watch the output as it runs:
 | Phase | What it does | Operator action |
 |---|---|---|
 | 1 — Discover | Reads subscription, location, MSI principal ID, workspace ID | None |
-| 2 — Assign MSI roles | Adds `Microsoft Sentinel Contributor` + `Log Analytics Contributor` on the workspace (= §5.2) | None |
+| 2 — Assign MSI roles | Adds `Microsoft Sentinel Contributor` on the workspace and `Monitoring Metrics Publisher` on the Data Collection Rule (= §5.2) | None |
 | 3 — Initial workflow deploy | Builds a placeholder `connections.json` (so Designer can render), zips, deploys | None |
 | 4 — **PAUSE** | Prompts you through two Designer-bind clicks (= §5.4) | Switch to Portal, do the two Designer binds (see §5.4 below for exact clicks), then press Enter in the shell |
 | 5 — Poll for connection runtime URLs | Up to 15 minutes; typically 1–5 minutes | None (don't make Portal changes during this window) |
@@ -317,11 +319,11 @@ az logicapp deployment source config-zip \
   --src /tmp/gibtia-standard.zip
 ```
 
-After deploy, Logic App → **Workflows** → confirm all 29 workflows appear. Then go to §5.2, §5.4, optionally §5.7.
+After deploy, Logic App → **Workflows** → confirm all 37 workflows appear. Then go to §5.2, §5.4, optionally §5.7.
 
-### 5.4 Bind the two managed API connections via the Designer
+### 5.4 Bind the managed API connection via the Designer
 
-This is the one manual step that ARM can't automate — the Logic Apps Standard runtime generates a per-Logic-App `connectionRuntimeUrl` only when a connection is bound through the Designer or the Logic App's internal connection-management API. You only need to do it **once per connector type**, not per workflow. The shipped workflows all reference `azuresentinel` and `azureloganalyticsdatacollector` by name, so once those two connections exist in `connections.json` every workflow resolves automatically.
+This is the one manual step that ARM can't automate — the Logic Apps Standard runtime generates a per-Logic-App `connectionRuntimeUrl` only when a connection is bound through the Designer or the Logic App's internal connection-management API. You only need to do it **once**, not per workflow: every workflow that needs Sentinel references the connection as `azuresentinel` by name, so once it exists in `connections.json` they all resolve. The collectors need no connection at all — they write to the Data Collection Rule with the managed identity.
 
 **Bind the `azuresentinel` connection** (used by the indicator processor and the enrichment playbooks):
 
@@ -332,14 +334,6 @@ This is the one manual step that ARM can't automate — the Logic Apps Standard 
 5. Click **Create**.
 6. **Save the workflow** (toolbar at the top).
 
-**Bind the `azureloganalyticsdatacollector` connection** (used by every collector + context playbook):
-
-1. Open `GIBTIA_IOC_Primary_Updated` → **Designer**.
-2. Click the **`Save_seqUpdate_in_loop`** action.
-3. Connection section → **Add new**.
-4. Authentication: **Managed identity** → **System-assigned managed identity**. Connection name: leave as `azureloganalyticsdatacollector`.
-5. Click **Create**.
-6. **Save the workflow**.
 
 Verify the bind succeeded — Kudu → Debug console → `cd site/wwwroot` → `type connections.json`. Both connections should appear with a populated `connectionRuntimeUrl`.
 
@@ -411,7 +405,7 @@ cd Playbooks/Standard
 The script (idempotent, ~50 lines):
 
 1. Discovers the Logic App's current MSI, tenant, and location.
-2. Finds every `Microsoft.Web/connections` resource in the RG whose name matches `azuresentinel*` or `azureloganalyticsdatacollector*`.
+2. Finds every V2 `Microsoft.Web/connections` resource in the RG whose name matches `azuresentinel*` (V1 connections created by Consumption playbooks in the same resource group are ignored; they have no access policies).
 3. **Deletes** any access policy whose name matches `<LogicAppName>-*` AND whose principal is **not** the current MSI (i.e. orphans from previous deploys). Preserves all other policies untouched.
 4. **Upserts** an access policy for the current MSI on each connection.
 5. Restarts the Logic App to flush the token-exchange cache.
@@ -423,6 +417,16 @@ Wait ~60 seconds after the script reports `Restart issued.` for the host to come
 > **Tracked as an open improvement.** See `MAINTAINER_NOTES.md §7` "Things still worth doing": there may be a way to clear the underlying token-store registration during cleanup (§10) so this script becomes unnecessary. If/when that's resolved, this section will be deprecated.
 
 ---
+
+### 5.8 Upgrading from version 2.0 (Data Collector API)
+
+A deployment that ran version 2.0 holds its `GIB*_CL` tables as *classic* tables, which a Data Collection Rule cannot write to. Upgrade in place, in this order:
+
+1. **Stop the Logic App** (`az logicapp stop`). Its old collectors must not write while the tables change.
+2. **Convert the tables once:** `./migrate-tables.sh <rg> <workspace>` (shipped next to `post-deploy.sh`). It converts every existing `GIB*` table, keeps the data, skips missing ones, and cannot be undone.
+3. **Redeploy `infrastructure-arm.json`** with the same names. It keeps the plan and storage, rewrites the app settings, adds the new columns to the converted tables, creates the DCR and assigns its role. It may recreate the app's managed identity.
+4. **Run `post-deploy.sh`.** At its Designer-bind prompt, do **not** create a new connection — the Sentinel one already exists; press ENTER and the script finds it. Then run `reconcile-acl.sh` (§5.7), because the existing connection carries the previous identity's access policy.
+5. Delete the orphaned `azureloganalyticsdatacollector-*` connection resource. Log Analytics Contributor can be removed from the identity.
 
 ## 6. Operating the Standard Logic App
 
@@ -625,10 +629,12 @@ The downstream Sentinel content is identical regardless of which deployment pack
 
 When following §8.3 and §8.5 from the Consumption guide, the only meaningful Standard difference is the **playbook selector dropdown**:
 
-- For Consumption: each enrichment playbook (`GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`) appears as its own **top-level Logic App** resource.
-- For Standard: both enrichment workflows appear **nested under the single `GIBTIA-Standard` Standard Logic App**. Expand `GIBTIA-Standard` in the picker and select the specific workflow.
+- For Consumption: each enrichment playbook (`GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`, `GIBTIA_Score_IP`) appears as its own **top-level Logic App** resource.
+- For Standard: the enrichment workflows appear **nested under the single `GIBTIA-Standard` Standard Logic App**. Expand `GIBTIA-Standard` in the picker and select the specific workflow.
 
 Both behave identically once selected. The same Sentinel automation rule logic, the same incident-comment output, the same triggering conditions.
+
+The seven **single-entity** workflows (`*_Single_*`) are entity-triggered: they never appear in the automation-rule picker. Run them from an entity's page or the investigation graph via **Run playbook**; the list there shows them under the Standard Logic App, filtered to the entity's kind (IP, DNS, URL or file hash). See [USER_GUIDE.md §8.8](USER_GUIDE.md#88-single-entity-on-demand-enrichment-playbooks) — everything there applies, including the roles: the Standard app's one identity already holds Microsoft Sentinel Contributor (comments) and Log Analytics Reader (the two WHOIS variants' `ThreatIntelIndicators` lookup) from §5.2, so no extra assignment is needed.
 
 > **Defender-portal-specific note for Standard:** in the Defender portal's automation-rule creator, the **Run playbook** action may not yet show Standard Logic Apps' nested workflows reliably (Microsoft is still finishing this surface). If the workflow you want doesn't appear, create the automation rule via the Azure-portal Sentinel UI instead — same backend rule, the Defender portal will display and execute it correctly afterward. This is improving over time; check both portals if one isn't surfacing your workflows.
 
@@ -638,9 +644,9 @@ Both behave identically once selected. The same Sentinel automation rule logic, 
 
 | Symptom                                                                                                                                                                                                                                                                    | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 |---|---|---|
-| `Query_Last_SeqUpdate` fails with **400** on the very first run                                                                                                                                                                                                            | Tracking table `GIBCollectionTracking_CL` does not exist yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Expected on a brand-new workspace. The workflow handles this via the `sequence_list` first-run path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `Query_Last_SeqUpdate` fails with **400** on the very first run                                                                                                                                                                                                            | Tracking table `GIBCollectionTracking_CL` does not exist yet (only possible if `infrastructure-arm.json` was not deployed, which creates it)                                                                                                                                                                                                                                                                                                                                                                                         | Harmless: the workflow handles this via the `sequence_list` first-run path. Normally the first run returns 200 with zero rows instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `Query_Last_SeqUpdate` fails with **403** on every run                                                                                                                                                                                                                     | MSI missing **Microsoft Sentinel Contributor** on the workspace                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Revisit [§5.2](#52-assign-managed-identity-roles). Wait 1 minute for propagation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `Save_seqUpdate_in_loop` / `Save_tracking_record` / context-table writes return **403**                                                                                                                                                                                    | MSI missing **Log Analytics Contributor** on the workspace                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Microsoft Sentinel Contributor does _not_ include data-plane writes to LA custom tables. Add **Log Analytics Contributor** as a second role on the same MSI — see [§5.2](#52-assign-managed-identity-roles).                                                                                                                                                                                                                                                                                                                                                                |
+| `Save_seqUpdate_in_loop` / `Save_tracking_record` / `Write_chunk_to_table` return **403**                                                                                                                                                                                  | MSI missing **Monitoring Metrics Publisher** on the Data Collection Rule, or the assignment has not propagated (Azure Monitor RBAC takes 5–15 minutes)                                                                                                                                                                                                                                                                                                                                                                              | Logic App → Identity → Azure role assignments must show the DCR row; add it per §5.2 step 4 if missing, otherwise wait 15 minutes and rerun. (Versions before 2.1 needed **Log Analytics Contributor** as a second role on the same MSI — see [§5.2](#52-assign-managed-identity-roles).                                                                                                                                                                                                                                                                                                                                                                |
 | `Upload_Indicators_V2` returns **403**                                                                                                                                                                                                                                     | MSI missing **Microsoft Sentinel Contributor**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Revisit [§5.2](#52-assign-managed-identity-roles).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Any action authenticating through a managed API connection fails with **403 "Permission denied due to missing connection ACL"** — `Upload_Indicators_V2`, `Save_seqUpdate_in_loop`, or context-table writes. Happens **only on a redeploy** (first-time deploys are fine). | `Microsoft.Web/connections` resources retain their access-policy registration in the Logic Apps managed-API token store across delete+recreate. When the Designer's Add new step recreates a connection with the same name (e.g. `azuresentinel-1`), Azure reattaches the surviving entry — carrying forward the previous MSI's `accessPolicies`. The token-exchange path evaluates policies in order and 403s on the first stale principal it finds (the now-deleted previous MSI) without falling through to a later matching one. | Run `./reconcile-acl.sh <rg> <app>` from `Playbooks/Standard/`. The script discovers the current MSI, deletes any orphan policies named `<LogicAppName>-*` whose principal isn't the current MSI, upserts the current MSI's policy on each Standard-package connection, and restarts the Logic App to flush the token cache. Targeted cleanup (preserves non-integration policies); idempotent (safe to re-run, safe on fresh tenants where it's effectively a no-op). Wait ~60s after the script finishes for the host to come back, then re-trigger the failing workflow. |
 | HTTP 400 from Group-IB `/updated` calls                                                                                                                                                                                                                                    | `LimitPerPortion` exceeds the per-collection maximum                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | See [§7](#7-per-workflow-tuning) — override `LimitPerPortion` (app setting) or in that workflow's `workflow.json`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -678,7 +684,7 @@ Use this section when you want to redeploy the Standard package onto the same re
 | `Microsoft.Web/serverfarms` (the App Service Plan) | The Sentinel solution on the workspace |
 | `Microsoft.Storage/storageAccounts` (the Logic App's storage) | `GIBCollectionTracking_CL` (with seqUpdate cursors) |
 | `Microsoft.Web/connections/azuresentinel-*` | `ThreatIntelIndicators` (previously-uploaded indicators expire naturally per `ExpirationDateTime`) |
-| `Microsoft.Web/connections/azureloganalyticsdatacollector-*` | All `GIB*_CL` context tables |
+| `Microsoft.Insights/dataCollectionRules/gibtia-logs-ingestion` (the DCR) | All `GIB*_CL` tables and their data |
 
 ### Stage 1 — enumerate (dry-run, no changes)
 
@@ -703,7 +709,7 @@ echo "Old MSI:     $OLD_MSI"
 echo ""
 echo "Managed API connections:"
 az resource list -g "$RG" --resource-type Microsoft.Web/connections \
-  --query "[?contains(name, 'azuresentinel') || contains(name, 'azureloganalyticsdatacollector')].name" \
+  --query "[?contains(name, 'azuresentinel')].name" \
   -o tsv | sed 's/^/  /'
 echo ""
 echo "=== Will be KEPT ==="
@@ -727,7 +733,7 @@ az storage account delete -g "$RG" -n "$STORAGE" --yes
 
 echo "=== 4/4 Managed API connections ==="
 for CONN in $(az resource list -g "$RG" --resource-type Microsoft.Web/connections \
-                --query "[?contains(name, 'azuresentinel') || contains(name, 'azureloganalyticsdatacollector')].name" -o tsv); do
+                --query "[?contains(name, 'azuresentinel')].name" -o tsv); do
   echo "  Deleting: $CONN"
   az resource delete -g "$RG" -n "$CONN" --resource-type Microsoft.Web/connections
 done
@@ -827,14 +833,17 @@ Hourly recurrence; poll a Group-IB collection, write raw records to a dedicated 
 | `GIBTIA_OSI_PublicLeak` | `osi/public_leak/updated` | `GIBOSIPublicLeak_CL` |
 | `GIBTIA_OSI_GitLeak` | `osi/git_repository/updated` | `GIBOSIGitRepository_CL` |
 
-### Enrichment playbooks (3)
+### Enrichment playbooks (10)
 
-Triggered by Sentinel incident webhook (not recurrence); post enrichment as incident comments.
+Triggered by a Sentinel incident webhook or, for the `*_Single_*` variants, by a single entity (not recurrence); post enrichment as incident comments.
 
 | Workflow | Trigger | What it does | Consumption equivalent |
 |---|---|---|---|
 | `GIBTIA_Enrich_WHOIS` | Sentinel incident | Per-entity WHOIS via GIB + check `ThreatIntelIndicators` for known matches | Yes |
 | `GIBTIA_Enrich_IOC` | Sentinel incident | Cross-collection search via `/api/v2/search`, filtered by `granted_collections`; posts hits-per-collection summary | Yes |
-| `GIBTIA_Score_IP` | Sentinel incident | Batched POST to `/api/v2/scoring`; posts each IP's GIB risk score (0–100) | Also available for Consumption: `Playbooks/GIBTIA_Score_IP/azuredeploy.json` |
+| `GIBTIA_Score_IP` | Sentinel incident | Batched POST to `/api/v2/scoring`; posts each IP's GIB risk score (0–100) | Yes |
+| `GIBTIA_Score_IP_Single` | IP entity | Scores the one selected IP; comments on the incident it was opened from | Yes |
+| `GIBTIA_Enrich_IOC_Single_IP` / `_Domain` / `_URL` / `_FileHash` | IP / DNS / URL / file-hash entity | Cross-collection search for the one selected entity; chunked comments | Yes |
+| `GIBTIA_Enrich_WHOIS_Single_IP` / `_Domain` | IP / DNS entity | WHOIS + `ThreatIntelIndicators` lookup for the one selected entity | Yes |
 
 All shared tracking lives in `GIBCollectionTracking_CL` filtered by `CollectionName_s`.
