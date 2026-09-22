@@ -99,7 +99,7 @@ class UpwindClient:
 
             response = self._request_with_retry(url, headers, search_body, params)
 
-            if response.status_code != 200:
+            if not 200 <= response.status_code < 300:
                 raise RuntimeError(
                     f"Upwind API returned status {response.status_code}: {response.text}"
                 )
@@ -206,7 +206,7 @@ class UpwindClient:
 
             response = self._get_with_retry(url, headers, params)
 
-            if response.status_code != 200:
+            if not 200 <= response.status_code < 300:
                 raise RuntimeError(
                     f"Upwind API returned status {response.status_code}: {response.text}"
                 )
@@ -251,7 +251,7 @@ class UpwindClient:
             page_number += 1
             response = self._get_with_retry(next_url, headers, params)
 
-            if response.status_code != 200:
+            if not 200 <= response.status_code < 300:
                 raise RuntimeError(
                     f"Upwind API returned status {response.status_code}: {response.text}"
                 )
