@@ -1,6 +1,7 @@
 ## Review and Manage Data Table Retention
 **Author: Matt Lowe**
-**Updated by: Joseph A. Montiel
+
+**Updated by: Joseph A. Montiel** 
 
 ## Deployment Process
 1. Copy the content of the workbook JSON file.
