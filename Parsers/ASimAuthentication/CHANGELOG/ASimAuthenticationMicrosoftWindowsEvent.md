@@ -1,5 +1,9 @@
 # Changelog for ASimAuthenticationMicrosoftWindowsEvent.yaml
 
+## Version 0.2.2
+
+- (2026-09-22) Updated DvcHostName to DvcHostname and bumped the normalization schema version to 1.0.0.
+
 ## Version 0.2.1
 
 - (2024-10-28) Updating Windows Auth Parser - [PR #11341](https://github.com/Azure/Azure-Sentinel/pull/11341)
