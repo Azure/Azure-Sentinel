@@ -53,10 +53,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * WorkbookDescription: Workbook description(s), generally from Workbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * PlaybookDescription: Playbook description(s), generally from Playbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * WatchlistDescription: Watchlist description(s), generally from Watchlists' Property data. This field can be a string if 1 description is used across all, and an array if multiple are used. This field is used if the description from the Watchlist resource is not desired in the Create-UI.
- * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo root, or BasePath if provided.
- * XDR Detections: Optional array of converted Custom Detection YAML files. Each file must declare kind CustomDetection, resourceType Microsoft.Security/detectionRules, a stable properties.id, contentProvenance.source.id matching an Analytic Rule in the same solution, a query, and entity mappings.
- * XDR Detection Version: Optional content version used when registering Custom Detections. If omitted, the solution Version is used.
- * Include XDR Content Registration: Optional boolean. Defaults to false because the live resource provider does not yet support Custom Detection content-template registration.
+ * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
  * SavedSearches: This input assumes a format of any of the following:
  * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
  * -- Array of SavedSearch resources
@@ -93,9 +90,6 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "HuntingQueryBladeDescription": "//Description used in the CreateUiDefinition.json for Hunting Query Blade"
   "PlaybooksBladeDescription": "//Description used in the CreateUiDefinition.json for Playbook Blade"
   "Analytic Rules": [],
-  "XDR Detections": [],
-  "XDR Detection Version": "1.0.0",
-  "Include XDR Content Registration": false,
   "Playbooks": [], //Please make sure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
   "PlaybookDescription": ["{Description of playbook}"],
   "Parsers": [],
@@ -113,16 +107,8 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "TemplateSpec": true, // Default should be true
   "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify. 
 }
-```
 
-When `XDR Detections` is present, the generated `mainTemplate.json` remains the complete
-Sentinel solution package and also contains the XDR resources. `E5Flavor=false` keeps the
-existing Analytic Rule path; `E5Flavor=true` installs the corresponding Custom Detections.
-Each detection is emitted as an isolated nested deployment and starts disabled.
-Content Hub registration resources are omitted unless
-`Include XDR Content Registration` is enabled. When enabled, `RegisterE5Content` still
-defaults to `false` until the live resource provider supports Custom Detection
-content-template registration. Increment the solution `Version` whenever XDR content changes.
+```
 
 #### **Example of Input File: Solution_CiscoUmbrella.json**
 
@@ -263,7 +249,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. V3 remains the legacy Sentinel-only packager and ignores `XDR Detections`. Use the sibling `V4\createSolutionV4.ps1` entry point when packaging Defender XDR Custom Detections. V3 and V4 are independent entry-point adapters over `common\createSolutionLocal.ps1`; neither invokes the other.
+NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. 'createSolutionV4.ps1' file is used for GitHub pipeline and is not used for local use. `'createSolutionV3.ps1' requires 'commonFunctions.ps1' file which is placed under 'Tools\Create-Azure-Sentinel-Solution\common' path and this file 'commonFunctions.ps1' has all core logic to create package.`
 
 The `createSolutionV3.ps1` script supports two version management modes:
 
@@ -289,9 +275,6 @@ cd Tools/Create-Azure-Sentinel-Solution/V3
 
 #### **Local Version Bumping Mode**
 ```powershell
-# Package and validate with the current version without modifying source files
-./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "local" -VersionBump "none"
-
 # Patch version bump (1.0.0 -> 1.0.1)
 ./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "local" -VersionBump "patch"
 
