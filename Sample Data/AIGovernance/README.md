@@ -11,17 +11,18 @@ The catalogue is reference data only. It is not a customer policy source and doe
 The public catalogue intentionally sets `Sanctioned` to `FALSE` for every row. Approval/sanctioning is customer-specific and should be defined locally or selected in the workbook.
 
 **Schema
-**Column	Type	Description
-`Provider`	string	Organisation providing the AI service.
-`Product`	string	Product or service name.
-`Domain`	string	Hostname/domain used as an observation indicator. Blank is allowed for process-only entries. Values should not include `https://`, URL paths, or wildcard characters.
-`Category`	string	Broad delivery/interface category such as `Web`, `API`, `Developer`, `Desktop`, `Image`, `Video`, or `Audio`.
-`Sanctioned`	bool	Public sample value. Always `FALSE`; customer policy should be defined locally.
-`RiskType`	string	Functional/service classification used by the workbook, for example `Chat`, `API`, `Developer`, `Document`, `Image`, `Video`, or `Audio`. Despite the historical column name, this is not a risk severity rating.
-`SourceURL`	string	Public vendor or product documentation used as a reference for the entry.
-`ProcessName`	string	Optional executable/process name used for endpoint process matching.
-`ProcessProductName`	string	Optional product-name metadata used to strengthen process matching.
-`ProcessPublisher`	string	Optional publisher/company metadata used to strengthen process matching.
+**| Column | Type | Description |
+|---|---|---|
+| `Provider` | `string` | Organisation providing the AI service. |
+| `Product` | `string` | Product or service name. |
+| `Domain` | `string` | Hostname/domain used as an observation indicator. Blank is allowed for process-only entries. Values should not include `https://`, URL paths, or wildcard characters. |
+| `Category` | `string` | Broad delivery/interface category such as `Web`, `API`, `Developer`, `Desktop`, `Image`, `Video`, or `Audio`. |
+| `Sanctioned` | `bool` | Public sample value. Always `FALSE`; customer policy should be defined locally. |
+| `RiskType` | `string` | Functional/service classification used by the workbook, for example `Chat`, `API`, `Developer`, `Document`, `Image`, `Video`, or `Audio`. Despite the historical column name, this is not a risk severity rating. |
+| `SourceURL` | `string` | Public vendor or product documentation used as a reference for the entry. |
+| `ProcessName` | `string` | Optional executable/process name used for endpoint process matching. |
+| `ProcessProductName` | `string` | Optional product-name metadata used to strengthen process matching. |
+| `ProcessPublisher` | `string` | Optional publisher/company metadata used to strengthen process matching. |
 `RiskType` terminology
 `RiskType` is retained for workbook schema compatibility. Values such as `Chat` describe the type of AI service or interaction, not whether the service is high, medium, or low risk.
 A future schema revision may rename this field to something clearer such as `ServiceType` or `UsageType`. Until then, consumers should not interpret `RiskType` as a security risk score.
