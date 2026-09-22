@@ -49,17 +49,24 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "E5Flavor": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "When true, install the E5 / XDR-native custom detections instead of the analytic rules they replace."
+      }
     }
   },
   "variables": {
     "email": "support@cloudflare.com",
     "_email": "[variables('email')]",
     "_solutionName": "Cloudflare CCF",
-    "_solutionVersion": "3.0.4",
+    "_solutionVersion": "3.0.5",
     "solutionId": "cloudflare.azure-sentinel-solution-cloudflare-ccf",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.4",
+    "dataConnectorCCPVersion": "3.0.5",
     "_dataConnectorContentIdConnectorDefinition1": "CloudflareDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "CloudflareDefinitionConnections",
@@ -4702,6 +4709,7 @@
             "queueName": "[[concat(variables('connectorName'), '-notification')]",
             "dlqName": "[[concat(variables('connectorName'), '-dlq')]",
             "storageAccountId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "blobContainerResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('blobContainerName'))]",
             "notificationQueueResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]",
             "dlqResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]",
             "EGSystemTopicDefaultName": "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('innerWorkspace'))]",
@@ -4711,9 +4719,9 @@
             "EgSubscriptionResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
             "storageBlobContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
             "storageQueueContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
-            "blobRaGuid": "[[guid(variables('storageAccountName'), variables('blobContainerName'))]",
-            "notificationQueueRaGuid": "[[guid(variables('storageAccountName'), variables('queueName'))]",
-            "dlqRaGuid": "[[guid(variables('storageAccountName'), variables('dlqName'))]",
+            "blobRaGuid": "[[guid(toLower(variables('blobContainerResourceId')), toLower(parameters('principalId')), toLower(variables('storageBlobContributorRoleId')))]",
+            "notificationQueueRaGuid": "[[guid(toLower(variables('notificationQueueResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]",
+            "dlqRaGuid": "[[guid(toLower(variables('dlqResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]",
             "blobRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), 'Microsoft.Authorization', variables('blobRaGuid'))]",
             "notificationQueueRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), 'Microsoft.Authorization', variables('notificationQueueRaGuid'))]",
             "dlqRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('dlqName'), 'Microsoft.Authorization', variables('dlqRaGuid'))]",
@@ -4790,18 +4798,18 @@
                         "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('EGSystemTopicName'))]"
                       ],
                       "properties": {
+                        "filter": {
+                          "includedEventTypes": [
+                            "Microsoft.Storage.BlobCreated"
+                          ],
+                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
+                        },
                         "destination": {
                           "endpointType": "StorageQueue",
                           "properties": {
                             "queueName": "[[variables('queueName')]",
                             "resourceId": "[[variables('storageAccountId')]"
                           }
-                        },
-                        "filter": {
-                          "includedEventTypes": [
-                            "Microsoft.Storage.BlobCreated"
-                          ],
-                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
                         }
                       }
                     },
@@ -4899,7 +4907,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cloudflare Data Parser with template version 3.0.4",
+        "description": "Cloudflare Data Parser with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -4916,7 +4924,7 @@
                 "displayName": "Parser for Cloudflare",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "Cloudflare",
-                "query": "let Cloudflare_view = view() {\n  Cloudflare_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType_s\", column_ifexists(\"Source_s\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher_s\", column_ifexists(\"ClientTlsCipher_s\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol_s\", column_ifexists(\"ClientTlsProtocol_s\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions_s\", column_ifexists(\"Event_s\", column_ifexists(\"Action_s\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs_s\", column_ifexists(\"RuleID_s\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes_d\", column_ifexists(\"ClientBytes_d\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort_d\", column_ifexists(\"ClientPort_d\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes_d\", column_ifexists(\"OriginBytes_d\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore_d\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc_s\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus_s\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes_d\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus_d\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill_b\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN_d\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry_s\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP_s\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass_s\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost_s\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod_s\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath_s\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol_s\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer_s\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI_s\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent_s\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith_s\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode_s\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID_d\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp_t\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp_s\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc_s\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus_s\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction_s\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID_d\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost_s\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio_d\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType_s\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus_d\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP_s\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp_t\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources_s\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP_s\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes_d\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires_s\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified_s\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus_d\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime_d\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol_s\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID_s\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID_s\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel_s\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction_s\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags_s\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar_s\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile_s\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID_s\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage_s\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime_d\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus_s\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest_b\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount_d\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID_d\", \"\")),\n      Application = tostring(column_ifexists(\"Application_s\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall_s\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto_s\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt_d\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName_s\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus_s\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode_s\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp_t\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp_t\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall_b\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort_d\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto_s\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt_d\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher_s\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint_s\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode_s\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol_s\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus_s\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol_s\", \"\")),\n      EventResult = toint(column_ifexists(\"Status_d\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp_t\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription_s\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost_s\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath_s\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery_s\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme_s\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery_s\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme_s\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime_t\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind_s\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex_d\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID_s\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nlet Cloudflarev2_view = view() {\n  CloudflareV2_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType\", column_ifexists(\"Source\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher\", column_ifexists(\"ClientTlsCipher\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol\", column_ifexists(\"ClientTlsProtocol\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions\", column_ifexists(\"Event\", column_ifexists(\"Action\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs\", column_ifexists(\"RuleID\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes\", column_ifexists(\"ClientBytes\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort\", column_ifexists(\"ClientPort\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes\", column_ifexists(\"OriginBytes\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID\", \"\")),\n      Application = tostring(column_ifexists(\"Application\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol\", \"\")),\n      EventResult = toint(column_ifexists(\"Status\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nunion isfuzzy=true (Cloudflare_view), (Cloudflarev2_view)\n  | project ClientDeviceType, TlsCipher, DvcAction, TlsVersion, NetworkRuleName, SrcBytes, SrcPortNumber, DstBytes, BotScore, BotScoreSrc, CacheCacheStatus, CacheResponseBytes, CacheResponseStatus, CacheTieredFill, ClientASN, SrcGeoCountry, SrcIpAddr, ClientIPClass, HttpRequestHeaderHost, HttpRequestMethod, ClientRequestPath, ClientRequestProtocol, HttpReferrerOriginal, ClientRequestURI, HttpUserAgentOriginal, ClientXRequestedWith, EdgeColoCode, EdgeColoID, EdgeEndTimestamp, EdgePathingOp, EdgePathingSrc, EdgePathingStatus, EdgeRateLimitAction, EdgeRateLimitID, EdgeRequestHost, EdgeResponseCompressionRatio, HttpContentType, EdgeResponseStatus, EdgeServerIP, EdgeStartTimestamp, FirewallMatchesSources, DstIpAddr, OriginResponseBytes, OriginResponseHTTPExpires, OriginResponseHTTPLastModified, HttpStatusCode, OriginResponseTime, OriginSSLProtocol, ParentRayID, RayID, SecurityLevel, WAFAction, WAFFlags, WAFMatchedVar, WAFProfile, WAFRuleID, WAFRuleMessage, WorkerCPUTime, WorkerStatus, WorkerSubrequest, WorkerSubrequestCount, ZoneID, Application, ClientMatchedIpFirewall, NetworkProtocol, ClientTcpRtt, ClientTlsClientHelloServerName, ClientTlsStatus, ColoCode, ConnectTimestamp, DisconnectTimestamp, IpFirewall, DstPortNumber, OriginProto, OriginTcpRtt, OriginTlsCipher, OriginTlsFingerprint, OriginTlsMode, OriginTlsProtocol, OriginTlsStatus, ProxyProtocol, EventResult, Timestamp, ClientASNDescription, ClientRefererHost, ClientRefererPath, ClientRefererQuery, ClientRefererScheme, ClientRequestQuery, ClientRequestScheme, Datetime, EventSubType, MatchIndex, OriginatorRayID, TimeGenerated\n",
+                "query": "let Cloudflare_view = view() {\n  Cloudflare_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType_s\", column_ifexists(\"Source_s\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher_s\", column_ifexists(\"ClientTlsCipher_s\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol_s\", column_ifexists(\"ClientTlsProtocol_s\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions_s\", column_ifexists(\"Event_s\", column_ifexists(\"Action_s\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs_s\", column_ifexists(\"RuleID_s\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes_d\", column_ifexists(\"ClientBytes_d\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort_d\", column_ifexists(\"ClientPort_d\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes_d\", column_ifexists(\"OriginBytes_d\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore_d\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc_s\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus_s\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes_d\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus_d\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill_b\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN_d\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry_s\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP_s\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass_s\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost_s\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod_s\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath_s\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol_s\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer_s\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI_s\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent_s\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith_s\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode_s\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID_d\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp_t\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp_s\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc_s\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus_s\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction_s\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID_d\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost_s\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio_d\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType_s\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus_d\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP_s\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp_t\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources_s\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP_s\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes_d\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires_s\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified_s\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus_d\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime_d\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol_s\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID_s\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID_s\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel_s\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction_s\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags_s\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar_s\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile_s\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID_s\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage_s\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime_d\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus_s\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest_b\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount_d\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID_d\", \"\")),\n      Application = tostring(column_ifexists(\"Application_s\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall_s\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto_s\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt_d\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName_s\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus_s\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode_s\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp_t\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp_t\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall_b\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort_d\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto_s\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt_d\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher_s\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint_s\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode_s\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol_s\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus_s\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol_s\", \"\")),\n      EventResult = toint(column_ifexists(\"Status_d\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp_t\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription_s\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost_s\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath_s\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery_s\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme_s\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery_s\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme_s\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime_t\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind_s\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex_d\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID_s\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nlet Cloudflarev2_view = view() {\n  CloudflareV2_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType\", column_ifexists(\"Source\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher\", column_ifexists(\"ClientTlsCipher\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol\", column_ifexists(\"ClientTlsProtocol\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions\", column_ifexists(\"Event\", column_ifexists(\"Action\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs\", column_ifexists(\"RuleID\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes\", column_ifexists(\"ClientBytes\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort\", column_ifexists(\"ClientPort\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes\", column_ifexists(\"OriginBytes\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction\", column_ifexists(\"SecurityAction\", \"\"))),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID\", column_ifexists(\"SecurityRuleID\", \"\"))),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage\", column_ifexists(\"SecurityRuleDescription\", \"\"))),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID\", \"\")),\n      Application = tostring(column_ifexists(\"Application\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol\", \"\")),\n      EventResult = toint(column_ifexists(\"Status\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nunion isfuzzy=true (Cloudflare_view), (Cloudflarev2_view)\n  | project ClientDeviceType, TlsCipher, DvcAction, TlsVersion, NetworkRuleName, SrcBytes, SrcPortNumber, DstBytes, BotScore, BotScoreSrc, CacheCacheStatus, CacheResponseBytes, CacheResponseStatus, CacheTieredFill, ClientASN, SrcGeoCountry, SrcIpAddr, ClientIPClass, HttpRequestHeaderHost, HttpRequestMethod, ClientRequestPath, ClientRequestProtocol, HttpReferrerOriginal, ClientRequestURI, HttpUserAgentOriginal, ClientXRequestedWith, EdgeColoCode, EdgeColoID, EdgeEndTimestamp, EdgePathingOp, EdgePathingSrc, EdgePathingStatus, EdgeRateLimitAction, EdgeRateLimitID, EdgeRequestHost, EdgeResponseCompressionRatio, HttpContentType, EdgeResponseStatus, EdgeServerIP, EdgeStartTimestamp, FirewallMatchesSources, DstIpAddr, OriginResponseBytes, OriginResponseHTTPExpires, OriginResponseHTTPLastModified, HttpStatusCode, OriginResponseTime, OriginSSLProtocol, ParentRayID, RayID, SecurityLevel, WAFAction, WAFFlags, WAFMatchedVar, WAFProfile, WAFRuleID, WAFRuleMessage, WorkerCPUTime, WorkerStatus, WorkerSubrequest, WorkerSubrequestCount, ZoneID, Application, ClientMatchedIpFirewall, NetworkProtocol, ClientTcpRtt, ClientTlsClientHelloServerName, ClientTlsStatus, ColoCode, ConnectTimestamp, DisconnectTimestamp, IpFirewall, DstPortNumber, OriginProto, OriginTcpRtt, OriginTlsCipher, OriginTlsFingerprint, OriginTlsMode, OriginTlsProtocol, OriginTlsStatus, ProxyProtocol, EventResult, Timestamp, ClientASNDescription, ClientRefererHost, ClientRefererPath, ClientRefererQuery, ClientRefererScheme, ClientRequestQuery, ClientRequestScheme, Datetime, EventSubType, MatchIndex, OriginatorRayID, TimeGenerated\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -4981,7 +4989,7 @@
         "displayName": "Parser for Cloudflare",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "Cloudflare",
-        "query": "let Cloudflare_view = view() {\n  Cloudflare_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType_s\", column_ifexists(\"Source_s\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher_s\", column_ifexists(\"ClientTlsCipher_s\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol_s\", column_ifexists(\"ClientTlsProtocol_s\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions_s\", column_ifexists(\"Event_s\", column_ifexists(\"Action_s\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs_s\", column_ifexists(\"RuleID_s\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes_d\", column_ifexists(\"ClientBytes_d\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort_d\", column_ifexists(\"ClientPort_d\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes_d\", column_ifexists(\"OriginBytes_d\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore_d\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc_s\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus_s\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes_d\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus_d\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill_b\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN_d\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry_s\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP_s\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass_s\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost_s\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod_s\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath_s\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol_s\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer_s\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI_s\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent_s\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith_s\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode_s\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID_d\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp_t\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp_s\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc_s\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus_s\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction_s\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID_d\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost_s\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio_d\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType_s\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus_d\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP_s\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp_t\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources_s\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP_s\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes_d\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires_s\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified_s\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus_d\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime_d\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol_s\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID_s\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID_s\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel_s\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction_s\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags_s\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar_s\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile_s\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID_s\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage_s\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime_d\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus_s\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest_b\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount_d\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID_d\", \"\")),\n      Application = tostring(column_ifexists(\"Application_s\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall_s\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto_s\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt_d\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName_s\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus_s\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode_s\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp_t\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp_t\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall_b\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort_d\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto_s\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt_d\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher_s\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint_s\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode_s\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol_s\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus_s\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol_s\", \"\")),\n      EventResult = toint(column_ifexists(\"Status_d\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp_t\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription_s\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost_s\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath_s\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery_s\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme_s\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery_s\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme_s\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime_t\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind_s\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex_d\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID_s\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nlet Cloudflarev2_view = view() {\n  CloudflareV2_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType\", column_ifexists(\"Source\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher\", column_ifexists(\"ClientTlsCipher\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol\", column_ifexists(\"ClientTlsProtocol\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions\", column_ifexists(\"Event\", column_ifexists(\"Action\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs\", column_ifexists(\"RuleID\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes\", column_ifexists(\"ClientBytes\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort\", column_ifexists(\"ClientPort\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes\", column_ifexists(\"OriginBytes\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID\", \"\")),\n      Application = tostring(column_ifexists(\"Application\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol\", \"\")),\n      EventResult = toint(column_ifexists(\"Status\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nunion isfuzzy=true (Cloudflare_view), (Cloudflarev2_view)\n  | project ClientDeviceType, TlsCipher, DvcAction, TlsVersion, NetworkRuleName, SrcBytes, SrcPortNumber, DstBytes, BotScore, BotScoreSrc, CacheCacheStatus, CacheResponseBytes, CacheResponseStatus, CacheTieredFill, ClientASN, SrcGeoCountry, SrcIpAddr, ClientIPClass, HttpRequestHeaderHost, HttpRequestMethod, ClientRequestPath, ClientRequestProtocol, HttpReferrerOriginal, ClientRequestURI, HttpUserAgentOriginal, ClientXRequestedWith, EdgeColoCode, EdgeColoID, EdgeEndTimestamp, EdgePathingOp, EdgePathingSrc, EdgePathingStatus, EdgeRateLimitAction, EdgeRateLimitID, EdgeRequestHost, EdgeResponseCompressionRatio, HttpContentType, EdgeResponseStatus, EdgeServerIP, EdgeStartTimestamp, FirewallMatchesSources, DstIpAddr, OriginResponseBytes, OriginResponseHTTPExpires, OriginResponseHTTPLastModified, HttpStatusCode, OriginResponseTime, OriginSSLProtocol, ParentRayID, RayID, SecurityLevel, WAFAction, WAFFlags, WAFMatchedVar, WAFProfile, WAFRuleID, WAFRuleMessage, WorkerCPUTime, WorkerStatus, WorkerSubrequest, WorkerSubrequestCount, ZoneID, Application, ClientMatchedIpFirewall, NetworkProtocol, ClientTcpRtt, ClientTlsClientHelloServerName, ClientTlsStatus, ColoCode, ConnectTimestamp, DisconnectTimestamp, IpFirewall, DstPortNumber, OriginProto, OriginTcpRtt, OriginTlsCipher, OriginTlsFingerprint, OriginTlsMode, OriginTlsProtocol, OriginTlsStatus, ProxyProtocol, EventResult, Timestamp, ClientASNDescription, ClientRefererHost, ClientRefererPath, ClientRefererQuery, ClientRefererScheme, ClientRequestQuery, ClientRequestScheme, Datetime, EventSubType, MatchIndex, OriginatorRayID, TimeGenerated\n",
+        "query": "let Cloudflare_view = view() {\n  Cloudflare_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType_s\", column_ifexists(\"Source_s\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher_s\", column_ifexists(\"ClientTlsCipher_s\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol_s\", column_ifexists(\"ClientTlsProtocol_s\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions_s\", column_ifexists(\"Event_s\", column_ifexists(\"Action_s\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs_s\", column_ifexists(\"RuleID_s\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes_d\", column_ifexists(\"ClientBytes_d\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort_d\", column_ifexists(\"ClientPort_d\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes_d\", column_ifexists(\"OriginBytes_d\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore_d\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc_s\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus_s\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes_d\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus_d\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill_b\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN_d\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry_s\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP_s\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass_s\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost_s\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod_s\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath_s\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol_s\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer_s\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI_s\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent_s\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith_s\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode_s\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID_d\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp_t\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp_s\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc_s\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus_s\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction_s\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID_d\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost_s\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio_d\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType_s\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus_d\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP_s\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp_t\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources_s\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP_s\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes_d\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires_s\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified_s\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus_d\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime_d\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol_s\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID_s\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID_s\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel_s\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction_s\", \"\")),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags_s\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar_s\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile_s\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID_s\", \"\")),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage_s\", \"\")),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime_d\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus_s\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest_b\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount_d\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID_d\", \"\")),\n      Application = tostring(column_ifexists(\"Application_s\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall_s\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto_s\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt_d\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName_s\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus_s\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode_s\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp_t\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp_t\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall_b\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort_d\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto_s\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt_d\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher_s\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint_s\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode_s\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol_s\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus_s\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol_s\", \"\")),\n      EventResult = toint(column_ifexists(\"Status_d\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp_t\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription_s\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost_s\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath_s\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery_s\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme_s\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery_s\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme_s\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime_t\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind_s\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex_d\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID_s\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nlet Cloudflarev2_view = view() {\n  CloudflareV2_CL\n  | extend\n      ClientDeviceType = tostring(column_ifexists(\"ClientDeviceType\", column_ifexists(\"Source\", \"\"))),\n      TlsCipher = tostring(column_ifexists(\"ClientSSLCipher\", column_ifexists(\"ClientTlsCipher\", \"\"))),\n      TlsVersion = tostring(column_ifexists(\"ClientSSLProtocol\", column_ifexists(\"ClientTlsProtocol\", \"\"))),\n      DvcAction = tostring(column_ifexists(\"FirewallMatchesActions\", column_ifexists(\"Event\", column_ifexists(\"Action\", \"\")))),\n      NetworkRuleName = tostring(column_ifexists(\"FirewallMatchesRuleIDs\", column_ifexists(\"RuleID\", \"\"))),\n      SrcBytes = toint(column_ifexists(\"ClientRequestBytes\", column_ifexists(\"ClientBytes\", \"\"))),\n      SrcPortNumber = toint(column_ifexists(\"ClientSrcPort\", column_ifexists(\"ClientPort\", \"\"))),\n      DstBytes = toint(column_ifexists(\"EdgeResponseBytes\", column_ifexists(\"OriginBytes\", \"\"))),\n      BotScore = toint(column_ifexists(\"BotScore\", \"\")),\n      BotScoreSrc = tostring(column_ifexists(\"BotScoreSrc\", \"\")),\n      CacheCacheStatus = tostring(column_ifexists(\"CacheCacheStatus\", \"\")),\n      CacheResponseBytes = toint(column_ifexists(\"CacheResponseBytes\", \"\")),\n      CacheResponseStatus = toint(column_ifexists(\"CacheResponseStatus\", \"\")),\n      CacheTieredFill = tobool(column_ifexists(\"CacheTieredFill\", \"\")),\n      ClientASN = toint(column_ifexists(\"ClientASN\", \"\")),\n      SrcGeoCountry = tostring(column_ifexists(\"ClientCountry\", \"\")),\n      SrcIpAddr = tostring(column_ifexists(\"ClientIP\", \"\")),\n      ClientIPClass = tostring(column_ifexists(\"ClientIPClass\", \"\")),\n      HttpRequestHeaderHost = tostring(column_ifexists(\"ClientRequestHost\", \"\")),\n      HttpRequestMethod = tostring(column_ifexists(\"ClientRequestMethod\", \"\")),\n      ClientRequestPath = tostring(column_ifexists(\"ClientRequestPath\", \"\")),\n      ClientRequestProtocol = tostring(column_ifexists(\"ClientRequestProtocol\", \"\")),\n      HttpReferrerOriginal = tostring(column_ifexists(\"ClientRequestReferer\", \"\")),\n      ClientRequestURI = tostring(column_ifexists(\"ClientRequestURI\", \"\")),\n      HttpUserAgentOriginal = tostring(column_ifexists(\"ClientRequestUserAgent\", \"\")),\n      ClientXRequestedWith = tostring(column_ifexists(\"ClientXRequestedWith\", \"\")),\n      EdgeColoCode = tostring(column_ifexists(\"EdgeColoCode\", \"\")),\n      EdgeColoID = toint(column_ifexists(\"EdgeColoID\", \"\")),\n      EdgeEndTimestamp = todatetime(column_ifexists(\"EdgeEndTimestamp\", \"\")),\n      EdgePathingOp = tostring(column_ifexists(\"EdgePathingOp\", \"\")),\n      EdgePathingSrc = tostring(column_ifexists(\"EdgePathingSrc\", \"\")),\n      EdgePathingStatus = tostring(column_ifexists(\"EdgePathingStatus\", \"\")),\n      EdgeRateLimitAction = tostring(column_ifexists(\"EdgeRateLimitAction\", \"\")),\n      EdgeRateLimitID = toint(column_ifexists(\"EdgeRateLimitID\", \"\")),\n      EdgeRequestHost = tostring(column_ifexists(\"EdgeRequestHost\", \"\")),\n      EdgeResponseCompressionRatio = toint(column_ifexists(\"EdgeResponseCompressionRatio\", \"\")),\n      HttpContentType = tostring(column_ifexists(\"EdgeResponseContentType\", \"\")),\n      EdgeResponseStatus = toint(column_ifexists(\"EdgeResponseStatus\", \"\")),\n      EdgeServerIP = tostring(column_ifexists(\"EdgeServerIP\", \"\")),\n      EdgeStartTimestamp = todatetime(column_ifexists(\"EdgeStartTimestamp\", \"\")),\n      FirewallMatchesSources = tostring(column_ifexists(\"FirewallMatchesSources\", \"\")),\n      DstIpAddr = tostring(column_ifexists(\"OriginIP\", \"\")),\n      OriginResponseBytes = toint(column_ifexists(\"OriginResponseBytes\", \"\")),\n      OriginResponseHTTPExpires = tostring(column_ifexists(\"OriginResponseHTTPExpires\", \"\")),\n      OriginResponseHTTPLastModified = tostring(column_ifexists(\"OriginResponseHTTPLastModified\", \"\")),\n      HttpStatusCode = toint(column_ifexists(\"OriginResponseStatus\", \"\")),\n      OriginResponseTime = toint(column_ifexists(\"OriginResponseTime\", \"\")),\n      OriginSSLProtocol = tostring(column_ifexists(\"OriginSSLProtocol\", \"\")),\n      ParentRayID = tostring(column_ifexists(\"ParentRayID\", \"\")),\n      RayID = tostring(column_ifexists(\"RayID\", \"\")),\n      SecurityLevel = tostring(column_ifexists(\"SecurityLevel\", \"\")),\n      WAFAction = tostring(column_ifexists(\"WAFAction\", column_ifexists(\"SecurityAction\", \"\"))),\n      WAFFlags = tostring(column_ifexists(\"WAFFlags\", \"\")),\n      WAFMatchedVar = tostring(column_ifexists(\"WAFMatchedVar\", \"\")),\n      WAFProfile = tostring(column_ifexists(\"WAFProfile\", \"\")),\n      WAFRuleID = tostring(column_ifexists(\"WAFRuleID\", column_ifexists(\"SecurityRuleID\", \"\"))),\n      WAFRuleMessage = tostring(column_ifexists(\"WAFRuleMessage\", column_ifexists(\"SecurityRuleDescription\", \"\"))),\n      WorkerCPUTime = toint(column_ifexists(\"WorkerCPUTime\", \"\")),\n      WorkerStatus = tostring(column_ifexists(\"WorkerStatus\", \"\")),\n      WorkerSubrequest = tobool(column_ifexists(\"WorkerSubrequest\", \"\")),\n      WorkerSubrequestCount = toint(column_ifexists(\"WorkerSubrequestCount\", \"\")),\n      ZoneID = toint(column_ifexists(\"ZoneID\", \"\")),\n      Application = tostring(column_ifexists(\"Application\", \"\")),\n      ClientMatchedIpFirewall = tostring(column_ifexists(\"ClientMatchedIpFirewall\", \"\")),\n      NetworkProtocol = tostring(column_ifexists(\"ClientProto\", \"\")),\n      ClientTcpRtt = toint(column_ifexists(\"ClientTcpRtt\", \"\")),\n      ClientTlsClientHelloServerName = tostring(column_ifexists(\"ClientTlsClientHelloServerName\", \"\")),\n      ClientTlsStatus = tostring(column_ifexists(\"ClientTlsStatus\", \"\")),\n      ColoCode = tostring(column_ifexists(\"ColoCode\", \"\")),\n      ConnectTimestamp = todatetime(column_ifexists(\"ConnectTimestamp\", \"\")),\n      DisconnectTimestamp = todatetime(column_ifexists(\"DisconnectTimestamp\", \"\")),\n      IpFirewall = tobool(column_ifexists(\"IpFirewall\", \"\")),\n      DstPortNumber = toint(column_ifexists(\"OriginPort\", \"\")),\n      OriginProto = tostring(column_ifexists(\"OriginProto\", \"\")),\n      OriginTcpRtt = toint(column_ifexists(\"OriginTcpRtt\", \"\")),\n      OriginTlsCipher = tostring(column_ifexists(\"OriginTlsCipher\", \"\")),\n      OriginTlsFingerprint = tostring(column_ifexists(\"OriginTlsFingerprint\", \"\")),\n      OriginTlsMode = tostring(column_ifexists(\"OriginTlsMode\", \"\")),\n      OriginTlsProtocol = tostring(column_ifexists(\"OriginTlsProtocol\", \"\")),\n      OriginTlsStatus = tostring(column_ifexists(\"OriginTlsStatus\", \"\")),\n      ProxyProtocol = tostring(column_ifexists(\"ProxyProtocol\", \"\")),\n      EventResult = toint(column_ifexists(\"Status\", \"\")),\n      Timestamp = todatetime(column_ifexists(\"Timestamp\", \"\")),\n      ClientASNDescription = tostring(column_ifexists(\"ClientASNDescription\", \"\")),\n      ClientRefererHost = tostring(column_ifexists(\"ClientRefererHost\", \"\")),\n      ClientRefererPath = tostring(column_ifexists(\"ClientRefererPath\", \"\")),\n      ClientRefererQuery = tostring(column_ifexists(\"ClientRefererQuery\", \"\")),\n      ClientRefererScheme = tostring(column_ifexists(\"ClientRefererScheme\", \"\")),\n      ClientRequestQuery = tostring(column_ifexists(\"ClientRequestQuery\", \"\")),\n      ClientRequestScheme = tostring(column_ifexists(\"ClientRequestScheme\", \"\")),\n      Datetime = todatetime(column_ifexists(\"Datetime\", \"\")),\n      EventSubType = tostring(column_ifexists(\"Kind\", \"\")),\n      MatchIndex = toint(column_ifexists(\"MatchIndex\", \"\")),\n      OriginatorRayID = tostring(column_ifexists(\"OriginatorRayID\", \"\")),\n      TimeGenerated = column_ifexists('TimeGenerated', '')\n};\nunion isfuzzy=true (Cloudflare_view), (Cloudflarev2_view)\n  | project ClientDeviceType, TlsCipher, DvcAction, TlsVersion, NetworkRuleName, SrcBytes, SrcPortNumber, DstBytes, BotScore, BotScoreSrc, CacheCacheStatus, CacheResponseBytes, CacheResponseStatus, CacheTieredFill, ClientASN, SrcGeoCountry, SrcIpAddr, ClientIPClass, HttpRequestHeaderHost, HttpRequestMethod, ClientRequestPath, ClientRequestProtocol, HttpReferrerOriginal, ClientRequestURI, HttpUserAgentOriginal, ClientXRequestedWith, EdgeColoCode, EdgeColoID, EdgeEndTimestamp, EdgePathingOp, EdgePathingSrc, EdgePathingStatus, EdgeRateLimitAction, EdgeRateLimitID, EdgeRequestHost, EdgeResponseCompressionRatio, HttpContentType, EdgeResponseStatus, EdgeServerIP, EdgeStartTimestamp, FirewallMatchesSources, DstIpAddr, OriginResponseBytes, OriginResponseHTTPExpires, OriginResponseHTTPLastModified, HttpStatusCode, OriginResponseTime, OriginSSLProtocol, ParentRayID, RayID, SecurityLevel, WAFAction, WAFFlags, WAFMatchedVar, WAFProfile, WAFRuleID, WAFRuleMessage, WorkerCPUTime, WorkerStatus, WorkerSubrequest, WorkerSubrequestCount, ZoneID, Application, ClientMatchedIpFirewall, NetworkProtocol, ClientTcpRtt, ClientTlsClientHelloServerName, ClientTlsStatus, ColoCode, ConnectTimestamp, DisconnectTimestamp, IpFirewall, DstPortNumber, OriginProto, OriginTcpRtt, OriginTlsCipher, OriginTlsFingerprint, OriginTlsMode, OriginTlsProtocol, OriginTlsStatus, ProxyProtocol, EventResult, Timestamp, ClientASNDescription, ClientRefererHost, ClientRefererPath, ClientRefererQuery, ClientRefererScheme, ClientRequestQuery, ClientRequestScheme, Datetime, EventSubType, MatchIndex, OriginatorRayID, TimeGenerated\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -5031,7 +5039,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCF Workbook with template version 3.0.4",
+        "description": "CloudflareCCF Workbook with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -5123,7 +5131,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFClientErrors_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFClientErrors_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -5208,7 +5216,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFClientTlsErrors_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFClientTlsErrors_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -5293,7 +5301,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFFilesRequested_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFFilesRequested_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -5378,7 +5386,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFRareUAs_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFRareUAs_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -5463,7 +5471,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFServerErrors_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFServerErrors_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -5548,7 +5556,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFServerTlsErrors_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFServerTlsErrors_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject6').huntingQueryVersion6]",
@@ -5633,7 +5641,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFTopNetworkRules_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFTopNetworkRules_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject7').huntingQueryVersion7]",
@@ -5718,7 +5726,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFTopWafRules_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFTopWafRules_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject8').huntingQueryVersion8]",
@@ -5803,7 +5811,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedCountries_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedCountries_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject9').huntingQueryVersion9]",
@@ -5888,7 +5896,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedEdgeResponse_HuntingQueries Hunting Query with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedEdgeResponse_HuntingQueries Hunting Query with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject10').huntingQueryVersion10]",
@@ -5973,7 +5981,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFBadClientIp_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFBadClientIp_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -6001,10 +6009,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6019,8 +6027,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   },
@@ -6028,8 +6036,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "CompleteUrl",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "CompleteUrl"
                       }
                     ]
                   }
@@ -6076,7 +6084,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6087,7 +6096,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFEmptyUA_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFEmptyUA_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -6115,10 +6124,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6133,8 +6142,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6181,7 +6190,8 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6192,7 +6202,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFMultipleErrorsSource_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFMultipleErrorsSource_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -6220,10 +6230,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6238,8 +6248,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6286,7 +6296,8 @@
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6297,7 +6308,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFMultipleUAs_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFMultipleUAs_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -6325,10 +6336,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6343,8 +6354,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6391,7 +6402,8 @@
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6402,7 +6414,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedCountry_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedCountry_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -6430,10 +6442,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6448,8 +6460,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   },
@@ -6457,8 +6469,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "CompleteUrl",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "CompleteUrl"
                       }
                     ]
                   }
@@ -6505,7 +6517,8 @@
         "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6516,7 +6529,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedPost_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedPost_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -6544,10 +6557,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6563,8 +6576,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6611,7 +6624,8 @@
         "contentProductId": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "id": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "version": "[variables('analyticRuleObject6').analyticRuleVersion6]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6622,7 +6636,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedRequest_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedRequest_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -6650,10 +6664,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6668,8 +6682,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6716,7 +6730,8 @@
         "contentProductId": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "id": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6727,7 +6742,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedUrl_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFUnexpectedUrl_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -6755,10 +6770,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6773,8 +6788,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
@@ -6821,7 +6836,8 @@
         "contentProductId": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "id": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "version": "[variables('analyticRuleObject8').analyticRuleVersion8]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6832,7 +6848,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFWafThreatAllowed_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFWafThreatAllowed_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -6860,10 +6876,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6878,8 +6894,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   },
@@ -6887,8 +6903,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "CompleteUrl",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "CompleteUrl"
                       }
                     ]
                   }
@@ -6935,7 +6951,8 @@
         "contentProductId": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "id": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "version": "[variables('analyticRuleObject9').analyticRuleVersion9]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6946,7 +6963,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFXSSProbingPattern_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CloudflareCCFXSSProbingPattern_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -6974,10 +6991,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CloudflareDataConnector",
                     "dataTypes": [
                       "Cloudflare"
-                    ]
+                    ],
+                    "connectorId": "CloudflareDataConnector"
                   }
                 ],
                 "tactics": [
@@ -6992,8 +7009,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   },
@@ -7001,8 +7018,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "CompleteUrl",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "CompleteUrl"
                       }
                     ]
                   }
@@ -7049,14 +7066,15 @@
         "contentProductId": "[variables('analyticRuleObject10')._analyticRulecontentProductId10]",
         "id": "[variables('analyticRuleObject10')._analyticRulecontentProductId10]",
         "version": "[variables('analyticRuleObject10').analyticRuleVersion10]"
-      }
+      },
+      "condition": "[not(parameters('E5Flavor'))]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.4",
+        "version": "3.0.5",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cloudflare CCF",
@@ -7215,6 +7233,737 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-bad-client-ip-a7ce6135",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let ip_reputation = dynamic(['unknown', 'badHost', 'greylist', 'securityScanner', 'scan', 'tor']);\nCloudflare\n| where ClientIPClass in~ (ip_reputation)\n| extend CompleteUrl = strcat(HttpRequestHeaderHost,ClientRequestPath)"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects requests from IP with bad reputation index.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "CompleteUrl"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Bad client IP",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Bad client IP",
+                "id": "[if(true(), 'xdr-cloudflare-bad-client-ip-a7ce6135', 'xdr-cloudflare-bad-client-ip-a7ce6135')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-empty-user-agent-729c6d21",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "Cloudflare\n| where isempty(HttpUserAgentOriginal)"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects requests where user agent is empty.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Empty user agent",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Empty user agent",
+                "id": "[if(true(), 'xdr-cloudflare-empty-user-agent-729c6d21', 'xdr-cloudflare-empty-user-agent-729c6d21')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-multiple-error-requests-8a528c80",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let threshold = 100;\nCloudflare\n| where HttpRequestMethod =~ 'GET'\n| summarize err_cnt = count() by SrcIpAddr, bin(TimeGenerated, 5m)\n| where err_cnt > threshold"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects multiple failure requests from single source in short timeframe.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Multiple error requests from single source",
+                    "severity": "low"
+                  }
+                },
+                "displayName": "Cloudflare - Multiple error requests from single source",
+                "id": "[if(true(), 'xdr-cloudflare-multiple-error-requests-from-single-source-ef877d68', 'xdr-cloudflare-multiple-error-requests-from-single-source-ef877d68')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-multiple-user-agents-fo-5fd99c87",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let threshold = 10;\nCloudflare\n| where isnotempty(HttpUserAgentOriginal)\n| summarize d_ua = dcount(HttpUserAgentOriginal) by SrcIpAddr, bin(TimeGenerated, 3m)\n| where d_ua > threshold"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects requests with different user agents from one source in short timeframe.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Multiple user agents for single source",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Multiple user agents for single source",
+                "id": "[if(true(), 'xdr-cloudflare-multiple-user-agents-for-single-source-fc50076a', 'xdr-cloudflare-multiple-user-agents-for-single-source-fc50076a')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-client-request-from-cou-9eae21eb",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let bl_countries = dynamic(['cn', 'hk']);\nCloudflare\n| where SrcGeoCountry in~ (bl_countries)\n| extend CompleteUrl = strcat(HttpRequestHeaderHost,ClientRequestPath)"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects requests from countries which are in blocklist.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "CompleteUrl"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Client request from country in blocklist",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Client request from country in blocklist",
+                "id": "[if(true(), 'xdr-cloudflare-client-request-from-country-in-blocklist-40554544', 'xdr-cloudflare-client-request-from-country-in-blocklist-40554544')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-unexpected-post-request-009d1440",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "Cloudflare\n| where HttpRequestMethod in~ ('POST', 'PUT')\n| where tostring(HttpStatusCode) startswith '2'\n| where DstBytes != 0 or SrcBytes != 0\n| extend fe = extract(@'.*(\\.\\w+)$', 1, ClientRequestURI)\n| where fe in~ ('.jpg', '.jpeg', '.gif', '.png', '.icon', '.ico', '.xml', '.swf', '.svg', '.ppt', '.pttx', '.doc', '.docx', '.rtf', '.pdf', '.tif', '.zip', '.mov')"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects post requests to unusual extensions.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1505"
+                          }
+                        ],
+                        "tactic": "Persistence"
+                      }
+                    ],
+                    "title": "Cloudflare - Unexpected POST requests",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Unexpected POST requests",
+                "id": "[if(true(), 'xdr-cloudflare-unexpected-post-requests-7313352a', 'xdr-cloudflare-unexpected-post-requests-7313352a')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-unexpected-client-reque-1451c429",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "Cloudflare\n| where HttpRequestMethod =~ 'GET'\n| where DstBytes != 0 or SrcBytes != 0\n| where ClientRequestURI has_any ('/admin', '/admin.php', 'wp-admin', '.htaccess', '/etc/shadow', '/etc/passwd', '/etc/hosts', '/etc/ssh/')"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects client requests to unusual client request.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Unexpected client request",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Unexpected client request",
+                "id": "[if(true(), 'xdr-cloudflare-unexpected-client-request-f32142b1', 'xdr-cloudflare-unexpected-client-request-f32142b1')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-unexpected-uri-dcb797cd",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "Cloudflare\n| where HttpRequestMethod =~ 'GET'\n| where DstBytes != 0 or SrcBytes != 0\n| where ClientRequestURI matches regex @'(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})|(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})|(172\\.1[6-9]\\.\\d{1,3}\\.\\d{1,3})|(172\\.2[0-9]\\.\\d{1,3}\\.\\d{1,3})|(172\\.3[0-1]\\.\\d{1,3}\\.\\d{1,3})|(192\\.168\\.\\d{1,3}\\.\\d{1,3})'"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects client requests to unusual URI.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - Unexpected URI",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - Unexpected URI",
+                "id": "[if(true(), 'xdr-cloudflare-unexpected-uri-dcb797cd', 'xdr-cloudflare-unexpected-uri-dcb797cd')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-waf-allowed-threat-f53fe2a9",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "Cloudflare\n| where isnotempty(WAFRuleID) or isnotempty(WAFRuleMessage)\n| where WAFAction =~ 'Allow'\n| extend CompleteUrl = strcat(HttpRequestHeaderHost,ClientRequestPath)"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects WAF \"Allowed\" action on threat events.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "CompleteUrl"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - WAF Allowed threat",
+                    "severity": "high"
+                  }
+                },
+                "displayName": "Cloudflare - WAF Allowed threat",
+                "id": "[if(true(), 'xdr-cloudflare-waf-allowed-threat-f53fe2a9', 'xdr-cloudflare-waf-allowed-threat-f53fe2a9')]"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "CloudflareCCF-CD-xdr-cloudflare-xss-probing-pattern-in-7be21ec5",
+      "condition": "[parameters('E5Flavor')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let s_threshold = 3;\nCloudflare\n| where HttpRequestMethod in~ ('POST', 'PUT')\n| extend susp_ch = countof(ClientRequestURI, '%00')\n| where ClientRequestURI matches regex @'(alert\\()|(alert\\%28)|(String\\.fromCharCode\\()|(expression\\(alert)' or susp_ch > s_threshold\n| extend CompleteUrl = strcat(HttpRequestHeaderHost,ClientRequestPath)"
+                },
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "'Detects XSS probing patterns.'",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "CompleteUrl"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "title": "Cloudflare - XSS probing pattern in request",
+                    "severity": "medium"
+                  }
+                },
+                "displayName": "Cloudflare - XSS probing pattern in request",
+                "id": "[if(true(), 'xdr-cloudflare-xss-probing-pattern-in-request-4d9d00b9', 'xdr-cloudflare-xss-probing-pattern-in-request-4d9d00b9')]"
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "outputs": {}

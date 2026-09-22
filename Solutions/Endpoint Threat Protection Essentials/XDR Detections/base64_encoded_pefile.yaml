@@ -1,0 +1,88 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ca67c83e-7fff-4127-a3e3-1af66d6d4cad
+    path: Analytic Rules/base64_encoded_pefile.yaml
+    version: 1.1.5
+    querySha256: 3558b09c136f0999cff742f0526e4e4c5cb86145bec1c73e15d089b7e2a95596
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Account mapping was completed with projected column `DnsDomain`
+    - Host.FullName has no supported Custom Detection field
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Execution
+    - DefenseEvasion
+    originalTechniques:
+    - T1059
+    - T1027
+    - T1140
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-base64-encoded-windows-process-command-lines-ca67c83e
+  displayName: Base64 encoded Windows process command-lines
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let ProcessCreationEvents=(union isfuzzy=true
+      (SecurityEvent
+      | where EventID==4688
+      | where isnotempty(CommandLine)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,
+      FileName = Process, CommandLine, ParentProcessName
+      ),
+      (WindowsEvent
+      | where EventID==4688
+      | where EventData has "TVqQAAMAAAAEAAA"
+      | extend CommandLine = tostring(EventData.CommandLine)
+      | where isnotempty(CommandLine)
+      | extend ParentProcessName = tostring(EventData.ParentProcessName)
+      | extend NewProcessName = tostring(EventData.NewProcessName)
+      | extend Process=tostring(split(NewProcessName, '\\')[-1])
+      | extend SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,
+      FileName = Process, CommandLine, ParentProcessName));
+      ProcessCreationEvents
+      | where CommandLine contains "TVqQAAMAAAAEAAA"
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Base64 encoded Windows process command-lines
+      description: '''Identifies instances of a base64-encoded PE file header seen in the process command line parameter.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Account
+          dnsDomainColumn: DnsDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1027
+        - technique: T1140

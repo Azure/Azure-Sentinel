@@ -1,0 +1,74 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 56f3f35c-3aca-4437-a1fb-b7a84dc4af00
+    path: Analytic Rules/PotentialFodhelperUACBypass.yaml
+    version: 1.0.2
+    querySha256: cbd7996eadc691e4bbf8a5dc74acb30a05e49c5540804f248b34376b03549fc0
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Host.FullName has no supported Custom Detection field
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1548.002
+properties:
+  id: xdr-potential-fodhelper-uac-bypass-56f3f35c
+  displayName: Potential Fodhelper UAC Bypass
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+        | where EventID == 4657
+        | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" RegistryKey
+        | project-reorder RegistryKey
+        | where RegistryKey has "Software\\Classes\\ms-settings\\shell\\open\\command"
+        | extend TimeKey = bin(TimeGenerated, 1h)
+        | join (
+        SecurityEvent
+        | where EventID == 4688
+        | where Process =~ "fodhelper.exe"
+        | where ParentProcessName endswith "cmd.exe" or ParentProcessName endswith "powershell.exe" or ParentProcessName endswith "powershell_ise.exe"
+        | extend TimeKey = bin(TimeGenerated, 1h)) on TimeKey, Computer
+        | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+        | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Potential Fodhelper UAC Bypass
+      description: '''This detection looks for the steps required to conduct a UAC bypass using Fodhelper.exe. By default
+        this detection looks for the setting of the required registry keys and the invoking of the process within 1 hour -
+        this can be tweaked as required.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
+          subTechniques:
+          - T1548.002

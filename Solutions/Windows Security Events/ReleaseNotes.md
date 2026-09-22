@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.0.14      | 17-09-2026                     | Added 21 **XDR Detections** and V4 hybrid packaging support for the existing **Analytic Rules** |
 | 3.0.13      | 20-07-2026                     | Added **Analytic Rule** WMI Spawning Suspicious Child Process |
 | 3.0.12      | 18-02-2026                     | Removed external blog reference text from "Remote Scheduled Task Creation or Update using ATSVC Named Pipe" and " Scheduled Task Creation or Update from User Writable Directory" **hunting query** description | 
 | 3.0.11      | 28-01-2026                     | Updated **Analytic Rule** to fix the link from the description &  Update **Analytic Rule** NonDCActiveDirectoryReplication - to reduce false positive results |
