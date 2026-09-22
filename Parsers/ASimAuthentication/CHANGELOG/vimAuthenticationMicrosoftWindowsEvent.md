@@ -2,7 +2,7 @@
 
 ## Version 0.3.2
 
-- (2026-09-22) Updated DvcHostName to DvcHostname and bumped the normalization schema version to 1.0.0.
+- (2026-09-22) Updated DvcHostName to DvcHostname and bumped the normalization schema version to 1.0.0. - [PR #15185](https://github.com/Azure/Azure-Sentinel/pull/15185)
 
 ## Version 0.3.1
 
