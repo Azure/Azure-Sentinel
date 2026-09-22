@@ -1,5 +1,31 @@
 This folder has sample data for different data connectors that can be leveraged by all Microsoft Sentinel contributions 
 
+## Neutral table base events
+
+`Tables\<TableName>\base-event.json` contains one deterministic, synthetic,
+behavior-neutral record for a public Microsoft table. Its companion
+`metadata.json` contains the table name, public schema source, and Kusto type of
+each column.
+
+These files are starting structures, not attack simulations and not evidence
+that a detection works. An Agent may copy a base event and specialize it from a
+specific Analytic Rule and converted Custom Detection, but must write the
+result under:
+
+```text
+Sample Data\Solutions\Mock\<Solution>\<RuleId>\
+    malicious.json
+    benign.json
+    scenario.json
+```
+
+Never modify a checked-in base event for one rule. Never use customer data,
+tenant identifiers, credentials, or private vendor examples.
+
+The catalog is generated or refreshed by the one-time CAT.Tools maintenance
+utility. Runtime Azure-Sentinel Agents consume these checked-in files and do
+not need CAT.Tools.
+
 ## Sample Data Contribution Guidance
 
 Sample data is extremely useful when troubleshooting issues, supporting and/or enhancing the Data Connectors with more Security-focused content (such as Analytics, Hunting Queries, Workbooks, etc.). So, for every data connector committed, authors must also upload the following three (3) files:
