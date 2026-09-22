@@ -1,0 +1,100 @@
+id: 3e9b7d54-2a6c-4f18-b0e5-c7a94d21f6b8
+name: Netskope Client - Internet Security disabled by user
+description: |
+  Detects Netskope Client devices where the user disabled the Netskope Internet Security
+  (secure web gateway / CASB steering) service. All matching client-status events in the
+  6-hour window are collected into a single alert, grouped per device, so repeated disable
+  events on the same device are reported once. A user disabling Internet Security bypasses
+  web, threat and data protection policies for that device.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeClientStatus
+    dataTypes:
+      - NetskopeClientStatus_CL
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  NetskopeClientStatus_CL
+  | where TimeGenerated > ago(6h)
+  | where last_seen_device_event_actor_name =~ "USER"
+      and last_seen_device_event_service_name =~ "Internet Security"
+      and last_seen_device_event_status_name =~ "DISABLED"
+  | extend DeviceKey = case(
+      isnotempty(device_hash), device_hash,
+      isnotempty(guid), guid,
+      isnotempty(device_id), device_id,
+      host_info_hostname)
+  | summarize
+      EventCount = count(),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      ClientEvents = make_set(last_seen_device_event_event_name, 10),
+      arg_max(TimeGenerated,
+          host_info_hostname,
+          user_info_username,
+          last_connected_from_public_ip,
+          last_connected_from_private_ip,
+          host_info_os_name,
+          client_version,
+          last_seen_device_event_actor_name,
+          last_seen_device_event_service_name,
+          last_seen_device_event_status_name,
+          last_seen_device_event_status_v2_name,
+          last_seen_device_event_npa_status_name,
+          last_seen_device_event_event_name,
+          last_seen_device_event_event_details)
+      by DeviceKey
+  | project
+      LastSeen,
+      FirstSeen,
+      EventCount,
+      DeviceKey,
+      HostName = host_info_hostname,
+      UserName = user_info_username,
+      PublicIp = last_connected_from_public_ip,
+      PrivateIp = last_connected_from_private_ip,
+      OperatingSystem = host_info_os_name,
+      ClientVersion = client_version,
+      Actor = last_seen_device_event_actor_name,
+      ServiceName = last_seen_device_event_service_name,
+      ClientStatus = last_seen_device_event_status_name,
+      ClientStatusV2 = last_seen_device_event_status_v2_name,
+      NpaStatus = last_seen_device_event_npa_status_name,
+      LatestClientEvent = last_seen_device_event_event_name,
+      EventDetails = last_seen_device_event_event_details,
+      ClientEvents
+  | order by LastSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIp
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  DeviceKey: DeviceKey
+  EventCount: EventCount
+  ServiceName: ServiceName
+  ClientStatus: ClientStatus
+  Actor: Actor
+  NpaStatus: NpaStatus
+  LatestClientEvent: LatestClientEvent
+  ClientVersion: ClientVersion
+  OperatingSystem: OperatingSystem
+version: 1.0.0
+kind: Scheduled

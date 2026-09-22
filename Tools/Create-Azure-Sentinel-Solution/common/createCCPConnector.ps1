@@ -9,6 +9,9 @@
     2 = "ResourcesDataConnector";
 }
 
+# Name of the mainTemplate variable holding the current CCF connector version (overridden per connector when DataConnectorCCFVersions is set).
+$global:ccpVersionVariable = "dataConnectorCCPVersion"
+
 #build the connection template parameters, according to the connector definition instructions
 function Get-ConnectionsTemplateParameters($activeResource) {
     # this is for data connector definition only
@@ -118,8 +121,10 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
             else {
+                # The portal submits a selected Dropdown value as an array and omits the field when nothing is
+                # selected, so the default must be an array too or ARM rejects it (Expected 'Array', received 'String').
                 $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
+                    defaultValue = @($instruction.parameters.options[0].key);
                     type         = "array";
                 }
             }
@@ -203,14 +208,14 @@ function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFile
     $parentId = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), $parentIdResourceName, variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))]"
     $metaDataResourceName = "concat('DataConnector-', variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))"
     $metaDataContentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]"
-    $metaDatsContentVersion = "[variables('dataConnectorCCPVersion')]"
+    $metaDatsContentVersion = "[variables('$($global:ccpVersionVariable)')]"
     $metaDataResource = Get-MetaDataBaseResource $metaDataResourceName $parentId $metaDataContentId $templateContentTypeByCounter[$TemplateCounter] $metaDatsContentVersion $dataFileMetadata $solutionFileMetadata
     
     if ($templateContentTypeByCounter[$TemplateCounter] -eq "DataConnector") {
         $dependencies = [PSCustomObject]@{
             "criteria" = @(
                 [PSCustomObject]@{
-                    "version"   = "[variables('dataConnectorCCPVersion')]";
+                    "version"   = "[variables('$($global:ccpVersionVariable)')]";
                     "contentId" = "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]";
                     "kind"      = "ResourcesDataConnector"
                 }
@@ -224,7 +229,7 @@ function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFile
 }
 
 function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, $ccpItem) {
-    $contentVersion = "variables('dataConnectorCCPVersion')";
+    $contentVersion = "variables('$($global:ccpVersionVariable)')";
     $contentTemplateName = "variables('dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $contentId = "variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $resoureKind = $templateContentTypeByCounter[$TemplateCounter];
@@ -264,7 +269,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
             contentProductId     = "[concat(take(variables('_solutionId'), 50),'-','$resoureKindTag','-', uniqueString(concat(variables('_solutionId'),'-','$resoureKind','-',$contentId,'-', $contentVersion)))]";
             packageId            = "[variables('_solutionId')]";
             contentSchemaVersion = $contentResourceDetails.contentSchemaVersion;
-            version              = "[variables('dataConnectorCCPVersion')]";
+            version              = "[variables('$($global:ccpVersionVariable)')]";
         }
     }
 }
@@ -434,7 +439,15 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$solutionId"
     }
 
-    if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
+    # The shared CCF version variable is only emitted when at least one connector does not carry its own
+    # DataConnectorCCFVersions override; otherwise arm-ttk flags it as an unreferenced variable.
+    $needsSharedCcpVersion = $false
+    foreach ($ccpItem in $ccpDict) {
+        if ([string]::IsNullOrWhiteSpace($dataFileMetadata.DataConnectorCCFVersions.($ccpItem.DCDefinitionId))) {
+            $needsSharedCcpVersion = $true
+        }
+    }
+    if ($needsSharedCcpVersion -and !$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
 
@@ -443,6 +456,17 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $activeResource = @()
             $tableCounter = 1;
             $templateName = $ccpItem.DCDefinitionId;
+
+            # Optional per-connector version: "DataConnectorCCFVersions": { "<DCDefinitionId>": "x.y.z" } in the solution data file.
+            # Connectors without an entry keep the shared dataConnectorCCPVersion.
+            $global:ccpVersionVariable = "dataConnectorCCPVersion"
+            $connectorVersionOverride = $dataFileMetadata.DataConnectorCCFVersions.$templateName
+            if (![string]::IsNullOrWhiteSpace($connectorVersionOverride)) {
+                $global:ccpVersionVariable = "dataConnectorCCPVersion$($global:connectorCounter)"
+                if (!$global:baseMainTemplate.variables."$($global:ccpVersionVariable)") {
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "$($global:ccpVersionVariable)" -NotePropertyValue "$connectorVersionOverride"
+                }
+            }
 
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
                 if (!$global:baseMainTemplate.variables."_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)") {
@@ -506,7 +530,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $global:DependencyCriteria += [PSCustomObject]@{
                         kind      = "DataConnector";
                         contentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]";
-                        version   = if ($dataFileMetadata.TemplateSpec) { "[variables('dataConnectorCCPVersion')]" }else { $dataFileMetadata.Version };
+                        version   = if ($dataFileMetadata.TemplateSpec) { "[variables('$($global:ccpVersionVariable)')]" }else { $dataFileMetadata.Version };
                     };
                 }
                 else {
