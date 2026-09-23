@@ -1,4 +1,9 @@
 # Changelog for imNetworkSession.yaml
+
+## Version 0.6.7
+
+- (2026-09-21) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
+
 ## Version 0.6.6
 
 - (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
