@@ -9,6 +9,7 @@ import azure.functions as func
 import msal
 import requests
 from greynoise.api import APIConfig, GreyNoise
+from greynoise.exceptions import RateLimitError
 from requests.adapters import HTTPAdapter
 from requests_ratelimiter import LimiterSession
 from urllib3.util import Retry
@@ -23,6 +24,10 @@ REQUIRED_ENVIRONMENT_VARIABLES = [
     "TENANT_ID",
     "WORKSPACE_ID",
     ]
+
+# Wait between retries after GreyNoise returns HTTP 429. With the default 3 tries this stays
+# well inside the 2 hour functionTimeout in host.json.
+RATE_LIMIT_BACKOFF_SECONDS = 300
 
 GreyNoiseSetup = namedtuple("GreyNoiseSetup", ["api_key", "query", "tries", "size"])
 MSALSetup = namedtuple("MSALSetup", ["tenant_id", "client_id", "client_secret", "workspace_id"])
@@ -291,17 +296,32 @@ class GreyNoiseSentinelUpdater(object):
                 ):
                     break
 
+            except RateLimitError:
+                # The GreyNoise SDK raises RateLimitError with no message on HTTP 429, so name it
+                # here and wait long enough for the limit to reset instead of the 10 second retry.
+                if tries != 0:
+                    tries -= 1
+                    logging.error(
+                        "GreyNoise API rate limit exceeded (HTTP 429). Trying again in %s seconds using same scroll..."
+                        % RATE_LIMIT_BACKOFF_SECONDS
+                    )
+                    time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                else:
+                    logging.error(
+                        "Exiting program. GreyNoise API rate limit exceeded (HTTP 429) and max tries met. "
+                        "Check the API key's plan and quota, and that no other connector shares the key. "
+                        "Last scroll: %s" % scroll
+                    )
+                    sys.exit(3)
             except Exception as reqErr:
-                logging.error("Uploading IPs failed: %s" % str(reqErr))
+                # repr() keeps the exception type visible when its message is empty
+                logging.exception("Fetching or uploading IPs failed: %r" % reqErr)
                 if tries != 0:
                     tries -= 1
                     logging.error("Trying again in 10 seconds using same scroll...")
                     time.sleep(10)
                 else:
-                    logging.error(
-                        "Exiting program. Max tries met. With time str%s and last scroll: %s"
-                        % (str(time), scroll)
-                    )
+                    logging.error("Exiting program. Max tries met. Last scroll: %s" % scroll)
                     sys.exit(3)
 
         logging.info(
