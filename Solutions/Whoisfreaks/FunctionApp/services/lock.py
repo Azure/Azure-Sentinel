@@ -1,6 +1,5 @@
 import logging
 import time
-from datetime import datetime, timezone
 
 from azure.core.exceptions import (
     HttpResponseError,
@@ -46,13 +45,9 @@ class FeedLock:
         self.feed_name = feed_name
         self.lease_client: BlobLeaseClient | None = None
 
-        blob_service_client = get_blob_service_client(
-            storage_account_name
-        )
+        blob_service_client = get_blob_service_client(storage_account_name)
 
-        self.container_client = (
-            blob_service_client.get_container_client(LOCK_CONTAINER)
-        )
+        self.container_client = blob_service_client.get_container_client(LOCK_CONTAINER)
 
         self.blob_client = self.container_client.get_blob_client(
             f"locks/{feed_name}.lock"
@@ -65,6 +60,7 @@ class FeedLock:
             try:
                 self.container_client.create_container()
             except ResourceExistsError:
+                # Ignored: Safe race condition if another worker created the container concurrently.
                 pass
 
             logging.info(
@@ -85,6 +81,7 @@ class FeedLock:
                     self.blob_client.blob_name,
                 )
             except ResourceExistsError:
+                # Ignored: Safe race condition if another worker created the lock blob concurrently.
                 pass
 
     def _write_acquired_at(self) -> None:
@@ -146,13 +143,9 @@ class FeedLock:
 
         for attempt in range(2):
             try:
-                self.lease_client = BlobLeaseClient(
-                    client=self.blob_client
-                )
+                self.lease_client = BlobLeaseClient(client=self.blob_client)
 
-                self.lease_client.acquire(
-                    lease_duration=LEASE_DURATION
-                )
+                self.lease_client.acquire(lease_duration=LEASE_DURATION)
                 self._write_acquired_at()
 
                 logging.info(

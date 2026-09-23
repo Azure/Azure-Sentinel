@@ -6,22 +6,15 @@ from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from models.feed import FeedConfig
 from services.azure_clients import get_blob_service_client
 
-
 CHECKPOINT_CONTAINER = "checkpoints"
 
 
 def get_blob_client(storage_account_name: str, feed: FeedConfig):
     blob_service_client = get_blob_service_client(storage_account_name)
 
-    container_client = (
-        blob_service_client.get_container_client(
-            CHECKPOINT_CONTAINER
-        )
-    )
+    container_client = blob_service_client.get_container_client(CHECKPOINT_CONTAINER)
 
-    blob_client = container_client.get_blob_client(
-        feed.checkpoint_blob_name()
-    )
+    blob_client = container_client.get_blob_client(feed.checkpoint_blob_name())
 
     return container_client, blob_client
 
@@ -29,11 +22,7 @@ def get_blob_client(storage_account_name: str, feed: FeedConfig):
 def ensure_checkpoint_container(storage_account_name: str) -> None:
     blob_service_client = get_blob_service_client(storage_account_name)
 
-    container_client = (
-        blob_service_client.get_container_client(
-            CHECKPOINT_CONTAINER
-        )
-    )
+    container_client = blob_service_client.get_container_client(CHECKPOINT_CONTAINER)
 
     try:
         container_client.get_container_properties()
@@ -41,6 +30,7 @@ def ensure_checkpoint_container(storage_account_name: str) -> None:
         try:
             container_client.create_container()
         except ResourceExistsError:
+            # Ignored: Safe race condition if another worker created the container concurrently.
             pass
 
         logging.info(
@@ -58,9 +48,7 @@ def get_checkpoint(
     try:
         data = blob_client.download_blob().readall()
 
-        checkpoint = json.loads(
-            data.decode("utf-8")
-        )
+        checkpoint = json.loads(data.decode("utf-8"))
 
         logging.info(
             "Checkpoint loaded: feed=%s date=%s offset=%s status=%s",

@@ -63,7 +63,7 @@ def test_whois_param_is_lowercase_string():
         return resp
 
     with patch.object(client.session, "get", side_effect=fake_get):
-        records, raw = client.fetch_page(feed=feed, feed_date="2026-01-01", offset=0)
+        client.fetch_page(feed=feed, feed_date="2026-01-01", offset=0)
 
     assert captured["params"]["whois"] == "true"
     assert isinstance(captured["params"]["whois"], str)
@@ -79,7 +79,7 @@ def test_upload_chunks_when_payload_exceeds_limit():
     ]
 
     # Bypass __init__ (would need real Azure credential)
-    service = object.__new__(SentinelIngestionService)
+    object.__new__(SentinelIngestionService)
     batches = SentinelIngestionService._chunk_by_bytes(records)
     assert len(batches) >= 2
     assert sum(len(b) for b in batches) == 3

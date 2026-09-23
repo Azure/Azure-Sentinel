@@ -52,7 +52,7 @@ class SentinelIngestionService:
             )
             return
 
-        batches = self._chunk_by_bytes(records)
+        batches = self._chunk_by_bytes(records, feed_name=feed.name)
 
         logging.info(
             "Uploading %s records in %s batch(es): feed=%s stream=%s",
@@ -94,7 +94,9 @@ class SentinelIngestionService:
         )
 
     @staticmethod
-    def _chunk_by_bytes(records: list[dict]) -> list[list[dict]]:
+    def _chunk_by_bytes(
+        records: list[dict], feed_name: str = "unknown"
+    ) -> list[list[dict]]:
         """Split records into batches whose JSON payload stays under 1 MB."""
         batches: list[list[dict]] = []
         current: list[dict] = []
@@ -104,6 +106,16 @@ class SentinelIngestionService:
             encoded = json.dumps(record, separators=(",", ":"), default=str)
             # +1 for the comma between array elements
             record_size = len(encoded.encode("utf-8")) + 1
+
+            # Safeguard: Handle individual records that exceed _MAX_BATCH_BYTES
+            if record_size > _MAX_BATCH_BYTES:
+                logging.error(
+                    "Single record size (%s bytes) exceeds maximum allowed batch limit (%s bytes). Dropping record to preserve stream: feed=%s",
+                    record_size,
+                    _MAX_BATCH_BYTES,
+                    feed_name,
+                )
+                continue
 
             if current and current_size + record_size > _MAX_BATCH_BYTES:
                 batches.append(current)
