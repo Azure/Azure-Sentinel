@@ -1,6 +1,6 @@
 id: c51628fe-999c-5150-9fd7-660fc4f58ed2
 name: GreyNoise TI map IP entity to OfficeActivity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 description: |
   This query maps any GreyNoise IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.
@@ -8,19 +8,19 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
   - connectorId: GreyNoise2SentinelAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -32,19 +32,22 @@ relevantTechniques:
 query: |
   let dt_lookBack = 1h; // Look back 1 hour for OfficeActivity events
   let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
-  // Fetch threat intelligence indicators related to IP addresses
-  let IP_Indicators = ThreatIntelligenceIndicator
+  // Fetch GreyNoise IPv4 indicators from the ThreatIntelIndicators (STIX 2.1) table.
+  // GreyNoise only publishes ipv4-addr patterns, so a single ObservableKey filter is sufficient.
+  let GreyNoise_IPs = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now()
     | where SourceSystem == 'GreyNoise'
-    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
-    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
-    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+    | where ObservableKey == 'ipv4-addr:value'
+    // Take the latest row per indicator first, then evaluate its current state, so an
+    // indicator that has since been deactivated cannot be resurrected by an older row.
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and IsDeleted == false and ValidUntil > now()
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    // Explicit projection keeps TimeGenerated and Type off the left side of the join, avoiding column collisions.
+    | project IndicatorId = Id, TI_ipEntity, ThreatType = tostring(Data.indicator_types[0]), IoCDescription = tostring(Data.description), Tags, Confidence, ValidFrom, ValidUntil;
   // Perform a join between IP indicators and OfficeActivity events
-  IP_Indicators
+  GreyNoise_IPs
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
     | join kind=innerunique (
         OfficeActivity
@@ -56,12 +59,12 @@ query: |
     )
     on $left.TI_ipEntity == $right.IPAddress
     // Filter out OfficeActivity events that occurred after the expiration of the corresponding indicator
-    | where OfficeActivity_TimeGenerated < ExpirationDateTime
+    | where OfficeActivity_TimeGenerated < ValidUntil
     // Group the results by IndicatorId and keep the OfficeActivity event with the latest timestamp
     | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId
     // Select the desired output fields
-    | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-      TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    | project OfficeActivity_TimeGenerated, IoCDescription, IndicatorId, ThreatType, ValidFrom, ValidUntil, Confidence, Tags,
+      TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, Type
     | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
 entityMappings:
   - entityType: Account
@@ -74,7 +77,3 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: TI_ipEntity
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: Url
