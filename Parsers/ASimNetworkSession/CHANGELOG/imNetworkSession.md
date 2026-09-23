@@ -6,7 +6,11 @@
 
 ## Version 0.6.7
 
+<<<<<<< HEAD
 - (2026-09-22) Add AWS GuardDuty filtering parser to the Network Session unifying parser - [PR #14769](https://github.com/Azure/Azure-Sentinel/pull/14769)
+=======
+- (2026-09-21) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
+>>>>>>> 199f83992a (update md files with pull request ID)
 
 ## Version 0.6.6
 
