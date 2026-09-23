@@ -40,7 +40,7 @@ Daily at **00:00 UTC** (timer trigger). Manual trigger: Function `/api/run`.
 After merge into [Azure/Azure-Sentinel](https://github.com/Azure/Azure-Sentinel), `azuredeploy.json`'s default `functionPackageUrl` parameter resolves to:
 
 ```text
-https://whoisfreakssentinela665.blob.core.windows.net/app-package-whoisfreaks-sentinel-function-025c524/FunctionApp.zip?sp=r&st=2026-09-22T07:19:19Z&se=2026-09-22T15:34:19Z&spr=https&sv=2026-02-06&sr=b&sig=iUUF8jDlCmMB4NWJ3XC4Pvn8GjDGleepeY%2FWY2D1HHs%3D
+https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Whoisfreaks/Package/FunctionApp.zip
 ```
 
 `Package/FunctionApp.zip` is committed in this solution folder for that path to resolve. Before merge, see `DEPLOYMENT_AND_TESTING.md` section 3.2 for hosting it yourself.

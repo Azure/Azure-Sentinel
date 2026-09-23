@@ -160,7 +160,7 @@ WhoisFreaksMalware_CL
 
 ## 9. Next steps for official Content Hub publish
 
-1. Open a PR against https://github.com/Azure/Azure-Sentinel under `Solutions/WhoisFreaks/`.
+1. Open a PR against https://github.com/Azure/Azure-Sentinel under `Solutions/Whoisfreaks/`.
 2. Confirm `Package/FunctionApp.zip` is committed and up to date with `FunctionApp/`, or regenerate it as part of CI.
 3. Run the official solution packaging/validation scripts in `Tools/Create-Azure-Sentinel-Solution/V3` and `arm-ttk` against both `Package/mainTemplate.json` and `azuredeploy/azuredeploy.json`.
 4. After merge, the default `functionPackageUrl` in `azuredeploy.json` (the raw GitHub URL) will resolve without any manual hosting step.
