@@ -29,7 +29,6 @@ AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 CONN_STRING = os.environ.get("AzureWebJobsStorage")
 COMPANIES = os.environ.get("Companies")
 WORKSPACE_ID = os.environ.get("WorkspaceID")
-WORKSPACE_KEY = os.environ.get("WorkspaceKey")
 COMPANIES_TABLE_NAME = os.environ.get("Portfolio_Companies_Table_Name")
 COMPANY_DETAIL_TABLE_NAME = os.environ.get("Company_Table_Name")
 COMPANIES_RATING_DETAILS_TABLE_NAME = os.environ.get(
