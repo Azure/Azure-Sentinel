@@ -31,6 +31,40 @@ def rename_reserved_columns(records: list, rename_map: dict) -> list:
     return renamed
 
 
+# Severity ladder shared by every dataset that supports severity filtering.
+# Ordered from least to most severe; a configured minimum selects that level
+# and everything above it.
+SEVERITY_ORDER = ("low", "medium", "high", "critical")
+
+
+def severities_at_least(min_severity) -> list:
+    """
+    Expand a minimum severity into the list of severities at or above it.
+
+    The Upwind API filters by explicit severity values rather than a threshold,
+    so "high" becomes ["high", "critical"].
+
+    :param min_severity: Configured minimum, case-insensitive. Falsy disables
+        filtering.
+    :return: List of severity values, or None when no filtering should apply.
+    """
+
+    if not min_severity:
+        return None
+
+    normalized = str(min_severity).strip().lower()
+    if normalized not in SEVERITY_ORDER:
+        logging.warning(
+            "Ignoring unrecognized minimum severity %r; expected one of %s. "
+            "No severity filter will be applied.",
+            min_severity,
+            ", ".join(SEVERITY_ORDER),
+        )
+        return None
+
+    return list(SEVERITY_ORDER[SEVERITY_ORDER.index(normalized):])
+
+
 class UpwindClient:
     """Base client for the Upwind API with authentication, retry, and pagination."""
 
@@ -39,6 +73,7 @@ class UpwindClient:
     RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)
 
     def __init__(self, config):
+        self.config = config
         self.org_id = config.get("upwind_org_id")
         self.client_id = config.get("upwind_client_id")
         self.client_secret = config.get("upwind_client_secret")
@@ -69,14 +104,17 @@ class UpwindClient:
         logging.info("Upwind API access token obtained.")
         return self._access_token
 
-    def _fetch_paginated(self, url: str, search_body: dict) -> list:
+    def _fetch_paginated(self, url: str, search_body: dict, on_page) -> int:
         """
         Fetch all items from a paginated Upwind API search endpoint.
         Uses cursor-based pagination and exponential backoff for 429 rate limits.
 
         :param url: The full API endpoint URL.
         :param search_body: The JSON search body to POST.
-        :return: List of item dictionaries from all pages.
+        :param on_page: Callback invoked with each page's items as they are
+            fetched, so pages can be uploaded without buffering the whole
+            dataset in memory.
+        :return: Total number of items fetched across all pages.
         :raises RuntimeError: If the API returns errors after exhausting retries.
         """
 
@@ -87,7 +125,7 @@ class UpwindClient:
             "Content-Type": "application/json",
         }
 
-        all_items = []
+        total = 0
         cursor = None
         page_number = 0
 
@@ -106,13 +144,14 @@ class UpwindClient:
 
             result = response.json()
             items = result.get("items", [])
-            all_items.extend(items)
+            total += len(items)
+            on_page(items)
 
             logging.info(
                 "Page %d: fetched %d items (total so far: %d)",
                 page_number,
                 len(items),
-                len(all_items),
+                total,
             )
 
             metadata = result.get("metadata", {})
@@ -120,8 +159,8 @@ class UpwindClient:
             if not cursor:
                 break
 
-        logging.info("Fetched %d total items from Upwind API.", len(all_items))
-        return all_items
+        logging.info("Fetched %d total items from Upwind API.", total)
+        return total
 
     def _send_with_retry(
         self, method, url, headers, params, json_body=None
@@ -183,7 +222,7 @@ class UpwindClient:
 
         return self._send_with_retry("GET", url, headers, params)
 
-    def _fetch_page_paginated(self, url: str, base_params: dict) -> list:
+    def _fetch_page_paginated(self, url: str, base_params: dict, on_page) -> int:
         """
         Fetch all items from a GET endpoint using 1-based page-number pagination
         (page + per-page query params). Stops when a page returns fewer items
@@ -191,13 +230,16 @@ class UpwindClient:
 
         :param url: The full API endpoint URL.
         :param base_params: Query params to send on every page (time window, per-page, etc).
-        :return: List of item dictionaries from all pages.
+        :param on_page: Callback invoked with each page's items as they are
+            fetched, so pages can be uploaded without buffering the whole
+            dataset in memory.
+        :return: Total number of items fetched across all pages.
         """
 
         token = self._get_access_token()
         headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
 
-        all_items = []
+        total = 0
         page = 1
 
         while True:
@@ -213,36 +255,40 @@ class UpwindClient:
 
             result = response.json()
             items = result if isinstance(result, list) else result.get("items", result.get("data", []))
-            all_items.extend(items)
+            total += len(items)
+            on_page(items)
 
             logging.info(
                 "Page %d: fetched %d items (total so far: %d)",
                 page,
                 len(items),
-                len(all_items),
+                total,
             )
 
             if len(items) < self.page_size:
                 break
             page += 1
 
-        logging.info("Fetched %d total items from Upwind API.", len(all_items))
-        return all_items
+        logging.info("Fetched %d total items from Upwind API.", total)
+        return total
 
-    def _fetch_link_header_paginated(self, url: str, base_params: dict) -> list:
+    def _fetch_link_header_paginated(self, url: str, base_params: dict, on_page) -> int:
         """
         Fetch all items from a GET endpoint that paginates via the standard
         HTTP `Link` response header (rel="next"), e.g. GitHub-style pagination.
 
         :param url: The full API endpoint URL.
         :param base_params: Query params to send on the first request (e.g. per-page).
-        :return: List of item dictionaries from all pages.
+        :param on_page: Callback invoked with each page's items as they are
+            fetched, so pages can be uploaded without buffering the whole
+            dataset in memory.
+        :return: Total number of items fetched across all pages.
         """
 
         token = self._get_access_token()
         headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
 
-        all_items = []
+        total = 0
         next_url = url
         params = dict(base_params)
         page_number = 0
@@ -258,18 +304,19 @@ class UpwindClient:
 
             result = response.json()
             items = result if isinstance(result, list) else result.get("items", result.get("data", []))
-            all_items.extend(items)
+            total += len(items)
+            on_page(items)
 
             logging.info(
                 "Page %d: fetched %d items (total so far: %d)",
                 page_number,
                 len(items),
-                len(all_items),
+                total,
             )
 
             next_link = response.links.get("next")
             next_url = next_link["url"] if next_link else None
             params = None  # the next-page URL already carries its own query string
 
-        logging.info("Fetched %d total items from Upwind API.", len(all_items))
-        return all_items
+        logging.info("Fetched %d total items from Upwind API.", total)
+        return total
