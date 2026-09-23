@@ -2,7 +2,7 @@
 
 ## Version 0.7.5
 
-- (2026-09-21) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #??](https://github.com/Azure/Azure-Sentinel/pull/??)
+- (2026-09-21) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
 
 ## Version 0.7.4
 
