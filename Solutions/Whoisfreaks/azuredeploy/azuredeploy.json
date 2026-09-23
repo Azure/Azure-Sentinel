@@ -1,0 +1,2147 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "WhoisFreaks Sentinel connector infrastructure: Function App, storage, DCE, DCR, custom tables, role assignments."
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel / Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for Function App, storage, DCE (should match workspace region when possible)"
+      }
+    },
+    "whoisfreaksApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "WhoisFreaks API key"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "[concat('whoisfreaks-', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Function App name (must be globally unique)"
+      }
+    },
+    "functionPackageUrl": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/WhoisFreaks/Package/FunctionApp.zip",
+      "metadata": {
+        "description": "URL of FunctionApp.zip for WEBSITE_RUN_FROM_PACKAGE. Default is the Azure-Sentinel raw GitHub URL after the PR merges. Override with a SAS URL when testing before merge."
+      }
+    },
+    "enableMalware": {
+      "type": "bool",
+      "defaultValue": true
+    },
+    "enablePhishing": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "enableSpam": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "enableNrdGtldWithWhois": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "enableNrdCctldWithWhois": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "enableNrdGtldWithoutWhois": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "enableNrdCctldWithoutWhois": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "hostingPlanSku": {
+      "type": "string",
+      "defaultValue": "B1",
+      "allowedValues": [
+        "B1",
+        "B2",
+        "B3",
+        "S1",
+        "EP1"
+      ],
+      "metadata": {
+        "description": "App Service plan SKU. Use B1+ (not Y1) when the resource group blocks Linux Consumption (LinuxDynamicWorkersNotAllowedInResourceGroup)."
+      }
+    },
+    "hostingPlanTier": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "allowedValues": [
+        "Basic",
+        "Standard",
+        "ElasticPremium"
+      ],
+      "metadata": {
+        "description": "Tier matching hostingPlanSku (B1\u2192Basic, S1\u2192Standard, EP1\u2192ElasticPremium)."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('functionAppName'))]",
+    "storageAccountName": "[toLower(concat('wf', uniqueString(resourceGroup().id, parameters('functionAppName'))))]",
+    "hostingPlanName": "[concat(parameters('functionAppName'), '-plan')]",
+    "dceName": "[concat('whoisfreaks-dce-', variables('suffix'))]",
+    "dcrName": "[concat('whoisfreaks-dcr-', variables('suffix'))]",
+    "appInsightsName": "[concat(parameters('functionAppName'), '-ai')]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+    "storageBlobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+    "boolToString": {
+      "true": "true",
+      "false": "false"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksMalware_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksMalware_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "domain",
+              "type": "string"
+            },
+            {
+              "name": "threat_type",
+              "type": "string"
+            },
+            {
+              "name": "confidence",
+              "type": "real"
+            },
+            {
+              "name": "first_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "last_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "No_of_threat_matched_pivots",
+              "type": "int"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksPhishing_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksPhishing_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "domain",
+              "type": "string"
+            },
+            {
+              "name": "threat_type",
+              "type": "string"
+            },
+            {
+              "name": "confidence",
+              "type": "real"
+            },
+            {
+              "name": "first_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "last_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "No_of_threat_matched_pivots",
+              "type": "int"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksSpam_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksSpam_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "domain",
+              "type": "string"
+            },
+            {
+              "name": "threat_type",
+              "type": "string"
+            },
+            {
+              "name": "confidence",
+              "type": "real"
+            },
+            {
+              "name": "first_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "last_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "No_of_threat_matched_pivots",
+              "type": "int"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksNRDGtldWithWhois_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksNRDGtldWithWhois_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "num",
+              "type": "int"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "query_time",
+              "type": "datetime"
+            },
+            {
+              "name": "create_date",
+              "type": "datetime"
+            },
+            {
+              "name": "update_date",
+              "type": "datetime"
+            },
+            {
+              "name": "expiry_date",
+              "type": "datetime"
+            },
+            {
+              "name": "domain_registrar_id",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_name",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_whois",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_url",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_email_address",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_phone",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_authoritative_registry_name",
+              "type": "string"
+            },
+            {
+              "name": "registrant_id",
+              "type": "string"
+            },
+            {
+              "name": "registrant_id_type",
+              "type": "string"
+            },
+            {
+              "name": "registrant_handle",
+              "type": "string"
+            },
+            {
+              "name": "registrant_name",
+              "type": "string"
+            },
+            {
+              "name": "registrant_company",
+              "type": "string"
+            },
+            {
+              "name": "registrant_address",
+              "type": "string"
+            },
+            {
+              "name": "registrant_city",
+              "type": "string"
+            },
+            {
+              "name": "registrant_state",
+              "type": "string"
+            },
+            {
+              "name": "registrant_zip",
+              "type": "string"
+            },
+            {
+              "name": "registrant_country_code",
+              "type": "string"
+            },
+            {
+              "name": "registrant_country",
+              "type": "string"
+            },
+            {
+              "name": "registrant_email",
+              "type": "string"
+            },
+            {
+              "name": "registrant_phone",
+              "type": "string"
+            },
+            {
+              "name": "registrant_fax",
+              "type": "string"
+            },
+            {
+              "name": "administrative_id",
+              "type": "string"
+            },
+            {
+              "name": "administrative_id_type",
+              "type": "string"
+            },
+            {
+              "name": "administrative_handle",
+              "type": "string"
+            },
+            {
+              "name": "administrative_name",
+              "type": "string"
+            },
+            {
+              "name": "administrative_company",
+              "type": "string"
+            },
+            {
+              "name": "administrative_address",
+              "type": "string"
+            },
+            {
+              "name": "administrative_city",
+              "type": "string"
+            },
+            {
+              "name": "administrative_state",
+              "type": "string"
+            },
+            {
+              "name": "administrative_zip",
+              "type": "string"
+            },
+            {
+              "name": "administrative_country_code",
+              "type": "string"
+            },
+            {
+              "name": "administrative_country",
+              "type": "string"
+            },
+            {
+              "name": "administrative_email",
+              "type": "string"
+            },
+            {
+              "name": "administrative_phone",
+              "type": "string"
+            },
+            {
+              "name": "administrative_fax",
+              "type": "string"
+            },
+            {
+              "name": "technical_id",
+              "type": "string"
+            },
+            {
+              "name": "technical_id_type",
+              "type": "string"
+            },
+            {
+              "name": "technical_handle",
+              "type": "string"
+            },
+            {
+              "name": "technical_name",
+              "type": "string"
+            },
+            {
+              "name": "technical_company",
+              "type": "string"
+            },
+            {
+              "name": "technical_address",
+              "type": "string"
+            },
+            {
+              "name": "technical_city",
+              "type": "string"
+            },
+            {
+              "name": "technical_state",
+              "type": "string"
+            },
+            {
+              "name": "technical_zip",
+              "type": "string"
+            },
+            {
+              "name": "technical_country_code",
+              "type": "string"
+            },
+            {
+              "name": "technical_country",
+              "type": "string"
+            },
+            {
+              "name": "technical_email",
+              "type": "string"
+            },
+            {
+              "name": "technical_phone",
+              "type": "string"
+            },
+            {
+              "name": "technical_fax",
+              "type": "string"
+            },
+            {
+              "name": "billing_id",
+              "type": "string"
+            },
+            {
+              "name": "billing_id_type",
+              "type": "string"
+            },
+            {
+              "name": "billing_handle",
+              "type": "string"
+            },
+            {
+              "name": "billing_name",
+              "type": "string"
+            },
+            {
+              "name": "billing_company",
+              "type": "string"
+            },
+            {
+              "name": "billing_address",
+              "type": "string"
+            },
+            {
+              "name": "billing_city",
+              "type": "string"
+            },
+            {
+              "name": "billing_state",
+              "type": "string"
+            },
+            {
+              "name": "billing_zip",
+              "type": "string"
+            },
+            {
+              "name": "billing_country_code",
+              "type": "string"
+            },
+            {
+              "name": "billing_country",
+              "type": "string"
+            },
+            {
+              "name": "billing_email",
+              "type": "string"
+            },
+            {
+              "name": "billing_phone",
+              "type": "string"
+            },
+            {
+              "name": "billing_fax",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_id",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_name",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_type",
+              "type": "string"
+            },
+            {
+              "name": "name_server_1",
+              "type": "string"
+            },
+            {
+              "name": "name_server_2",
+              "type": "string"
+            },
+            {
+              "name": "name_server_3",
+              "type": "string"
+            },
+            {
+              "name": "name_server_4",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_1",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_2",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_3",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_4",
+              "type": "string"
+            },
+            {
+              "name": "reseller_name",
+              "type": "string"
+            },
+            {
+              "name": "reseller_email",
+              "type": "string"
+            },
+            {
+              "name": "reseller_phone",
+              "type": "string"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksNRDCctldWithWhois_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksNRDCctldWithWhois_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "num",
+              "type": "int"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "query_time",
+              "type": "datetime"
+            },
+            {
+              "name": "create_date",
+              "type": "datetime"
+            },
+            {
+              "name": "update_date",
+              "type": "datetime"
+            },
+            {
+              "name": "expiry_date",
+              "type": "datetime"
+            },
+            {
+              "name": "domain_registrar_id",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_name",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_whois",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_url",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_email_address",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_phone",
+              "type": "string"
+            },
+            {
+              "name": "domain_registrar_authoritative_registry_name",
+              "type": "string"
+            },
+            {
+              "name": "registrant_id",
+              "type": "string"
+            },
+            {
+              "name": "registrant_id_type",
+              "type": "string"
+            },
+            {
+              "name": "registrant_handle",
+              "type": "string"
+            },
+            {
+              "name": "registrant_name",
+              "type": "string"
+            },
+            {
+              "name": "registrant_company",
+              "type": "string"
+            },
+            {
+              "name": "registrant_address",
+              "type": "string"
+            },
+            {
+              "name": "registrant_city",
+              "type": "string"
+            },
+            {
+              "name": "registrant_state",
+              "type": "string"
+            },
+            {
+              "name": "registrant_zip",
+              "type": "string"
+            },
+            {
+              "name": "registrant_country_code",
+              "type": "string"
+            },
+            {
+              "name": "registrant_country",
+              "type": "string"
+            },
+            {
+              "name": "registrant_email",
+              "type": "string"
+            },
+            {
+              "name": "registrant_phone",
+              "type": "string"
+            },
+            {
+              "name": "registrant_fax",
+              "type": "string"
+            },
+            {
+              "name": "administrative_id",
+              "type": "string"
+            },
+            {
+              "name": "administrative_id_type",
+              "type": "string"
+            },
+            {
+              "name": "administrative_handle",
+              "type": "string"
+            },
+            {
+              "name": "administrative_name",
+              "type": "string"
+            },
+            {
+              "name": "administrative_company",
+              "type": "string"
+            },
+            {
+              "name": "administrative_address",
+              "type": "string"
+            },
+            {
+              "name": "administrative_city",
+              "type": "string"
+            },
+            {
+              "name": "administrative_state",
+              "type": "string"
+            },
+            {
+              "name": "administrative_zip",
+              "type": "string"
+            },
+            {
+              "name": "administrative_country_code",
+              "type": "string"
+            },
+            {
+              "name": "administrative_country",
+              "type": "string"
+            },
+            {
+              "name": "administrative_email",
+              "type": "string"
+            },
+            {
+              "name": "administrative_phone",
+              "type": "string"
+            },
+            {
+              "name": "administrative_fax",
+              "type": "string"
+            },
+            {
+              "name": "technical_id",
+              "type": "string"
+            },
+            {
+              "name": "technical_id_type",
+              "type": "string"
+            },
+            {
+              "name": "technical_handle",
+              "type": "string"
+            },
+            {
+              "name": "technical_name",
+              "type": "string"
+            },
+            {
+              "name": "technical_company",
+              "type": "string"
+            },
+            {
+              "name": "technical_address",
+              "type": "string"
+            },
+            {
+              "name": "technical_city",
+              "type": "string"
+            },
+            {
+              "name": "technical_state",
+              "type": "string"
+            },
+            {
+              "name": "technical_zip",
+              "type": "string"
+            },
+            {
+              "name": "technical_country_code",
+              "type": "string"
+            },
+            {
+              "name": "technical_country",
+              "type": "string"
+            },
+            {
+              "name": "technical_email",
+              "type": "string"
+            },
+            {
+              "name": "technical_phone",
+              "type": "string"
+            },
+            {
+              "name": "technical_fax",
+              "type": "string"
+            },
+            {
+              "name": "billing_id",
+              "type": "string"
+            },
+            {
+              "name": "billing_id_type",
+              "type": "string"
+            },
+            {
+              "name": "billing_handle",
+              "type": "string"
+            },
+            {
+              "name": "billing_name",
+              "type": "string"
+            },
+            {
+              "name": "billing_company",
+              "type": "string"
+            },
+            {
+              "name": "billing_address",
+              "type": "string"
+            },
+            {
+              "name": "billing_city",
+              "type": "string"
+            },
+            {
+              "name": "billing_state",
+              "type": "string"
+            },
+            {
+              "name": "billing_zip",
+              "type": "string"
+            },
+            {
+              "name": "billing_country_code",
+              "type": "string"
+            },
+            {
+              "name": "billing_country",
+              "type": "string"
+            },
+            {
+              "name": "billing_email",
+              "type": "string"
+            },
+            {
+              "name": "billing_phone",
+              "type": "string"
+            },
+            {
+              "name": "billing_fax",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_id",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_name",
+              "type": "string"
+            },
+            {
+              "name": "eligibility_type",
+              "type": "string"
+            },
+            {
+              "name": "name_server_1",
+              "type": "string"
+            },
+            {
+              "name": "name_server_2",
+              "type": "string"
+            },
+            {
+              "name": "name_server_3",
+              "type": "string"
+            },
+            {
+              "name": "name_server_4",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_1",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_2",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_3",
+              "type": "string"
+            },
+            {
+              "name": "domain_status_4",
+              "type": "string"
+            },
+            {
+              "name": "reseller_name",
+              "type": "string"
+            },
+            {
+              "name": "reseller_email",
+              "type": "string"
+            },
+            {
+              "name": "reseller_phone",
+              "type": "string"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksNRDGtldWithoutWhois_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksNRDGtldWithoutWhois_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/WhoisFreaksNRDCctldWithoutWhois_CL')]",
+      "properties": {
+        "schema": {
+          "name": "WhoisFreaksNRDCctldWithoutWhois_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTimeUtc",
+              "type": "datetime"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('hostingPlanSku')]",
+        "tier": "[parameters('hostingPlanTier')]"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[variables('workspaceResourceId')]",
+        "IngestionMode": "LogAnalytics",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksMalware_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksPhishing_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksSpam_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksNRDGtldWithWhois_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksNRDCctldWithWhois_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksNRDGtldWithoutWhois_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'WhoisFreaksNRDCctldWithoutWhois_CL')]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "logAnalyticsWorkspace"
+            }
+          ]
+        },
+        "streamDeclarations": {
+          "Custom-WhoisFreaksMalware": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "threat_type",
+                "type": "string"
+              },
+              {
+                "name": "confidence",
+                "type": "real"
+              },
+              {
+                "name": "first_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "last_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "No_of_threat_matched_pivots",
+                "type": "int"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksPhishing": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "threat_type",
+                "type": "string"
+              },
+              {
+                "name": "confidence",
+                "type": "real"
+              },
+              {
+                "name": "first_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "last_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "No_of_threat_matched_pivots",
+                "type": "int"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksSpam": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "threat_type",
+                "type": "string"
+              },
+              {
+                "name": "confidence",
+                "type": "real"
+              },
+              {
+                "name": "first_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "last_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "No_of_threat_matched_pivots",
+                "type": "int"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksNRDGtldWithWhois": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "num",
+                "type": "int"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "query_time",
+                "type": "datetime"
+              },
+              {
+                "name": "create_date",
+                "type": "datetime"
+              },
+              {
+                "name": "update_date",
+                "type": "datetime"
+              },
+              {
+                "name": "expiry_date",
+                "type": "datetime"
+              },
+              {
+                "name": "domain_registrar_id",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_name",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_whois",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_url",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_email_address",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_phone",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_authoritative_registry_name",
+                "type": "string"
+              },
+              {
+                "name": "registrant_id",
+                "type": "string"
+              },
+              {
+                "name": "registrant_id_type",
+                "type": "string"
+              },
+              {
+                "name": "registrant_handle",
+                "type": "string"
+              },
+              {
+                "name": "registrant_name",
+                "type": "string"
+              },
+              {
+                "name": "registrant_company",
+                "type": "string"
+              },
+              {
+                "name": "registrant_address",
+                "type": "string"
+              },
+              {
+                "name": "registrant_city",
+                "type": "string"
+              },
+              {
+                "name": "registrant_state",
+                "type": "string"
+              },
+              {
+                "name": "registrant_zip",
+                "type": "string"
+              },
+              {
+                "name": "registrant_country_code",
+                "type": "string"
+              },
+              {
+                "name": "registrant_country",
+                "type": "string"
+              },
+              {
+                "name": "registrant_email",
+                "type": "string"
+              },
+              {
+                "name": "registrant_phone",
+                "type": "string"
+              },
+              {
+                "name": "registrant_fax",
+                "type": "string"
+              },
+              {
+                "name": "administrative_id",
+                "type": "string"
+              },
+              {
+                "name": "administrative_id_type",
+                "type": "string"
+              },
+              {
+                "name": "administrative_handle",
+                "type": "string"
+              },
+              {
+                "name": "administrative_name",
+                "type": "string"
+              },
+              {
+                "name": "administrative_company",
+                "type": "string"
+              },
+              {
+                "name": "administrative_address",
+                "type": "string"
+              },
+              {
+                "name": "administrative_city",
+                "type": "string"
+              },
+              {
+                "name": "administrative_state",
+                "type": "string"
+              },
+              {
+                "name": "administrative_zip",
+                "type": "string"
+              },
+              {
+                "name": "administrative_country_code",
+                "type": "string"
+              },
+              {
+                "name": "administrative_country",
+                "type": "string"
+              },
+              {
+                "name": "administrative_email",
+                "type": "string"
+              },
+              {
+                "name": "administrative_phone",
+                "type": "string"
+              },
+              {
+                "name": "administrative_fax",
+                "type": "string"
+              },
+              {
+                "name": "technical_id",
+                "type": "string"
+              },
+              {
+                "name": "technical_id_type",
+                "type": "string"
+              },
+              {
+                "name": "technical_handle",
+                "type": "string"
+              },
+              {
+                "name": "technical_name",
+                "type": "string"
+              },
+              {
+                "name": "technical_company",
+                "type": "string"
+              },
+              {
+                "name": "technical_address",
+                "type": "string"
+              },
+              {
+                "name": "technical_city",
+                "type": "string"
+              },
+              {
+                "name": "technical_state",
+                "type": "string"
+              },
+              {
+                "name": "technical_zip",
+                "type": "string"
+              },
+              {
+                "name": "technical_country_code",
+                "type": "string"
+              },
+              {
+                "name": "technical_country",
+                "type": "string"
+              },
+              {
+                "name": "technical_email",
+                "type": "string"
+              },
+              {
+                "name": "technical_phone",
+                "type": "string"
+              },
+              {
+                "name": "technical_fax",
+                "type": "string"
+              },
+              {
+                "name": "billing_id",
+                "type": "string"
+              },
+              {
+                "name": "billing_id_type",
+                "type": "string"
+              },
+              {
+                "name": "billing_handle",
+                "type": "string"
+              },
+              {
+                "name": "billing_name",
+                "type": "string"
+              },
+              {
+                "name": "billing_company",
+                "type": "string"
+              },
+              {
+                "name": "billing_address",
+                "type": "string"
+              },
+              {
+                "name": "billing_city",
+                "type": "string"
+              },
+              {
+                "name": "billing_state",
+                "type": "string"
+              },
+              {
+                "name": "billing_zip",
+                "type": "string"
+              },
+              {
+                "name": "billing_country_code",
+                "type": "string"
+              },
+              {
+                "name": "billing_country",
+                "type": "string"
+              },
+              {
+                "name": "billing_email",
+                "type": "string"
+              },
+              {
+                "name": "billing_phone",
+                "type": "string"
+              },
+              {
+                "name": "billing_fax",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_id",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_name",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_type",
+                "type": "string"
+              },
+              {
+                "name": "name_server_1",
+                "type": "string"
+              },
+              {
+                "name": "name_server_2",
+                "type": "string"
+              },
+              {
+                "name": "name_server_3",
+                "type": "string"
+              },
+              {
+                "name": "name_server_4",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_1",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_2",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_3",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_4",
+                "type": "string"
+              },
+              {
+                "name": "reseller_name",
+                "type": "string"
+              },
+              {
+                "name": "reseller_email",
+                "type": "string"
+              },
+              {
+                "name": "reseller_phone",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksNRDCctldWithWhois": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "num",
+                "type": "int"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "query_time",
+                "type": "datetime"
+              },
+              {
+                "name": "create_date",
+                "type": "datetime"
+              },
+              {
+                "name": "update_date",
+                "type": "datetime"
+              },
+              {
+                "name": "expiry_date",
+                "type": "datetime"
+              },
+              {
+                "name": "domain_registrar_id",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_name",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_whois",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_url",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_email_address",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_phone",
+                "type": "string"
+              },
+              {
+                "name": "domain_registrar_authoritative_registry_name",
+                "type": "string"
+              },
+              {
+                "name": "registrant_id",
+                "type": "string"
+              },
+              {
+                "name": "registrant_id_type",
+                "type": "string"
+              },
+              {
+                "name": "registrant_handle",
+                "type": "string"
+              },
+              {
+                "name": "registrant_name",
+                "type": "string"
+              },
+              {
+                "name": "registrant_company",
+                "type": "string"
+              },
+              {
+                "name": "registrant_address",
+                "type": "string"
+              },
+              {
+                "name": "registrant_city",
+                "type": "string"
+              },
+              {
+                "name": "registrant_state",
+                "type": "string"
+              },
+              {
+                "name": "registrant_zip",
+                "type": "string"
+              },
+              {
+                "name": "registrant_country_code",
+                "type": "string"
+              },
+              {
+                "name": "registrant_country",
+                "type": "string"
+              },
+              {
+                "name": "registrant_email",
+                "type": "string"
+              },
+              {
+                "name": "registrant_phone",
+                "type": "string"
+              },
+              {
+                "name": "registrant_fax",
+                "type": "string"
+              },
+              {
+                "name": "administrative_id",
+                "type": "string"
+              },
+              {
+                "name": "administrative_id_type",
+                "type": "string"
+              },
+              {
+                "name": "administrative_handle",
+                "type": "string"
+              },
+              {
+                "name": "administrative_name",
+                "type": "string"
+              },
+              {
+                "name": "administrative_company",
+                "type": "string"
+              },
+              {
+                "name": "administrative_address",
+                "type": "string"
+              },
+              {
+                "name": "administrative_city",
+                "type": "string"
+              },
+              {
+                "name": "administrative_state",
+                "type": "string"
+              },
+              {
+                "name": "administrative_zip",
+                "type": "string"
+              },
+              {
+                "name": "administrative_country_code",
+                "type": "string"
+              },
+              {
+                "name": "administrative_country",
+                "type": "string"
+              },
+              {
+                "name": "administrative_email",
+                "type": "string"
+              },
+              {
+                "name": "administrative_phone",
+                "type": "string"
+              },
+              {
+                "name": "administrative_fax",
+                "type": "string"
+              },
+              {
+                "name": "technical_id",
+                "type": "string"
+              },
+              {
+                "name": "technical_id_type",
+                "type": "string"
+              },
+              {
+                "name": "technical_handle",
+                "type": "string"
+              },
+              {
+                "name": "technical_name",
+                "type": "string"
+              },
+              {
+                "name": "technical_company",
+                "type": "string"
+              },
+              {
+                "name": "technical_address",
+                "type": "string"
+              },
+              {
+                "name": "technical_city",
+                "type": "string"
+              },
+              {
+                "name": "technical_state",
+                "type": "string"
+              },
+              {
+                "name": "technical_zip",
+                "type": "string"
+              },
+              {
+                "name": "technical_country_code",
+                "type": "string"
+              },
+              {
+                "name": "technical_country",
+                "type": "string"
+              },
+              {
+                "name": "technical_email",
+                "type": "string"
+              },
+              {
+                "name": "technical_phone",
+                "type": "string"
+              },
+              {
+                "name": "technical_fax",
+                "type": "string"
+              },
+              {
+                "name": "billing_id",
+                "type": "string"
+              },
+              {
+                "name": "billing_id_type",
+                "type": "string"
+              },
+              {
+                "name": "billing_handle",
+                "type": "string"
+              },
+              {
+                "name": "billing_name",
+                "type": "string"
+              },
+              {
+                "name": "billing_company",
+                "type": "string"
+              },
+              {
+                "name": "billing_address",
+                "type": "string"
+              },
+              {
+                "name": "billing_city",
+                "type": "string"
+              },
+              {
+                "name": "billing_state",
+                "type": "string"
+              },
+              {
+                "name": "billing_zip",
+                "type": "string"
+              },
+              {
+                "name": "billing_country_code",
+                "type": "string"
+              },
+              {
+                "name": "billing_country",
+                "type": "string"
+              },
+              {
+                "name": "billing_email",
+                "type": "string"
+              },
+              {
+                "name": "billing_phone",
+                "type": "string"
+              },
+              {
+                "name": "billing_fax",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_id",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_name",
+                "type": "string"
+              },
+              {
+                "name": "eligibility_type",
+                "type": "string"
+              },
+              {
+                "name": "name_server_1",
+                "type": "string"
+              },
+              {
+                "name": "name_server_2",
+                "type": "string"
+              },
+              {
+                "name": "name_server_3",
+                "type": "string"
+              },
+              {
+                "name": "name_server_4",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_1",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_2",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_3",
+                "type": "string"
+              },
+              {
+                "name": "domain_status_4",
+                "type": "string"
+              },
+              {
+                "name": "reseller_name",
+                "type": "string"
+              },
+              {
+                "name": "reseller_email",
+                "type": "string"
+              },
+              {
+                "name": "reseller_phone",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksNRDGtldWithoutWhois": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-WhoisFreaksNRDCctldWithoutWhois": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTimeUtc",
+                "type": "datetime"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-WhoisFreaksMalware"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksMalware_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksPhishing"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksPhishing_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksSpam"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksSpam_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksNRDGtldWithWhois"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksNRDGtldWithWhois_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksNRDCctldWithWhois"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksNRDCctldWithWhois_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksNRDGtldWithoutWhois"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksNRDGtldWithoutWhois_CL"
+          },
+          {
+            "streams": [
+              "Custom-WhoisFreaksNRDCctldWithoutWhois"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-WhoisFreaksNRDCctldWithoutWhois_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "Python|3.11",
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2",
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(parameters('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "[parameters('functionPackageUrl')]"
+            },
+            {
+              "name": "WHOISFREAKS_API_KEY",
+              "value": "[parameters('whoisfreaksApiKey')]"
+            },
+            {
+              "name": "CHECKPOINT_STORAGE_ACCOUNT",
+              "value": "[variables('storageAccountName')]"
+            },
+            {
+              "name": "DCR_INGESTION_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]"
+            },
+            {
+              "name": "DCR_IMMUTABLE_ID",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_MALWARE_ENABLED",
+              "value": "[if(parameters('enableMalware'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_PHISHING_ENABLED",
+              "value": "[if(parameters('enablePhishing'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_SPAM_ENABLED",
+              "value": "[if(parameters('enableSpam'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_NRD_GTLD_WITH_WHOIS_ENABLED",
+              "value": "[if(parameters('enableNrdGtldWithWhois'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_NRD_CCTLD_WITH_WHOIS_ENABLED",
+              "value": "[if(parameters('enableNrdCctldWithWhois'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_NRD_GTLD_WITHOUT_WHOIS_ENABLED",
+              "value": "[if(parameters('enableNrdGtldWithoutWhois'), 'true', 'false')]"
+            },
+            {
+              "name": "WHOISFREAKS_FEED_NRD_CCTLD_WITHOUT_WHOIS_ENABLED",
+              "value": "[if(parameters('enableNrdCctldWithoutWhois'), 'true', 'false')]"
+            }
+          ],
+          "alwaysOn": true
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), parameters('functionAppName'), variables('storageBlobDataContributorRoleId'))]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-09-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), parameters('functionAppName'), variables('monitoringMetricsPublisherRoleId'))]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-09-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[parameters('functionAppName')]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]"
+    },
+    "checkpointStorageAccount": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    }
+  }
+}

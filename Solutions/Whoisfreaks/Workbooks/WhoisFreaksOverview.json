@@ -1,0 +1,147 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## WhoisFreaks Overview\n\nIngestion volume, feed breakdown, top TLDs, NRD recency, and threat-domain activity for the WhoisFreaks Microsoft Sentinel solution."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL, WhoisFreaksNRDGtldWithWhois_CL, WhoisFreaksNRDCctldWithWhois_CL, WhoisFreaksNRDGtldWithoutWhois_CL, WhoisFreaksNRDCctldWithoutWhois_CL\n| where TimeGenerated {TimeRange}\n| summarize Records = count() by bin(TimeGenerated, 1d), Type\n| render timechart",
+        "size": 0,
+        "title": "Ingestion volume by feed (daily)",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "volume"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL, WhoisFreaksNRDGtldWithWhois_CL, WhoisFreaksNRDCctldWithWhois_CL, WhoisFreaksNRDGtldWithoutWhois_CL, WhoisFreaksNRDCctldWithoutWhois_CL\n| where TimeGenerated {TimeRange}\n| summarize Records = count() by Type\n| render piechart",
+        "size": 0,
+        "title": "Records by feed type",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "bytype"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true\n  (WhoisFreaksMalware_CL | extend Domain = tostring(domain)),\n  (WhoisFreaksPhishing_CL | extend Domain = tostring(domain)),\n  (WhoisFreaksSpam_CL | extend Domain = tostring(domain)),\n  (WhoisFreaksNRDGtldWithWhois_CL | extend Domain = tostring(domain_name)),\n  (WhoisFreaksNRDCctldWithWhois_CL | extend Domain = tostring(domain_name)),\n  (WhoisFreaksNRDGtldWithoutWhois_CL | extend Domain = tostring(domain_name)),\n  (WhoisFreaksNRDCctldWithoutWhois_CL | extend Domain = tostring(domain_name))\n| where TimeGenerated {TimeRange}\n| where isnotempty(Domain)\n| extend TLD = tostring(extract(@\"\\.([^.]+)$\", 1, Domain))\n| where isnotempty(TLD)\n| summarize Domains = dcount(Domain) by TLD\n| top 15 by Domains\n| render barchart",
+        "size": 0,
+        "title": "Top TLDs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "tlds"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true WhoisFreaksNRDGtldWithWhois_CL, WhoisFreaksNRDCctldWithWhois_CL\n| where TimeGenerated {TimeRange}\n| extend CreateDate = todatetime(create_date)\n| where isnotnull(CreateDate)\n| extend AgeDays = datetime_diff('day', now(), CreateDate)\n| summarize Domains = dcount(tostring(domain_name)) by AgeBucket = case(\n    AgeDays <= 1, \"0-1 days\",\n    AgeDays <= 7, \"2-7 days\",\n    AgeDays <= 30, \"8-30 days\",\n    \">30 days\")\n| render barchart",
+        "size": 0,
+        "title": "NRD age (with WHOIS)",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "nrdage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL\n| where TimeGenerated {TimeRange}\n| extend\n    Domain = tolower(trim(\" \", coalesce(tostring(domain), tostring(domain_name), \"\"))),\n    ThreatType = tostring(coalesce(threat_type, \"\")),\n    Confidence = todouble(confidence)\n| where isnotempty(Domain)\n| summarize Confidence = max(Confidence), ThreatType = any(ThreatType), LastSeen = max(TimeGenerated) by Domain\n| top 50 by Confidence desc\n| project Domain, ThreatType, Confidence, LastSeen",
+        "size": 0,
+        "title": "Top threat domains by confidence",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "topthreats"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let ti = union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL\n| where TimeGenerated {TimeRange}\n| extend Domain = tolower(trim(\" \", coalesce(tostring(domain), tostring(domain_name), \"\")))\n| where isnotempty(Domain)\n| summarize ThreatType = any(tostring(coalesce(threat_type, \"\"))) by Domain;\nDnsEvents\n| where TimeGenerated {TimeRange}\n| extend Domain = tolower(trim(\" \", tostring(Name)))\n| where isnotempty(Domain)\n| summarize Hits = count(), LastSeen = max(TimeGenerated) by Domain, Computer\n| join kind=inner ti on Domain\n| project LastSeen, Domain, ThreatType, Computer, Hits\n| order by LastSeen desc\n| take 100",
+        "size": 0,
+        "title": "Threat domain matches in DnsEvents (if available)",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "timatch"
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Monitor"
+  ],
+  "styleSettings": {},
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

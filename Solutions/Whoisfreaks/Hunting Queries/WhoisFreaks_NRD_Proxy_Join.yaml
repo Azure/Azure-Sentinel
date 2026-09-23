@@ -1,0 +1,61 @@
+id: d0f6b4e5-7a8c-9d01-2e3f-4a5b6c7d8e9f
+name: WhoisFreaks - NRD contact via proxy or firewall
+description: |
+  'Finds CommonSecurityLog / proxy traffic to domains present in WhoisFreaks NRD feeds
+  registered in the last 14 days. Useful for investigating fresh domain infrastructure.'
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksNRDGtldWithWhois_CL
+      - WhoisFreaksNRDCctldWithWhois_CL
+      - WhoisFreaksNRDGtldWithoutWhois_CL
+      - WhoisFreaksNRDCctldWithoutWhois_CL
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1566
+  - T1071
+query: |
+  let nrd_age = 14d;
+  let nrd =
+      union isfuzzy=true
+          (WhoisFreaksNRDGtldWithWhois_CL
+              | extend Domain = tolower(trim(" ", tostring(domain_name))), CreateDate = todatetime(create_date)),
+          (WhoisFreaksNRDCctldWithWhois_CL
+              | extend Domain = tolower(trim(" ", tostring(domain_name))), CreateDate = todatetime(create_date)),
+          (WhoisFreaksNRDGtldWithoutWhois_CL
+              | extend Domain = tolower(trim(" ", tostring(domain_name))), CreateDate = datetime(null)),
+          (WhoisFreaksNRDCctldWithoutWhois_CL
+              | extend Domain = tolower(trim(" ", tostring(domain_name))), CreateDate = datetime(null))
+      | where TimeGenerated >= ago(14d)
+      | where isnotempty(Domain)
+      | where isnull(CreateDate) or CreateDate >= ago(nrd_age)
+      | summarize CreateDate = min(CreateDate) by Domain;
+  CommonSecurityLog
+  | where TimeGenerated >= ago(7d)
+  | where isnotempty(DestinationHostName) or isnotempty(RequestURL)
+  | extend Domain = tolower(trim(" ", coalesce(
+        tostring(DestinationHostName),
+        tostring(parse_url(tostring(RequestURL)).Host),
+        "")))
+  | where isnotempty(Domain)
+  | summarize
+      Hits = count(),
+      Sources = make_set(SourceIP, 30),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+    by Domain, DeviceName
+  | join kind=inner nrd on Domain
+  | project FirstSeen, LastSeen, Domain, CreateDate, DeviceName, Sources, Hits
+  | order by LastSeen desc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Domain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+version: 1.0.0

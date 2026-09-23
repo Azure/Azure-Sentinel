@@ -1,0 +1,39 @@
+id: e1a7c5f6-8b9d-0e12-3f4a-5b6c7d8e9f0a
+name: WhoisFreaks - High-confidence threat domains
+description: |
+  'Lists WhoisFreaks threat-intelligence domains with confidence >= 0.8 (or missing confidence)
+  observed in the last 7 days. Use as a seed list for blocklists or deeper investigation.'
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksMalware_CL
+      - WhoisFreaksPhishing_CL
+      - WhoisFreaksSpam_CL
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL
+  | where TimeGenerated >= ago(7d)
+  | extend
+      Domain = tolower(trim(" ", coalesce(tostring(domain), tostring(domain_name), ""))),
+      ThreatType = tostring(coalesce(threat_type, "")),
+      Confidence = todouble(confidence)
+  | where isnotempty(Domain)
+  | where isnull(Confidence) or Confidence >= 0.8
+  | summarize
+      Confidence = max(Confidence),
+      ThreatType = any(ThreatType),
+      FirstSeen = min(todatetime(first_seen)),
+      LastSeen = max(todatetime(last_seen)),
+      PivotCount = max(toint(No_of_threat_matched_pivots)),
+      Tables = make_set(Type)
+    by Domain
+  | order by Confidence desc, LastSeen desc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Domain
+version: 1.0.0

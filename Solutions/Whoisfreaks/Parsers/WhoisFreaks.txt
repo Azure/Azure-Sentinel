@@ -1,0 +1,98 @@
+// Title: WhoisFreaks
+// Author: WhoisFreaks
+// Version: 1.0.0
+// Description:
+//   Unifies WhoisFreaks threat-intelligence and NRD custom tables into a single
+//   schema for detections, hunting, and workbooks.
+// Usage:
+//   WhoisFreaks
+//   | where FeedCategory == "ThreatIntelligence"
+//   | where Domain == "example.com"
+//
+// Notes:
+//   - Threat feeds expose Domain, ThreatType, Confidence, FirstSeen, LastSeen
+//   - NRD with-WHOIS exposes Domain, CreateDate, Registrar, Registrant*
+//   - NRD without-WHOIS exposes Domain only
+//   - Domain is always lower-cased and trimmed
+
+let Threat =
+    union isfuzzy=true
+        (WhoisFreaksMalware_CL
+            | extend FeedName = "malware", FeedCategory = "ThreatIntelligence"),
+        (WhoisFreaksPhishing_CL
+            | extend FeedName = "phishing", FeedCategory = "ThreatIntelligence"),
+        (WhoisFreaksSpam_CL
+            | extend FeedName = "spam", FeedCategory = "ThreatIntelligence")
+    | extend
+        Domain = tolower(trim(" ", coalesce(tostring(domain), tostring(domain_name), ""))),
+        ThreatType = tostring(coalesce(threat_type, FeedName)),
+        Confidence = todouble(confidence),
+        FirstSeen = todatetime(first_seen),
+        LastSeen = todatetime(last_seen),
+        ThreatPivotCount = toint(No_of_threat_matched_pivots),
+        CreateDate = datetime(null),
+        RegistrarName = "",
+        RegistrantName = "",
+        RegistrantCompany = "",
+        RegistrantCountry = "",
+        RegistrantEmail = ""
+    | where isnotempty(Domain);
+let NrdWithWhois =
+    union isfuzzy=true
+        (WhoisFreaksNRDGtldWithWhois_CL
+            | extend FeedName = "nrd_gtld_with_whois", FeedCategory = "NewlyRegisteredDomain"),
+        (WhoisFreaksNRDCctldWithWhois_CL
+            | extend FeedName = "nrd_cctld_with_whois", FeedCategory = "NewlyRegisteredDomain")
+    | extend
+        Domain = tolower(trim(" ", coalesce(tostring(domain_name), tostring(domain), ""))),
+        ThreatType = "",
+        Confidence = double(null),
+        FirstSeen = datetime(null),
+        LastSeen = datetime(null),
+        ThreatPivotCount = int(null),
+        CreateDate = todatetime(create_date),
+        RegistrarName = tostring(domain_registrar_name),
+        RegistrantName = tostring(registrant_name),
+        RegistrantCompany = tostring(registrant_company),
+        RegistrantCountry = tostring(coalesce(registrant_country, registrant_country_code)),
+        RegistrantEmail = tostring(registrant_email)
+    | where isnotempty(Domain);
+let NrdWithoutWhois =
+    union isfuzzy=true
+        (WhoisFreaksNRDGtldWithoutWhois_CL
+            | extend FeedName = "nrd_gtld_without_whois", FeedCategory = "NewlyRegisteredDomain"),
+        (WhoisFreaksNRDCctldWithoutWhois_CL
+            | extend FeedName = "nrd_cctld_without_whois", FeedCategory = "NewlyRegisteredDomain")
+    | extend
+        Domain = tolower(trim(" ", coalesce(tostring(domain_name), tostring(domain), ""))),
+        ThreatType = "",
+        Confidence = double(null),
+        FirstSeen = datetime(null),
+        LastSeen = datetime(null),
+        ThreatPivotCount = int(null),
+        CreateDate = datetime(null),
+        RegistrarName = "",
+        RegistrantName = "",
+        RegistrantCompany = "",
+        RegistrantCountry = "",
+        RegistrantEmail = ""
+    | where isnotempty(Domain);
+union isfuzzy=true Threat, NrdWithWhois, NrdWithoutWhois
+| project
+    TimeGenerated,
+    IngestionTimeUtc,
+    FeedName,
+    FeedCategory,
+    Domain,
+    ThreatType,
+    Confidence,
+    FirstSeen,
+    LastSeen,
+    ThreatPivotCount,
+    CreateDate,
+    RegistrarName,
+    RegistrantName,
+    RegistrantCompany,
+    RegistrantCountry,
+    RegistrantEmail,
+    Type
