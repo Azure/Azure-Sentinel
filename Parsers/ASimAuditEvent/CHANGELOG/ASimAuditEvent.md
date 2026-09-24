@@ -1,5 +1,9 @@
 # Changelog for ASimAuditEvent.yaml
 
+## Version 0.1.9
+- (2026-09-24) [ASIM] AuditEvent - Oracle OCI (New Parser) - [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
+- Add Oracle OCI parser to ASimAuditEvent
+
 ## Version 0.1.8
 - (2026-09-14) [ASIM] AuditEvent - Alibaba Cloud ActionTrail (New Parser) - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
 - Add Alibaba Cloud ActionTrail parser to ASimAuditEvent
