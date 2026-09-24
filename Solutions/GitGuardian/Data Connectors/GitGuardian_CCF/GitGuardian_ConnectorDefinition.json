@@ -7,27 +7,44 @@
   "properties": {
     "connectorUiConfig": {
       "id": "GitGuardianAuditLogs",
-      "title": "GitGuardian Audit Logs",
+      "title": "GitGuardian Audit Logs and Secret Incidents",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "Ingests GitGuardian workspace audit logs into Microsoft Sentinel for security monitoring and investigation. Supports API key authentication.",
-      "graphQueriesTableName": "GitGuardian_AuditLogs_CL",
+      "descriptionMarkdown": "Ingests GitGuardian workspace audit logs and secret incidents into Microsoft Sentinel. Secret incidents include lifecycle, severity, validity, risk, assignment, detector, tags, exposure, ticket, and occurrence details.",
+      "graphQueriesTableName": "GitGuardianSecretIncidents_CL",
       "graphQueries": [
         {
-          "metricName": "Total events received",
+          "metricName": "Secret incidents received",
+          "legend": "GitGuardian Secret Incidents",
+          "baseQuery": "GitGuardianSecretIncidents_CL"
+        },
+        {
+          "metricName": "Audit events received",
           "legend": "GitGuardian Audit Logs",
-          "baseQuery": "{{graphQueriesTableName}}"
+          "baseQuery": "GitGuardian_AuditLogs_CL"
         }
       ],
       "sampleQueries": [
         {
-          "description": "Get sample of GitGuardian Audit Logs",
-          "query": "{{graphQueriesTableName}}\n | take 10"
+          "description": "Get recent GitGuardian secret incidents",
+          "query": "GitGuardianSecretIncidents_CL\n| sort by TimeGenerated desc\n| take 10"
+        },
+        {
+          "description": "Summarize open secret incidents by severity",
+          "query": "GitGuardianSecretIncidents_CL\n| where Status == \"TRIGGERED\"\n| summarize IncidentCount = count() by Severity\n| sort by IncidentCount desc"
+        },
+        {
+          "description": "Get recent GitGuardian audit logs",
+          "query": "GitGuardian_AuditLogs_CL\n| sort by TimeGenerated desc\n| take 10"
         }
       ],
       "dataTypes": [
         {
           "name": "GitGuardian_AuditLogs_CL",
           "lastDataReceivedQuery": "GitGuardian_AuditLogs_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "GitGuardianSecretIncidents_CL",
+          "lastDataReceivedQuery": "GitGuardianSecretIncidents_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -53,12 +70,18 @@
               "action": false
             }
           }
+        ],
+        "customs": [
+          {
+            "name": "GitGuardian API token",
+            "description": "A GitGuardian API token with the `audit_logs:read` and `incidents:read` scopes is required."
+          }
         ]
       },
       "instructionSteps": [
         {
-          "title": "Configure GitGuardian Audit Logs connections",
-          "description": "Add one connection for each GitGuardian workspace or region that you want to monitor.",
+          "title": "Configure GitGuardian connections",
+          "description": "Add one connection for each GitGuardian workspace or region. Each connection collects audit logs and secret incidents.",
           "instructions": [
             {
               "type": "DataConnectorsGrid",
@@ -71,6 +94,10 @@
                   {
                     "columnName": "API URL",
                     "columnValue": "properties.request.apiEndpoint"
+                  },
+                  {
+                    "columnName": "Data stream",
+                    "columnValue": "properties.dataType"
                   }
                 ],
                 "menuItems": [
@@ -82,8 +109,8 @@
               "type": "ContextPane",
               "parameters": {
                 "label": "Add Connection",
-                "title": "Add GitGuardian Audit Logs connection",
-                "subtitle": "Configure a GitGuardian workspace connection",
+                "title": "Add GitGuardian connection",
+                "subtitle": "Collect audit logs and secret incidents",
                 "contextPaneType": "DataConnectorsContextPane",
                 "instructionSteps": [
                   {
@@ -91,7 +118,7 @@
                       {
                         "type": "Markdown",
                         "parameters": {
-                          "content": "Enter a name for this connection, select the GitGuardian SaaS region, and provide an API token with the `audit_logs:read` scope."
+                          "content": "Enter a name for this connection, select the GitGuardian SaaS region, and provide an API token with the `audit_logs:read` and `incidents:read` scopes."
                         }
                       },
                       {
