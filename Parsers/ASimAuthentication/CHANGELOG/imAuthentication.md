@@ -2,7 +2,7 @@
 
 ## Version 0.3.19
 
-- (2026-09-24) Add the Aruba Networks ClearPass Authentication filtering parser. PR #TBD
+- (2026-09-24) Add the Aruba Networks ClearPass Authentication filtering parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
 
 ## Version 0.3.18
 
