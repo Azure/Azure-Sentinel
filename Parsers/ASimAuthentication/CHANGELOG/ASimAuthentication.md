@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.22
+
+- (2026-09-24) Add the Aruba Networks ClearPass Authentication parser. PR #TBD
+
 ## Version 0.2.21
 
 - (2026-09-17) Add the Wiz Cloud Authentication parser. [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
