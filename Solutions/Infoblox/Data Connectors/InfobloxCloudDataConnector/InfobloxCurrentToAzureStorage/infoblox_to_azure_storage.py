@@ -3,7 +3,6 @@
 import inspect
 import datetime
 import requests
-import json
 from azure.storage.fileshare import ShareDirectoryClient
 from ..SharedCode import consts
 from ..SharedCode.infoblox_exception import InfobloxException
@@ -11,7 +10,6 @@ from ..SharedCode.logger import applogger
 from ..SharedCode.state_manager import StateManager
 from ..SharedCode.table_checkpoint_manager import TableCheckpointManager
 from ..SharedCode.utils import Utils
-from ..SharedCode.sentinel import post_data
 
 
 class InfobloxToAzureStorage(Utils):
@@ -28,8 +26,9 @@ class InfobloxToAzureStorage(Utils):
                 {"File_Share_Name": consts.FILE_SHARE_NAME},
                 {"File_Name": consts.FILE_NAME},
                 {"Base_Url": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY}
+                {"AzureClientId": consts.AZURE_CLIENT_ID},
+                {"AzureClientSecret": consts.AZURE_CLIENT_SECRET},
+                {"AzureTenantId": consts.AZURE_TENANT_ID},
             ]
         )
         self.authenticate_infoblox_api()
@@ -172,7 +171,7 @@ class InfobloxToAzureStorage(Utils):
                 if list_of_file_with_prefix:
                     self.delete_files_from_azure_storage(list_of_file_with_prefix, self.parent_file)
                 if status_of_last_from_date > 2:
-                    self.store_failed_range(from_date, to_date)
+                    self.log_failed_range(from_date, to_date)
 
                     data_to_post = {"to_date": to_date}
                     self.post_time_checkpoint(date_state_manager_obj, data_to_post, dump_flag=True)
@@ -623,38 +622,20 @@ class InfobloxToAzureStorage(Utils):
             )
             raise InfobloxException()
 
-    def store_failed_range(self, from_date, to_date):
-        """Store range of date which are failed to fetch in table.
+    def log_failed_range(self, from_date, to_date):
+        """Log a warning for a date range that failed to fetch after exhausting retries.
 
         Args:
             from_date (str): from date of range
             to_date (str): to date of range
         """
         __method_name = inspect.currentframe().f_code.co_name
-        try:
-            range_to_append = [
-                {
-                    "From Date": from_date,
-                    "To Date": to_date,
-                    "Threat Type": self.ioc_type,
-                }
-            ]
-            applogger.info(
-                self.log_format.format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    self.azure_function_name,
-                    "Ingesting failed range = {}".format(range_to_append),
-                )
+        applogger.warning(
+            self.log_format.format(
+                consts.LOGS_STARTS_WITH,
+                __method_name,
+                self.azure_function_name,
+                "Exhausted retries fetching ThreatType={} for range FromDate={} ToDate={}. "
+                "This range will be skipped.".format(self.ioc_type, from_date, to_date),
             )
-            post_data(json.dumps(range_to_append), "Failed_Range_To_Ingest")
-        except Exception as err:
-            applogger.error(
-                self.log_format.format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    self.azure_function_name,
-                    consts.UNEXPECTED_ERROR_MSG.format(err),
-                )
-            )
-            raise InfobloxException()
+        )

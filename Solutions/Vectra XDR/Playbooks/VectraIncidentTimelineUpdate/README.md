@@ -41,7 +41,7 @@ After authorizing each connection, assign role to this playbook.
 
 #### c. Configurations in Microsoft Sentinel
 
-1. In Microsoft sentinel, below analytical rules should be configured to trigger an incident.
+1. In Microsoft Sentinel, below analytical rules should be configured to trigger an incident.
    * Vectra Detection Account Alerts
    * Vectra Detection Host Alerts
    * Vectra Priority Account Incidents

@@ -1,4 +1,11 @@
 # Changelog for ASimNetworkSession.yaml
+## Version 0.7.5
+
+- (2026-09-22) Add AWS GuardDuty parser to the Network Session unifying parser - [PR #14769](https://github.com/Azure/Azure-Sentinel/pull/14769)
+
+## Version 0.7.4
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
 
 ## Version 0.7.3
 

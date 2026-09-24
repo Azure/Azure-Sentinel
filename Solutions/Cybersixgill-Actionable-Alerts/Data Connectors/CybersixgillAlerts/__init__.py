@@ -49,7 +49,6 @@ def get_from_and_to_date(date_format="%Y-%m-%d %H:%M:%S"):
 
 
 def main(mytimer: func.TimerRequest) -> None:
-    logging.info(str(environ))
     utc_timestamp = datetime.utcnow().replace(
         tzinfo=timezone.utc).isoformat()
     

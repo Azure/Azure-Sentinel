@@ -1,0 +1,233 @@
+{
+  "name": "GTIVulnerabilitiesConnectorDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "GTIVulnerabilitiesConnector",
+      "title": "Google Threat Intelligence Vulnerabilities (CCF)",
+      "publisher": "Google",
+      "logo": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/GoogleThreatIntelligence.svg",
+      "descriptionMarkdown": "The **Google Threat Intelligence (GTI) Vulnerabilities** data connector ingests Vulnerability collection objects from the [Google Threat Intelligence (VirusTotal) Collections API](https://gtidocs.virustotal.com/reference/list-vulnerabilities) into Microsoft Sentinel using the **Codeless Connector Framework (CCF)** — no Azure Function or agent to deploy.<br><br>The connector authenticates with your GTI API key (sent in the `x-apikey` header), always scopes the query to `collection_type:vulnerability`, sorts by **last modification date ascending** (firstly-modified objects first), and polls on a rolling time window so each cycle only retrieves vulnerabilities modified since the previous poll. An optional free-form filter can be supplied to refine the search (for example `risk_rating:Critical`, `cvss_3x_base_score:4+`).<br><br>Ingested data lands in the **GTI_Vulnerabilities_CL** table and supports DCR-based [ingestion-time transformations](https://learn.microsoft.com/azure/azure-monitor/logs/ingestion-time-transformations) so enriched fields (risk rating, CVSS scores, exploitation state) are available for fast querying.",
+      "graphQueriesTableName": "GTI_Vulnerabilities_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total vulnerabilities received",
+          "legend": "GTI Vulnerabilities",
+          "baseQuery": "GTI_Vulnerabilities_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All GTI vulnerabilities",
+          "query": "GTI_Vulnerabilities_CL\n| project TimeGenerated, Name, RiskRating, ExploitationState, Cvss3xBaseScore\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Critical vulnerabilities with confirmed exploitation",
+          "query": "GTI_Vulnerabilities_CL\n| where RiskRating == \"Critical\" and ExploitationState == \"Confirmed\"\n| project TimeGenerated, Name, Cvss3xBaseScore, ExploitationVector\n| sort by Cvss3xBaseScore desc"
+        },
+        {
+          "description": "Vulnerabilities by risk rating",
+          "query": "GTI_Vulnerabilities_CL\n| summarize Count = dcount(Id) by RiskRating\n| sort by Count desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "GTI_Vulnerabilities_CL",
+          "lastDataReceivedQuery": "GTI_Vulnerabilities_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions required",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Google Threat Intelligence / VirusTotal account",
+            "description": "An active Google Threat Intelligence (VirusTotal) account is required. The vulnerabilities feed is part of the GTI Collections API and requires a subscription/privileges that include vulnerability collections."
+          },
+          {
+            "name": "Google Threat Intelligence API Key",
+            "description": "A valid GTI / VirusTotal API key with access to the Collections API. The key is sent in the 'x-apikey' request header. Treat it as a secret — it is stored as a securestring and never displayed after entry."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Prerequisites",
+          "description": "Before you connect, make sure the following are in place.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Before you begin\n\n1. **Permissions on this workspace** — you need **read** and **write** permissions on the Microsoft Sentinel workspace to create the data connection.\n2. **A Google Threat Intelligence (VirusTotal) account** with access to the **Collections API** and to **vulnerability** collections. If you do not see vulnerability data, confirm your subscription/privileges with your GTI administrator.\n3. **A GTI API key** — see the next step to generate it. The key is sent in the `x-apikey` header on every request."
+              }
+            }
+          ]
+        },
+        {
+          "title": "1. Generate your Google Threat Intelligence API key",
+          "description": "Obtain the API key the connector uses to authenticate.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Get your API key\n\n1. Sign in to your account at [https://www.virustotal.com](https://www.virustotal.com) (or your Google Threat Intelligence portal).\n2. Click your avatar in the top-right corner and select **API key**, or go directly to the [API key page](https://www.virustotal.com/gui/my-apikey).\n3. Copy the **API key** shown on that page. This single value is all the connector needs.\n\n> The same key is documented in the GTI reference under [List vulnerabilities](https://gtidocs.virustotal.com/reference/list-vulnerabilities)."
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Keep your API key secret. Anyone with the key can query the GTI API as you and consume your quota. If a key is exposed, regenerate it from the API key page and update the connector. The connector stores the key as a securestring — it is not displayed again after you connect.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "API quota & rate limits: GTI/VirusTotal enforces per-minute and daily request quotas tied to your subscription tier. The connector requests up to 40 objects per page and throttles itself (~4 requests/second). If you hit HTTP 429 (rate limit) errors, choose a longer Polling interval below and/or narrow the result set with the Vulnerability filter.",
+                "visible": true,
+                "inline": false
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Connect Google Threat Intelligence Vulnerabilities to Microsoft Sentinel",
+          "description": "Provide the values below and select Connect. The connector always scopes the query to `collection_type:vulnerability` and sorts by last-modification-date ascending (firstly-modified objects first).",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Connection settings"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "GTI API Key",
+                "placeholder": "Paste your Google Threat Intelligence API key (sent in the x-apikey header)",
+                "type": "password",
+                "name": "GTIAPIKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. The API key copied from the GTI / VirusTotal API key page. It is sent in the 'x-apikey' header on every request.",
+                "visible": true,
+                "inline": true
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Vulnerability filter (optional)",
+                "placeholder": "e.g. risk_rating:Critical cvss_3x_base_score:4+",
+                "type": "text",
+                "name": "VulnerabilityFilter",
+                "defaultValue": "cvss_3x_base_score:4+",
+                "validations": {
+                  "required": false
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Optional. A GTI search expression appended to the mandatory 'collection_type:vulnerability' filter to narrow ingestion. Examples: 'risk_rating:Critical', 'cvss_3x_base_score:4+', 'exploitation_state:Confirmed'. Leave blank to ingest all vulnerability objects. Separate multiple conditions with spaces.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Polling interval",
+                "name": "pollingFrequency",
+                "options": [
+                  { "key": "10", "text": "Every 10 minutes" },
+                  { "key": "15", "text": "Every 15 minutes" },
+                  { "key": "30", "text": "Every 30 minutes" },
+                  { "key": "60", "text": "Every hour" },
+                  { "key": "120", "text": "Every 2 hours" },
+                  { "key": "360", "text": "Every 6 hours" },
+                  { "key": "720", "text": "Every 12 hours" },
+                  { "key": "1440", "text": "Every day" }
+                ],
+                "placeholder": "Select polling frequency",
+                "isMultiSelect": false,
+                "defaultAllSelected": false,
+                "required": true,
+                "defaultValue": "10",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. How often Sentinel queries the GTI API. Each poll uses a rolling time window equal to this interval, so no vulnerabilities are skipped or double-counted. Choose a longer interval if you are rate-limited or only need periodic updates.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "disconnectLabel": "Disconnect",
+                "name": "toggle"
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Verify data is flowing",
+          "description": "After connecting, confirm vulnerabilities are being ingested.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Validate the connection\n\nData can take up to ~30 minutes to appear after the first successful poll. Once it does:\n\n1. On this page, the **GTI_Vulnerabilities_CL** data type shows a recent **Last data received** timestamp and the status turns green.\n2. Run this query in **Logs** to confirm rows are arriving:\n\n   `GTI_Vulnerabilities_CL | summarize Count = count(), Latest = max(TimeGenerated)`\n\n3. Inspect a sample of the enriched fields:\n\n   `GTI_Vulnerabilities_CL | project TimeGenerated, Name, RiskRating, ExploitationState, Cvss3xBaseScore | sort by TimeGenerated desc | take 20`\n\n**Optional — connector health:** enable **Microsoft Sentinel → Settings → Health and Audit** to log per-poll status. Then run:\n\n`SentinelHealth | where TimeGenerated > ago(24h) | where SentinelResourceType == \"Data connector\" | project TimeGenerated, SentinelResourceName, Status, Description, Reason | order by TimeGenerated desc`"
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "No data after 30+ minutes? Check that: (1) the API key is valid and not rate-limited (HTTP 401/429), (2) your account has access to vulnerability collections, and (3) any Vulnerability filter you entered is not so narrow that it matches no objects. Disconnect and reconnect to retry after correcting the value.",
+                "visible": true,
+                "inline": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

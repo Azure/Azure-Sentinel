@@ -1,0 +1,50 @@
+id: c5e9a1d7-4b2f-4e6c-8a9d-7f3b1c5e2a84
+name: ContraForce - Destructive workspace action
+description: |
+  'Identifies destructive actions against the ContraForce workspace or its account: workspace
+  deletion, account deactivation, and account purge. These actions terminate or remove the
+  security service delivery for the affected workspace and should always correspond to a
+  planned offboarding; anything else warrants immediate investigation.'
+severity: High
+requiredDataConnectors:
+  - connectorId: ContraForceEvents
+    dataTypes:
+      - ContraForceEvents_CL
+queryFrequency: 5m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1531
+query: |
+  ContraForceEvents_CL
+  | where ingestion_time() > ago(5m)
+  | where ActivityType in ("WorkspaceDeleted", "AccountDeactivated", "AccountPurged")
+  | extend Meta = parse_json(Metadata)
+  | project TimeGenerated, EventId, CfWorkspaceId, ActivityType, ActivityAction,
+            ActorName, ActorEmail, TargetResourceType, TargetResourceId, TargetResourceName, Metadata
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'ContraForce destructive action: {{ActivityType}} on {{TargetResourceName}}'
+  alertDescriptionFormat: '{{ActorName}} performed {{ActivityType}} on {{TargetResourceName}}.'
+customDetails:
+  EventId: EventId
+  ActorEmail: ActorEmail
+  TargetResourceId: TargetResourceId
+  CfWorkspaceId: CfWorkspaceId
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT2H
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - EventId
+version: 1.0.0
+kind: Scheduled

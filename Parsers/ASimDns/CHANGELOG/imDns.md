@@ -1,4 +1,11 @@
 # Changelog for imDns.yaml
+## Version 0.5.4
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
+
+## Version 0.5.3
+
+- (2026-06-09) Added vimDnsHalcyon to the source-agnostic filtering parser - [PR #14606](https://github.com/Azure/Azure-Sentinel/pull/14606)
 
 ## Version 0.5.2
 

@@ -28,7 +28,6 @@ class CreateThreatIndicator(Utils):
                 {"AzureClientSecret": consts.AZURE_CLIENT_SECRET},
                 {"AzureAuthURL": consts.AZURE_AUTHENTICATION_URL},
                 {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"ConnectionString": consts.CONN_STRING},
                 {"FILE_SHARE_NAME_DATA": consts.FILE_SHARE_NAME_DATA},
             ]

@@ -186,7 +186,7 @@ The interactive index has six tabs:
 | **Tables** | Table, Discovered Via, Category, Solutions, Connectors, Azure Monitor, Defender XDR | Discovery source: Connector > Content > Docs > Schema > Reference |
 | **Content** | Name, Type, Source, Solution, Description | Descriptions truncated at 200 characters |
 | **Parsers** | Parser, Source, Solution, Tables | Source: Solution or Legacy. Tables show first 2 + "..." |
-| **ASIM** | Parser, Schema, Type, Product, Version, Solutions | Type: Unifying or Source. Empty parsers excluded. |
+| **ASIM** | Parser, Schema, Type, Product, Version, Solutions | Type: Unifying or Source. Empty parsers excluded. Unifying parsers are deduplicated to the `ASim` (parameter-less) variant; the `im`/`vim` (filtering) variant is omitted from the list and documented on the parser's page. |
 
 ### Summary Cards
 
@@ -333,7 +333,7 @@ The interactive index builds its own data rows from the CSV files, independent o
 | `build_tables_table_data()` | Tables | Merges tables from connectors, content mapping, reference, and schemas |
 | `build_content_table_data()` | Content | Resolves placeholder names from file paths, truncates descriptions |
 | `build_parsers_table_data()` | Parsers | Filters TXT duplicates when YAML twin exists |
-| `build_asim_table_data()` | ASIM | Excludes empty/placeholder parsers, categorizes as Unifying or Source |
+| `build_asim_table_data()` | ASIM | Excludes empty/placeholder parsers, deduplicates unifying parsers to the `ASim` variant, categorizes as Unifying or Source |
 
 ### Performance
 

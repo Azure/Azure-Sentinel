@@ -1,0 +1,215 @@
+Parser:
+  DisplayName: Salesforce Service Cloud WebSession ASIM ingestion-time parser
+  Version: '0.2.0'
+  LastUpdated: '2026-09-15'
+Product:
+  Name: Salesforce Service Cloud
+Normalization:
+  Schema: WebSession
+  Version: '1.0.0'
+Author: Microsoft
+Description: |
+  Normalizes Salesforce Service Cloud web session and API request events from
+  the SalesforceServiceCloudV3_CL raw-table shape into the native
+  ASimWebSessionLogs table during ingestion.
+ParserName: ASimWebSessionSalesforceServiceCloud
+DCRType: Standard
+InputStream: Custom-SalesforceServiceCloudV3_CL
+SourceRawTable: SalesforceServiceCloudV3_CL
+TargetASIMTable: ASimWebSessionLogs
+ParserFilterQuery: |
+  source
+  | where EventType in (
+      "ApiTotalUsage",
+      "RestApi",
+      "BulkApi2",
+      "ApexCallout",
+      "ExternalODataCallout",
+      "MetadataApiOperation",
+      "NamedCredential",
+      "URI",
+      "AuraRequest",
+      "LightningPageView",
+      "LightningPerformance",
+      "LightningInteraction",
+      "UiTelemetryResourceTiming",
+      "UiTelemetryNavigationTiming",
+      "CSPViolation"
+  )
+ParserQuery: |
+  source
+  | where EventType in (
+      "ApiTotalUsage",
+      "RestApi",
+      "BulkApi2",
+      "ApexCallout",
+      "ExternalODataCallout",
+      "MetadataApiOperation",
+      "NamedCredential",
+      "URI",
+      "AuraRequest",
+      "LightningPageView",
+      "LightningPerformance",
+      "LightningInteraction",
+      "UiTelemetryResourceTiming",
+      "UiTelemetryNavigationTiming",
+      "CSPViolation"
+  )
+  | extend Type = "SalesforceServiceCloudV3_CL"
+  | extend
+      EventOriginalType = EventType,
+      EventType = case(
+          EventType in ("ApiTotalUsage", "RestApi", "BulkApi2", "ApexCallout", "ExternalODataCallout", "MetadataApiOperation", "NamedCredential"), "ApiRequest",
+          EventType in ("URI", "AuraRequest", "LightningPageView", "LightningPerformance", "LightningInteraction", "UiTelemetryResourceTiming", "UiTelemetryNavigationTiming", "CSPViolation"), "WebServerSession",
+          EventType
+      )
+  | extend
+      Url = iif(isnotempty(Url), Url, Uri),
+      _UrlHost = extract(@"https?://([^/:?#]+)", 1, Url)
+  | extend
+      DstFQDN = iif(_UrlHost has ".", _UrlHost, ""),
+      DstHostname = iif(isnotempty(_UrlHost), extract(@"^([^.]+)", 1, _UrlHost), ""),
+      DstDomain = extract(@"^[^.]+\.(.*)", 1, _UrlHost),
+      DstDomainType = iif(_UrlHost has ".", "FQDN", "")
+  | extend
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSchema = "WebSession",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "Salesforce",
+      EventProduct = "Salesforce Service Cloud",
+      EventProductVersion = ApiVersion,
+      EventSeverity = "Informational",
+      EventResultDetails = StatusCode,
+      EventResult = case(
+          isempty(StatusCode), "NA",
+          toint(StatusCode) >= 100 and toint(StatusCode) <= 399, "Success",
+          toint(StatusCode) >= 400 and toint(StatusCode) <= 599, "Failure",
+          "NA"
+      ),
+      EventOriginalResultDetails = StatusCode
+  | extend
+      HttpRequestMethod = HttpMethod,
+      HttpStatusCode = EventResultDetails,
+      HttpUserAgent = iif(isnotempty(HttpUserAgentOriginal), HttpUserAgentOriginal, iif(isnotempty(HttpUserAgent), HttpUserAgent, UserAgent)),
+      HttpReferrer = iif(isnotempty(HttpReferrerOriginal), HttpReferrerOriginal, ReferrerUri),
+      SrcIpAddr = iif(isnotempty(ClientIp), ClientIp, iif(isnotempty(SourceIp), SourceIp, SrcIpAddr)),
+      SrcUserId = UserId,
+      SrcUserIdType = iif(isnotempty(UserId), "SalesforceId", ""),
+      SrcUsername = iif(isnotempty(UserEmail), UserEmail, User),
+      SrcUserType = case(
+          UserType == "Standard" or UserType == "S", "Regular",
+          UserType == "X", "Admin",
+          ""
+      ),
+      SrcBytes = tolong(RequestSize),
+      SrcDvcId = iif(isnotempty(SrcDvcId), SrcDvcId, DeviceId),
+      SrcDvcModelName = iif(isnotempty(SrcDvcModelName), SrcDvcModelName, DeviceModel),
+      SrcDvcOs = OsName,
+      DstBytes = tolong(iif(isnotnull(DstBytes), DstBytes, ResponseSize)),
+      DstAppName = "Salesforce Service Cloud",
+      DstAppType = "SaaS application",
+      Dvc = "Salesforce Service Cloud",
+      DvcScopeId = OrganizationId,
+      NetworkDuration = toint(Duration),
+      NetworkSessionId = SessionKey,
+      TlsVersion = TlsProtocol,
+      TlsCipher = CipherSuite
+  | extend
+      SrcUsernameType = case(
+          isnotempty(SrcUsername) and SrcUsername has "@", "UPN",
+          isnotempty(SrcUsername), "Simple",
+          ""
+      )
+  | extend
+      SrcDvcIdType = iif(isnotempty(SrcDvcId), "Other", ""),
+      Dst = iif(isnotempty(DstFQDN), DstFQDN, iif(isnotempty(DstHostname), DstHostname, DstAppName)),
+      Src = SrcIpAddr,
+      IpAddr = SrcIpAddr,
+      User = SrcUsername,
+      UserAgent = HttpUserAgent,
+      Hostname = DstHostname,
+      Duration = NetworkDuration,
+      SessionId = NetworkSessionId
+  | extend
+      AdditionalFields = pack(
+          "ApiVersion", ApiVersion,
+          "ApiType", ApiType,
+          "SessionType", SessionType,
+          "BrowserName", BrowserName,
+          "BrowserVersion", BrowserVersion,
+          "OsVersion", OsVersion,
+          "PlatformType", PlatformType,
+          "DevicePlatform", DevicePlatform,
+          "ConnectionType", ConnectionType,
+          "RequestId", RequestId,
+          "Quiddity", Quiddity,
+          "ExecTime", ExecTime,
+          "TotalTime", TotalTime,
+          "CpuTime", CpuTime,
+          "DbTotalTime", DbTotalTime,
+          "DbCpuTime", DbCpuTime,
+          "RowsProcessed", RowsProcessed,
+          "IsLongRunningRequest", IsLongRunningRequest
+      )
+  | project
+      TimeGenerated,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventType,
+      EventResult,
+      EventProduct,
+      EventVendor,
+      EventSchema,
+      EventSchemaVersion,
+      Dvc,
+      Url,
+      Dst,
+      EventResultDetails,
+      EventSeverity,
+      HttpRequestMethod,
+      HttpStatusCode,
+      DstHostname,
+      DstBytes,
+      SrcIpAddr,
+      SrcBytes,
+      ASimMatchingIpAddr = "SrcIpAddr",
+      ASimMatchingHostname = "DstHostname",
+      EventOriginalType,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      HttpUserAgent,
+      HttpReferrer,
+      DstFQDN,
+      DstDomain,
+      DstDomainType,
+      DstAppName,
+      DstAppType,
+      SrcUserId,
+      SrcUserIdType,
+      SrcUsername,
+      SrcUsernameType,
+      SrcUserType,
+      SrcDvcId,
+      SrcDvcIdType,
+      SrcDvcModelName,
+      SrcDvcOs,
+      DvcScopeId,
+      NetworkDuration,
+      NetworkSessionId,
+      TlsVersion,
+      TlsCipher,
+      AdditionalFields,
+      IpAddr,
+      User,
+      UserAgent,
+      Hostname,
+      Duration,
+      SessionId,
+      Src,
+      Type
+Change:
+  Date: '2026-09-15'
+  Description: Initial ingestion-time parser publication for _ASim_WebSession_SalesforceServiceCloud; targets ASimWebSessionLogs.

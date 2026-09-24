@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.7       |     18-08-2026                 | Updated version and mapping of `connectorId` to `dataTypes` for multiple **Analytic Rules** and **Hunting Queries**.                     |
 | 3.0.6       |     20-07-2026                 | Added **Analytic Rule** CertUtil Used for File Download.                     |
 | 3.0.5       |     18-11-2024                 | Removed the broken URL in **Analytic Rule** and **Hunting Query**            |
 | 3.0.4       |     10-06-2024                 | Added entityMappings and added missing AMA DC reference in **Analytical Rules** and **Hunting Queries**     |
