@@ -2,7 +2,7 @@
 
 ## Version 0.4.1
 
-- (2026-09-24) Include `ConnectionAttempt` events as inbound, mapping the remote endpoint to the source and the local endpoint to the destination, based on the [documented device-discovery scenario](https://learn.microsoft.com/en-us/defender-endpoint/assess-devices#query-network-related-information) of a non-onboarded device initiating a TCP connection to an onboarded device. Addresses [issue #15182](https://github.com/Azure/Azure-Sentinel/issues/15182).
+- (2026-09-24) Include `ConnectionAttempt` events as inbound, mapping the remote endpoint to the source and the local endpoint to the destination, based on the [documented device-discovery scenario](https://learn.microsoft.com/en-us/defender-endpoint/assess-devices#query-network-related-information) of a non-onboarded device initiating a TCP connection to an onboarded device. Addresses [issue #15182](https://github.com/Azure/Azure-Sentinel/issues/15182). - [PR #15198](https://github.com/Azure/Azure-Sentinel/pull/15198)
 
 ## Version 0.4
 
