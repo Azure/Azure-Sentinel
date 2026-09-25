@@ -1,8 +1,8 @@
 id: 2757535d-ca8d-4083-8ea2-ac9ba5237b95
 Function:
   Title: Parser for Snowflake
-  Version: '1.1.0'
-  LastUpdated: '2026-08-04'
+  Version: '2.0.0'
+  LastUpdated: '2026-09-22'
 Category: Microsoft Sentinel Parser
 FunctionName: Snowflake
 FunctionAlias: Snowflake
@@ -17,16 +17,16 @@ FunctionQuery: |
       TargetUsername = column_ifexists('USER_NAME_s', ''),
       SrcDvcIpAddr = column_ifexists('CLIENT_IP_s', ''),
       QueryType = column_ifexists('QUERY_TYPE_s', ''),
-      QueryText = column_ifexists('QUERY_TEXT_s',''),
+      QueryText = column_ifexists('QUERY_TEXT_s', ''),
       QueryExecutionStatus = column_ifexists('EXECUTION_STATUS_s', ''),
       QueryTotalElapsedTime = toreal(column_ifexists('TOTAL_ELAPSED_TIME_d', '0')),
-      LoginIsSuccess = column_ifexists('IS_SUCCESS_s',''),
+      LoginIsSuccess = column_ifexists('IS_SUCCESS_s', ''),
       QueryCreditsUsedCloudServices = iff(isempty(CREDITS_USED_CLOUD_SERVICES_d), toreal(0), toreal(CREDITS_USED_CLOUD_SERVICES_d)),
-      QueryExecutionTime = toreal(column_ifexists('EXECUTION_TIME_d','0')),
-      RoleName = column_ifexists('ROLE_NAME_s','')
+      QueryExecutionTime = toreal(column_ifexists('EXECUTION_TIME_d', '0')),
+      RoleName = column_ifexists('ROLE_NAME_s', '')
     | extend
-      User=TargetUsername,
-      EventEndTime=iff(isnotempty(EVENT_TIMESTAMP_t), EVENT_TIMESTAMP_t, END_TIME_t)
+      User = TargetUsername,
+      EventEndTime = iff(isnotempty(EVENT_TIMESTAMP_t), EVENT_TIMESTAMP_t, END_TIME_t)
   };
   let SnowflakeLogin_view = view () {
     SnowflakeLogin_CL
@@ -158,7 +158,7 @@ FunctionQuery: |
       LoadCatalogId = extractjson("$.CATALOG_ID", JsonString),
       LoadCatalogName = extractjson("$.CATALOG_NAME", JsonString),
       LoadFileName = extractjson("$.FILE_NAME", JsonString),
-      LastLoadTime = todatetime(substring(LTime, 0, 23)) - tolong(substring(LTime, 24, 3)) * 1h,
+      LoadLastLoadTime = todatetime(substring(LTime, 0, 23)) - tolong(substring(LTime, 24, 3)) * 1h,
       LoadStatus = extractjson("$.STATUS", JsonString),
       LoadRowCount = extractjson("$.ROW_COUNT", JsonString),
       LoadRowParsed = extractjson("$.ROW_PARSED", JsonString),
@@ -527,7 +527,7 @@ FunctionQuery: |
       LoadCatalogId = tostring(DataList[4]),
       LoadCatalogName = tostring(DataList[5]),
       LoadFileName = tostring(DataList[6]),
-      LastLoadTime = unixtime_seconds_todatetime(LTime),
+      LoadLastLoadTime = unixtime_seconds_todatetime(LTime),
       LoadStatus = tostring(DataList[8]),
       LoadRowCount = tostring(DataList[9]),
       LoadRowParsed = tostring(DataList[10]),
@@ -782,31 +782,427 @@ FunctionQuery: |
       QueryBindValues = tostring(DataList[83]),
       QueryAgentType = tostring(DataList[84])
   };
+  let SnowflakeLoginV3_view = view () {
+    union isfuzzy=true SnowflakeLoginV3_CL, (datatable(TimeGenerated:datetime, EventId:string, EventTimestamp:string, EventType:string, UserName:string, ClientIp:string, ReportedClientType:string, ReportedClientVersion:string, FirstAuthenticationFactor:string, SecondAuthenticationFactor:string, IsSuccess:string, ErrorCode:string, ErrorMessage:string, RelatedEventId:string, Connection:string, ClientPrivateLinkId:string, FirstAuthenticationFactorId:string, SecondAuthenticationFactorId:string, LoginDetails:string, AuthorizingIntegrationName:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      LTime = toreal(EventTimestamp)
+    | extend
+      LoginEventId = tostring(EventId),
+      LoginEventTimestamp = unixtime_seconds_todatetime(LTime),
+      LoginEventType = tostring(EventType),
+      LoginUserName = tostring(UserName),
+      LoginClientIp = tostring(ClientIp),
+      LoginReportedClientType = tostring(ReportedClientType),
+      LoginReportedClientVersion = tostring(ReportedClientVersion),
+      LoginFirstAuthenticationFactor = tostring(FirstAuthenticationFactor),
+      LoginSecondAuthenticationFactor = tostring(SecondAuthenticationFactor),
+      LoginIsSuccess = tostring(IsSuccess),
+      LoginErrorCode = tostring(ErrorCode),
+      LoginErrorMessage = tostring(ErrorMessage),
+      LoginRelatedEventId = tostring(RelatedEventId),
+      LoginConnection = tostring(Connection),
+      LoginClientPrivateLinkId = tostring(ClientPrivateLinkId),
+      LoginFirstAuthenticationFactorId = tostring(FirstAuthenticationFactorId),
+      LoginSecondAuthenticationFactorId = tostring(SecondAuthenticationFactorId),
+      LoginDetails = tostring(LoginDetails),
+      LoginAuthorizingIntegrationName = tostring(AuthorizingIntegrationName)
+    | extend
+      TargetUsername = LoginUserName,
+      SrcDvcIpAddr = LoginClientIp,
+      User = LoginUserName,
+      LoginEventEndTime = LoginEventTimestamp
+  };
+  let SnowflakeUserGrantV3_view = view () {
+    union isfuzzy=true SnowflakeUserGrantV3_CL, (datatable(TimeGenerated:datetime, CreatedOn:string, DeletedOn:string, Role:string, GrantedTo:string, GranteeName:string, GrantedBy:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      CTime = toreal(CreatedOn),
+      DTime = toreal(DeletedOn)
+    | extend
+      UserGrantCreatedOn = unixtime_seconds_todatetime(CTime),
+      UserGrantDeletedOn = unixtime_seconds_todatetime(DTime),
+      UserRole = tostring(Role),
+      UserGrantGrantedTo = tostring(GrantedTo),
+      UserGrantGranteeName = tostring(GranteeName),
+      UserGrantGrantedBy = tostring(GrantedBy)
+  };
+  let SnowflakeMaterializedViewV3_view = view () {
+    union isfuzzy=true SnowflakeMaterializedViewV3_CL, (datatable(TimeGenerated:datetime, StartTime:string, EndTime:string, CreditsUsed:string, TableId:string, TableName:string, SchemaId:string, SchemaName:string, DatabaseId:string, DatabaseName:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      STime = toreal(StartTime),
+      ETime = toreal(EndTime)
+    | extend
+      MaterializedViewStartTime = unixtime_seconds_todatetime(STime),
+      MaterializedViewEndTime = unixtime_seconds_todatetime(ETime),
+      MaterializedViewCreditsUsed = tostring(CreditsUsed),
+      MaterializedViewTableId = tostring(TableId),
+      MaterializedViewTableName = tostring(TableName),
+      MaterializedViewSchemaId = tostring(SchemaId),
+      MaterializedViewSchemaName = tostring(SchemaName),
+      MaterializedViewDatabaseId = tostring(DatabaseId),
+      MaterializedViewDatabaseName = tostring(DatabaseName)
+  };
+  let SnowflakeRolesV3_view = view () {
+    union isfuzzy=true SnowflakeRolesV3_CL, (datatable(TimeGenerated:datetime, RoleId:string, CreatedOn:string, DeletedOn:string, Name:string, Comment:string, Owner:string, RoleType:string, RoleDatabaseName:string, RoleInstanceId:string, OwnerRoleType:string, IsFromOrganizationUserGroup:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      CTime = toreal(CreatedOn),
+      DTime = toreal(DeletedOn)
+    | extend
+      RoleId = tostring(RoleId),
+      RoleCreatedOn = unixtime_seconds_todatetime(CTime),
+      RoleDeletedOn = unixtime_seconds_todatetime(DTime),
+      RoleName = tostring(Name),
+      RoleComment = tostring(Comment),
+      RoleOwner = tostring(Owner),
+      RoleType = tostring(RoleType),
+      RoleDatabaseName = tostring(RoleDatabaseName),
+      RoleInstanceId = tostring(RoleInstanceId),
+      OwnerRoleType = tostring(OwnerRoleType),
+      RoleIsFromOrganizationUserGroup = tostring(IsFromOrganizationUserGroup)
+  };
+  let SnowflakeRoleGrantV3_view = view () {
+    union isfuzzy=true SnowflakeRoleGrantV3_CL, (datatable(TimeGenerated:datetime, CreatedOn:string, ModifiedOn:string, Privilege:string, GrantedOn:string, Name:string, TableCatalog:string, TableSchema:string, GrantedTo:string, GranteeName:string, GrantOption:string, GrantedBy:string, DeletedOn:string, GrantedByRoleType:string, ObjectInstance:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      CTime = toreal(CreatedOn),
+      MTime = toreal(ModifiedOn),
+      DTime = toreal(DeletedOn)
+    | extend
+      RoleGrantCreatedOn = unixtime_seconds_todatetime(CTime),
+      RoleGrantModifiedOn = unixtime_seconds_todatetime(MTime),
+      RoleGrantPrivilege = tostring(Privilege),
+      RoleGrantGrantedOn = tostring(GrantedOn),
+      RoleGrantName = tostring(Name),
+      RoleGrantTableCatalog = tostring(TableCatalog),
+      RoleGrantTableSchema = tostring(TableSchema),
+      RoleGrantGrantedTo = tostring(GrantedTo),
+      RoleGrantGranteeName = tostring(GranteeName),
+      RoleGrantGrantOption = tostring(GrantOption),
+      RoleGrantGrantedBy = tostring(GrantedBy),
+      RoleGrantDeletedOn = unixtime_seconds_todatetime(DTime),
+      RoleGrantGrantedByRoleType = tostring(GrantedByRoleType),
+      RoleGrantObjectInstance = tostring(ObjectInstance)
+  };
+  let SnowflakeLoadV3_view = view () {
+    union isfuzzy=true SnowflakeLoadV3_CL, (datatable(TimeGenerated:datetime, TableId:string, TableName:string, SchemaId:string, SchemaName:string, CatalogId:string, CatalogName:string, FileName:string, LastLoadTime:string, Status:string, RowCount:string, RowParsed:string, FirstErrorMessage:string, FirstErrorLineNumber:string, FirstErrorCharacterPosition:string, FirstErrorColName:string, ErrorCount:string, ErrorLimit:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      LTime = toreal(LastLoadTime)
+    | extend
+      LoadTableId = tostring(TableId),
+      LoadTableName = tostring(TableName),
+      LoadSchemaId = tostring(SchemaId),
+      LoadSchemaName = tostring(SchemaName),
+      LoadCatalogId = tostring(CatalogId),
+      LoadCatalogName = tostring(CatalogName),
+      LoadFileName = tostring(FileName),
+      LoadLastLoadTime = unixtime_seconds_todatetime(LTime),
+      LoadStatus = tostring(Status),
+      LoadRowCount = tostring(RowCount),
+      LoadRowParsed = tostring(RowParsed),
+      LoadFirstErrorMessage = tostring(FirstErrorMessage),
+      LoadFirstErrorLineNumber = tostring(FirstErrorLineNumber),
+      LoadFirstErrorCharacterPosition = tostring(FirstErrorCharacterPosition),
+      LoadFirstErrorColName = tostring(FirstErrorColName),
+      LoadErrorCount = tostring(ErrorCount),
+      LoadErrorLimit = tostring(ErrorLimit)
+  };
+  let SnowflakeTableStorageMetricsV3_view = view () {
+    union isfuzzy=true SnowflakeTableStorageMetricsV3_CL, (datatable(TimeGenerated:datetime, Id:string, TableName:string, TableSchemaId:string, TableSchema:string, TableCatalogId:string, TableCatalog:string, CloneGroupId:string, IsTransient:string, ActiveBytes:string, TimeTravelBytes:string, FailsafeBytes:string, RetainedForCloneBytes:string, Deleted:string, TableCreated:string, TableDropped:string, TableEnteredFailsafe:string, SchemaCreated:string, SchemaDropped:string, CatalogCreated:string, CatalogDropped:string, Comment:string, InstanceId:string, ArchiveStorageCoolActiveBytes:string, ArchiveStorageColdActiveBytes:string, ArchiveStorageCoolTimeTravelBytes:string, ArchiveStorageColdTimeTravelBytes:string, ArchiveStorageCoolFailsafeBytes:string, ArchiveStorageColdFailsafeBytes:string, ArchiveStorageCoolEarlyDeletionPenaltyBytes:string, ArchiveStorageColdEarlyDeletionPenaltyBytes:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      TCTime = toreal(TableCreated),
+      TDTime = toreal(TableDropped),
+      TFTime = toreal(TableEnteredFailsafe),
+      SCTime = toreal(SchemaCreated),
+      SDTime = toreal(SchemaDropped),
+      CCTime = toreal(CatalogCreated),
+      CDTime = toreal(CatalogDropped)
+    | extend
+      TableStorageMetricsId = tostring(Id),
+      TableStorageMetricsTableName = tostring(TableName),
+      TableStorageMetricsTableSchemaId = tostring(TableSchemaId),
+      TableStorageMetricsTableSchema = tostring(TableSchema),
+      TableStorageMetricsTableCatalogId = tostring(TableCatalogId),
+      TableStorageMetricsTableCatalog = tostring(TableCatalog),
+      TableStorageMetricsCloneGroupId = tostring(CloneGroupId),
+      TableStorageMetricsIsTransient = tostring(IsTransient),
+      TableStorageMetricsActiveBytes = tostring(ActiveBytes),
+      TableStorageMetricsTimeTravelBytes = tostring(TimeTravelBytes),
+      TableStorageMetricsFailsafeBytes = tostring(FailsafeBytes),
+      TableStorageMetricsRetainedForCloneBytes = tostring(RetainedForCloneBytes),
+      TableStorageMetricsDeleted = tostring(Deleted),
+      TableStorageMetricsTableCreated = unixtime_seconds_todatetime(TCTime),
+      TableStorageMetricsTableDropped = unixtime_seconds_todatetime(TDTime),
+      TableStorageMetricsTableEnteredFailsafe = unixtime_seconds_todatetime(TFTime),
+      TableStorageMetricsSchemaCreated = unixtime_seconds_todatetime(SCTime),
+      TableStorageMetricsSchemaDropped = unixtime_seconds_todatetime(SDTime),
+      TableStorageMetricsCatalogCreated = unixtime_seconds_todatetime(CCTime),
+      TableStorageMetricsCatalogDropped = unixtime_seconds_todatetime(CDTime),
+      TableStorageMetricsComment = tostring(Comment),
+      TableStorageMetricsInstanceId = tostring(InstanceId),
+      TableStorageMetricsArchiveStorageCoolActiveBytes = tostring(ArchiveStorageCoolActiveBytes),
+      TableStorageMetricsArchiveStorageColdActiveBytes = tostring(ArchiveStorageColdActiveBytes),
+      TableStorageMetricsArchiveStorageCoolTimeTravelBytes = tostring(ArchiveStorageCoolTimeTravelBytes),
+      TableStorageMetricsArchiveStorageColdTimeTravelBytes = tostring(ArchiveStorageColdTimeTravelBytes),
+      TableStorageMetricsArchiveStorageCoolFailsafeBytes = tostring(ArchiveStorageCoolFailsafeBytes),
+      TableStorageMetricsArchiveStorageColdFailsafeBytes = tostring(ArchiveStorageColdFailsafeBytes),
+      TableStorageMetricsArchiveStorageCoolEarlyDeletionPenaltyBytes = tostring(ArchiveStorageCoolEarlyDeletionPenaltyBytes),
+      TableStorageMetricsArchiveStorageColdEarlyDeletionPenaltyBytes = tostring(ArchiveStorageColdEarlyDeletionPenaltyBytes)
+    | project-away TableCreated, TableDropped, TableEnteredFailsafe, SchemaCreated, SchemaDropped, CatalogCreated, CatalogDropped
+  };
+  let SnowflakeTablesV3_view = view () {
+    union isfuzzy=true SnowflakeTablesV3_CL, (datatable(TimeGenerated:datetime, TableId:string, TableName:string, TableSchemaId:string, TableSchema:string, TableCatalogId:string, TableCatalog:string, TableOwner:string, TableType:string, IsTransient:string, IsIceberg:string, IsDynamic:string, IsHybrid:string, ClusteringKey:string, RowCount:string, Bytes:string, RetentionTime:string, SelfReferencingColumnName:string, ReferenceGeneration:string, UserDefinedTypeCatalog:string, UserDefinedTypeSchema:string, UserDefinedTypeName:string, IsInsertableInto:string, IsTyped:string, CommitAction:string, Created:string, LastAltered:string, LastDdl:string, LastDdlBy:string, Deleted:string, AutoClusteringOn:string, Comment:string, OwnerRoleType:string, InstanceId:string, ArchiveStorageCoolRowCount:string, ArchiveStorageCoolBytes:string, ArchiveStorageColdRowCount:string, ArchiveStorageColdBytes:string, ErrorLogging:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      TCTime = toreal(Created),
+      LATime = toreal(LastAltered),
+      LDTime = toreal(LastDdl),
+      TDTime = toreal(Deleted)
+    | extend
+      TableId = tostring(TableId),
+      TableName = tostring(TableName),
+      TableSchemaId = tostring(TableSchemaId),
+      TableSchema = tostring(TableSchema),
+      TableCatalogId = tostring(TableCatalogId),
+      TableCatalog = tostring(TableCatalog),
+      TableOwner = tostring(TableOwner),
+      TableType = tostring(TableType),
+      TableIsTransient = tostring(IsTransient),
+      TableIsIceberg = tostring(IsIceberg),
+      TableIsDynamic = tostring(IsDynamic),
+      TableIsHybrid = tostring(IsHybrid),
+      TableClusteringKey = tostring(ClusteringKey),
+      TableRowCount = tostring(RowCount),
+      TableBytes = tostring(Bytes),
+      TableRetentionTime = tostring(RetentionTime),
+      TableSelfReferencingColumnName = tostring(SelfReferencingColumnName),
+      TableReferenceGeneration = tostring(ReferenceGeneration),
+      TableUserDefinedTypeCatalog = tostring(UserDefinedTypeCatalog),
+      TableUserDefinedTypeSchema = tostring(UserDefinedTypeSchema),
+      TableUserDefinedTypeName = tostring(UserDefinedTypeName),
+      TableIsInsertableInto = tostring(IsInsertableInto),
+      TableIsTyped = tostring(IsTyped),
+      TableCommitAction = tostring(CommitAction),
+      TableCreated = unixtime_seconds_todatetime(TCTime),
+      TableLastAltered = unixtime_seconds_todatetime(LATime),
+      TableLastDDL = unixtime_seconds_todatetime(LDTime),
+      TableLastDDLBy = tostring(LastDdlBy),
+      TableDeleted = unixtime_seconds_todatetime(TDTime),
+      TableAutoClusteringOn = tostring(AutoClusteringOn),
+      TableComment = tostring(Comment),
+      TableOwnerRoleType = tostring(OwnerRoleType),
+      TableInstanceId = tostring(InstanceId),
+      TableArchiveStorageCoolRowCount = tostring(ArchiveStorageCoolRowCount),
+      TableArchiveStorageCoolBytes = tostring(ArchiveStorageCoolBytes),
+      TableArchiveStorageColdRowCount = tostring(ArchiveStorageColdRowCount),
+      TableArchiveStorageColdBytes = tostring(ArchiveStorageColdBytes),
+      TableErrorLogging = tostring(ErrorLogging)
+  };
+  let SnowflakeUsersV3_view = view () {
+    union isfuzzy=true SnowflakeUsersV3_CL, (datatable(TimeGenerated:datetime, UserId:string, Name:string, CreatedOn:string, DeletedOn:string, LoginName:string, DisplayName:string, FirstName:string, LastName:string, Email:string, MustChangePassword:string, HasPassword:string, Comment:string, Disabled:string, SnowflakeLock:string, DefaultWarehouse:string, DefaultNamespace:string, DefaultRole:string, ExtAuthnDuo:string, ExtAuthnUid:string, HasMfa:string, BypassMfaUntil:string, LastSuccessLogin:string, ExpiresAt:string, LockedUntilTime:string, HasRsaPublicKey:string, PasswordLastSetTime:string, Owner:string, DefaultSecondaryRole:string, HasPat:string, HasWorkloadIdentity:string, UserType:string, DatabaseName:string, DatabaseId:string, SchemaName:string, SchemaId:string, IsFromOrganizationUser:string, ProvisionedBy:string, IsEmailVerified:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      CTime = toreal(CreatedOn),
+      DTime = toreal(DeletedOn),
+      BMTime = toreal(BypassMfaUntil),
+      LSLTime = toreal(LastSuccessLogin),
+      ETime = toreal(ExpiresAt),
+      LUTime = toreal(LockedUntilTime),
+      PLSTime = toreal(PasswordLastSetTime)
+    | extend
+      UserId = tostring(UserId),
+      UserName = tostring(Name),
+      UserCreatedOn = unixtime_seconds_todatetime(CTime),
+      UserDeletedOn = unixtime_seconds_todatetime(DTime),
+      UserLoginName = tostring(LoginName),
+      UserDisplayName = tostring(DisplayName),
+      UserFirstName = tostring(FirstName),
+      UserLastName = tostring(LastName),
+      UserEmail = tostring(Email),
+      UserMustChangePassword = tostring(MustChangePassword),
+      UserHasPassword = tostring(HasPassword),
+      UserComment = tostring(Comment),
+      UserDisabled = tostring(Disabled),
+      UserSnowflakeLock = tostring(SnowflakeLock),
+      UserDefaultWarehouse = tostring(DefaultWarehouse),
+      UserDefaultNamespace = tostring(DefaultNamespace),
+      UserDefaultRole = tostring(DefaultRole),
+      UserExtAuthnDuo = tostring(ExtAuthnDuo),
+      UserExtAuthnUid = tostring(ExtAuthnUid),
+      UserHasMFA = tostring(HasMfa),
+      UserBypassMFAUntil = unixtime_seconds_todatetime(BMTime),
+      UserLastSuccessLogin = unixtime_seconds_todatetime(LSLTime),
+      UserExpiresAt = unixtime_seconds_todatetime(ETime),
+      UserLockedUntilTime = unixtime_seconds_todatetime(LUTime),
+      UserHasRSAPublicKey = tostring(HasRsaPublicKey),
+      UserPasswordLastSetTime = unixtime_seconds_todatetime(PLSTime),
+      UserOwner = tostring(Owner),
+      UserDefaultSecondaryRole = tostring(DefaultSecondaryRole),
+      UserHasPAT = tostring(HasPat),
+      UserHasWorkloadIdentity = tostring(HasWorkloadIdentity),
+      UserType = tostring(UserType),
+      UserDatabaseName = tostring(DatabaseName),
+      UserDatabaseId = tostring(DatabaseId),
+      UserSchemaName = tostring(SchemaName),
+      UserSchemaId = tostring(SchemaId),
+      UserIsFromOrganizationUser = tostring(IsFromOrganizationUser),
+      UserProvisionedBy = tostring(ProvisionedBy),
+      UserIsEmailVerified = tostring(IsEmailVerified)
+  };
+  let SnowflakeQueryV3_view = view () {
+    union isfuzzy=true SnowflakeQueryV3_CL, (datatable(TimeGenerated:datetime, QueryId:string, QueryText:string, DatabaseId:string, DatabaseName:string, SchemaId:string, SchemaName:string, QueryType:string, SessionId:string, AuthnEventId:string, UserName:string, RoleName:string, WarehouseId:string, WarehouseName:string, WarehouseSize:string, WarehouseType:string, ClusterNumber:string, QueryTag:string, ExecutionStatus:string, ErrorCode:string, ErrorMessage:string, StartTime:string, EndTime:string, TotalElapsedTime:string, BytesScanned:string, PercentageScannedFromCache:string, BytesWritten:string, BytesWrittenToResult:string, BytesReadFromResult:string, RowsProduced:string, RowsInserted:string, RowsUpdated:string, RowsDeleted:string, RowsUnloaded:string, BytesDeleted:string, PartitionsScanned:string, PartitionsTotal:string, BytesSpilledToLocalStorage:string, BytesSpilledToRemoteStorage:string, BytesSentOverTheNetwork:string, CompilationTime:string, ExecutionTime:string, QueuedProvisioningTime:string, QueuedRepairTime:string, QueuedOverloadTime:string, TransactionBlockedTime:string, OutboundDataTransferCloud:string, OutboundDataTransferRegion:string, OutboundDataTransferBytes:string, InboundDataTransferCloud:string, InboundDataTransferRegion:string, InboundDataTransferBytes:string, ListExternalFilesTime:string, CreditsUsedCloudServices:string, ReleaseVersion:string, ExternalFunctionTotalInvocations:string, ExternalFunctionTotalSentRows:string, ExternalFunctionTotalReceivedRows:string, ExternalFunctionTotalSentBytes:string, ExternalFunctionTotalReceivedBytes:string, QueryLoadPercent:string, IsClientGeneratedStatement:string, QueryAccelerationBytesScanned:string, QueryAccelerationPartitionsScanned:string, QueryAccelerationUpperLimitScaleFactor:string, TransactionId:string, ChildQueriesWaitTime:string, RoleType:string, QueryHash:string, QueryHashVersion:string, QueryParameterizedHash:string, QueryParameterizedHashVersion:string, SecondaryRoleStats:string, RowsWrittenToResult:string, QueryRetryTime:string, QueryRetryCause:string, FaultHandlingTime:string, UserType:string, UserDatabaseName:string, UserDatabaseId:string, UserSchemaName:string, UserSchemaId:string, ResourceConstraint:string, Generation:string, BindValues:string, AgentType:string, SnowflakeAccountIdentifier:string)[])
+    | extend EventVendor = 'Snowflake'
+    | extend EventProduct = 'Snowflake'
+    | extend
+      QSTime = toreal(StartTime),
+      QETime = toreal(EndTime),
+      QueryTotalElapsedTime = toreal(TotalElapsedTime),
+      QueryExecutionTime = toreal(ExecutionTime)
+    | extend
+      QueryStartTime = unixtime_seconds_todatetime(QSTime),
+      QueryEndTime = unixtime_seconds_todatetime(QETime)
+    | extend
+      QueryId = tostring(QueryId),
+      QueryText = tostring(QueryText),
+      QueryDatabaseId = tostring(DatabaseId),
+      QueryDatabaseName = tostring(DatabaseName),
+      QuerySchemaId = tostring(SchemaId),
+      QuerySchemaName = tostring(SchemaName),
+      QueryType = tostring(QueryType),
+      QuerySessionId = tostring(SessionId),
+      QueryAuthnEventId = tostring(AuthnEventId),
+      QueryUserName = tostring(UserName),
+      QueryRoleName = tostring(RoleName),
+      QueryWarehouseId = tostring(WarehouseId),
+      QueryWarehouseName = tostring(WarehouseName),
+      QueryWarehouseSize = tostring(WarehouseSize),
+      QueryWarehouseType = tostring(WarehouseType),
+      QueryClusterNumber = tostring(ClusterNumber),
+      QueryTag = tostring(QueryTag),
+      QueryExecutionStatus = tostring(ExecutionStatus),
+      QueryErrorCode = tostring(ErrorCode),
+      QueryErrorMessage = tostring(ErrorMessage),
+      QueryBytesScanned = tostring(BytesScanned),
+      QueryPercentageScannedFromCache = tostring(PercentageScannedFromCache),
+      QueryBytesWritten = tostring(BytesWritten),
+      QueryBytesWrittenToResult = tostring(BytesWrittenToResult),
+      QueryBytesReadFromResult = tostring(BytesReadFromResult),
+      QueryRowsProduced = tostring(RowsProduced),
+      QueryRowsInserted = tostring(RowsInserted),
+      QueryRowsUpdated = tostring(RowsUpdated),
+      QueryRowsDeleted = tostring(RowsDeleted),
+      QueryRowsUnloaded = tostring(RowsUnloaded),
+      QueryBytesDeleted = tostring(BytesDeleted),
+      QueryPartitionsScanned = tostring(PartitionsScanned),
+      QueryPartitionsTotal = tostring(PartitionsTotal),
+      QueryBytesSpilledToLocalStorage = tostring(BytesSpilledToLocalStorage),
+      QueryBytesSpilledToRemoteStorage = tostring(BytesSpilledToRemoteStorage),
+      QueryBytesSentOverTheNetwork = tostring(BytesSentOverTheNetwork),
+      QueryCompilationTime = tostring(CompilationTime),
+      QueryQueuedProvisioningTime = tostring(QueuedProvisioningTime),
+      QueryQueuedRepairTime = tostring(QueuedRepairTime),
+      QueryQueuedOverloadTime = tostring(QueuedOverloadTime),
+      QueryTransactionBlockedTime = tostring(TransactionBlockedTime),
+      QueryOutboundDataTransferCloud = tostring(OutboundDataTransferCloud),
+      QueryOutboundDataTransferRegion = tostring(OutboundDataTransferRegion),
+      QueryOutboundDataTransferBytes = tostring(OutboundDataTransferBytes),
+      QueryInboundDataTransferCloud = tostring(InboundDataTransferCloud),
+      QueryInboundDataTransferRegion = tostring(InboundDataTransferRegion),
+      QueryInboundDataTransferBytes = tostring(InboundDataTransferBytes),
+      QueryListExternalFilesTime = tostring(ListExternalFilesTime),
+      QueryCreditsUsedCloudServices = iff(isempty(tostring(CreditsUsedCloudServices)), toreal(0), toreal(CreditsUsedCloudServices)),
+      QueryReleaseVersion = tostring(ReleaseVersion),
+      QueryExternalFunctionTotalInvocations = tostring(ExternalFunctionTotalInvocations),
+      QueryExternalFunctionTotalSentRows = tostring(ExternalFunctionTotalSentRows),
+      QueryExternalFunctionTotalReceivedRows = tostring(ExternalFunctionTotalReceivedRows),
+      QueryExternalFunctionTotalSentBytes = tostring(ExternalFunctionTotalSentBytes),
+      QueryExternalFunctionTotalReceivedBytes = tostring(ExternalFunctionTotalReceivedBytes),
+      QueryLoadPercent = tostring(QueryLoadPercent),
+      QueryIsClientGeneratedStatement = tostring(IsClientGeneratedStatement),
+      QueryAccelerationBytesScanned = tostring(QueryAccelerationBytesScanned),
+      QueryAccelerationPartitionsScanned = tostring(QueryAccelerationPartitionsScanned),
+      QueryAccelerationUpperLimitScaleFactor = tostring(QueryAccelerationUpperLimitScaleFactor),
+      QueryTransactionId = tostring(TransactionId),
+      ChildQueriesWaitTime = tostring(ChildQueriesWaitTime),
+      QueryRoleType = tostring(RoleType),
+      QueryHash = tostring(QueryHash),
+      QueryHashVersion = tostring(QueryHashVersion),
+      QueryParameterizedHash = tostring(QueryParameterizedHash),
+      QueryParameterizedHashVersion = tostring(QueryParameterizedHashVersion),
+      QuerySecondaryRoleStats = tostring(SecondaryRoleStats),
+      QueryRowsWrittenToResult = tostring(RowsWrittenToResult),
+      QueryRetryTime = tostring(QueryRetryTime),
+      QueryRetryCause = tostring(QueryRetryCause),
+      QueryFaultHandlingTime = tostring(FaultHandlingTime),
+      QueryUserType = tostring(UserType),
+      QueryUserDatabaseName = tostring(UserDatabaseName),
+      QueryUserDatabaseId = tostring(UserDatabaseId),
+      QueryUserSchemaName = tostring(UserSchemaName),
+      QueryUserSchemaId = tostring(UserSchemaId),
+      QueryResourceConstraint = tostring(ResourceConstraint),
+      QueryGeneration = tostring(Generation),
+      QueryBindValues = tostring(BindValues),
+      QueryAgentType = tostring(AgentType)
+  };
   union isfuzzy=true
       (Snowflake_view),
       (SnowflakeLogin_view),
+      (SnowflakeLoginV3_view),
       (SnowflakeLoginV2_view),
       (SnowflakeUserGrant_view),
+      (SnowflakeUserGrantV3_view),
       (SnowflakeUserGrantV2_view),
       (SnowflakeMaterializedView_view),
+      (SnowflakeMaterializedViewV3_view),
       (SnowflakeMaterializedViewV2_view),
       (SnowflakeRoles_view),
+      (SnowflakeRolesV3_view),
       (SnowflakeRolesV2_view),
       (SnowflakeRoleGrant_view),
+      (SnowflakeRoleGrantV3_view),
       (SnowflakeRoleGrantV2_view),
       (SnowflakeLoad_view),
+      (SnowflakeLoadV3_view),
       (SnowflakeLoadV2_view),
       (SnowflakeTableStorageMetrics_view),
+      (SnowflakeTableStorageMetricsV3_view),
       (SnowflakeTableStorageMetricsV2_view),
       (SnowflakeTables_view),
+      (SnowflakeTablesV3_view),
       (SnowflakeTablesV2_view),
       (SnowflakeUsers_view),
+      (SnowflakeUsersV3_view),
       (SnowflakeUsersV2_view),
       (SnowflakeQuery_view),
+      (SnowflakeQueryV3_view),
       (SnowflakeQueryV2_view)
   | extend DatabaseName = coalesce(QueryDatabaseName, UserDatabaseName, RoleDatabaseName, MaterializedViewDatabaseName)
   | extend TableNames = coalesce(TableName, MaterializedViewTableName, LoadTableName, TableStorageMetricsTableName)
-  | extend EventStartTime = column_ifexists('EventStartTime', '')
+  | extend EventStartTime = coalesce(
+      todatetime(column_ifexists('EventStartTime', todatetime(''))),
+      LoginEventTimestamp,
+      QueryStartTime,
+      MaterializedViewStartTime,
+      RoleGrantCreatedOn,
+      RoleCreatedOn,
+      LoadLastLoadTime,
+      TableCreated,
+      UserCreatedOn,
+      TimeGenerated)
+  | extend Type = column_ifexists('Type', '')
   | project
       EventVendor,
       EventProduct,
@@ -882,6 +1278,7 @@ FunctionQuery: |
       LoadCatalogName,
       LoadFileName,
       LastLoadTime,
+      LoadLastLoadTime,
       LoadStatus,
       LoadRowCount,
       LoadRowParsed,
