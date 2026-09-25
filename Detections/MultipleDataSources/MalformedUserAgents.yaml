@@ -72,7 +72,11 @@ query: |
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
   )
   )
-  // Likely artefact of hardcoding
+  // Likely artefact of hardcoding.
+  // Note: the AWS service-identity exception below is intentionally scoped to this single predicate. AWS
+  // service UAs (config.amazonaws.com, autoscaling.amazonaws.com, user-subscriptions.amazonaws.com, etc.)
+  // legitimately start with "User" but they do NOT exhibit the quote, Mozilla casing, (Compatible; or MSIE
+  // malformation patterns, so those branches remain authoritative even for service-originated calls.
   | where (UserAgent startswith "User" or UserAgent startswith '\"'
   // Incorrect casing
   or (UserAgent startswith "Mozilla" and not(UserAgent contains_cs "Mozilla"))
@@ -82,11 +86,11 @@ query: |
   or UserAgent matches regex @"MSIE\s?;"
   // Incorrect spacing around MSIE version
   or UserAgent matches regex  @"MSIE(?:\d|.{1,5}?\d\s;)")
-  // Exclude legitimate AWS service user agents (e.g. user-subscriptions.amazonaws.com) only when CloudTrail
-  // confirms the API call was made by an AWS service (userIdentity.invokedBy is populated exclusively for
-  // AWS-service-originated calls). Requiring this service-identity evidence prevents an external caller from
-  // suppressing the alert simply by spoofing an .amazonaws.com user agent suffix.
-  and not (Type == "AWSCloudTrail" and isnotempty(AwsServiceInvokedBy) and (UserAgent endswith ".amazonaws.com" or UserAgent endswith ".amazonaws.com.cn"))
+  // AWS service-identity exception for the only predicate that produced the reported FP. CloudTrail records
+  // userIdentity.invokedBy only when an AWS service (not an IAM caller) made the API call, so this guards
+  // against caller-controlled UAs that merely end in .amazonaws.com(.cn). This exception is intentionally
+  // narrow: it does not suppress quote, casing, (Compatible; or MSIE detections for service calls.
+  and not (Type == "AWSCloudTrail" and UserAgent startswith "User" and isnotempty(AwsServiceInvokedBy) and (UserAgent endswith ".amazonaws.com" or UserAgent endswith ".amazonaws.com.cn"))
   | extend AccountName = split(Account, "@")[0], UPNSuffix = split(Account, "@")[1]
 entityMappings:
   - entityType: Account
@@ -101,7 +105,7 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIP
-version: 1.0.9
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
