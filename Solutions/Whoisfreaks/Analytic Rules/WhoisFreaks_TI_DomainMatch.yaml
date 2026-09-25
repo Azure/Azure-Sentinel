@@ -1,0 +1,97 @@
+id: a7c3e1b2-4d5f-6a78-9b0c-1d2e3f4a5b6c
+name: WhoisFreaks - Threat domain observed in environment
+description: |
+  'Matches WhoisFreaks malware, phishing, or spam domains against DNS, proxy, firewall, and email telemetry.
+  A hit indicates a host or user in the environment contacted a domain listed by WhoisFreaks as malicious.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksMalware_CL
+      - WhoisFreaksPhishing_CL
+      - WhoisFreaksSpam_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1566
+query: |
+  let lookback = 14d;
+  let ti =
+      union isfuzzy=true
+          WhoisFreaksMalware_CL,
+          WhoisFreaksPhishing_CL,
+          WhoisFreaksSpam_CL
+      | where TimeGenerated >= ago(lookback)
+      | extend Domain = tolower(trim(" ", coalesce(tostring(domain), tostring(domain_name), "")))
+      | where isnotempty(Domain)
+      | summarize
+          ThreatType = any(tostring(coalesce(threat_type, ""))),
+          Confidence = max(todouble(confidence)),
+          FirstSeen = min(todatetime(first_seen)),
+          LastSeen = max(todatetime(last_seen)),
+          FeedTables = make_set(Type)
+        by Domain;
+  let dns =
+      union isfuzzy=true
+          (DnsEvents
+              | where TimeGenerated >= ago(1h)
+              | extend Domain = tolower(trim(" ", tostring(Name))), SrcIp = tostring(ClientIP), Device = tostring(Computer)),
+          (CommonSecurityLog
+              | where TimeGenerated >= ago(1h)
+              | where isnotempty(DestinationHostName) or isnotempty(RequestURL)
+              | extend Domain = tolower(trim(" ", coalesce(
+                    tostring(DestinationHostName),
+                    tostring(parse_url(tostring(RequestURL)).Host),
+                    "")))
+              | extend SrcIp = tostring(SourceIP), Device = tostring(Computer)),
+          (DeviceNetworkEvents
+              | where TimeGenerated >= ago(1h)
+              | where isnotempty(RemoteUrl)
+              | extend Domain = tolower(trim(" ", tostring(parse_url(RemoteUrl).Host)))
+              | extend SrcIp = tostring(LocalIP), Device = tostring(DeviceName)),
+          (EmailUrlInfo
+              | where TimeGenerated >= ago(1h)
+              | where isnotempty(UrlDomain)
+              | extend Domain = tolower(trim(" ", tostring(UrlDomain)))
+              | extend SrcIp = "", Device = "")
+      | where isnotempty(Domain)
+      | summarize
+          EventCount = count(),
+          FirstEvent = min(TimeGenerated),
+          LastEvent = max(TimeGenerated),
+          SrcIps = make_set(SrcIp, 20),
+          Devices = make_set(Device, 20)
+        by Domain;
+  ti
+  | join kind=inner dns on Domain
+  | project
+      TimeGenerated = LastEvent,
+      Domain,
+      ThreatType,
+      Confidence,
+      FirstSeen,
+      LastSeen,
+      EventCount,
+      FirstEvent,
+      LastEvent,
+      SrcIps,
+      Devices,
+      FeedTables
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIps
+version: 1.0.0
+kind: Scheduled

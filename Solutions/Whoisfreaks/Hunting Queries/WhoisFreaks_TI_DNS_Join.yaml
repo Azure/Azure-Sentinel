@@ -1,0 +1,53 @@
+id: c9e5a3d4-6f7b-8c90-1d2e-3f4a5b6c7d8e
+name: WhoisFreaks - Threat domains in DNS activity
+description: |
+  'Joins WhoisFreaks malware/phishing/spam domains with DnsEvents over the last 7 days.
+  Use to hunt for historical contact with known-bad domains after enabling the connector.'
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksMalware_CL
+      - WhoisFreaksPhishing_CL
+      - WhoisFreaksSpam_CL
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1566
+query: |
+  let lookback = 7d;
+  let ti =
+      union isfuzzy=true WhoisFreaksMalware_CL, WhoisFreaksPhishing_CL, WhoisFreaksSpam_CL
+      | where TimeGenerated >= ago(lookback)
+      | extend Domain = tolower(trim(" ", coalesce(tostring(domain), tostring(domain_name), "")))
+      | where isnotempty(Domain)
+      | summarize
+          ThreatType = any(tostring(coalesce(threat_type, ""))),
+          Confidence = max(todouble(confidence)),
+          FirstSeen = min(todatetime(first_seen)),
+          LastSeen = max(todatetime(last_seen))
+        by Domain;
+  DnsEvents
+  | where TimeGenerated >= ago(lookback)
+  | extend Domain = tolower(trim(" ", tostring(Name)))
+  | where isnotempty(Domain)
+  | summarize
+      QueryCount = count(),
+      Clients = make_set(ClientIP, 50),
+      FirstQuery = min(TimeGenerated),
+      LastQuery = max(TimeGenerated)
+    by Domain, Computer
+  | join kind=inner ti on Domain
+  | project FirstQuery, LastQuery, Domain, ThreatType, Confidence, Computer, Clients, QueryCount, FirstSeen, LastSeen
+  | order by LastQuery desc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Domain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+version: 1.0.0
