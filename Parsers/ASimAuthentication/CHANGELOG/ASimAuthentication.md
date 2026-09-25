@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.23
+
+- (2026-09-25) Add the Aruba Networks ClearPass Authentication parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
+
 ## Version 0.2.22
 
 - (2026-09-24) Add the Oracle OCI Authentication parser. [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)

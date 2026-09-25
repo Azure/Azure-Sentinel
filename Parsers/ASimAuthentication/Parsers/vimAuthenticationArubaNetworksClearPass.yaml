@@ -1,0 +1,331 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Aruba Networks ClearPass
+  Version: '0.1.0'
+  LastUpdated: Sep 24, 2026
+Product:
+  Name: Aruba Networks ClearPass
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Aruba ClearPass Policy Manager CEF/Syslog format
+  Link: https://arubanetworking.hpe.com/techdocs/ClearPass/6.11/PolicyManager/Content/CPPM_UserGuide/Admin/syslogExportFilters.html
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing and filtering Aruba Networks ClearPass authentication events, ingested via the CommonSecurityLog (CEF) connector, to the ASIM Authentication normalized schema.
+Exceptions:
+- Field: DvcAction
+  Warning: Missing recommended field
+  Exception: Data not available.
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Data not available.
+ParserName: vimAuthenticationArubaNetworksClearPass
+EquivalentBuiltInParser: _Im_Authentication_ArubaNetworksClearPass
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
+  let DomainFormatRegex = @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)*[a-zA-Z]{2,63}$';
+  let vimAuthenticationArubaNetworksClearPass = (
+      starttime: datetime = datetime(null)
+      , endtime: datetime = datetime(null)
+      , srcipaddr_has_any_prefix: dynamic = dynamic([])
+      , srchostname_has_any: dynamic = dynamic([])
+      , username_has_any: dynamic = dynamic([])
+      , targetappname_has_any: dynamic = dynamic([])
+      , eventtype_in: dynamic = dynamic([])
+      , eventresult: string = '*'
+      , eventresultdetails_in: dynamic = dynamic([])
+      , disabled: bool = false
+      , pack: bool = false
+  ) {
+      // Scope to actual authentication-decision events (RADIUS/TACACS+ logon attempts).
+      // RADIUS/TACACS+ Accounting (2002/2004) carry no logon outcome and are session/traffic
+      // accounting. Guest Access (2006) is a session-log echo without reliable outcome
+      // or source fields. Audit Records (3xxx) and System Events (4xxx) are
+      // administrative/config activity, not end-user or device authentication.
+      CommonSecurityLog
+      | where not(disabled)
+      | where DeviceVendor == "Aruba Networks" and DeviceProduct == "ClearPass"
+      // 2000: "Logged in users", 2001: "Failed Authentications", 2003 "TACACS+ Administration".
+      | where DeviceEventClassID in ("2000", "2001", "2003")
+      // Drop rows with no device or source identity (mandatory Dvc would be blank).
+      | where isnotempty(DeviceAddress) or isnotempty(SourceIP)
+      | where
+          (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | where array_length(eventtype_in) == 0 or "Logon" in (eventtype_in) // Source doesn't provide Logoff or Elevate
+      | where
+          array_length(srcipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix)
+          or ipv6_is_in_any_range(SourceIP, srcipaddr_has_any_prefix)
+      // Hostname may appear as host/<fqdn> in DestinationUserName when SourceHostName is absent. Often just an IP is reported.
+      | where
+          array_length(srchostname_has_any) == 0
+          or SourceIP has_any (srchostname_has_any)
+          or DestinationUserName has_any (srchostname_has_any)
+      | where array_length(username_has_any) == 0 or DestinationUserName has_any (username_has_any)
+      // TargetAppName is the ClearPass service (DestinationServiceName).
+      | where array_length(targetappname_has_any) == 0 or DestinationServiceName has_any (targetappname_has_any)
+      | extend
+          // 2000/2001 imply the outcome. 2003 relies on Login Status.
+          EventResult = case(
+              DeviceEventClassID == "2000", "Success"
+              , DeviceEventClassID == "2001", "Failure"
+              , DeviceCustomString1Label == "Login Status" and DeviceCustomString1 == "ACCEPT", "Success"
+              , DeviceCustomString1Label == "Login Status" and DeviceCustomString1 in ("REJECT", "TIMEOUT"), "Failure"
+              , "NA")
+      | where eventresult == '*' or eventresult == EventResult
+      | extend
+          EventResultDetails = case(
+              EventResult != "Failure", ""
+              , Reason has "User not found", "No such user"
+              , Reason has "disabled", "User disabled"
+              , Reason has "Password expired", "Password expired"
+              , Reason has "expired", "Account expired"
+              , Reason has "locked", "User locked"
+              , isnotempty(Reason), "Other"
+              , "")
+      | where array_length(eventresultdetails_in) == 0 or EventResultDetails in (eventresultdetails_in)
+      | parse-kv AdditionalExtensions as (
+          ArubaClearpassCommonNASName: string
+          , ArubaClearpassCommonConnectionStatus: string
+          , ArubaClearpassRADIUSAuthMethod: string
+          , ArubaClearpassTACACSRequestType: string
+      ) with (pair_delimiter=";", kv_delimiter="=")
+      // TACACS AUTHORIZATION is privilege checking, not a logon. Keep AUTHEN /
+      // TACACS_AUTHENTICATION, and 2003 rows with no request type (older exports).
+      | where
+          DeviceEventClassID != "2003"
+          or isempty(ArubaClearpassTACACSRequestType)
+          or ArubaClearpassTACACSRequestType in ("TACACS_AUTHENTICATION", "AUTHEN")
+      // The RADIUS method is exported either as requestMethod or as an unmapped extension.
+      | extend
+          _AuthMethod = iff(isnotempty(ArubaClearpassRADIUSAuthMethod), ArubaClearpassRADIUSAuthMethod, RequestMethod)
+      | extend
+          // Machine identities stay in TargetUsername (RADIUS User-Name), typed as Machine.
+          // Require Machine Authenticated without User Authenticated dual tags are common on
+          // human 802.1X (e.g. CORP\user) and must stay Regular.
+          _IsMachineIdentity = case(
+              _AuthMethod == "MAC-AUTH", true
+              , DestinationUserPrivileges has "Machine Authenticated"
+                  and DestinationUserPrivileges !has "User Authenticated", true
+              , DestinationUserName startswith "host/", true
+              , DestinationUserName endswith "$", true
+              , DestinationUserName matches regex @"^[0-9a-fA-F]{12}$", true
+              , DestinationUserName matches regex @"^[0-9a-fA-F]{2}([:\-][0-9a-fA-F]{2}){5}$", true
+              , false)
+          // host/<fqdn> is the 802.1X computer SPN. Reuse the FQDN as the source host.
+          , _HostSpn = iff(DestinationUserName startswith "host/", substring(DestinationUserName, 5), "")
+      | extend
+          _SrcFQDN = iff(isnotempty(_HostSpn) and _HostSpn contains ".", _HostSpn, "")
+          , _SrcHostnameFromSpn = case(
+              isempty(_HostSpn), ""
+              , _HostSpn contains ".", tostring(split(_HostSpn, ".")[0])
+              , _HostSpn)
+          , _SrcDomainFromSpn = iff(
+              _HostSpn contains "."
+              , tostring(substring(_HostSpn, indexof(_HostSpn, ".") + 1))
+              , "")
+          // Normalize host/<fqdn> SPNs to the short hostname. Domain goes to TargetDomain.
+          , _TargetUsernameCandidate = case(
+              isempty(_HostSpn), DestinationUserName
+              , iff(_HostSpn contains ".", tostring(split(_HostSpn, ".")[0]), _HostSpn))
+      | extend
+          // Drop MOTD/banner fragments that leak into User-Name on some TACACS failures.
+          _IsGarbageUsername = case(
+              isempty(_TargetUsernameCandidate), false
+              , strlen(_TargetUsernameCandidate) > 64, true
+              , _TargetUsernameCandidate startswith " ", true
+              , _TargetUsernameCandidate endswith " ", true
+              , _TargetUsernameCandidate has "*", true
+              , _TargetUsernameCandidate has "  ", true
+              , false)
+      | extend
+          _TargetUsername = iff(_IsGarbageUsername, "", _TargetUsernameCandidate)
+      | extend
+          TargetUserType = case(
+              _IsMachineIdentity, "Machine"
+              , isnotempty(_TargetUsername), "Regular"
+              , "Other")
+          , TargetOriginalUserType = case(
+              DestinationUserPrivileges has "Machine Authenticated"
+                  or DestinationUserPrivileges has "User Authenticated"
+                  , DestinationUserPrivileges
+              , _AuthMethod == "MAC-AUTH", "MAC-AUTH"
+              , "")
+          , TargetUsernameType = case(
+              isempty(_TargetUsername), ""
+              , _TargetUsername contains "@", "UPN"
+              , _TargetUsername contains @"\", "Windows"
+              , "Simple")
+          , _UserDomain = case(
+              DestinationUserName contains "@", tostring(split(DestinationUserName, "@")[1])
+              , DestinationUserName contains @"\", tostring(split(DestinationUserName, @"\")[0])
+              , isnotempty(_SrcDomainFromSpn), _SrcDomainFromSpn
+              , "")
+          , TargetSimpleUsername = case(
+              isempty(_TargetUsername), ""
+              , _TargetUsername contains "@", tostring(split(_TargetUsername, "@")[0])
+              , _TargetUsername contains @"\", tostring(split(_TargetUsername, @"\")[-1])
+              , _TargetUsername)
+          , TargetUserUpn = iff(_TargetUsername contains "@", _TargetUsername, "")
+          , TargetWindowsUsername = iff(_TargetUsername contains @"\", _TargetUsername, "")
+          , LogonMethod = case(
+              _AuthMethod contains "TLS", "PKI"
+              , _AuthMethod contains "PEAP"
+                  or _AuthMethod contains "MSCHAP"
+                  or _AuthMethod contains "PAP", "Username & Password"
+              , isnotempty(_AuthMethod), "Other"
+              , "")
+          // Hostname-shaped NAS names identify the network device being accessed.
+          , _TargetHostname = case(
+              DestinationHostName matches regex HostnameFormatRegex, DestinationHostName
+              , ArubaClearpassCommonNASName matches regex HostnameFormatRegex, ArubaClearpassCommonNASName
+              , "")
+          // Some records carry the string "unknown" instead of a real IP.
+          , _TargetIpAddr = iff(isnotnull(parse_ipv4(DestinationIP)) or isnotempty(parse_ipv6(DestinationIP)), DestinationIP, "")
+          // TACACS+ Administration is an interactive admin logon to the network device. RADIUS
+          // 802.1X/MAC-AUTH network access has no clean match in the ASIM EventSubType .
+          , EventSubType = case(DeviceEventClassID == "2003", "RemoteInteractive", "")
+          , EventSeverity = case(
+              toint(LogSeverity) >= 7, "High"
+              , toint(LogSeverity) >= 4, "Medium"
+              , toint(LogSeverity) >= 0, "Low"
+              , "Informational")
+      | extend
+          _UserDomainOk = _UserDomain matches regex DomainFormatRegex
+          , _SrcDomainOk = _SrcDomainFromSpn matches regex DomainFormatRegex
+          , _SrcHostnameOk = _SrcHostnameFromSpn matches regex HostnameFormatRegex
+          // TacacsPrivilegeLevel only needed when packing AdditionalFields.
+          , _IsTacacsPrivilege = iff(pack, DestinationUserPrivileges matches regex @"^\d+$", false)
+      | extend
+          AdditionalFields = iff(
+              pack
+              , pack(
+                  "DeviceEventCategory", DeviceEventCategory
+                  , "LoginStatus", iff(DeviceCustomString1Label == "Login Status", DeviceCustomString1, "")
+                  , "ErrorCode", FieldDeviceCustomNumber1
+                  , "SystemPostureToken", DeviceCustomString4
+                  , "ConnectionStatus", ArubaClearpassCommonConnectionStatus
+                  , "EnforcementProfile", iff(_IsTacacsPrivilege, "", DestinationUserPrivileges)
+                  , "TacacsPrivilegeLevel", iff(_IsTacacsPrivilege, DestinationUserPrivileges, "")
+                  , "AuthMethod", _AuthMethod
+                  , "NasName", ArubaClearpassCommonNASName
+                  , "OriginalUsername", DestinationUserName)
+              , dynamic(null))
+      | project
+          TimeGenerated
+          , EventCount = toint(1)
+          , EventStartTime = TimeGenerated
+          , EventEndTime = TimeGenerated
+          , EventType = "Logon"
+          , EventSubType
+          , EventResult
+          , EventResultDetails
+          , EventOriginalResultDetails = Reason
+          , EventProduct = "ClearPass"
+          , EventProductVersion = DeviceVersion
+          , EventVendor = "Aruba Networks"
+          , EventSchema = "Authentication"
+          , EventSchemaVersion = "1.0.0"
+          , EventSeverity
+          , EventOriginalSeverity = LogSeverity
+          , EventOriginalType = Activity
+          , EventMessage = Reason
+          , EventUid = _ItemId
+          , TargetUsername = _TargetUsername
+          , User = _TargetUsername
+          , TargetUsernameType
+          , TargetUserType
+          , TargetOriginalUserType
+          , TargetSimpleUsername
+          , TargetUserUpn
+          , TargetWindowsUsername
+          , TargetDomain = iff(_UserDomainOk, _UserDomain, "")
+          , TargetDomainType = case(
+              not(_UserDomainOk), ""
+              , _UserDomain has ".", "FQDN"
+              , "Windows")
+          , TargetHostname = _TargetHostname
+          , TargetIpAddr = _TargetIpAddr
+          , Dst = coalesce(_TargetHostname, _TargetIpAddr)
+          , TargetAppName = DestinationServiceName
+          , TargetAppType = iff(isnotempty(DestinationServiceName), "Service", "")
+          , Application = DestinationServiceName
+          , LogonTarget = DestinationServiceName
+          , LogonMethod
+          , SrcIpAddr = SourceIP
+          , IpAddr = SourceIP
+          , SrcFQDN = _SrcFQDN
+          , SrcHostname = case(
+              _SrcHostnameOk, _SrcHostnameFromSpn
+              , isnotnull(parse_ipv4(SourceIP)) or isnotempty(parse_ipv6(SourceIP)), SourceIP
+              , "")
+          , SrcDomain = iff(_SrcDomainOk, _SrcDomainFromSpn, "")
+          , SrcDomainType = case(
+              not(_SrcDomainOk), ""
+              , _SrcDomainFromSpn has ".", "FQDN"
+              , "Windows")
+          , Src = case(
+              isnotempty(_SrcFQDN), _SrcFQDN
+              , _SrcHostnameOk, _SrcHostnameFromSpn
+              , isnotempty(SourceIP), SourceIP
+              , "")
+          , Dvc = DeviceAddress
+          , DvcIpAddr = DeviceAddress
+          , DvcHostname = DeviceName
+          , AdditionalFields
+          , Type = "CommonSecurityLog"
+  };
+  vimAuthenticationArubaNetworksClearPass(
+      starttime=starttime
+      , endtime=endtime
+      , srcipaddr_has_any_prefix=srcipaddr_has_any_prefix
+      , srchostname_has_any=srchostname_has_any
+      , username_has_any=username_has_any
+      , targetappname_has_any=targetappname_has_any
+      , eventtype_in=eventtype_in
+      , eventresult=eventresult
+      , eventresultdetails_in=eventresultdetails_in
+      , disabled=disabled
+      , pack=pack
+  )

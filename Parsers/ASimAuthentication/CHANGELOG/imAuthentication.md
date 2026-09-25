@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.20
+
+- (2026-09-25) Add the Aruba Networks ClearPass Authentication filtering parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
+
 ## Version 0.3.19
 
 - (2026-09-24) Add the Oracle OCI Authentication filtering parser. [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
