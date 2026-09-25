@@ -3,7 +3,11 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from .upwind_client import UpwindClient, rename_reserved_columns
+from .upwind_client import (
+    UpwindClient,
+    rename_reserved_columns,
+    severities_at_least,
+)
 
 # "title" is a reserved/invalid Log Analytics custom-table column name, so
 # it's renamed before upload. The DCR/table schema uses "title_text".
@@ -13,7 +17,7 @@ _COLUMN_RENAME_MAP = {"title": "title_text"}
 class UpwindConfigurationFindingsClient(UpwindClient):
     """Client for the Upwind configuration findings API."""
 
-    def fetch_configuration_findings(self, lookback_minutes: int) -> list:
+    def fetch_configuration_findings(self, lookback_minutes: int, on_page) -> int:
         """
         Fetch configuration findings evaluated within the lookback window.
 
@@ -21,7 +25,8 @@ class UpwindConfigurationFindingsClient(UpwindClient):
             comfortably larger than the function's own run interval so no
             findings are missed between runs; harmless duplicates are
             re-ingested on overlap.
-        :return: List of configuration finding dictionaries.
+        :param on_page: Callback invoked with each page of configuration findings.
+        :return: Total number of configuration findings fetched.
         :raises RuntimeError: If the API returns errors after exhausting retries.
         """
 
@@ -37,7 +42,20 @@ class UpwindConfigurationFindingsClient(UpwindClient):
             ]
         }
 
-        findings = self._fetch_paginated(url, search_body)
-        findings = rename_reserved_columns(findings, _COLUMN_RENAME_MAP)
-        logging.info("Fetched %d total configuration findings.", len(findings))
-        return findings
+        severities = severities_at_least(
+            self.config.get("upwind_min_severity_config_findings")
+        )
+        if severities:
+            search_body["conditions"].append(
+                {"field": "severity", "operator": "in", "value": severities}
+            )
+            logging.info(
+                "Filtering configuration findings to severities: %s", ", ".join(severities)
+            )
+
+        def emit(items):
+            on_page(rename_reserved_columns(items, _COLUMN_RENAME_MAP))
+
+        total = self._fetch_paginated(url, search_body, emit)
+        logging.info("Fetched %d total configuration findings.", total)
+        return total

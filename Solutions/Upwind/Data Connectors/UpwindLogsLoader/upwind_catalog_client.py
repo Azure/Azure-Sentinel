@@ -8,13 +8,14 @@ from .upwind_client import UpwindClient
 class UpwindCatalogClient(UpwindClient):
     """Client for the Upwind inventory catalog API."""
 
-    def fetch_catalog_assets(self) -> list:
+    def fetch_catalog_assets(self, on_page) -> int:
         """
         Fetch all catalog assets from the Upwind inventory search API, across
         every asset category (compute, storage, network, database, container,
         IAM, etc.) - not just compute platform.
 
-        :return: List of catalog asset dictionaries.
+        :param on_page: Callback invoked with each page of assets.
+        :return: Total number of catalog assets fetched.
         :raises RuntimeError: If the API returns errors after exhausting retries.
         """
 
@@ -34,6 +35,6 @@ class UpwindCatalogClient(UpwindClient):
             ]
         }
 
-        assets = self._fetch_paginated(url, search_body)
-        logging.info("Fetched %d total catalog assets (all categories).", len(assets))
-        return assets
+        total = self._fetch_paginated(url, search_body, on_page)
+        logging.info("Fetched %d total catalog assets (all categories).", total)
+        return total
