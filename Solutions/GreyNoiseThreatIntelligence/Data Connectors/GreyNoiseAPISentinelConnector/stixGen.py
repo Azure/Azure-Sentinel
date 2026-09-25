@@ -23,6 +23,19 @@ class GreyNoiseStixGenerator:
         ioc_uuid = str(uuid.uuid5(namespace=NAMESPACE_UUID, name=ioc_value.lower()))
         return f'indicator--{ioc_uuid}'
     
+    @staticmethod
+    def tag_names(tags) -> list:
+        """Reduce GreyNoise tags to the names Sentinel shows as indicator Tags.
+
+        The v3 API returns each tag as an object (id, slug, name, description, references, ...);
+        passed through as-is, every label became that whole object rendered as a string."""
+        names = []
+        for tag in tags or []:
+            name = (tag.get('name') or tag.get('slug')) if isinstance(tag, dict) else tag
+            if name:
+                names.append(str(name))
+        return names
+
     def generate_indicator(self, gnIndicator: dict):
         # Set confidence to 90 if spoofable, 100 if not
         if gnIndicator["internet_scanner_intelligence"].get('spoofable') == True and gnIndicator["internet_scanner_intelligence"].get('classification') != "benign":
@@ -40,7 +53,7 @@ class GreyNoiseStixGenerator:
             pattern_type=self.pattern_type,
              valid_from=(datetime.datetime.strptime(gnIndicator['first_seen'], "%Y-%m-%d") if 'first_seen' in gnIndicator and gnIndicator['first_seen'] else datetime.datetime.utcnow()).isoformat()+'Z',valid_until=self.valid_until,
             created_by_ref=self.created_by_ref,
-            labels=gnIndicator["internet_scanner_intelligence"].get('tags'),
+            labels=self.tag_names(gnIndicator["internet_scanner_intelligence"].get('tags')),
             confidence=confidence,
         )
 
