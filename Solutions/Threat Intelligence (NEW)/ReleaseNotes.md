@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.21      | 29-07-2026                     | Removed the `Premium Microsoft Defender Threat Intelligence` Data Connector from the **Threat Intelligence (NEW)** Solution.  |
+| 3.0.22      | 25-09-2026                     | Fixed TI map Domain entity to Cloud App Events analytic rule (1.0.8): extracted host/domain from real CloudAppEvents payload fields (RawEventData.SiteUrl/ObjectId/TargetDomain, ObjectName) instead of non-existent RequestURL; removed unused list_tlds. |
 | 3.0.20      | 21-07-2026                     | Updated the URLEntity AuditLogs analytic rule to 1.2.11 and refine its URL extraction and lowercase normalization so URL IoC matches in AuditLogs are more reliable. |
 | 3.0.19      | 21-06-2026                     | Standardized naming and corrected the incorrect mapping for `dataTypes: EmailEvents` and `dataTypes: EmailUrlInfo` with `connectorId: Office365` and `connectorId: AzureActiveDirectory` across multiple **Analytic Rules**.  |
 | 3.0.18      | 04-05-2026                     | Export to TAXII **connector** proceeds to GA.                                                                                                    |
