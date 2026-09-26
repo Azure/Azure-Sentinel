@@ -1,0 +1,110 @@
+id: 9a55136c-fa19-46d4-9376-17c8f96cc2b8
+kind: Scheduled
+name: SAP - Data has Changed During Debugging Activity
+description: |
+  Identifies changes for runtime data during a debugging activity.
+  Source Action: Activate Debug ("/h"), Select a field for change and update it's value.
+
+  **Recommended for Production only**
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - LateralMovement
+relevantTechniques:
+  - T0858
+  - T1203
+  - T0866
+  - T1210
+  - T1428
+query: |
+  // SAP - Data has Changed during Debugging Activity
+  let TimeAgo= 75m;
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey, SystemRole, SystemUsage;
+  // here you can exclude certain users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'ProdDebugOK'
+  // can also specify relevant SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['ProdDebugOK']);// dynamic(['ProdDebugOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  let AuditClasses = dynamic(["CUL", "AU1", "AU5"]); // Audit Log Classes - Debug Change and dialog logons
+  let SAPEvents= SAPAuditLog
+  | where TimeGenerated> ago(TimeAgo)
+  | where MessageID in (AuditClasses)
+  | join kind= inner SelectedSystems on SystemID
+  | extend TimeBin= bin(UpdatedOn_t, 10m);
+  // get logon details for external debugging user:
+  let SAPSignins= SAPEvents
+  | where isnotempty(Email) and MessageID != "CUL"
+  | summarize DebuggerEmail= take_anyif(Email, Email has "@") by User
+  | extend Var1IsUser= true;
+  let Debugs= materialize(SAPEvents
+  | where MessageID == "CUL"
+  | lookup SAPSignins on $left.Variable1 == $right.User
+  | extend IsExternal= coalesce(Var1IsUser and User!=Variable1, false)
+  | extend DebuggingUser= iff(IsExternal, Variable1, User )
+  | join kind=leftantisemi excludedUsers on $left.DebuggingUser == $right.User2Exclude);
+  let ExternalDebugs= Debugs
+  | where IsExternal
+  | summarize by DebuggedUser= User, ActualDebuggingUser= DebuggingUser, TimeBin
+  | lookup SAPSignins on $left.ActualDebuggingUser == $right.User;
+  Debugs
+  | extend ChangeDetails = bag_pack("Time", UpdatedOn_t, "Changes", strcat_delim(" ", Variable1, Variable2, Variable3, Variable4))
+  | order by UpdatedOn_t asc
+  | lookup ExternalDebugs
+  on $left.User == $right.DebuggedUser, TimeBin
+  | summarize ActivityCount= count(), ChangeDetails= make_list(ChangeDetails, 30), DebuggerEmail=take_anyif(DebuggerEmail, isnotempty( DebuggerEmail)), take_any(Host, ABAPProgramName, TransactionCode, Email, SystemRole, IsExternal, Instance)
+  by SystemID,ClientID, TerminalIPv6, TERM_IPV6, DebuggedOn=TimeBin, User, ActualDebuggingUser= coalesce(ActualDebuggingUser, User)
+  | extend AlertName= strcat_delim(" ", "SAP - Data has changed during debugging activity", iff(isnotempty( SystemRole), strcat(" in a ",tolower(SystemRole), " system"),""))
+  | extend AlertDescription= strcat_delim(" ", "SAP User", ActualDebuggingUser, "was observed changing data during a debugging session.", iff(IsExternal,
+  strcat("The debugging session was external and performed on a code execution initiated by user ", User, "."), "" )
+  ,"Changes: ", tostring(ChangeDetails))
+  | extend AlertRuleUniqueName = 'datahaschangedduringdebuggingactivity'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: DebuggerEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TERM_IPV6
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}} '
+  alertDescriptionFormat: '{{AlertDescription}}'
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

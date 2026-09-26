@@ -1,0 +1,48 @@
+Contentkind: Function
+Description: SAPUsersGetPrivileged
+Function:
+  Title: SAPUsersGetPrivileged
+  Version: 3.1.9
+  LastUpdated: '2024-07-08'
+Category: SAPFunctions
+FunctionName: SAPUsersGetPrivileged
+FunctionQuery: |
+  // this function returns privilileged user by default but can also return sensitive users
+  // let IncludeSensitiveUsers= false;// can also do IncludeSensitive= true which will include users with sensitive profiles
+  // privileged users are users which are directly named as such
+  let PrivelegedUsers = _GetWatchlist('SAP - Privileged Users');
+  let FixedUsers = datatable(User: string, Client: string, SystemID: string) ["DDIC", "XXX","001"];
+  // privileged users can also be such that carry a privileged role
+  let fixedRoles = datatable(Role: string) ["SAP_BC_BASIS_ADMIN", "SAP_BC_AUTH_PROFILE_ADMIN"];
+  // privileged users can also be such that carry a privileged profile
+  let fixedProfiles = datatable(Profile: string) ["SAP_ALL", "SAP_NEW"];
+  let AuditTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));
+  let availableSystems= (SAPAuditLog
+  | where TimeGenerated > ago(AuditTimeAgo)
+  | distinct SystemID, Client= ClientID)
+  // uncomment this if you have SAPControl interface for SAP AS JAVA instance
+  // | union (SAPJAVAFilesLogs
+  // | where TimeGenerated > ago(AuditTimeAgo)
+  // | extend SystemID= column_ifexists("SystemID", "")
+  // | distinct SystemID )
+  | extend dummy ="";
+  // get the user assignments to roles and profiles
+  let UserAssignments= materialize(SAPUsersAssignments() | project User, ChildRoles, DirectRoles, Profiles, Client, SystemID);
+  // privileged users
+  let PrivUsersByMD = UserAssignments
+  | mv-expand ChildRoles, DirectRoles, Profiles
+  | where DirectRoles in (fixedRoles) or ChildRoles in (fixedRoles) or Profiles in (fixedProfiles)
+  | summarize by User, Client, SystemID
+  | extend IsPrivileged= true;
+  // cross join watchlist users with available systems and clients
+  let FixedUPriv = ((PrivelegedUsers
+      | union isfuzzy=true  FixedUsers
+      | summarize by User
+      | extend dummy = '')
+      | join kind= fullouter availableSystems
+          on $left.dummy == $right.dummy)
+      | extend IsPrivileged= true;
+  FixedUPriv
+  | union isfuzzy=true PrivUsersByMD, FixedUsers
+  | where Client != "XXX"
+  | summarize by User, Client, SystemID
