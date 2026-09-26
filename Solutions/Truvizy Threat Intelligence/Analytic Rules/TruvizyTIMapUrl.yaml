@@ -1,0 +1,54 @@
+id: b8566872-80fa-49c0-a593-c17236217ba7
+name: Truvizy TI map URL indicator to CommonSecurityLog
+description: |
+  'Identifies matches between URL indicators confirmed by the Truvizy detection network and RequestURL values in CommonSecurityLog (proxy / firewall logs). Truvizy indicators are curated scam and phishing URLs; a match means a host in your environment reached a confirmed scam destination.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: TruvizyThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where SourceSystem == "Truvizy"
+  | where Active == true and isnotempty(Url)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | extend Url = tolower(Url)
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(RequestURL)
+      | extend Url = tolower(RequestURL)
+      | extend CSL_TimeGenerated = TimeGenerated
+    ) on Url
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType,
+      ExpirationDateTime, ConfidenceScore, Url, CSL_TimeGenerated, SourceIP, SourceUserName,
+      DeviceName, DeviceVendor
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceUserName
+version: 1.0.0
+kind: Scheduled
