@@ -1,0 +1,78 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ed43bdb7-eaab-4ea4-be52-6951fcfa7e3b
+    path: Analytic Rules/TimeSeriesAnomaly_Mass_Cloud_Resource_Deletions.yaml
+    version: 2.0.4
+    querySha256: 5fa33a9232f209075eacdeebe5afa0f3fd97d68e2124c7f579e55e0f58c48727
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+properties:
+  id: xdr-mass-cloud-resource-deletions-time-series-anomaly-ed43bdb7
+  displayName: Mass Cloud resource deletions Time Series Anomaly
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let starttime = 14d;
+      let endtime = 1d;
+      let timeframe = 1d;
+      let TotalEventsThreshold = 25;
+      let TimeSeriesData = AzureActivity
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))
+      | where OperationNameValue endswith "delete"
+      | project TimeGenerated, Caller
+      | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by Caller;
+      TimeSeriesData
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')
+      | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+      | where TimeGenerated >= startofday(ago(endtime))
+      | where anomalies > 0
+      | project Caller, TimeGenerated, Total, baseline, anomalies, score
+      | where Total > TotalEventsThreshold and baseline > 0
+      | join (AzureActivity
+      | where TimeGenerated > startofday(ago(endtime))
+      | where OperationNameValue endswith "delete"
+      | summarize count(), make_set(OperationNameValue,100), make_set(_ResourceId,100) by bin(TimeGenerated, timeframe), Caller ) on TimeGenerated, Caller
+      | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+      | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+      | extend AadUserId = iif(Caller !has '@',Caller,"")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Mass Cloud resource deletions Time Series Anomaly
+      description: '''This query generates the baseline pattern of cloud resource deletions by an individual and generates
+        an anomaly when any unusual spike is detected. These anomalies from unusual or privileged users could be an indication
+        of a cloud infrastructure takedown by an adversary.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: AadUserId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485

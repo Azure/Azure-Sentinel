@@ -1,0 +1,70 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 720d12c6-a08c-44c4-b18f-2236412d59b0
+    path: Analytic Rules/Potentialre-namedsdeleteusage.yaml
+    version: 1.0.3
+    querySha256: c8c8104b92e8fe3c52ea64fb546b73e24ec3c11442ffd8a34df4e8b177daa193
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Host.FullName has no supported Custom Detection field
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Impact
+    originalTechniques:
+    - T1485
+    - T1036
+properties:
+  id: xdr-potential-re-named-sdelete-usage-720d12c6
+  displayName: Potential re-named sdelete usage
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+        | where EventID == 4688
+        | where Process !~ "sdelete.exe"
+        | where CommandLine has_all ("accepteula", "-r", "-s", "-q", "c:/")
+        | where CommandLine !has ("sdelete")
+        | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+        | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Potential re-named sdelete usage
+      description: |-
+        'This detection looks for command line parameters associated with the use of Sysinternals sdelete (https://docs.microsoft.com/sysinternals/downloads/sdelete) to delete multiple files on a host's C drive.
+        A threat actor may re-name the tool to avoid detection and then use it for destructive attacks on a host.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          ntDomainColumn: AccountNTDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485

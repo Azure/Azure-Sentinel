@@ -1,0 +1,71 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6d7214d9-4a28-44df-aafb-0910b9e6ae3e
+    path: Analytic Rules/New-CloudShell-User.yaml
+    version: 2.0.3
+    querySha256: 2d2b06d3f8a0205ae349f76b253c7042d63c027adef51e4f75158f91a2847d12
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+properties:
+  id: xdr-new-cloudshell-user-6d7214d9
+  displayName: New CloudShell User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let match_window = 3m;
+      AzureActivity
+      | where ResourceGroup has "cloud-shell"
+      | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/listKeys/action")
+      | where ActivityStatusValue =~ "Success"
+      | extend TimeKey = bin(TimeGenerated, match_window), AzureIP = CallerIpAddress
+      | join kind = inner
+      (AzureActivity
+      | where ResourceGroup has "cloud-shell"
+      | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/write")
+      | extend TimeKey = bin(TimeGenerated, match_window), UserIP = CallerIpAddress
+      ) on Caller, TimeKey
+      | summarize count() by TimeKey, Caller, ResourceGroup, SubscriptionId, TenantId, AzureIP, UserIP, HTTPRequest, Type, Properties, CategoryValue, OperationList = strcat(OperationNameValue, ' , ', OperationNameValue1)
+      | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New CloudShell User
+      description: |-
+        'Identifies when a user creates an Azure CloudShell for the first time.
+        Monitor this activity to ensure only the expected users are using CloudShell.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: UserIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
