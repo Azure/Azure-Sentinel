@@ -1,0 +1,1586 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "11593839348315511290"
+    }
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of your existing Log Analytics Workspace"
+      }
+    },
+    "workspaceResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "The Resource Group where the existing Log Analytics Workspace is located"
+      }
+    },
+    "menloApiToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Menlo Security API Token"
+      }
+    },
+    "functionAppCodeUrl": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/MenloSecurity/Data%20Connectors/function_app_v1.0.0.zip",
+      "metadata": {
+        "description": "Public URL of the Function App code zip to deploy (raw GitHub release/asset URL)"
+      }
+    },
+    "retentionInDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "minValue": 4,
+      "maxValue": 730,
+      "metadata": {
+        "description": "Retention in days for all Menlo tables (4\u2013730)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region for the connector resources. Auto-populated from the selected Log Analytics workspace by createUiDefinition so it always matches the workspace."
+      }
+    }
+  },
+  "variables": {
+    "dcrName": "MenloSecurity-DCR",
+    "dceName": "MenloSecurity-DCE",
+    "functionAppName": "[format('menlo-logs-func-{0}', uniqueString(resourceGroup().id))]",
+    "storageAccountName": "[format('menlostore{0}', uniqueString(resourceGroup().id))]",
+    "appInsightsName": "menlo-logs-insights",
+    "keyVaultName": "[format('kv-{0}', uniqueString(resourceGroup().id))]",
+    "bandwidthTableName": "MenloBandwidth_CL",
+    "auditTableName": "MenloAudit_CL",
+    "webTableName": "MenloWeb_CL"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2021-09-01-preview",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-MenloBandwidth": {
+            "columns": [
+              {
+                "name": "event_time",
+                "type": "string"
+              },
+              {
+                "name": "src_ip",
+                "type": "string"
+              },
+              {
+                "name": "userid",
+                "type": "string"
+              },
+              {
+                "name": "top_domain",
+                "type": "string"
+              },
+              {
+                "name": "rx_bytes",
+                "type": "int"
+              },
+              {
+                "name": "tx_bytes",
+                "type": "int"
+              },
+              {
+                "name": "cumulative_bytes",
+                "type": "int"
+              },
+              {
+                "name": "sum_bytes",
+                "type": "int"
+              },
+              {
+                "name": "user_agent",
+                "type": "string"
+              },
+              {
+                "name": "browser",
+                "type": "string"
+              },
+              {
+                "name": "categories",
+                "type": "dynamic"
+              },
+              {
+                "name": "is_mobile",
+                "type": "string"
+              },
+              {
+                "name": "is_iframe",
+                "type": "string"
+              },
+              {
+                "name": "region",
+                "type": "string"
+              },
+              {
+                "name": "ua_type",
+                "type": "string"
+              },
+              {
+                "name": "user_groups",
+                "type": "dynamic"
+              }
+            ]
+          },
+          "Custom-MenloAudit": {
+            "columns": [
+              {
+                "name": "event_time",
+                "type": "string"
+              },
+              {
+                "name": "uid",
+                "type": "string"
+              },
+              {
+                "name": "audit_actions",
+                "type": "dynamic"
+              },
+              {
+                "name": "sub_event_type",
+                "type": "string"
+              },
+              {
+                "name": "details",
+                "type": "string"
+              },
+              {
+                "name": "additional_info",
+                "type": "string"
+              },
+              {
+                "name": "rev_id",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-MenloWeb": {
+            "columns": [
+              {
+                "name": "event_time",
+                "type": "string"
+              },
+              {
+                "name": "dst",
+                "type": "dynamic"
+              },
+              {
+                "name": "userid",
+                "type": "string"
+              },
+              {
+                "name": "url",
+                "type": "string"
+              },
+              {
+                "name": "top_url",
+                "type": "string"
+              },
+              {
+                "name": "response_code",
+                "type": "string"
+              },
+              {
+                "name": "categories",
+                "type": "dynamic"
+              },
+              {
+                "name": "threat_types",
+                "type": "dynamic"
+              },
+              {
+                "name": "threats",
+                "type": "dynamic"
+              },
+              {
+                "name": "sha256",
+                "type": "string"
+              },
+              {
+                "name": "content_type",
+                "type": "string"
+              },
+              {
+                "name": "user_agent",
+                "type": "string"
+              },
+              {
+                "name": "x_client_country",
+                "type": "string"
+              },
+              {
+                "name": "x_client_ip",
+                "type": "string"
+              },
+              {
+                "name": "access_mode",
+                "type": "string"
+              },
+              {
+                "name": "browser_and_version",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "origin_country",
+                "type": "string"
+              },
+              {
+                "name": "egress_country",
+                "type": "string"
+              },
+              {
+                "name": "egress_ip",
+                "type": "string"
+              },
+              {
+                "name": "file_size",
+                "type": "string"
+              },
+              {
+                "name": "filename",
+                "type": "string"
+              },
+              {
+                "name": "full_session_id",
+                "type": "string"
+              },
+              {
+                "name": "gpush",
+                "type": "string"
+              },
+              {
+                "name": "gpush_name",
+                "type": "string"
+              },
+              {
+                "name": "gpush_changes",
+                "type": "dynamic"
+              },
+              {
+                "name": "gpush_out_cat",
+                "type": "string"
+              },
+              {
+                "name": "gpush_rep_url",
+                "type": "string"
+              },
+              {
+                "name": "votiro_cdr",
+                "type": "string"
+              },
+              {
+                "name": "votiro_cdr_changes",
+                "type": "dynamic"
+              },
+              {
+                "name": "votiro_cdr_out_cat",
+                "type": "string"
+              },
+              {
+                "name": "votiro_cdr_rep_url",
+                "type": "string"
+              },
+              {
+                "name": "has_password",
+                "type": "string"
+              },
+              {
+                "name": "inconsistent_domain",
+                "type": "string"
+              },
+              {
+                "name": "is_iframe",
+                "type": "string"
+              },
+              {
+                "name": "magicName",
+                "type": "string"
+              },
+              {
+                "name": "numSubfiles",
+                "type": "string"
+              },
+              {
+                "name": "origin_ip",
+                "type": "string"
+              },
+              {
+                "name": "pe_action",
+                "type": "string"
+              },
+              {
+                "name": "pe_reason",
+                "type": "dynamic"
+              },
+              {
+                "name": "pe_rulename",
+                "type": "dynamic"
+              },
+              {
+                "name": "protocol",
+                "type": "string"
+              },
+              {
+                "name": "region",
+                "type": "string"
+              },
+              {
+                "name": "region_name",
+                "type": "string"
+              },
+              {
+                "name": "rendering_mode",
+                "type": "string"
+              },
+              {
+                "name": "request_type",
+                "type": "string"
+              },
+              {
+                "name": "risk_score",
+                "type": "string"
+              },
+              {
+                "name": "risk_tally",
+                "type": "string"
+              },
+              {
+                "name": "sandboxResult",
+                "type": "string"
+              },
+              {
+                "name": "sandboxActivity",
+                "type": "dynamic"
+              },
+              {
+                "name": "session_id",
+                "type": "string"
+              },
+              {
+                "name": "fullScanResult",
+                "type": "string"
+              },
+              {
+                "name": "soph_dlp_ref",
+                "type": "string"
+              },
+              {
+                "name": "surrogate_id",
+                "type": "string"
+              },
+              {
+                "name": "tab_id",
+                "type": "string"
+              },
+              {
+                "name": "ua_type",
+                "type": "string"
+              },
+              {
+                "name": "watermark",
+                "type": "string"
+              },
+              {
+                "name": "xff_ip",
+                "type": "string"
+              },
+              {
+                "name": "ra_action",
+                "type": "string"
+              },
+              {
+                "name": "ra_mode",
+                "type": "string"
+              },
+              {
+                "name": "ra_rule_id",
+                "type": "dynamic"
+              },
+              {
+                "name": "ra_threat_types",
+                "type": "string"
+              },
+              {
+                "name": "ra_heat_evasion_techniques",
+                "type": "string"
+              },
+              {
+                "name": "ra_impersonated_brand",
+                "type": "string"
+              },
+              {
+                "name": "ra_malware_family",
+                "type": "string"
+              },
+              {
+                "name": "ra_navigation_id",
+                "type": "string"
+              },
+              {
+                "name": "proxyEventType",
+                "type": "dynamic"
+              },
+              {
+                "name": "proxyEventDetail",
+                "type": "dynamic"
+              },
+              {
+                "name": "srcPort",
+                "type": "string"
+              },
+              {
+                "name": "connId",
+                "type": "string"
+              },
+              {
+                "name": "referer",
+                "type": "string"
+              },
+              {
+                "name": "domain_front",
+                "type": "string"
+              },
+              {
+                "name": "upstream_response_code",
+                "type": "string"
+              },
+              {
+                "name": "mimeType",
+                "type": "string"
+              },
+              {
+                "name": "virusDetails",
+                "type": "string"
+              },
+              {
+                "name": "votiro_cdr_mode",
+                "type": "string"
+              },
+              {
+                "name": "xff_ip_matched",
+                "type": "string"
+              },
+              {
+                "name": "pe_inspection_skip_reason",
+                "type": "string"
+              },
+              {
+                "name": "cached",
+                "type": "string"
+              },
+              {
+                "name": "email_isolation_state",
+                "type": "string"
+              },
+              {
+                "name": "client_ip",
+                "type": "string"
+              },
+              {
+                "name": "reqId",
+                "type": "string"
+              },
+              {
+                "name": "xHeaders",
+                "type": "string"
+              },
+              {
+                "name": "xHeadersMatched",
+                "type": "string"
+              },
+              {
+                "name": "resource",
+                "type": "dynamic"
+              },
+              {
+                "name": "groups",
+                "type": "dynamic"
+              },
+              {
+                "name": "groupsMatched",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('workspaceResourceGroup')), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+              "name": "MenloWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-MenloBandwidth"
+            ],
+            "destinations": [
+              "MenloWorkspace"
+            ],
+            "transformKql": "source | extend TimeGenerated = todatetime(event_time), event_time = todatetime(event_time), is_mobile = tobool(is_mobile), is_iframe = tobool(is_iframe), rx_bytes = tolong(rx_bytes), tx_bytes = tolong(tx_bytes), cumulative_bytes = tolong(cumulative_bytes), sum_bytes = tolong(sum_bytes)",
+            "outputStream": "[format('Custom-{0}', variables('bandwidthTableName'))]"
+          },
+          {
+            "streams": [
+              "Custom-MenloAudit"
+            ],
+            "destinations": [
+              "MenloWorkspace"
+            ],
+            "transformKql": "source | extend TimeGenerated = todatetime(event_time), event_time = todatetime(event_time), details = parse_json(details), additional_info = parse_json(additional_info)",
+            "outputStream": "[format('Custom-{0}', variables('auditTableName'))]"
+          },
+          {
+            "streams": [
+              "Custom-MenloWeb"
+            ],
+            "destinations": [
+              "MenloWorkspace"
+            ],
+            "transformKql": "source | extend TimeGenerated = todatetime(event_time), event_time = todatetime(event_time), is_iframe = tobool(is_iframe), has_password = tobool(has_password), inconsistent_domain = tobool(inconsistent_domain), watermark = tobool(watermark), numSubfiles = toint(numSubfiles), risk_tally = toint(risk_tally), response_code = toint(response_code), file_size = tolong(file_size), srcPort = toint(srcPort), upstream_response_code = toint(upstream_response_code), cached = tobool(cached)",
+            "outputStream": "[format('Custom-{0}', variables('webTableName'))]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'tablesDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2022-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'MenloApiToken')]",
+      "properties": {
+        "value": "[parameters('menloApiToken')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "publicNetworkAccess": "Enabled",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', 'deployment-package')]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', 'menlo-log-state')]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}-plan', variables('functionAppName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "FC1",
+        "tier": "FlexConsumption"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('workspaceResourceGroup')), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "httpsOnly": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', variables('functionAppName')))]",
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[format('{0}deployment-package', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob)]",
+              "authentication": {
+                "type": "SystemAssignedIdentity"
+              }
+            }
+          },
+          "scaleAndConcurrency": {
+            "maximumInstanceCount": 10,
+            "instanceMemoryMB": 2048
+          },
+          "runtime": {
+            "name": "python",
+            "version": "3.13"
+          }
+        },
+        "siteConfig": {
+          "ipSecurityRestrictions": [
+            {
+              "action": "Deny",
+              "priority": 100,
+              "name": "DenyAll",
+              "ipAddress": "Any"
+            }
+          ],
+          "scmIpSecurityRestrictionsUseMain": false,
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage__accountName",
+              "value": "[variables('storageAccountName')]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "TIMER_SCHEDULE",
+              "value": "0 */3 * * * *"
+            },
+            {
+              "name": "DceLogsIngestionUrl",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2021-09-01-preview').logsIngestion.endpoint]"
+            },
+            {
+              "name": "DcrImmutableId",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
+            },
+            {
+              "name": "MenloApiToken",
+              "value": "[format('@Microsoft.KeyVault(SecretUri={0})', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'MenloApiToken'), '2022-07-01').secretUri)]"
+            },
+            {
+              "name": "StateStorageAccountName",
+              "value": "[variables('storageAccountName')]"
+            },
+            {
+              "name": "MenloApiHostname",
+              "value": "logs.menlosecurity.com"
+            },
+            {
+              "name": "AUDIT_INITIAL_LOOKBACK_MINUTES",
+              "value": "2880"
+            },
+            {
+              "name": "AUDIT_CHUNK_SIZE_MINUTES",
+              "value": "3"
+            },
+            {
+              "name": "AUDIT_LAG_TIME_MINUTES",
+              "value": "3"
+            },
+            {
+              "name": "AUDIT_MAX_THREADS",
+              "value": "3"
+            },
+            {
+              "name": "BANDWIDTH_INITIAL_LOOKBACK_MINUTES",
+              "value": "2880"
+            },
+            {
+              "name": "BANDWIDTH_CHUNK_SIZE_MINUTES",
+              "value": "3"
+            },
+            {
+              "name": "BANDWIDTH_LAG_TIME_MINUTES",
+              "value": "3"
+            },
+            {
+              "name": "BANDWIDTH_MAX_THREADS",
+              "value": "3"
+            },
+            {
+              "name": "WEB_INITIAL_LOOKBACK_MINUTES",
+              "value": "2880"
+            },
+            {
+              "name": "WEB_CHUNK_SIZE_MINUTES",
+              "value": "1"
+            },
+            {
+              "name": "WEB_LAG_TIME_MINUTES",
+              "value": "3"
+            },
+            {
+              "name": "WEB_MAX_THREADS",
+              "value": "2"
+            },
+            {
+              "name": "AzureWebJobs.TimerTriggerBandwidthLogs.Disabled",
+              "value": "1"
+            },
+            {
+              "name": "AzureWebJobs.TimerTriggerAuditLogs.Disabled",
+              "value": "1"
+            },
+            {
+              "name": "AzureWebJobs.TimerTriggerWebLogs.Disabled",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', variables('functionAppName')))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'MenloApiToken')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', variables('dcrName'))]",
+      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'MonitoringMetricsPublisher')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'KeyVaultSecretsUser')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}/containers/{2}', variables('storageAccountName'), 'default', 'menlo-log-state')]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'menlo-log-state'), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'StorageBlobDataContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'menlo-log-state')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}/containers/{2}', variables('storageAccountName'), 'default', 'deployment-package')]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'deployment-package'), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'StorageBlobDataContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'deployment-package')]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'StorageBlobDataContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'StorageQueueDataContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'StorageTableDataContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id))), 'WebsiteContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'de139f84-1756-47ae-9be6-808fbbe84772')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id))), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id)))]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "deployFunctionAppCode",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id))))]": {}
+        }
+      },
+      "properties": {
+        "azCliVersion": "2.60.0",
+        "timeout": "PT15M",
+        "retentionInterval": "PT1H",
+        "environmentVariables": [
+          {
+            "name": "PACKAGE_URL",
+            "value": "[parameters('functionAppCodeUrl')]"
+          },
+          {
+            "name": "FUNC_APP",
+            "value": "[variables('functionAppName')]"
+          },
+          {
+            "name": "RG",
+            "value": "[resourceGroup().name]"
+          }
+        ],
+        "scriptContent": "set -e\npython3 -c \"import urllib.request, os; urllib.request.urlretrieve(os.environ['PACKAGE_URL'], '/tmp/fa.zip')\"\n# Wait for the role assignment to propagate (RBAC is eventually consistent); the identity may briefly\n# see the Function App as 'not found' (masked 403) right after deployment.\nfor i in $(seq 1 15); do\n  if az functionapp show -g \"$RG\" -n \"$FUNC_APP\" -o none 2>/dev/null; then echo \"function app visible after attempt $i\"; break; fi\n  echo \"waiting for RBAC propagation (attempt $i)\"; sleep 20\ndone\naz functionapp deployment source config-zip -g \"$RG\" -n \"$FUNC_APP\" --src /tmp/fa.zip"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id)))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uai-menlo-deploy-{0}', uniqueString(resourceGroup().id))), 'WebsiteContributor'))]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "tablesDeployment",
+      "resourceGroup": "[parameters('workspaceResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[parameters('workspaceName')]"
+          },
+          "retentionInDays": {
+            "value": "[parameters('retentionInDays')]"
+          },
+          "bandwidthTableName": {
+            "value": "[variables('bandwidthTableName')]"
+          },
+          "auditTableName": {
+            "value": "[variables('auditTableName')]"
+          },
+          "webTableName": {
+            "value": "[variables('webTableName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "4681018114830336212"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "The name of the existing Log Analytics Workspace"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "minValue": 4,
+              "maxValue": 730,
+              "metadata": {
+                "description": "Retention in days for all Menlo tables (4\u2013730)"
+              }
+            },
+            "bandwidthTableName": {
+              "type": "string",
+              "defaultValue": "MenloBandwidth_CL",
+              "metadata": {
+                "description": "Log Analytics table name for bandwidth logs"
+              }
+            },
+            "auditTableName": {
+              "type": "string",
+              "defaultValue": "MenloAudit_CL",
+              "metadata": {
+                "description": "Log Analytics table name for audit logs"
+              }
+            },
+            "webTableName": {
+              "type": "string",
+              "defaultValue": "MenloWeb_CL",
+              "metadata": {
+                "description": "Log Analytics table name for web logs"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('bandwidthTableName'))]",
+              "properties": {
+                "plan": "Analytics",
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "schema": {
+                  "name": "[parameters('bandwidthTableName')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "src_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "userid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "top_domain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "rx_bytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "tx_bytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "cumulative_bytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "sum_bytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "user_agent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "browser",
+                      "type": "string"
+                    },
+                    {
+                      "name": "categories",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "is_mobile",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "is_iframe",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "region",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ua_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user_groups",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "event_time",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('auditTableName'))]",
+              "properties": {
+                "plan": "Analytics",
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "schema": {
+                  "name": "[parameters('auditTableName')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "uid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "audit_actions",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "sub_event_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "details",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "additional_info",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "rev_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "event_time",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('webTableName'))]",
+              "properties": {
+                "plan": "Analytics",
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "schema": {
+                  "name": "[parameters('webTableName')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "event_time",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "dst",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "userid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "top_url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "response_code",
+                      "type": "int"
+                    },
+                    {
+                      "name": "categories",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "threat_types",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "threats",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "sha256",
+                      "type": "string"
+                    },
+                    {
+                      "name": "content_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user_agent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "x_client_country",
+                      "type": "string"
+                    },
+                    {
+                      "name": "x_client_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "access_mode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "browser_and_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "domain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "origin_country",
+                      "type": "string"
+                    },
+                    {
+                      "name": "egress_country",
+                      "type": "string"
+                    },
+                    {
+                      "name": "egress_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "file_size",
+                      "type": "long"
+                    },
+                    {
+                      "name": "filename",
+                      "type": "string"
+                    },
+                    {
+                      "name": "full_session_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "gpush",
+                      "type": "string"
+                    },
+                    {
+                      "name": "gpush_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "gpush_changes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "gpush_out_cat",
+                      "type": "string"
+                    },
+                    {
+                      "name": "gpush_rep_url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "votiro_cdr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "votiro_cdr_changes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "votiro_cdr_out_cat",
+                      "type": "string"
+                    },
+                    {
+                      "name": "votiro_cdr_rep_url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "has_password",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "inconsistent_domain",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "is_iframe",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "magicName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "numSubfiles",
+                      "type": "int"
+                    },
+                    {
+                      "name": "origin_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "pe_action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "pe_reason",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "pe_rulename",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "region",
+                      "type": "string"
+                    },
+                    {
+                      "name": "region_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "rendering_mode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "request_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_score",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_tally",
+                      "type": "int"
+                    },
+                    {
+                      "name": "sandboxResult",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sandboxActivity",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "session_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "fullScanResult",
+                      "type": "string"
+                    },
+                    {
+                      "name": "soph_dlp_ref",
+                      "type": "string"
+                    },
+                    {
+                      "name": "surrogate_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "tab_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ua_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "watermark",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "xff_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_mode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_rule_id",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "ra_threat_types",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_heat_evasion_techniques",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_impersonated_brand",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_malware_family",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ra_navigation_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "proxyEventType",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "proxyEventDetail",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "srcPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "connId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "referer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "domain_front",
+                      "type": "string"
+                    },
+                    {
+                      "name": "upstream_response_code",
+                      "type": "int"
+                    },
+                    {
+                      "name": "mimeType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "virusDetails",
+                      "type": "string"
+                    },
+                    {
+                      "name": "votiro_cdr_mode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "xff_ip_matched",
+                      "type": "string"
+                    },
+                    {
+                      "name": "pe_inspection_skip_reason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "cached",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "email_isolation_state",
+                      "type": "string"
+                    },
+                    {
+                      "name": "client_ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "reqId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "xHeaders",
+                      "type": "string"
+                    },
+                    {
+                      "name": "xHeadersMatched",
+                      "type": "string"
+                    },
+                    {
+                      "name": "resource",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "groups",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "groupsMatched",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "dceLogsIngestionUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2021-09-01-preview').logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
+    },
+    "dcrStreamBandwidth": {
+      "type": "string",
+      "value": "Custom-MenloBandwidth"
+    },
+    "dcrStreamAudit": {
+      "type": "string",
+      "value": "Custom-MenloAudit"
+    }
+  }
+}
