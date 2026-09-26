@@ -1,0 +1,98 @@
+id: 7a1e9c4d-2f6b-4d3a-9e5c-8b2a6f1d3c90
+Function:
+  Title: Corelight Network Performance Anomaly Events
+  Version: 2.0.0
+  LastUpdated: '2026-09-24'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_net_perf
+FunctionAlias: corelight_net_perf
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
+    let corelight_net_perf = view () {
+        union isfuzzy=true
+            Corelight_v3_net_perf_CL,
+            dummy_table
+        | extend
+            ts = column_ifexists("ts", datetime(null)),
+            uid = column_ifexists("uid", ""),
+            id_orig_h = column_ifexists("id_orig_h", ""),
+            id_orig_p = column_ifexists("id_orig_p", int(null)),
+            id_resp_h = column_ifexists("id_resp_h", ""),
+            id_resp_p = column_ifexists("id_resp_p", int(null)),
+            write_ts = column_ifexists("write_ts", datetime(null)),
+            system_name = column_ifexists("system_name", ""),
+            path = column_ifexists("path", ""),
+            trigger = column_ifexists("trigger", ""),
+            local_entity = column_ifexists("local_entity", bool(null)),
+            extracted_host = column_ifexists("host", ""),
+            domain = column_ifexists("domain", ""),
+            crossings = column_ifexists("crossings", long(null)),
+            total = column_ifexists("total", long(null)),
+            max_val = column_ifexists("max_val", real(null)),
+            window = column_ifexists("window", real(null)),
+            reply_rate = column_ifexists("reply_rate", ""),
+            sent_bytes = column_ifexists("sent_bytes", long(null)),
+            recv_bytes = column_ifexists("recv_bytes", long(null))
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "net_perf",
+            sensor_name = coalesce(system_name, "unknown"),
+            performance_question = case(
+                trigger == "RS", "Server RTT (path latency)",
+                trigger == "RC", "Client RTT (path latency)",
+                trigger == "DS", "DNS response time (by resolver)",
+                trigger == "DD", "DNS response time (by domain)",
+                trigger == "TS", "TLS handshake (by server IP)",
+                trigger == "TH", "TLS handshake (by SNI)",
+                trigger == "QS", "QUIC handshake (by server IP)",
+                trigger == "QH", "QUIC handshake (by SNI)",
+                trigger == "HS", "HTTP request/response (by server IP)",
+                trigger == "HH", "HTTP request/response (by Host header)",
+                trigger == "B", "IP byte volume",
+                "Unknown"
+            ),
+            entity = coalesce(iff(isnotempty(domain), domain, ""), iff(isnotempty(extracted_host), extracted_host, ""), "unknown"),
+            scope = case(
+                local_entity == true, "Internal",
+                local_entity == false, "External",
+                trigger in ("DD", "TH", "QH", "HH"), "External (name-based)",
+                "Unknown"
+            ),
+            max_val_real = max_val,
+            sent_bytes_real = toreal(sent_bytes),
+            recv_bytes_real = toreal(recv_bytes)
+        | project
+            TimeGenerated,
+            ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            write_ts,
+            system_name,
+            sensor_name,
+            path,
+            trigger,
+            performance_question,
+            local_entity,
+            scope,
+            extracted_host,
+            domain,
+            entity,
+            crossings,
+            total,
+            max_val,
+            max_val_real,
+            window,
+            reply_rate,
+            sent_bytes,
+            sent_bytes_real,
+            recv_bytes,
+            recv_bytes_real,
+            EventVendor,
+            EventProduct,
+            EventType
+    };
+    corelight_net_perf
