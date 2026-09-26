@@ -1,0 +1,69 @@
+id: 228e7a7b-a3d2-449c-9979-0730a746df2a
+name: CSPM/IaC High Severity Alerts From Prancer
+description: |
+  'High severity CSPM/IaC posture findings found by Prancer, across all Azure resource types (disks, flow logs, network security groups, container registries, sites, storage accounts, subnets, key vaults, virtual networks/peerings, and virtual machines). Consolidates the previous per-resource-type rule set into a single detection so coverage is expressed as one query over all Snapshots rather than one near-identical rule per Azure resource type.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  // Consolidated CSPM/IaC high-severity rule: replaces the 10 per-resource-type rules
+  // (Disks/Flow_Logs/Network_Security_Groups/Registries/Sites/Storage_Accounts/Subnets/
+  // Vaults/Virtual_Networks/VM) with a single query over all Snapshots - no
+  // Snapshots.type filter, so no resource-type coverage is lost vs. the originals.
+  PrancerFindings
+  | where DeviceProduct in ('cspm', 'iac') and Severity == 'High'
+  | where isnotempty(Snapshots)
+  | mv-expand Snapshots
+  | extend
+      id = tostring(Snapshots.id),
+      structure = tostring(Snapshots.structure),
+      reference = tostring(Snapshots.reference),
+      source = tostring(Snapshots.source),
+      collection = tostring(Snapshots.collection),
+      type = tostring(Snapshots.type),
+      region = tostring(Snapshots.region),
+      resourceTypes = tostring(Snapshots.resourceTypes),
+      path = tostring(Snapshots.path)
+customDetails:
+  PacConfigReference: ConfigId
+  UniqueFindingId: FindingId
+  ResourceType: type
+  Region: region
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: path
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{Title}}"
+  alertDescriptionFormat: "{{Title}} detected on resource {{path}}"
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: RemediationSteps
+      value: RemediationDescription
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+version: 1.0.0
+kind: Scheduled
