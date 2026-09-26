@@ -1,0 +1,216 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GIBTIA_Score_IP_Single",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "GIBUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "GIB TI portal login (email)."
+            }
+        },
+        "GIBApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "GIB TI personal API token."
+            }
+        }
+    },
+    "variables": {
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "tags": {
+                "hidden-SentinelTemplateName": "GIBTIA_Score_IP_Single",
+                "hidden-SentinelTemplateVersion": "2.0"
+            },
+            "metadata": {
+                "title": "Group-IB TI - Score a single IP entity",
+                "description": "Entity-triggered playbook. Run it against a single IP address entity from the incident investigation graph or the entity page to retrieve the Group-IB risk score and post the result as an incident comment.",
+                "prerequisites": [
+                    "A Group-IB Threat Intelligence subscription with API access.",
+                    "A Log Analytics workspace connected to Microsoft Sentinel."
+                ],
+                "postDeployment": [
+                    "1. Authorize the Microsoft Sentinel API connection.",
+                    "2. Assign the Microsoft Sentinel Responder role to the playbook's managed identity so it can add incident comments.",
+                    "3. Set the GIBUsername and GIBApiKey parameters.",
+                    "4. Run it from an incident's investigation graph or from the entity page using Run playbook. Entity-triggered playbooks cannot be attached to automation rules.",
+                    "5. When run outside an incident the enrichment still executes, but there is no incident to comment on - the result is visible in the Logic App run history."
+                ],
+                "lastUpdateTime": "2026-09-02T00:00:00.000Z",
+                "entities": [
+                    "ip"
+                ],
+                "tags": [
+                    "Group-IB",
+                    "Enrichment"
+                ],
+                "releaseNotes": [
+                    {
+                        "version": "2.0",
+                        "title": "Rebuilt for the current Group-IB TI API",
+                        "notes": [
+                            "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
+                        ]
+                    }
+                ],
+                "support": {
+                    "tier": "community"
+                },
+                "author": {
+                    "name": "Group-IB"
+                }
+            },
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GIBUsername": {
+                            "defaultValue": "[parameters('GIBUsername')]",
+                            "type": "String"
+                        },
+                        "GIBApiKey": {
+                            "defaultValue": "[parameters('GIBApiKey')]",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/entity/@{encodeURIComponent('IP')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Score_IP": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "https://tap.group-ib.com/api/v2/scoring",
+                                "headers": {
+                                    "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                    "Accept": "application/json",
+                                    "Content-Type": "application/json",
+                                    "User-Agent": "GroupIB-MSentinel-Integration/2.0 (score-ip; logic-app)"
+                                },
+                                "body": {
+                                    "ips": "@createArray(triggerBody()?['Entity']?['properties']?['Address'])"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            },
+                            "runAfter": {}
+                        },
+                        "Condition_Has_Incident": {
+                            "type": "If",
+                            "expression": {
+                                "greater": [
+                                    "@length(coalesce(triggerBody()?['IncidentArmID'], ''))",
+                                    0
+                                ]
+                            },
+                            "actions": {
+                                "Add_comment_to_incident": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p><b>Group-IB TI &mdash; IP Scoring</b><br><br><b>IP: @{triggerBody()?['Entity']?['properties']?['Address']}</b> &mdash; Group-IB risk score: <b>@{coalesce(body('Score_IP')?['items']?[triggerBody()?['Entity']?['properties']?['Address']]?['riskScore'], 'n/a')}</b>/100</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Score_IP": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName": "[variables('azuresentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

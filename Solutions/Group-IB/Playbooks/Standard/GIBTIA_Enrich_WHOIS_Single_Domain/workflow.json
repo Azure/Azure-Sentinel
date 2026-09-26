@@ -1,0 +1,108 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Microsoft_Sentinel_entity": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                        "connection": {
+                            "referenceName": "azuresentinel"
+                        }
+                    },
+                    "path": "/entity/@{encodeURIComponent('DNS')}"
+                }
+            }
+        },
+        "actions": {
+            "WHOIS_Domain": {
+                "type": "Http",
+                "inputs": {
+                    "method": "GET",
+                    "uri": "https://tap.group-ib.com/api/v2/utils/graph/domain",
+                    "queries": {
+                        "domain": "@{triggerBody()?['Entity']?['properties']?['DomainName']}"
+                    },
+                    "headers": {
+                        "Authorization": "@{concat('Basic ', base64(concat(appsetting('GIBUsername'), ':', appsetting('GIBApiKey'))))}",
+                        "Accept": "application/json",
+                        "User-Agent": "GroupIB-MSentinel-Integration/2.0 (enrich-whois; logic-app)"
+                    }
+                },
+                "runtimeConfiguration": {
+                    "secureData": {
+                        "properties": [
+                            "inputs"
+                        ]
+                    }
+                },
+                "runAfter": {}
+            },
+            "TI_Lookup_Domain": {
+                "type": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat('https://management.azure.com/subscriptions/', appsetting('WORKFLOWS_SUBSCRIPTION_ID'), '/resourceGroups/', appsetting('WORKFLOWS_RESOURCE_GROUP_NAME'), '/providers/microsoft.operationalinsights/workspaces/', appsetting('WorkspaceName'), '/query?api-version=2017-10-01')}",
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "query": "ThreatIntelIndicators | where Pattern has 'domain-name:value' and Pattern contains strcat(\"'\", '@{replace(coalesce(triggerBody()?['Entity']?['properties']?['DomainName'], ''), '''', '''''')}', \"'\") | where ValidUntil > now() | project Labels, Confidence | take 1"
+                    },
+                    "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://management.azure.com/"
+                    }
+                },
+                "runAfter": {}
+            },
+            "Condition_Has_Incident": {
+                "type": "If",
+                "expression": {
+                    "greater": [
+                        "@length(coalesce(triggerBody()?['IncidentArmID'], ''))",
+                        0
+                    ]
+                },
+                "actions": {
+                    "Add_comment_to_incident": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "<p><b>Group-IB TI — WHOIS &amp; Indicator Enrichment</b><br><br><b>Domain: @{triggerBody()?['Entity']?['properties']?['DomainName']}</b><br>GIB TI: @{if(greater(length(coalesce(body('TI_Lookup_Domain')?['tables']?[0]?['rows'], json('[]'))), 0), concat(string(body('TI_Lookup_Domain')?['tables'][0]?['rows'][0]?[0]), ' | confidence: ', string(body('TI_Lookup_Domain')?['tables'][0]?['rows'][0]?[1])), 'Not in GIB ThreatIntelIndicators')}<br>WHOIS: registered @{coalesce(body('WHOIS_Domain')?['created_at'], 'n/a')} | updated @{coalesce(body('WHOIS_Domain')?['updated_at'], 'n/a')} | zone: @{coalesce(body('WHOIS_Domain')?['zone'], 'n/a')}</p>"
+                            },
+                            "host": {
+                                "connection": {
+                                    "referenceName": "azuresentinel"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                        },
+                        "runAfter": {}
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "WHOIS_Domain": [
+                        "Succeeded",
+                        "Failed"
+                    ],
+                    "TI_Lookup_Domain": [
+                        "Succeeded",
+                        "Failed"
+                    ]
+                }
+            }
+        },
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

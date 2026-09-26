@@ -1,0 +1,65 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "Batch_messages": {
+        "type": "Batch",
+        "inputs": {
+          "mode": "Inline",
+          "configurations": {
+            "GIBIOCBatch": {
+              "releaseCriteria": {
+                "messageCount": 100,
+                "recurrence": {
+                  "frequency": "Minute",
+                  "interval": 5
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Select_indicators": {
+        "type": "Select",
+        "inputs": {
+          "from": "@triggerBody()['items']",
+          "select": "@item()['content']"
+        },
+        "runAfter": {}
+      },
+      "Upload_Indicators_V2": {
+        "type": "ApiConnection",
+        "inputs": {
+          "method": "post",
+          "path": "/V2/ThreatIntelligence/@{appsetting('WorkspaceId')}/UploadIndicators/",
+          "body": {
+            "indicators": "@body('Select_indicators')",
+            "sourcesystem": "Group-IB TI"
+          },
+          "host": {
+            "connection": {
+              "referenceName": "azuresentinel"
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 10,
+            "interval": "PT20S",
+            "minimumInterval": "PT10S",
+            "maximumInterval": "PT1H"
+          }
+        },
+        "runAfter": {
+          "Select_indicators": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}

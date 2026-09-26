@@ -1,0 +1,446 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GIBTIA_Score_IP",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "GIBUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "GIB TI portal login (email)."
+            }
+        },
+        "GIBApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "GIB TI personal API token."
+            }
+        }
+    },
+    "variables": {
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "tags": {
+                "hidden-SentinelTemplateName": "GIBTIA_Score_IP",
+                "hidden-SentinelTemplateVersion": "2.0"
+            },
+            "metadata": {
+                "title": "Group-IB TI - Score incident IP addresses",
+                "description": "Triggered by a Microsoft Sentinel incident. Retrieves the Group-IB risk score and associated categories for every IP entity on the incident and posts the result back as an incident comment.",
+                "prerequisites": [
+                    "A Group-IB Threat Intelligence subscription with API access.",
+                    "A Log Analytics workspace connected to Microsoft Sentinel."
+                ],
+                "postDeployment": [
+                    "1. Authorize the Microsoft Sentinel API connection.",
+                    "2. Assign the Microsoft Sentinel Responder role to the playbook's managed identity so it can add incident comments.",
+                    "3. Set the GIBUsername and GIBApiKey parameters.",
+                    "4. Attach the playbook to an automation rule so it runs when an incident is created."
+                ],
+                "lastUpdateTime": "2026-09-02T00:00:00.000Z",
+                "entities": [
+                    "ip"
+                ],
+                "tags": [
+                    "Group-IB",
+                    "Enrichment"
+                ],
+                "releaseNotes": [
+                    {
+                        "version": "2.0",
+                        "title": "Rebuilt for the current Group-IB TI API",
+                        "notes": [
+                            "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
+                        ]
+                    }
+                ],
+                "support": {
+                    "tier": "community"
+                },
+                "author": {
+                    "name": "Group-IB"
+                }
+            },
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GIBUsername": {
+                            "defaultValue": "[parameters('GIBUsername')]",
+                            "type": "String"
+                        },
+                        "GIBApiKey": {
+                            "defaultValue": "[parameters('GIBApiKey')]",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Segments": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Segments",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Initialize_Chunks": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Chunks",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Segments": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Chunk": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Chunk",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Chunks": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_PartNum": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PartNum",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Chunk": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Filter_IP_Entities": {
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "where": "@equals(item()?['kind'], 'Ip')"
+                            },
+                            "runAfter": {
+                                "Initialize_PartNum": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Condition_Has_IPs": {
+                            "type": "If",
+                            "expression": {
+                                "greater": [
+                                    "@length(body('Filter_IP_Entities'))",
+                                    0
+                                ]
+                            },
+                            "actions": {
+                                "Select_IP_Values": {
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@body('Filter_IP_Entities')",
+                                        "select": "@item()?['properties']?['address']"
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Score_IPs": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "uri": "https://tap.group-ib.com/api/v2/scoring",
+                                        "headers": {
+                                            "Authorization": "@{concat('Basic ', base64(concat(parameters('GIBUsername'), ':', parameters('GIBApiKey'))))}",
+                                            "Accept": "application/json",
+                                            "Content-Type": "application/json",
+                                            "User-Agent": "GroupIB-MSentinel-Integration/2.0 (score-ip; logic-app)"
+                                        },
+                                        "body": {
+                                            "ips": "@body('Select_IP_Values')"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Select_IP_Values": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "For_Each_Scored_IP": {
+                                    "type": "Foreach",
+                                    "foreach": "@body('Select_IP_Values')",
+                                    "operationOptions": "Sequential",
+                                    "actions": {
+                                        "Append_IP_Score": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "Segments",
+                                                "value": "<b>IP: @{item()}</b> &mdash; Group-IB risk score: <b>@{coalesce(body('Score_IPs')?['items']?[item()]?['riskScore'], 'n/a')}</b>/100<br>"
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Score_IPs": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Filter_IP_Entities": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Pack_Segments": {
+                            "type": "Foreach",
+                            "foreach": "@variables('Segments')",
+                            "operationOptions": "Sequential",
+                            "actions": {
+                                "Condition_Segment_Fits": {
+                                    "type": "If",
+                                    "expression": {
+                                        "lessOrEquals": [
+                                            "@add(length(variables('Chunk')), length(items('Pack_Segments')))",
+                                            29000
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_To_Chunk": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Chunk",
+                                                "value": "@items('Pack_Segments')"
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_Flush_NonEmpty": {
+                                                "type": "If",
+                                                "expression": {
+                                                    "greater": [
+                                                        "@length(variables('Chunk'))",
+                                                        0
+                                                    ]
+                                                },
+                                                "actions": {
+                                                    "Flush_Chunk": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "Chunks",
+                                                            "value": "@variables('Chunk')"
+                                                        },
+                                                        "runAfter": {}
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {}
+                                                },
+                                                "runAfter": {}
+                                            },
+                                            "Start_New_Chunk": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Chunk",
+                                                    "value": "@if(greater(length(items('Pack_Segments')), 29000), concat(substring(items('Pack_Segments'), 0, 28950), '<br>[record truncated — see Group-IB portal]'), items('Pack_Segments'))"
+                                                },
+                                                "runAfter": {
+                                                    "Condition_Flush_NonEmpty": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_Has_IPs": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ]
+                            }
+                        },
+                        "Flush_Final_Chunk": {
+                            "type": "If",
+                            "expression": {
+                                "greater": [
+                                    "@length(variables('Chunk'))",
+                                    0
+                                ]
+                            },
+                            "actions": {
+                                "Append_Final_Chunk": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Chunks",
+                                        "value": "@variables('Chunk')"
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Pack_Segments": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Post_Comments": {
+                            "type": "Foreach",
+                            "foreach": "@variables('Chunks')",
+                            "operationOptions": "Sequential",
+                            "actions": {
+                                "Increment_PartNum": {
+                                    "type": "IncrementVariable",
+                                    "inputs": {
+                                        "name": "PartNum",
+                                        "value": 1
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Add_comment_to_incident": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><b>Group-IB TI &mdash; IP Scoring@{if(greater(length(variables('Chunks')), 1), concat(' (part ', string(variables('PartNum')), ' of ', string(length(variables('Chunks'))), ')'), '')}</b><br><br>@{items('Post_Comments')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Increment_PartNum": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Flush_Final_Chunk": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName": "[variables('azuresentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

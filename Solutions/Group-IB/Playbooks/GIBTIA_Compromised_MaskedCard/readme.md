@@ -1,0 +1,25 @@
+# Group-IB TI - Masked card collector
+
+Polls the Group-IB Threat Intelligence compromised/masked_card collection hourly using incremental seqUpdate paging and writes masked compromised card records to the GIBCompromisedMaskedCard_CL custom table in Log Analytics for use in analytics rules and hunting queries.
+
+## Quick Deployment
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FGIBTIA_Compromised_MaskedCard%2Fazuredeploy.json)
+
+## Prerequisites
+
+- A Group-IB Threat Intelligence subscription with API access to the compromised/masked_card collection.
+- A Log Analytics workspace connected to Microsoft Sentinel.
+- The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
+- The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
+
+## Post-deployment
+
+1. Nothing to authorize: the playbook writes to Log Analytics through the Data Collection Rule this template created, using its managed identity. With AssignRoles left at true the template has also assigned the playbook's two roles (Monitoring Metrics Publisher on that rule, Log Analytics Reader on the workspace); with AssignRoles=false, assign them by hand.
+2. Set the GIBUsername, GIBApiKey, StartDate and LimitPerPortion parameters.
+3. Wait 5-15 minutes for the role assignments to propagate, then enable the Logic App. It deploys in a Disabled state by design.
+4. Upgrading from 2.0: convert the workspace's GIB* tables once with migrate-tables.sh before redeploying (see the Playbooks readme).
+
+---
+
+Part of the Group-IB Threat Intelligence integration. See [the Playbooks readme](../readme.md) for the full catalog, architecture and deployment order.
