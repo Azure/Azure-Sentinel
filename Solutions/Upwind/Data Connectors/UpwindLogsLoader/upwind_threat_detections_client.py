@@ -42,16 +42,25 @@ class UpwindThreatDetectionsClient(UpwindClient):
             "max-last-seen-time": now.strftime(time_fmt),
         }
 
+        # Unlike threat events, this endpoint validates `severity` as a single
+        # enum value rather than splitting it, so a comma-separated list is
+        # rejected with a 400. Filter on the way out instead, which also avoids
+        # depending on whether the parameter means "exactly" or "at least".
         severities = severities_at_least(
             self.config.get("upwind_min_severity_threat_detections")
         )
         if severities:
-            params["severity"] = ",".join(severities)
             logging.info(
                 "Filtering threat detections to severities: %s", ", ".join(severities)
             )
 
         def emit(items):
+            if severities:
+                items = [
+                    item
+                    for item in items
+                    if str(item.get("severity", "")).strip().lower() in severities
+                ]
             on_page(rename_reserved_columns(items, _COLUMN_RENAME_MAP))
 
         total = self._fetch_page_paginated(url, params, emit)
