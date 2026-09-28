@@ -13,8 +13,8 @@ let pullRequestDetails;
 let resolvedPRNumber;
 let octokit;
 if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
-    console.log("Running in a forked repository. Creating unauthenticated Octokit client.");
-    octokit = new Octokit(); // Unauthenticated client
+    console.log("Running in a forked repository. Creating workflow-authenticated Octokit client.");
+    octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 }
 else if (process.env.GITHUBAPPID && process.env.GITHUBAPPPRIVATEKEY && process.env.GITHUBAPPINSTALLATIONID) {
     console.log("Running in a non-forked repository. Creating authenticated Octokit client.");
