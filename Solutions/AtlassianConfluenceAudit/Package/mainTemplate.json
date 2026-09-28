@@ -47,11 +47,11 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "AtlassianConfluenceAudit",
-    "_solutionVersion": "3.0.7",
+    "_solutionVersion": "3.0.8",
     "solutionId": "azuresentinel.azure-sentinel-solution-atlassianconfluenceaudit",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.7",
+    "dataConnectorCCPVersion": "3.0.8",
     "_dataConnectorContentIdConnectorDefinition1": "AtlassianConfluenceConnector",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "AtlassianConfluenceConnectorConnections",
@@ -64,6 +64,13 @@
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('ConfluenceAudit-Parser')))]",
       "parserVersion1": "1.0.0",
       "parserContentId1": "ConfluenceAudit-Parser"
+    },
+    "parserObject2": {
+      "_parserName2": "[concat(parameters('workspace'),'/','ConfluenceAuditLogs')]",
+      "_parserId2": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ConfluenceAuditLogs')]",
+      "parserTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('ConfluenceAuditLogs-Parser')))]",
+      "parserVersion2": "1.0.0",
+      "parserContentId2": "ConfluenceAuditLogs-Parser"
     },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
@@ -98,28 +105,28 @@
                   "title": "Atlassian Confluence Audit (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
                   "descriptionMarkdown": "The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
-                  "graphQueriesTableName": "ConfluenceAuditLogs_CL",
+                  "graphQueriesTableName": "ConfluenceAuditLogs",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
                       "legend": "Confluence Audit Events",
-                      "baseQuery": "{{graphQueriesTableName}}"
+                      "baseQuery": "ConfluenceAuditLogs"
                     }
                   ],
                   "sampleQueries": [
                     {
                       "description": "All Atlassian Confluence Audit logs",
-                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                      "query": "ConfluenceAuditLogs\n| sort by TimeGenerated desc"
                     },
                     {
                       "description": "Events by Category",
-                      "query": "{{graphQueriesTableName}}\n | summarize count() by Category"
+                      "query": "ConfluenceAuditLogs\n | summarize count() by Category"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "{{graphQueriesTableName}}",
-                      "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                      "name": "ConfluenceAuditLogs",
+                      "lastDataReceivedQuery": "ConfluenceAuditLogs | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -149,45 +156,76 @@
                     "customs": [
                       {
                         "name": "Atlassian Confluence API access",
-                        "description": "Permission of [Administer Confluence](https://developer.atlassian.com/cloud/confluence/rest/v1/intro/#auth) is required to get access to the Confluence Audit logs API. See [Confluence API documentation](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get) to learn more about the audit API."
+                        "description": "The account requires the [Confluence Administrator global permission](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get). Scoped API tokens also require the `read:audit-log:confluence` scope."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "title": "Connect to Atlassian Confluence API to start collecting audit logs in Microsoft Sentinel",
-                      "description": "To enable the Atlassian Confluence connector for Microsoft Sentinel, click to add an organization, fill the form with the Confluence environment credentials and click to Connect. \n Follow [these steps](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.\n ",
+                      "title": "Connect Atlassian Confluence to Microsoft Sentinel",
+                      "description": "Add one connection per Atlassian Confluence site. Follow the [Atlassian API token instructions](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.",
                       "instructions": [
                         {
                           "type": "DataConnectorsGrid",
                           "parameters": {
                             "mapping": [
                               {
-                                "columnName": "Atlassian Confluence organization URL",
-                                "columnValue": "properties.request.apiEndpoint"
+                                "columnName": "Connection Alias",
+                                "columnValue": "properties.addOnAttributes.friendlyName"
+                              },
+                              {
+                                "columnName": "Confluence API Base Path",
+                                "columnValue": "properties.addOnAttributes.apiUrl"
+                              },
+                              {
+                                "columnName": "Data Type",
+                                "columnValue": "properties.addOnAttributes.dataType"
                               }
                             ],
                             "menuItems": [
                               "DeleteConnector"
-                            ]
+                            ],
+                            "isMultiSelect": true
                           }
                         },
                         {
                           "type": "ContextPane",
                           "parameters": {
                             "isPrimary": true,
-                            "label": "Add organization",
-                            "title": "Add organization",
-                            "subtitle": "Add Atlassian Confluence organization",
+                            "label": "Add Connection",
+                            "title": "Add Atlassian Confluence Connection",
+                            "subtitle": "Connect to an Atlassian Confluence site to ingest audit logs",
                             "contextPaneType": "DataConnectorsContextPane",
                             "instructionSteps": [
                               {
+                                "title": "Connection Details",
+                                "description": "Enter the details for this Atlassian Confluence connection.",
                                 "instructions": [
                                   {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "Atlassian Confluence organization URL",
-                                      "placeholder": "<your-domain>.atlassian.net",
+                                      "label": "Connection Alias",
+                                      "placeholder": "e.g. Contoso Production",
+                                      "type": "text",
+                                      "name": "friendlyName",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Enter a unique alias to identify this Atlassian connection. **Important:** Use a different alias for each connection. To update an existing connection, delete it and recreate it with the same alias.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Atlassian Confluence API Base Path",
+                                      "placeholder": "<tenant>.atlassian.net",
                                       "type": "text",
                                       "name": "confluenceorganizationurl",
                                       "validations": {
@@ -196,10 +234,18 @@
                                     }
                                   },
                                   {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "For an unscoped token, enter `<tenant>.atlassian.net`. For a scoped token, get the Cloud ID from `https://<tenant>.atlassian.net/_edge/tenant_info`, then enter `api.atlassian.com/ex/confluence/<cloudId>`. Do not include `https://` or a trailing slash.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  },
+                                  {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "User Name",
-                                      "placeholder": "User Name (e.g., user@example.com)",
+                                      "label": "Atlassian Account Email",
+                                      "placeholder": "user@example.com",
                                       "type": "text",
                                       "name": "userid",
                                       "validations": {
@@ -208,10 +254,18 @@
                                     }
                                   },
                                   {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Enter the exact email address of the Atlassian account that created the API token.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  },
+                                  {
                                     "type": "Textbox",
                                     "parameters": {
                                       "label": "API Token",
-                                      "placeholder": "API Token",
+                                      "placeholder": "Enter your Atlassian API token",
                                       "type": "password",
                                       "name": "apikey",
                                       "validations": {
@@ -534,28 +588,28 @@
           "title": "Atlassian Confluence Audit (via Codeless Connector Framework)",
           "publisher": "Microsoft",
           "descriptionMarkdown": "The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
-          "graphQueriesTableName": "ConfluenceAuditLogs_CL",
+          "graphQueriesTableName": "ConfluenceAuditLogs",
           "graphQueries": [
             {
               "metricName": "Total data received",
               "legend": "Confluence Audit Events",
-              "baseQuery": "{{graphQueriesTableName}}"
+              "baseQuery": "ConfluenceAuditLogs"
             }
           ],
           "sampleQueries": [
             {
               "description": "All Atlassian Confluence Audit logs",
-              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+              "query": "ConfluenceAuditLogs\n| sort by TimeGenerated desc"
             },
             {
               "description": "Events by Category",
-              "query": "{{graphQueriesTableName}}\n | summarize count() by Category"
+              "query": "ConfluenceAuditLogs\n | summarize count() by Category"
             }
           ],
           "dataTypes": [
             {
-              "name": "{{graphQueriesTableName}}",
-              "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+              "name": "ConfluenceAuditLogs",
+              "lastDataReceivedQuery": "ConfluenceAuditLogs | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -585,45 +639,76 @@
             "customs": [
               {
                 "name": "Atlassian Confluence API access",
-                "description": "Permission of [Administer Confluence](https://developer.atlassian.com/cloud/confluence/rest/v1/intro/#auth) is required to get access to the Confluence Audit logs API. See [Confluence API documentation](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get) to learn more about the audit API."
+                "description": "The account requires the [Confluence Administrator global permission](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get). Scoped API tokens also require the `read:audit-log:confluence` scope."
               }
             ]
           },
           "instructionSteps": [
             {
-              "title": "Connect to Atlassian Confluence API to start collecting audit logs in Microsoft Sentinel",
-              "description": "To enable the Atlassian Confluence connector for Microsoft Sentinel, click to add an organization, fill the form with the Confluence environment credentials and click to Connect. \n Follow [these steps](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.\n ",
+              "title": "Connect Atlassian Confluence to Microsoft Sentinel",
+              "description": "Add one connection per Atlassian Confluence site. Follow the [Atlassian API token instructions](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.",
               "instructions": [
                 {
                   "type": "DataConnectorsGrid",
                   "parameters": {
                     "mapping": [
                       {
-                        "columnName": "Atlassian Confluence organization URL",
-                        "columnValue": "properties.request.apiEndpoint"
+                        "columnName": "Connection Alias",
+                        "columnValue": "properties.addOnAttributes.friendlyName"
+                      },
+                      {
+                        "columnName": "Confluence API Base Path",
+                        "columnValue": "properties.addOnAttributes.apiUrl"
+                      },
+                      {
+                        "columnName": "Data Type",
+                        "columnValue": "properties.addOnAttributes.dataType"
                       }
                     ],
                     "menuItems": [
                       "DeleteConnector"
-                    ]
+                    ],
+                    "isMultiSelect": true
                   }
                 },
                 {
                   "type": "ContextPane",
                   "parameters": {
                     "isPrimary": true,
-                    "label": "Add organization",
-                    "title": "Add organization",
-                    "subtitle": "Add Atlassian Confluence organization",
+                    "label": "Add Connection",
+                    "title": "Add Atlassian Confluence Connection",
+                    "subtitle": "Connect to an Atlassian Confluence site to ingest audit logs",
                     "contextPaneType": "DataConnectorsContextPane",
                     "instructionSteps": [
                       {
+                        "title": "Connection Details",
+                        "description": "Enter the details for this Atlassian Confluence connection.",
                         "instructions": [
                           {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "Atlassian Confluence organization URL",
-                              "placeholder": "<your-domain>.atlassian.net",
+                              "label": "Connection Alias",
+                              "placeholder": "e.g. Contoso Production",
+                              "type": "text",
+                              "name": "friendlyName",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Enter a unique alias to identify this Atlassian connection. **Important:** Use a different alias for each connection. To update an existing connection, delete it and recreate it with the same alias.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Atlassian Confluence API Base Path",
+                              "placeholder": "<tenant>.atlassian.net",
                               "type": "text",
                               "name": "confluenceorganizationurl",
                               "validations": {
@@ -632,10 +717,18 @@
                             }
                           },
                           {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "For an unscoped token, enter `<tenant>.atlassian.net`. For a scoped token, get the Cloud ID from `https://<tenant>.atlassian.net/_edge/tenant_info`, then enter `api.atlassian.com/ex/confluence/<cloudId>`. Do not include `https://` or a trailing slash.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          },
+                          {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "User Name",
-                              "placeholder": "User Name (e.g., user@example.com)",
+                              "label": "Atlassian Account Email",
+                              "placeholder": "user@example.com",
                               "type": "text",
                               "name": "userid",
                               "validations": {
@@ -644,10 +737,18 @@
                             }
                           },
                           {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Enter the exact email address of the Atlassian account that created the API token.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          },
+                          {
                             "type": "Textbox",
                             "parameters": {
                               "label": "API Token",
-                              "placeholder": "API Token",
+                              "placeholder": "Enter your Atlassian API token",
                               "type": "password",
                               "name": "apikey",
                               "validations": {
@@ -741,6 +842,11 @@
               },
               "type": "object"
             },
+            "friendlyName": {
+              "defaultValue": "friendlyName",
+              "type": "securestring",
+              "minLength": 1
+            },
             "confluenceorganizationurl": {
               "defaultValue": "confluenceorganizationurl",
               "type": "securestring",
@@ -788,7 +894,7 @@
               }
             },
             {
-              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'ConfluenceAuditLogsPoller', parameters('guidValue'))]",
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','ConfluenceAuditLogs' , uniqueString(parameters('friendlyName')) )]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
@@ -832,6 +938,11 @@
                   "streamName": "Custom-ConfluenceAuditLogs_CL",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "friendlyName": "[[parameters('friendlyName')]",
+                  "apiUrl": "[[parameters('confluenceorganizationurl')]",
+                  "dataType": "ConfluenceAuditLogs"
                 }
               }
             }
@@ -855,7 +966,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ConfluenceAudit Data Parser with template version 3.0.7",
+        "description": "ConfluenceAudit Data Parser with template version 3.0.8",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -979,16 +1090,148 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject2').parserTemplateSpecName2]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "parser_ConfluenceAuditLogsAliasFunction Data Parser with template version 3.0.8",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject2').parserVersion2]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject2')._parserName2]",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "ConfluenceAuditLogs",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "ConfluenceAuditLogs",
+                "query": "union isfuzzy=true ConfluenceAuditLogs_CL, SentinelConfluenceAuditLogs",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "ConfluenceAuditLogs"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject2')._parserId2,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject2')._parserId2]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ConfluenceAuditLogs')]",
+                "contentId": "[variables('parserObject2').parserContentId2]",
+                "kind": "Parser",
+                "version": "[variables('parserObject2').parserVersion2]",
+                "source": {
+                  "name": "AtlassianConfluenceAudit",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject2').parserContentId2]",
+        "contentKind": "Parser",
+        "displayName": "ConfluenceAuditLogs",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
+        "version": "[variables('parserObject2').parserVersion2]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('parserObject2')._parserName2]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "ConfluenceAuditLogs",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "ConfluenceAuditLogs",
+        "query": "union isfuzzy=true ConfluenceAuditLogs_CL, SentinelConfluenceAuditLogs",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "ConfluenceAuditLogs"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject2')._parserId2,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject2')._parserId2]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ConfluenceAuditLogs')]",
+        "contentId": "[variables('parserObject2').parserContentId2]",
+        "kind": "Parser",
+        "version": "[variables('parserObject2').parserVersion2]",
+        "source": {
+          "kind": "Solution",
+          "name": "AtlassianConfluenceAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.7",
+        "version": "3.0.8",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "AtlassianConfluenceAudit",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AtlassianConfluenceAudit/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.atlassian.com/software/confluence\">Atlassian Confluence Audit</a> solution provides the capability to ingest <a href=\"https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/\">Confluence Audit Records</a> into Microsoft Sentinel.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AtlassianConfluenceAudit/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.atlassian.com/software/confluence\">Atlassian Confluence Audit</a> solution provides the capability to ingest <a href=\"https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/\">Confluence Audit Records</a> into Microsoft Sentinel.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1022,6 +1265,11 @@
               "kind": "Parser",
               "contentId": "[variables('parserObject1').parserContentId1]",
               "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject2').parserContentId2]",
+              "version": "[variables('parserObject2').parserVersion2]"
             }
           ]
         },

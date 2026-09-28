@@ -1,6 +1,6 @@
 id: ddf47b6f-870c-5712-a296-1383acb13c82
 name: GreyNoise TI Map IP Entity to DnsEvents
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
 description: |
   This query maps any IP indicators of compromise (IOCs) from GreyNoise Threat Intelligence (TI), by searching for matches in DnsEvents.
@@ -8,10 +8,10 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -20,7 +20,7 @@ requiredDataConnectors:
       - DnsEvents
   - connectorId: GreyNoise2SentinelAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -32,19 +32,22 @@ relevantTechniques:
 query: |
   let dt_lookBack = 1h; // Look back 1 hour for DNS events
   let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
-  // Fetch threat intelligence indicators related to IP addresses
-  let IP_Indicators = ThreatIntelligenceIndicator
+  // Fetch GreyNoise IPv4 indicators from the ThreatIntelIndicators (STIX 2.1) table.
+  // GreyNoise only publishes ipv4-addr patterns, so a single ObservableKey filter is sufficient.
+  let GreyNoise_IPs = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now()
     | where SourceSystem == 'GreyNoise'
-    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
-    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
-    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+    | where ObservableKey == 'ipv4-addr:value'
+    // Take the latest row per indicator first, then evaluate its current state, so an
+    // indicator that has since been deactivated cannot be resurrected by an older row.
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and IsDeleted == false and ValidUntil > now()
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    // Explicit projection keeps TimeGenerated and Type off the left side of the join, avoiding column collisions.
+    | project IndicatorId = Id, TI_ipEntity, ThreatType = tostring(Data.indicator_types[0]), IoCDescription = tostring(Data.description), Tags, Confidence, ValidFrom, ValidUntil;
   // Perform a join between IP indicators and DNS events
-  IP_Indicators
+  GreyNoise_IPs
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
     | join kind=innerunique (
         DnsEvents
@@ -55,12 +58,12 @@ query: |
     )
     on $left.TI_ipEntity == $right.SingleIP
     // Filter out DNS events that occurred after the expiration of the corresponding indicator
-    | where DNS_TimeGenerated < ExpirationDateTime
+    | where DNS_TimeGenerated < ValidUntil
     // Group the results by IndicatorId and SingleIP, and keep the DNS event with the latest timestamp
     | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId, SingleIP
     // Select the desired output fields
-    | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,
-      TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    | project DNS_TimeGenerated, IoCDescription, IndicatorId, ThreatType, ValidFrom, ValidUntil, Confidence, Tags,
+      TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, Type
     | extend timestamp = DNS_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Host
@@ -73,7 +76,3 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIP
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: Url
