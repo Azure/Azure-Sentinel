@@ -6,7 +6,7 @@ This folder provides raw workbook JSON for manual import into workspace-less Wor
 
 The workbook brings the shipped Microsoft Sentinel MDO Detections and Insights V4 experience to eligible Defender-only tenants. It preserves all 14 tabs and runs 237 portable visual queries through Advanced Hunting. Six visuals that depend on Microsoft Sentinel incident and alert tables are replaced with notices explaining that an ISOC workspace is required.
 
-Learn more in the [ISOC public-preview announcement](https://techcommunity.microsoft.com/blog/microsoftthreatprotectionblog/integrated-security-operations-center-in-microsoft-defender/4559097) and the [Workbooks in Microsoft Defender documentation](https://learn.microsoft.com/defender-xdr/siem-defender-workbooks).
+Learn more in the [ISOC public preview announcement](https://techcommunity.microsoft.com/blog/microsoftthreatprotectionblog/integrated-security-operations-center-in-microsoft-defender/4559097) and the [Workbooks in Microsoft Defender documentation](https://learn.microsoft.com/defender-xdr/siem-defender-workbooks).
 
 ![Executive Summary in Microsoft Defender](Images/01_Executive.png)
 
