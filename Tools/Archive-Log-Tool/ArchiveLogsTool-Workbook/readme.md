@@ -57,7 +57,7 @@
 1. Use the **Tables for Bulk Auxiliary Change** dropdown (or **Select All**).
 2. Click each **Send Batch** button that appears, in order (20 tables per batch, up to 15 batches / 300 tables).
 
-> Not every table supports the Auxiliary plan — unsupported tables fail individually within a batch, and the rest of that batch still succeeds. Alerts stop working on a table once it's switched to Auxiliary, and a table can only change plan about once per week. This tab calls API version **2025-07-01**; the Archive and Basic tabs call **2023-09-01**.
+> Not every table supports the Auxiliary plan — unsupported tables fail individually within a batch, and the rest of that batch still succeeds. Alerts stop working on a table once it's switched to Auxiliary, and a table can only change plan about once per week. The workbook uses the ARM API versions configured in the workbook JSON for these operations.
 
 ### General bulk-update notes (all tabs)
 - Every "Send Batch" button submits one ARM batch request (`/batch?api-version=2020-06-01`) covering up to 20 tables. Click the buttons **in order, one at a time** — a button for Batch 2 only appears once 21+ tables are selected, and so on up to Batch 15 (300 tables).
