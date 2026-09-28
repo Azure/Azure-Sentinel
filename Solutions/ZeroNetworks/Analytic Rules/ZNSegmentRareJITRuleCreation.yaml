@@ -26,14 +26,17 @@ query: |
   ZNSegmentAudit
   | where TimeGenerated >= ago(endtime)
   | where AuditTypeId == 20
+  | extend PerformedByName = tostring(InitiatedBy.Name),
+      DestinationEntityName = tostring(AffectedEntity.Name)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()
-  by PerformedByName, tostring(DestinationEntityName)
+  by PerformedByName, DestinationEntityName
     // use left anti to exclude anything from the previous 14 days that is not rare
   | join kind=leftanti (
   ZNSegmentAudit
   | where TimeGenerated between (ago(starttime) .. ago(endtime))
   | where AuditTypeId == 20
-  | summarize by tostring(DestinationEntityName)
+  | extend DestinationEntityName = tostring(AffectedEntity.Name)
+  | summarize by DestinationEntityName
   ) on DestinationEntityName
   | summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)
   by PerformedByName, DestinationEntityName
@@ -47,5 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: HostName
         columnName: DestinationEntityName
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

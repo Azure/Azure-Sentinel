@@ -1,5 +1,21 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.23
+
+- (2026-09-25) Add the Aruba Networks ClearPass Authentication parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
+
+## Version 0.2.22
+
+- (2026-09-24) Add the Oracle OCI Authentication parser. [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
+
+## Version 0.2.21
+
+- (2026-09-17) Add the Wiz Cloud Authentication parser. [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+
+## Version 0.2.20
+
+- (2026-09-14) Add the Alibaba Cloud ActionTrail Authentication parser. - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
+
 ## Version 0.2.19
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication parser.

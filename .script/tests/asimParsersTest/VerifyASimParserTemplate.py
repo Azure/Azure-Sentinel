@@ -62,6 +62,7 @@ SCHEMA_INFO = [
     {"SchemaName": "Authentication", "SchemaVersion": "1.0.0","SchemaTitle":"ASIM Authentication Schema","SchemaLink":"https://aka.ms/ASimAuthenticationDoc"},
     {"SchemaName": "Dns", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dns Schema","SchemaLink":"https://aka.ms/ASimDnsDoc"},
     {"SchemaName": "DhcpEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink":"https://aka.ms/ASimDhcpEventDoc"},
+    {"SchemaName": "EmailEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Email Event Schema", "SchemaLink": "https://aka.ms/ASimEmailEventDoc"},
     {"SchemaName": "FileEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM File Schema","SchemaLink":"https://aka.ms/ASimFileEventDoc"},
     {"SchemaName": "NetworkSession", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Network Session Schema","SchemaLink":"https://aka.ms/ASimNetworkSessionDoc"},
     {"SchemaName": "ProcessEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Process Schema","SchemaLink":"https://aka.ms/ASimProcessEventDoc"},

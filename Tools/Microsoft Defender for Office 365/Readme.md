@@ -7,6 +7,7 @@ This directory contains Power BI templates and tools for visualizing and analyzi
 | # | Solution | Description | Status |
 |---|----------|-------------|--------|
 | 1 | [MDO Detection and Insights Report](./1.%20Microsoft%20Defender%20for%20Office%20365%20Detections%20and%20Insights/) | Power BI templates for visualizing MDO detection details, threat insights, and email security analytics | ✅ Active |
+| 2 | [Attack Simulation Training Insights Report](./2.%20Microsoft%20Attack%20Simulation%20Training%20Insights/) | Power BI templates for visualizing Attack Simulation Training campaigns data | ✅ Active |
 
 ## Archived Solutions
 

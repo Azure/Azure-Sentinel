@@ -1,8 +1,8 @@
 id: 7162903e-e07f-426b-9b07-63b8c7eb77b1
 Function:
-    Title: Parser for QualysHostDetection
-    Version: '1.0.3'
-    LastUpdated: '2026-09-10'
+  Title: Parser for QualysHostDetection
+  Version: '1.1.0'
+  LastUpdated: '2026-09-14'
 Category: Microsoft Sentinel Parser
 FunctionName: QualysHostDetection
 FunctionAlias: QualysHostDetection
@@ -92,7 +92,12 @@ FunctionQuery: |
     let QualysHostDetectionV3_view = view () {
     QualysHostDetectionV3_CL
     | extend DetectionList = todynamic(DetectionList)
-    | mv-expand Detections = todynamic(DetectionList.DETECTION)
+    | extend DetectionItems = iff(
+        gettype(DetectionList.DETECTION) == "array",
+        DetectionList.DETECTION,
+        pack_array(DetectionList.DETECTION)
+    )
+    | mv-expand Detections = DetectionItems to typeof(dynamic)
     | extend 
         TenantId = column_ifexists('TenantId', ''),
         SourceSystem = column_ifexists('SourceSystem', ''),
@@ -127,7 +132,7 @@ FunctionQuery: |
         LastProcessedDateTime = coalesce(
             todatetime(Detections.LAST_PROCESSED_DATETIME),
             todatetime(Detections.LAST_PROCESSED_DATE)),
-        Results_0 = tostring(Detections['RESULTS']['#cdata-section']),
+        Results_0 = tostring(coalesce(Detections.RESULTS['#cdata-section'], Detections.RESULTS)),
         Result_column_count = "1",
         Type = tostring(Detections.TYPE),
         _ResourceId = column_ifexists('_ResourceId', '')

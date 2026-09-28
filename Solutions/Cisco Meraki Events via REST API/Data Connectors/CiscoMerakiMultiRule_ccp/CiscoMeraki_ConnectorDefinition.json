@@ -9,7 +9,7 @@
       "id": "CiscoMerakiConnector",
       "title": "Cisco Meraki Events (using REST API) (via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, and wireless Air Marshal (rogue access point) events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+      "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes, API Requests, and File Scanned detections) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, wireless Air Marshal (rogue access point) events, and File Scanned events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
       "graphQueries": [
         {
           "metricName": "Total Organization logs received",
@@ -42,9 +42,14 @@
           "baseQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
         },
         {
-          "metricName": "Total Security/IDS events received",
-          "legend": "Cisco Meraki Security Events (ASimNetworkSessionLogs)",
+          "metricName": "Total Security events received",
+          "legend": "Cisco Meraki Security Events excluding File Scanned (ASimNetworkSessionLogs)",
           "baseQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
+        },
+        {
+          "metricName": "Total File Scanned events received",
+          "legend": "Cisco Meraki File Scanned Events",
+          "baseQuery": "CiscoMerakiFileScannedEvents_CL"
         }
       ],
       "sampleQueries": [
@@ -86,7 +91,11 @@
         },
         {
           "description": "Get IDS alerts from last 24 hours",
-          "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'Notable'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+          "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'IDS Alert'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get file scanned events from last 24 hours",
+          "query": "CiscoMerakiFileScannedEvents_CL | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventType, FileType, Uri, Action, Disposition, SourceIp, DestinationIp, FileHash\n | order by TimeGenerated desc"
         },
         {
           "description": "Get configuration changes from last 24 hours",
@@ -96,7 +105,7 @@
       "dataTypes": [
         {
           "name": "CiscoMerakiOrganizations",
-          "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+          "lastDataReceivedQuery": "CiscoMerakiOrganizations\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
         },
         {
           "name": "CiscoMerakiNetworkClients",
@@ -104,7 +113,7 @@
         },
         {
           "name": "CiscoMerakiOrganizationNetworks",
-          "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+          "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
         },
         {
           "name": "CiscoMerakiAirMarshalEvents",
@@ -116,11 +125,15 @@
         },
         {
           "name": "ASimAuditEventLogs",
-          "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+          "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(90d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
         },
         {
           "name": "ASimNetworkSessionLogs",
           "lastDataReceivedQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "CiscoMerakiFileScannedEvents",
+          "lastDataReceivedQuery": "CiscoMerakiFileScannedEvents_CL\n | where TimeGenerated > ago(2d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -281,6 +294,10 @@
                             {
                               "key": "ASimNetworkSessionLogs",
                               "text": "Security Events / IDS (ASIM Network Session)"
+                            },
+                            {
+                              "key": "CiscoMerakiFileScannedEvents",
+                              "text": "File Scanned Events"
                             }
                           ],
                           "placeholder": "Select data types to collect...",
