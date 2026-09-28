@@ -2,7 +2,7 @@ id: c24252d1-d98c-48db-b2f9-4cb37dd2208a
 name: Delinea - Privilege escalation detected (role / permission changes)
 description: |
   Detects role assignments, permission or right grants, admin grants and elevation events that
-  the acting user has not performed in the prior 14 days. Only grant-type actions (added /
+  the acting user has not performed against the same target in the prior 14 days. Only grant-type actions (added /
   assigned / granted / elevated / approved / created / updated) against role, permission,
   privilege, admin or entitlement objects are considered; removals and read-only events are
   excluded, and plain group-membership or ownership events are not matched because they make up
@@ -53,6 +53,8 @@ query: |
       | extend Actor = tostring(coalesce(d.actor.name, d.actor.email, d.actor.displayName)),
                ServiceType = tostring(d.service.type),
                Target = tostring(coalesce(d.target.displayName, d.target.name)),
+               // ID first - display names can change. Empty when the event carries no target.
+               TargetKey = tostring(coalesce(d.target.id, d.target.platformId, d.target.name, d.target.displayName)),
                FieldChanges = tostring(d.fieldChanges),
                RawSrcIP = tostring(d.source.host.network.ipAddress)
       | where isnotempty(Actor)
@@ -62,10 +64,12 @@ query: |
       // '0.0.0.0' is the placeholder reported for events that have no network origin.
       | extend SrcIP = iff(RawSrcIP in ("", "0.0.0.0"), "", RawSrcIP);
   // Batch by ingestion time so a late arriving event is still evaluated exactly once.
-  let priorGrants = grants | where IngestedAt <= ago(detectionWindow) | distinct Actor, EventName;
+  // The baseline is keyed on the target too, so repeating a grant on the same target is
+  // suppressed but the same grant against a new target still alerts.
+  let priorGrants = grants | where IngestedAt <= ago(detectionWindow) | distinct Actor, EventName, TargetKey;
   grants
   | where IngestedAt > ago(detectionWindow)
-  | join kind=leftanti priorGrants on Actor, EventName
+  | join kind=leftanti priorGrants on Actor, EventName, TargetKey
   | summarize Changes = count(), EventNames = make_set(EventName, 20),
               Targets = make_set_if(Target, isnotempty(Target), 20),
               FieldChanges = make_list_if(FieldChanges, isnotempty(FieldChanges), 10),
