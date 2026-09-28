@@ -1,0 +1,203 @@
+{
+  "name": "GitGuardianConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "GitGuardianConnector",
+      "title": "GitGuardian Audit Logs and Secret Incidents (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "Ingests GitGuardian workspace audit logs and secret incidents into Microsoft Sentinel.",
+      "graphQueries": [
+        {
+          "metricName": "Secret incidents received",
+          "legend": "GitGuardian Secret Incidents",
+          "baseQuery": "GitGuardianSecretIncidentsV2_CL"
+        },
+        {
+          "metricName": "Audit events received",
+          "legend": "GitGuardian Audit Logs",
+          "baseQuery": "GitGuardianAuditLogsV2_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get recent GitGuardian secret incidents",
+          "query": "GitGuardianSecretIncidentsV2_CL\n| sort by TimeGenerated desc\n| take 10"
+        },
+        {
+          "description": "Summarize open secret incidents by severity",
+          "query": "GitGuardianSecretIncidentsV2_CL\n| where Status == \"TRIGGERED\"\n| summarize IncidentCount = count() by Severity\n| sort by IncidentCount desc"
+        },
+        {
+          "description": "Get recent GitGuardian audit logs",
+          "query": "GitGuardianAuditLogsV2_CL\n| sort by TimeGenerated desc\n| take 10"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "GitGuardianAuditLogsV2_CL",
+          "lastDataReceivedQuery": "GitGuardianAuditLogsV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "GitGuardianSecretIncidentsV2_CL",
+          "lastDataReceivedQuery": "GitGuardianSecretIncidentsV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "union GitGuardianAuditLogsV2_CL, GitGuardianSecretIncidentsV2_CL | where TimeGenerated > ago(1h) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "GitGuardian API token",
+            "description": "A GitGuardian API token with the scope required by the selected stream is required: audit_logs:read for Audit Logs or incidents:read for Secret Incidents."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Configure GitGuardian connections",
+          "description": "Add a separate named connection for each GitGuardian data stream.",
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Connection",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "API URL",
+                    "columnValue": "properties.request.apiEndpoint"
+                  },
+                  {
+                    "columnName": "Data Stream",
+                    "columnValue": "properties.dataType"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Add GitGuardian connection",
+                "subtitle": "Select one GitGuardian data stream",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "Enter a unique connection name, select one data stream and GitGuardian SaaS location, and provide an API token with the required scope. Add a separate connection with a different name for each additional stream."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connection name",
+                          "placeholder": "e.g. Contoso GitGuardian US",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data stream",
+                          "name": "selectedDataType",
+                          "options": [
+                            {
+                              "key": "GitGuardianSecretIncidentsV2",
+                              "text": "Secret Incidents"
+                            },
+                            {
+                              "key": "GitGuardianAuditLogsV2",
+                              "text": "Audit Logs"
+                            }
+                          ],
+                          "placeholder": "Select one data stream to collect",
+                          "isMultiSelect": false,
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "GitGuardian SaaS location",
+                          "name": "BaseUrl",
+                          "options": [
+                            {
+                              "key": "https://api.gitguardian.com/v1/audit_logs",
+                              "text": "United States"
+                            },
+                            {
+                              "key": "https://api.eu1.gitguardian.com/v1/audit_logs",
+                              "text": "Europe"
+                            }
+                          ],
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "API token",
+                          "placeholder": "Enter your GitGuardian API token",
+                          "type": "password",
+                          "name": "apiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": true
+    }
+  }
+}
