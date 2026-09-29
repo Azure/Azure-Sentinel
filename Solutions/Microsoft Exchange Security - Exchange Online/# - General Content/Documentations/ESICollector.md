@@ -1,12 +1,8 @@
-# Exchange Security Insights Collector for Exchange Online
+# Exchange Security Insights Online Collector prerequisites and permissions
 
-## Overview
+This guide describes the Azure Automation modules, managed identity permissions, Microsoft Entra role, and network access required by the Exchange Security Insights Online Collector.
 
-The Exchange Security Insights Collector generates a snapshot of the Exchange Online configuration for the Microsoft Exchange Security for Exchange Online solution in Microsoft Sentinel. The Azure Automation runbook is scheduled to run at least once a day so that Microsoft Sentinel receives an up-to-date view of the environment.
-
-The collector uses Exchange Online and Microsoft Graph PowerShell cmdlets to retrieve the information required to assess the security posture of the Exchange Online environment.
-
-For a detailed description of the configuration settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md). For version-specific upgrade instructions, see the [Exchange Security Insights Collector README](../Solutions/ESICollector/README.md).
+For deployment and Azure Monitor configuration, see [Configure the Exchange Security Insights Online Collector with Azure Monitor](./README_LogIngestionAPI.md). For package version and upgrade information, see the [collector package and upgrade guide](../Solutions/ESICollector/README.md). For individual settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md).
 
 ## Prerequisites
 

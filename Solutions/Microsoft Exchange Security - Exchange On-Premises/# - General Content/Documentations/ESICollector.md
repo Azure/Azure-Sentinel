@@ -1,12 +1,8 @@
-# Exchange Security Insights Collector for Exchange Server
+# Exchange Security Insights Collector prerequisites and connectivity
 
-## Overview
+This guide describes the server prerequisites, permissions, and network access required to run the Exchange Security Insights Collector in an on-premises Exchange environment.
 
-The Exchange Security Insights Collector generates a snapshot of the Exchange Server configuration for the Microsoft Exchange Security for Exchange On-Premises solution in Microsoft Sentinel. Schedule the collector to run at least once a day so that Microsoft Sentinel receives an up-to-date view of the environment.
-
-The collector uses Exchange and Active Directory PowerShell cmdlets to retrieve the information required to assess the security posture of the Exchange Server environment.
-
-For a detailed description of the configuration settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md). For version-specific upgrade instructions, see the [Exchange Security Insights Collector README](../Solutions/ESICollector/README.md).
+For deployment and Azure Monitor configuration, see [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](./README_LogIngestionAPI.md). For package installation and upgrades, see the [collector package and upgrade guide](../Solutions/ESICollector/README.md). For individual settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md).
 
 ## Prerequisites
 
@@ -64,7 +60,7 @@ The collector must also be able to:
 - Connect to every Exchange Server by using WMI and remote PowerShell.
 - Contact the domain controllers by using the Active Directory PowerShell module.
 
-Membership in **Organization Management** normally provides the required permissions. Additional configuration might be required if Active Directory inheritance has been disabled or unsupported custom hardening has been.
+Membership in **Organization Management** normally provides the required permissions. Additional configuration might be required if Active Directory inheritance has been disabled or unsupported custom hardening has been applied.
 
 ## Network access
 

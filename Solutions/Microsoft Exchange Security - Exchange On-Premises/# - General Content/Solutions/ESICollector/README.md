@@ -1,14 +1,8 @@
-# Exchange Security Insights Collector
+# Exchange Security Insights Collector package and upgrade guide
 
-## Overview
+This README accompanies the on-premises collector package. It documents the current version, package replacement procedure, version-specific configuration changes, and legacy upgrade paths.
 
-The Exchange Security Insights Collector is a PowerShell-based data collection tool for Exchange Server and Exchange Online environments. It collects security configuration data and sends it to Microsoft Sentinel for use by the Microsoft Exchange Security solutions.
-
-For on-premises Exchange environments, the collector runs on a Windows machine and can be scheduled to execute at regular intervals. For more information about Exchange Online Solution, see the [Microsoft Exchange Security - Exchange Online solution](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online).
-
-For installation and configuration instructions, see the [Exchange Security Insights Collector documentation](../../Documentations/ESICollector.md).
-
-For a detailed description of the configuration parameters, see the [configuration parameter reference](./Parameters.md).
+For server prerequisites and permissions, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md). For Azure Monitor deployment and migration, see [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). For individual settings, see the [configuration parameter reference](./Parameters.md).
 
 ## Current version
 
@@ -24,7 +18,7 @@ The current version of the Exchange Security Insights Collector is **8.0.0.0**.
 > The collector continues to support both APIs. The API used is controlled by the `SentinelLogIngestionAPIActivated` setting, allowing the migration to be completed in two phases:
 >
 > 1. Upgrade the collector while continuing to use the legacy API.
-> 2. Deploy the required Azure resources and switch to the Log Ingestion API.
+> 2. Update the Microsoft Sentinel solution, deploy the Azure Monitor data connector, and switch the collector configuration.
 >
 > For complete migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
@@ -37,11 +31,11 @@ The following settings in the `LogCollection` section are required only when usi
 | Setting | Description |
 |---------|-------------|
 | `SentinelLogIngestionAPIActivated` | Set to `true` to use the Log Ingestion API. The default is `false`. |
-| `DataCollectionEndpointURI` | URI of the DCE created by the `azuredeploy_ESI_LogIngestionAPI.json` ARM template. |
-| `DCRImmutableId` | Immutable ID of the target DCR for Exchange Online, Exchange on-premises, or Message Tracking data. |
-| `TargetLogTenantID` | Microsoft Entra tenant ID used for certificate-based authentication when `UseManagedIdentity` is `false`. |
-| `TargetLogAppID` | Application ID used for certificate-based authentication when `UseManagedIdentity` is `false`. |
-| `TargetLogCertificateThumbprint` | Thumbprint of the certificate used for authentication when `UseManagedIdentity` is `false`. |
+| `DataCollectionEndpointURI` | URI of the DCE displayed by the **Exchange Security Insights On-Premises Collector (Azure Monitor)** data connector. |
+| `DCRImmutableId` | Immutable ID displayed by the data connector. |
+| `TargetLogTenantID` | Microsoft Entra tenant ID used for certificate authentication. |
+| `TargetLogAppID` | Application ID created for collector ingestion. |
+| `TargetLogCertificateThumbprint` | Thumbprint of the collector authentication certificate. |
 
 Additional configuration changes:
 
@@ -50,7 +44,7 @@ Additional configuration changes:
   - `MaximalSentinelPacketSizeMb` defaults to `0.9` when the Log Ingestion API is used because each POST request has a 1 MB payload limit.
   - New GitHub download settings allow configuration retrieval through the GitHub API instead of a raw file download.
 
-After configuring the new connector, go to the collect server and update the configuration file manually or use the **WinformConfig editor** at `ExchSecIns/WinformConfig/SetupCollectExchSecConfiguration.ps1`. The editor validates the payload and hides the legacy `WorkspaceId` and `WorkspaceKey` fields when the Log Ingestion API is enabled.
+After configuring the new connector, update the configuration on the collector server by using the [WinformConfig editor](../../Documentations/WinformConfigReadme.md).
 
 #### Collector update
 
@@ -108,11 +102,11 @@ For every upgrade path below, replace the existing collector script with the new
 | 7.6.0.0 to 7.6.0.1 | No configuration changes are required. |
 | 7.5.2.2 to 7.6.0.0 | No configuration changes are required. |
 | 7.5.2.1 to 7.5.2.2 | Update the configuration file to the new version and preserve all custom settings. |
-| 7.5.2.0 to 7.5.2.1 | Add `PaginationErrorThreshold` to the `Advanced` section. You can also add the optional `ExchangeOnlineMessageTracking` category described below. |
+| 7.5.2.0 to 7.5.2.1 | Add `PaginationErrorThreshold` to the `Advanced` section. |
 | 7.5.1.1 to 7.5.2.0 | No configuration changes are required. |
-| 7.5.0 to 7.5.1.1 | Add `PaginationErrorThreshold` to the `Advanced` section. You can also add the optional `ExchangeOnlineMessageTracking` category described below. |
+| 7.5.0 to 7.5.1.1 | Add `PaginationErrorThreshold` to the `Advanced` section. |
 | 7.4.2 to 7.5.0 | No configuration changes are required. |
-| 7.3.2 to 7.4.2 | Add the new parameters to the `Advanced` section and configure a managed identity for Exchange Online as described below. |
+| 7.3.2 to 7.4.2 | Add the new parameters to the `Advanced` section. |
 | 7.3.1 to 7.3.2 | Add the new parameters to the `Advanced` section. |
 | 7.3.0 to 7.3.1 | No configuration changes are required. |
 | 7.2.0 to 7.3.0 | Add the `Beta` property to the `Advanced` section as described below. |

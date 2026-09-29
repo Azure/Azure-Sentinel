@@ -1,16 +1,8 @@
-# Exchange Security Insights Collector for Exchange Online
+# Exchange Security Insights Online Collector package and upgrade guide
 
-## Overview
+This README accompanies the Exchange Online collector package. It documents the current version, Azure Monitor configuration changes, runbook update procedure, data model changes, and version availability.
 
-The Exchange Security Insights Collector for Exchange Online runs as a PowerShell 5.1 runbook in Azure Automation. It collects Exchange Online security configuration data and sends it to Microsoft Sentinel.
-
-The collector uses the system-assigned managed identity of the Azure Automation account for Azure Monitor ingestion and for Microsoft Graph and Exchange Online access.
-
-For deployment and migration instructions, see [Configure the Exchange Security Insights Online Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md).
-
-For permission and module requirements, see [Exchange Security Insights Collector for Exchange Online](../../Documentations/ESICollector.md).
-
-For configuration details, see the [configuration parameter reference](./Parameters.md).
+For deployment and migration, see [Configure the Exchange Security Insights Online Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). For modules and permissions, see [Collector prerequisites and permissions](../../Documentations/ESICollector.md). For individual settings, see the [configuration parameter reference](./Parameters.md).
 
 ## Current version
 
@@ -26,7 +18,7 @@ The current collector version is **8.0.0.0**.
 1. Back up the `GlobalConfiguration` variable in the existing Automation account.
 2. Update the **Microsoft Exchange Security for Exchange Online** solution in Microsoft Sentinel Content Hub.
 3. Configure **Exchange Security Insights Online Collector (Azure Monitor)** and select **Deploy Exchange Collector Push connector resources**.
-4. Record the DCE URI, DCR immutable ID, and DCR name displayed by the connector.
+4. Record the DCE URI and DCR immutable ID displayed by the connector. Retrieve the DCR name by following [Retrieve the DCR name](../../Documentations/README_LogIngestionAPI.md#retrieve-the-dcr-name).
 5. Update the existing `Start-ESICollector` runbook and `GlobalConfiguration` variable by following [Update an existing Azure Automation deployment](../../Documentations/README_LogIngestionAPI.md#update-an-existing-azure-automation-deployment).
 6. Verify that the runbook, modules, configuration variables, and daily schedule were updated.
 7. Verify that the Automation account system-assigned managed identity has **Monitoring Metrics Publisher** on the DCR.
@@ -49,15 +41,7 @@ The Automation deployment generates the `GlobalConfiguration` variable with:
 
 The legacy `WorkspaceId` and `WorkspaceKey` settings are not used when the Log Ingestion API is enabled.
 
-## Managed identity permissions
-
-The Automation account managed identity requires:
-
-- **Monitoring Metrics Publisher** on the DCR. The Automation deployment template assigns this role.
-- `Group.Read.All`, `User.Read.All`, `AuditLog.Read.All`, and `Exchange.ManageAsApp`. Assign these permissions with `ExchangeOnlinePermSetup.ps1`.
-- At least the **Global Reader** or **Security Reader** Microsoft Entra directory role. Assign this role manually.
-
-For instructions, see [Assign Microsoft Graph and Exchange Online permissions](../../Documentations/README_LogIngestionAPI.md#assign-microsoft-graph-and-exchange-online-permissions).
+For managed identity, Microsoft Graph, Exchange Online, and directory role requirements, see [Collector prerequisites and permissions](../../Documentations/ESICollector.md).
 
 ## Data model changes
 
