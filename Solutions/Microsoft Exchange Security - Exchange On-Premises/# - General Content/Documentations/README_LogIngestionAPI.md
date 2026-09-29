@@ -1,323 +1,269 @@
-# Exchange Security Insights - Log Ingestion API Deployment
+# Configure the Exchange Security Insights On-Premises Collector with Azure Monitor
 
-This ARM template deploys the Azure infrastructure required for Exchange Security Insights (ESI) data collection using the **Azure Monitor Log Ingestion API** (the modern replacement for the deprecated Log Analytics HTTP Data Collector API).
+## Overview
 
-> [!IMPORTANT]
-> The legacy **Log Analytics HTTP Data Collector API** (workspace ID + shared key) is being retired by Microsoft. All new ESI deployments must use the Log Ingestion API. Existing deployments should migrate before the end-of-support date. See the migration guide: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](./Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+The **Exchange Security Insights On-Premises Collector (Azure Monitor)** data connector configures the Azure resources required by the Exchange Security Insights Collector to send data through the Azure Monitor Log Ingestion API.
 
-## Resources Deployed
+The connector deployment creates and configures:
 
-The template `azuredeploy_ESI_LogIngestionAPI.json` provisions the following resources into an **existing Log Analytics workspace**:
+- The `ESIAPIExchangeOnPremConfig_CL` custom Log Analytics table.
+- The Data Collection Endpoint (DCE).
+- The Data Collection Rule (DCR).
+- The Microsoft Entra application used by the collector.
+- The required link and permissions between the application and the DCR.
 
-1. **Data Collection Endpoint (DCE)** — HTTPS endpoint receiving log payloads.
-2. **Custom Log Analytics Tables** (each deployment is optional via master switches):
-   - `ESIAPIExchangeOnPremConfig_CL` — Exchange **On-Premises** configuration data.
-   - `ESIAPIExchangeOnlineConfig_CL` — Exchange **Online** configuration data.
-   - `ExchangeOnlineMessageTracking_CL` — Message tracking logs.
-3. **Data Collection Rules (DCR)** — one per table, defining schema, transform (`transformKql`), and routing:
-   - `DCR-ESI-OnPremisesConfig`
-   - `DCR-ESI-OnlineConfig`
-   - `DCR-ESI-MessageTracking`
-
-Each block is guarded by a boolean parameter so you can deploy the full stack or only a subset (for example, add on-premises collection to an existing online setup).
-
-## Template Parameters
-
-| Parameter                                 | Type    | Default                    | Purpose                                                                                                            |
-|-------------------------------------------|---------|----------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `workspaceName`                           | string  | (required)                 | Name of the existing Log Analytics workspace (same subscription/resource group/region as the DCE).                 |
-| `location`                                | string  | `resourceGroup().location` | Azure region for the DCE and DCRs. Must match the workspace region.                                                |
-| `dataCollectionEndpointName`              | string  | `DCE-ESI-LogIngestion`     | Name of the DCE.                                                                                                   |
-| `dataCollectionRuleOnPremisesConfigName`  | string  | `DCR-ESI-OnPremisesConfig` | Name of the on-premises config DCR.                                                                                |
-| `dataCollectionRuleOnlineConfigName`      | string  | `DCR-ESI-OnlineConfig`     | Name of the Exchange Online config DCR.                                                                            |
-| `dataCollectionRuleMessageTrackingName`   | string  | `DCR-ESI-MessageTracking`  | Name of the message tracking DCR.                                                                                  |
-| `retentionInDays`                         | int     | `90` (min 30, max 730)     | Retention for the custom tables.                                                                                   |
-| `deployTables`                            | bool    | `true`                     | Master switch — deploy the custom Log Analytics tables. Set to `false` when the tables already exist.              |
-| `deployDataCollection`                    | bool    | `true`                     | Master switch — deploy the DCE and DCRs. Set to `false` to only (re)deploy the tables.                             |
-| `deployOnPremConfigTable`                 | bool    | `true`                     | Deploy the on-premises config table and its DCR.                                                                   |
-| `deployOnlineConfigTable`                 | bool    | `true`                     | Deploy the Exchange Online config table and its DCR.                                                               |
-| `deployMessageTrackingTable`              | bool    | `true`                     | Deploy the message tracking table and its DCR.                                                                     |
-
-> [!TIP]
-> Use `deployTables=false` and `deployDataCollection=true` when reusing pre-existing tables (for example, after a schema-only redeployment). Use `deployTables=true` and `deployDataCollection=false` to only create or update table schemas.
+After the connector deployment completes, the remaining local action is to configure `Config\CollectExchSecConfiguration.json` on the collector server.
 
 ## Prerequisites
 
-- Azure subscription with **Contributor** (or higher) on the target resource group.
-- An **existing Log Analytics workspace** (Microsoft Sentinel-enabled if you plan to detect on this data).
-- Azure CLI or PowerShell with the `Az.*` modules.
-- The Entra ID application (or managed identity) that will send data (see [README_AzureMonitorSetup.md](README_AzureMonitorSetup.md) for the full identity setup).
+Before starting, verify that:
 
-## Deployment
+- The **Microsoft Exchange Security for Exchange On-Premises** solution is installed in Microsoft Sentinel.
+- You have sufficient permissions to configure the data connector and deploy its resources.
+- Version 8.0.0.0 or later of the Exchange Security Insights Collector is available on the collector server.
+- The collector server meets the requirements documented in [Exchange Security Insights Collector for Exchange Server](./ESICollector.md).
+- You are a local administrator on the collector server.
 
-### Azure CLI
+## Choose the appropriate scenario
 
-```bash
-az login
-az account set --subscription "YOUR_SUBSCRIPTION_ID"
+The procedure differs depending on whether this is a new collector deployment or an upgrade of an existing deployment.
 
-# Create resource group (if needed)
-az group create --name "rg-sentinel-esi" --location "eastus"
+### New deployment
 
-az deployment group create \
-  --resource-group "rg-sentinel-esi" \
-  --template-file azuredeploy_ESI_LogIngestionAPI.json \
-  --parameters workspaceName=law-sentinel-prod
-```
+For a new deployment, create a new collector configuration. Do not follow an upgrade or migration procedure.
 
-### PowerShell
+1. Install the **Microsoft Exchange Security for Exchange On-Premises** solution from Microsoft Sentinel Content Hub.
+2. Open **Data connectors** in Microsoft Sentinel.
+3. Select **Exchange Security Insights On-Premises Collector (Azure Monitor)**.
+4. Open the connector page and select **Deploy Exchange Collector Push connector resources**.
+5. Wait for the connector deployment to complete.
+6. Create the authentication certificate and add its public part to the Entra application created by the connector by following [Create the authentication certificate](#create-the-authentication-certificate).
+7. Download and extract the latest `CollectExchSecIns.zip` package on the collector server.
+8. Use the [`WinformConfig\SetupCollectExchSecConfiguration.ps1` user interface](./WinformConfigReadme.md) to configure the new `Config\CollectExchSecConfiguration.json` file and create the mandatory scheduled task during the same setup session. Alternatively, `setup.ps1` can configure the file and create the task.
+9. Run the collector manually and verify ingestion.
 
-```powershell
-Connect-AzAccount
-Set-AzContext -SubscriptionId "YOUR_SUBSCRIPTION_ID"
+### Upgrade an existing deployment
 
-New-AzResourceGroup -Name "rg-sentinel-esi" -Location "eastus" -Force
+For an existing deployment, preserve the current configuration and update only the settings required for Azure Monitor ingestion.
 
-New-AzResourceGroupDeployment `
-  -ResourceGroupName "rg-sentinel-esi" `
-  -TemplateFile "azuredeploy_ESI_LogIngestionAPI.json" `
-  -workspaceName "law-sentinel-prod"
-```
+1. Update the collector to version 8.0.0.0 or later by following the [collector upgrade instructions](../Solutions/ESICollector/README.md). This includes deploying the updated `WinformConfig` folder.
+2. Back up the existing `Config\CollectExchSecConfiguration.json` file.
+3. Update the **Microsoft Exchange Security for Exchange On-Premises** solution from Microsoft Sentinel Content Hub.
+4. Open **Data connectors** in Microsoft Sentinel.
+5. Select the new **Exchange Security Insights On-Premises Collector (Azure Monitor)** connector.
+6. Open the connector page and select **Deploy Exchange Collector Push connector resources**.
+7. Wait for the connector deployment to complete.
+8. Create or select the authentication certificate and add its public part to the Entra application created by the connector by following [Create the authentication certificate](#create-the-authentication-certificate).
+9. Update the existing `Config\CollectExchSecConfiguration.json` file. Prefer the [`WinformConfig\SetupCollectExchSecConfiguration.ps1` user interface](./WinformConfigReadme.md), and preserve all existing environment, instance, scheduling, and add-on settings.
+10. Verify that the mandatory scheduled task still points to the updated collector. If it is missing, create it during the same WinformConfig setup session.
+11. Run the collector manually and verify ingestion before relying on the scheduled task.
 
-### Azure Portal
+## Create the authentication certificate
 
-1. Navigate to **Deploy a custom template**.
-2. Select **Build your own template in the editor**.
-3. Paste the content of `azuredeploy_ESI_LogIngestionAPI.json`.
-4. Fill in the parameters and confirm the master switches.
-5. Click **Review + create**.
+Complete this section only after **Deploy Exchange Collector Push connector resources** has finished and the Entra application exists.
 
-## Deployment Outputs
-
-| Output name                                       | Purpose                                                        |
-|---------------------------------------------------|----------------------------------------------------------------|
-| `dataCollectionEndpointId`                        | Full resource ID of the DCE.                                   |
-| `dataCollectionEndpointUri`                       | HTTPS ingestion URI. Required by the collector.                |
-| `dataCollectionRuleOnPremisesConfigId`            | Full resource ID of the on-premises DCR.                       |
-| `dataCollectionRuleOnPremisesConfigImmutableId`   | **Immutable ID** used by the collector for on-premises data.   |
-| `dataCollectionRuleOnlineConfigId`                | Full resource ID of the online DCR.                            |
-| `dataCollectionRuleOnlineConfigImmutableId`       | **Immutable ID** used by the collector for online data.        |
-| `dataCollectionRuleMessageTrackingId`             | Full resource ID of the message tracking DCR.                  |
-| `dataCollectionRuleMessageTrackingImmutableId`    | **Immutable ID** used by the collector for message tracking.   |
-| `onPremConfigTableName`                           | Confirms the on-premises table name (or `Not deployed`).       |
-| `configTableName`                                 | Confirms the Exchange Online table name (or `Not deployed`).   |
-| `messageTrackingTableName`                        | Confirms the message tracking table name (or `Not deployed`).  |
-
-Outputs of skipped resources return the string `Not deployed`.
-
-Retrieve them after deployment:
+Run the following commands from an elevated Windows PowerShell session on the collector server:
 
 ```powershell
-$deploy = Get-AzResourceGroupDeployment -ResourceGroupName "rg-sentinel-esi" -Name "YOUR_DEPLOYMENT_NAME"
-$deploy.Outputs.dataCollectionEndpointUri.Value
-$deploy.Outputs.dataCollectionRuleOnlineConfigImmutableId.Value
+# Create a self-signed certificate valid for 2 years
+$cert = New-SelfSignedCertificate `
+    -Subject "CN=ESI-Collector-Auth" `
+    -CertStoreLocation "Cert:\LocalMachine\My" `
+    -KeyExportPolicy Exportable `
+    -KeySpec Signature `
+    -KeyLength 2048 `
+    -HashAlgorithm SHA256 `
+    -NotAfter (Get-Date).AddYears(2)
+
+# Display the thumbprint (you need it for configuration)
+Write-Host "Certificate Thumbprint: $($cert.Thumbprint)"
+
+# Export the public key (.cer) for uploading to the Entra ID application
+Export-Certificate -Cert $cert -FilePath ".\ESI-Collector-Auth.cer" -Type CERT
 ```
 
-## Post-Deployment: Assign Ingestion Permissions
+The exported `.cer` file contains only the public certificate. The private key remains in `Cert:\LocalMachine\My`.
 
-The identity used by the ESI collector needs the **Monitoring Metrics Publisher** role on **each DCR** it sends data to.
+### Add the certificate to the Entra application
 
-```bash
-# Example: assign to a service principal on the Online Config DCR
-az role assignment create \
-  --role "Monitoring Metrics Publisher" \
-  --assignee "YOUR_APP_OBJECT_ID" \
-  --assignee-principal-type ServicePrincipal \
-  --scope "/subscriptions/<sub>/resourceGroups/rg-sentinel-esi/providers/Microsoft.Insights/dataCollectionRules/DCR-ESI-OnlineConfig"
-```
+1. Copy the **Entra application ID** displayed on the data connector page.
+2. Open the [Microsoft Entra admin center](https://entra.microsoft.com/).
+3. Go to **Identity** > **Applications** > **App registrations**.
+4. Select **All applications**.
+5. Search for the application by using its **Application (client) ID** and open it.
+6. Select **Certificates & secrets**.
+7. Open the **Certificates** tab.
+8. Select **Upload certificate**.
+9. Select the `ESI-Collector-Auth.cer` file, optionally enter a description, and select **Add**.
+10. Verify that the certificate appears with the expected thumbprint and expiration date.
 
-Repeat for `DCR-ESI-OnPremisesConfig` and `DCR-ESI-MessageTracking` as needed.
+Do not create a client secret. The on-premises collector authenticates by using the certificate.
 
-## Update the Collector Configuration
+### Grant the service account access to the private key
 
-Update `CollectExchSecConfiguration.json` with the deployment outputs:
+On the collector server:
+
+1. Run `certlm.msc`.
+2. Go to **Certificates (Local Computer)** > **Personal** > **Certificates**.
+3. Locate the `ESI-Collector-Auth` certificate.
+4. Right-click the certificate and select **All Tasks** > **Manage Private Keys**.
+5. Add the collector's service account and grant it **Read** permission.
+6. Record the certificate thumbprint for the WinformConfig setup.
+
+## Values provided by the data connector
+
+After deployment, the connector page displays the values required to configure the collector:
+
+- Tenant ID (Directory ID).
+- Entra application ID.
+- Data Collection Endpoint URI.
+- Data Collection Rule immutable ID.
+- Stream name: `Custom-ESIExchangeConfig`.
+
+You must also provide the thumbprint of the authentication certificate created before configuring the collector.
+
+Use the [WinformConfig editor](./WinformConfigReadme.md) as the preferred method for applying these values and creating the mandatory scheduled task during the same configuration session. The `setup.ps1` script remains available as an alternative guided configuration method.
+
+The on-premises collector uses certificate authentication. Do not configure an application secret.
+
+## Validate the JSON configuration
+
+The configuration tools update the authentication fields according to the selected mode. At minimum, verify that the following Azure Monitor settings are configured:
 
 ```json
 {
   "LogCollection": {
     "ActivateLogUpdloadToSentinel": "true",
     "SentinelLogIngestionAPIActivated": "true",
-    "DataCollectionEndpointURI": "<dataCollectionEndpointUri from outputs>",
-    "DCRImmutableId": "<Immutable ID matching the target table>",
-    "UseManagedIdentity": "false",
-    "TargetLogTenantID": "YOUR_TENANT_ID",
-    "TargetLogAppID": "YOUR_APP_ID",
-    "TargetLogCertificateThumbprint": "YOUR_CERTIFICATE_THUMBPRINT",
+    "DataCollectionEndpointURI": "<value displayed by the data connector>",
+    "DCRImmutableId": "<value displayed by the data connector>",
+    "TargetLogTenantID": "<tenant ID displayed by the data connector>",
+    "TargetLogAppID": "<application ID displayed by the data connector>",
+    "TargetLogCertificateThumbprint": "<authentication certificate thumbprint>",
     "LogTypeName": "ESIExchangeConfig"
   }
 }
 ```
 
-Pick the immutable ID matching the target table (on-premises, online, or message tracking).
+This is a partial example. Do not replace the complete `LogCollection` section with this example.
 
-## Table Schemas
+When the Log Ingestion API is enabled:
 
-Column suffixes follow Log Analytics conventions: `_s` string, `_d` real, `_g` guid, `_b` boolean, `_t` datetime, `_l` long, `_i` int.
+- `WorkspaceId` and `WorkspaceKey` are legacy settings and are not used for ingestion.
+- `DataCollectionEndpointURI` must match the DCE displayed by the connector.
+- `DCRImmutableId` must match the DCR displayed by the connector.
+- `TargetLogCertificateThumbprint` must identify a certificate with a private key accessible to the collector's service account.
+- `LogTypeName` must remain `ESIExchangeConfig`, which produces the `Custom-ESIExchangeConfig` stream used by the DCR.
 
-### `ESIAPIExchangeOnPremConfig_CL` and `ESIAPIExchangeOnlineConfig_CL`
+## Validate data ingestion
 
-Both tables share the same schema (only the target audience differs).
+Run the collector manually after saving the configuration. Confirm that it completes without authentication or ingestion errors.
 
-| Column                          | Type     | Description                                            |
-|---------------------------------|----------|--------------------------------------------------------|
-| `TimeGenerated`                 | datetime | Ingestion timestamp (set by `transformKql`).           |
-| `EntryDate_s`                   | string   | Date of the configuration entry.                       |
-| `GenerationInstanceID_g`        | guid     | Unique identifier for the collector execution.         |
-| `ESIEnvironment_s`              | string   | Exchange environment identifier.                       |
-| `Section_s`                     | string   | Configuration section name.                            |
-| `ExecutionResult_s`             | string   | Execution result (`Success`, `Error`, ...).            |
-| `Identity_s`                    | string   | Raw serialized `Identity` object (source of truth).    |
-| `Identity_Depth_d`              | real     | Depth of the identity in the directory hierarchy.      |
-| `Identity_DistinguishedName_s`  | string   | Distinguished name (LDAP DN).                          |
-| `Identity_DomainId_s`           | string   | Domain identifier (serialized when object).            |
-| `Identity_IsDeleted_b`          | boolean  | Whether the identity is flagged as deleted.            |
-| `Identity_IsRelativeDn_b`       | boolean  | Whether the DN is relative.                            |
-| `Identity_Name_s`               | string   | Identity name.                                         |
-| `Identity_ObjectGuid_g`         | guid     | Object GUID.                                           |
-| `Identity_Parent_s`             | string   | Parent identity (serialized when object).              |
-| `Identity_PartitionFQDN_s`      | string   | Partition FQDN.                                        |
-| `Identity_PartitionGuid_g`      | guid     | Partition GUID.                                        |
-| `Identity_Rdn_s`                | string   | Relative distinguished name (serialized when object).  |
-| `IdentityString_s`              | string   | Human-readable identity string.                        |
-| `RawData_s`                     | string   | Full raw configuration payload in JSON.                |
-| `Name_s`                        | string   | Object name.                                           |
-| `ProcessedByServer_s`           | string   | Server that produced the entry.                        |
-| `PSCmdL_s`                      | string   | PowerShell cmdlet used to collect the entry.           |
-| `WhenChanged_t`                 | datetime | `WhenChanged` timestamp.                               |
-| `WhenCreated_t`                 | datetime | `WhenCreated` timestamp.                               |
-
-> [!NOTE]
-> The `Identity_*` sub-property columns are extracted from the source `Identity` object by the DCR's `transformKql` using `parse_json`. When `Identity` is `null` (some sections do not populate it), the sub-columns are `null`/empty — no ingestion error.
-
-### `ExchangeOnlineMessageTracking_CL`
-
-| Column                          | Type     | Description                                    |
-|---------------------------------|----------|------------------------------------------------|
-| `TimeGenerated`                 | datetime | Ingestion timestamp.                           |
-| `schemaVersion_s`               | string   | Schema version of the log entry.               |
-| `clientIp_s`                    | string   | Client IP address.                             |
-| `clientHostname_s`              | string   | Client hostname.                               |
-| `serverIp_s`                    | string   | Server IP address.                             |
-| `senderHostname_s`              | string   | Sender hostname.                               |
-| `sourceContext_s`               | string   | Source context.                                |
-| `connectorId_s`                 | string   | Connector identifier.                          |
-| `source_s`                      | string   | Message source.                                |
-| `eventId_s`                     | string   | Event identifier.                              |
-| `internalMessageId_s`           | string   | Internal message identifier.                   |
-| `messageId_s`                   | string   | Message identifier.                            |
-| `networkMessageId_s`            | string   | Network message identifier.                    |
-| `recipientAddress_s`            | string   | Recipient email address.                       |
-| `recipientStatus_s`             | string   | Recipient delivery status.                     |
-| `totalBytes_l`                  | long     | Message size in bytes.                         |
-| `recipientCount_i`              | int      | Number of recipients.                          |
-| `relatedRecipientAddress_s`     | string   | Related recipient address.                     |
-| `reference_s`                   | string   | Message reference.                             |
-| `messageSubject_s`              | string   | Email subject line.                            |
-| `senderAddress_s`               | string   | Sender email address.                          |
-| `returnPath_s`                  | string   | Return path address.                           |
-| `directionality_s`              | string   | Directionality (Originating / Incoming).       |
-| `messageInfo_s`                 | string   | Additional message info.                       |
-| `originalClientIp_s`            | string   | Original client IP.                            |
-| `originalServerIp_s`            | string   | Original server IP.                            |
-| `customData_s`                  | string   | Custom metadata.                               |
-| `transportTrafficType_s`        | string   | Transport traffic type.                        |
-| `FilePath_s`                    | string   | File path of the log entry.                    |
-| `logId_s`                       | string   | Log identifier.                                |
-| `messageTrackingTenantId_s`     | string   | Tenant identifier for the message tracking log.|
-
-## Stream Names for API Ingestion
-
-When calling the Log Ingestion API directly, the stream name that follows the DCR immutable ID must match the DCR:
-
-| DCR                        | Stream declared                        | Output stream (table)                     |
-|----------------------------|----------------------------------------|-------------------------------------------|
-| `DCR-ESI-OnPremisesConfig` | `Custom-ESIExchangeConfig`             | `Custom-ESIAPIExchangeOnPremConfig_CL`    |
-| `DCR-ESI-OnlineConfig`     | `Custom-ESIExchangeOnlineConfig`       | `Custom-ESIAPIExchangeOnlineConfig_CL`    |
-| `DCR-ESI-MessageTracking`  | `Custom-ExchangeOnlineMessageTracking` | `Custom-ExchangeOnlineMessageTracking_CL` |
-
-Example API call:
-
-```powershell
-$endpoint       = "https://<dce-name>.<region>.ingest.monitor.azure.com"
-$dcrImmutableId = "dcr-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-$streamName     = "Custom-ESIExchangeOnlineConfig"
-
-$uri = "$endpoint/dataCollectionRules/$dcrImmutableId/streams/$streamName" +
-       "?api-version=2023-01-01"
-
-Invoke-RestMethod -Uri $uri -Method Post -Body $jsonData -Headers @{
-  "Authorization" = "Bearer $accessToken"
-  "Content-Type"  = "application/json"
-}
-```
-
-## Monitoring
-
-Verify ingestion after deployment:
+Then run the following query in the Microsoft Sentinel workspace:
 
 ```kql
-// Exchange Online configuration ingestion
-ESIAPIExchangeOnlineConfig_CL
-| summarize count() by bin(TimeGenerated, 1h), Section_s
-| render timechart
-
-// Exchange On-Premises configuration ingestion
 ESIAPIExchangeOnPremConfig_CL
-| summarize count() by bin(TimeGenerated, 1h), Section_s
-| render timechart
-
-// Message Tracking ingestion
-ExchangeOnlineMessageTracking_CL
-| summarize count() by bin(TimeGenerated, 1h), directionality_s
-| render timechart
+| summarize Entries = count(), LastIngestion = max(TimeGenerated)
+    by GenerationInstanceID_g, ESIEnvironment_s
+| order by LastIngestion desc
 ```
+
+The data connector status should change to **Connected** after data is received.
+
+## Data destination
+
+The connector sends data through the following route:
+
+| Component | Value |
+|-----------|-------|
+| Table | `ESIAPIExchangeOnPremConfig_CL` |
+| Stream | `Custom-ESIExchangeConfig` |
+| Collector `LogTypeName` | `ESIExchangeConfig` |
+
+Column suffixes follow Log Analytics conventions:
+
+- `_s`: string
+- `_d`: real
+- `_g`: GUID
+- `_b`: boolean
+- `_t`: datetime
+- `_l`: long
+- `_i`: integer
+
+The DCR transform extracts the `Identity_*` columns from the source `Identity` object. The original `Identity_s` column is preserved for compatibility with existing analytics, hunting queries, and workbooks.
+
+## After upgrading an existing deployment
+
+### Post-migration cleanup
+
+After several successful scheduled executions:
+
+1. Keep the backed-up legacy configuration for the agreed rollback period.
+2. Remove the legacy workspace key from scripts, scheduled-task arguments, and unsecured files.
+3. Remove the workspace key from password vaults only after the rollback period ends.
+4. Update custom analytics, hunting queries, or workbooks that directly reference `ESIExchangeConfig_CL`.
+5. Retain the legacy table for historical data until its retention period expires.
+
+Do not delete the DCE, DCR, Entra application, certificate, or new table while the collector uses the Log Ingestion API.
+
+### Rollback during validation
+
+Rollback is intended only for the validation period and only while the legacy API remains available.
+
+1. Stop the scheduled task.
+2. Restore the backed-up `CollectExchSecConfiguration.json` file, including the legacy `WorkspaceId` and `WorkspaceKey`.
+3. Confirm that `SentinelLogIngestionAPIActivated` is set to `false`.
+4. Run the collector manually.
+5. Verify that new data appears in `ESIExchangeConfig_CL`.
+6. Restart the scheduled task.
+
+The Azure Monitor resources can remain deployed while the migration issue is investigated.
 
 ## Troubleshooting
 
-### 403 Forbidden on ingestion
+### The new data connector is not available
 
-Verify the identity used by the collector has the **Monitoring Metrics Publisher** role on the correct DCR (not the DCE, not the workspace).
+Confirm that the **Microsoft Exchange Security for Exchange On-Premises** solution has been installed or updated from Content Hub.
 
-### Data does not appear
+### Deployment values are not displayed
 
-1. Confirm the `DCRImmutableId` in the collector configuration matches the DCR routing to the target table.
-2. Check the `transformKql` output columns match the destination table columns.
-3. Review collector logs for payload size errors (Log Ingestion API limit is 1 MB per call — the collector auto-segments).
+Confirm that **Deploy Exchange Collector Push connector resources** completed successfully on the data connector page. Do not replace this action with a manual ARM template deployment.
 
-### Table already exists
+### Authentication failure
 
-If a table already exists with a different schema, either:
+Reopen the configuration tool and verify:
 
-- Redeploy with `deployTables=false` (leave tables as-is), or
-- Manually align columns in the workspace, or
-- Delete the table via the Log Analytics workspace and redeploy.
+- The tenant and Entra application information against the values displayed by the data connector.
+- The certificate thumbprint.
+- The presence of the certificate and its private key in a certificate store accessible to the collector's service account.
+- The presence of the public certificate on the Entra application created by the connector.
 
-### Deployment fails on cross-region resources
+### HTTP 400 or `InvalidPayload`
 
-The DCE, DCRs, and workspace must be in the **same region**. Adjust the `location` parameter or move the workspace.
+Verify that:
 
-## Cleanup
+- `DCRImmutableId` matches the value displayed by the connector.
+- `DataCollectionEndpointURI` contains the correct ingestion endpoint.
+- `LogTypeName` is `ESIExchangeConfig`.
+- The collector is version 8.0.0.0 or later.
 
-```bash
-# Delete DCRs
-az monitor data-collection rule delete --name "DCR-ESI-OnPremisesConfig" --resource-group "rg-sentinel-esi"
-az monitor data-collection rule delete --name "DCR-ESI-OnlineConfig"     --resource-group "rg-sentinel-esi"
-az monitor data-collection rule delete --name "DCR-ESI-MessageTracking"  --resource-group "rg-sentinel-esi"
+### HTTP 401 or 403
 
-# Delete DCE
-az monitor data-collection endpoint delete --name "DCE-ESI-LogIngestion" --resource-group "rg-sentinel-esi"
-```
+Confirm that the connector deployment completed successfully and that the collector is using the Entra application created by that deployment. If necessary, redeploy the connector resources from the data connector page instead of assigning the DCR role manually.
 
-> [!CAUTION]
-> Custom Log Analytics tables cannot be deleted via API. They can only be removed through the Log Analytics workspace in the Azure Portal, or by deleting the workspace itself.
+### No data appears in the table
 
-## Related Documentation
+1. Run the collector manually.
+2. Review the collector logs for authentication, payload, or endpoint errors.
+3. Confirm that `SentinelLogIngestionAPIActivated` is set to `"true"`.
+4. Confirm that the DCE, DCR immutable ID, and stream settings match the data connector values.
+5. Run the validation query again after several minutes.
 
-- Full identity + permission setup: [README_AzureMonitorSetup.md](README_AzureMonitorSetup.md)
-- Migration from the legacy Log Analytics API: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md)
-- Sample payload: [sample-Custom-ESIExchangeConfig.json](sample-Custom-ESIExchangeConfig.json)
+## Related documentation
 
-## Support
-
-- GitHub: <https://github.com/Azure/Azure-Sentinel>
-- Microsoft Sentinel community: <https://techcommunity.microsoft.com/t5/microsoft-sentinel/bd-p/MicrosoftSentinel>
+- [Exchange Security Insights Collector prerequisites](./ESICollector.md)
+- [Collector configuration parameters](../Solutions/ESICollector/Parameters.md)
+- [Collector upgrade instructions](../Solutions/ESICollector/README.md)
+- [WinformConfig editor](./WinformConfigReadme.md)
+- [Forwarder quick start](../Forwarder/QUICKSTART-Forwarder.md)
+- [Forwarder Pickup Processor reference](../Forwarder/README-ForwarderPickup.md)

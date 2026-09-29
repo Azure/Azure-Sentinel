@@ -1,42 +1,29 @@
-# Folder structure
+# Microsoft Exchange Security for Exchange On-Premises documentation
 
-This folder contains documentations related to the deployment of solutions Microsoft Exchange Security for Exchange On-Premises and Microsoft Exchange Security for Exchange Online :
+This folder contains the documentation for deploying and operating the **Microsoft Exchange Security for Exchange On-Premises** solution in Microsoft Sentinel.
 
-## Overview of Deployement
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-Overview.md
+The on-premises collector runs on a Windows server as a scheduled PowerShell task and uses certificate authentication to send data through the Azure Monitor Log Ingestion API.
 
-## Deployment Microsoft Exchange Security for Exchange On-Premises
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-MES-OnPremises.md
+## Collector deployment and configuration
 
-## Deployment Microsoft Exchange Security for Exchange Online
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-MES-Online.md
+- [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](./README_LogIngestionAPI.md): Deploy or upgrade the Azure Monitor data connector, configure certificate authentication, validate ingestion, and troubleshoot the deployment.
 
-## Collectors Information
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/ESICollector.md
+- [Exchange Security Insights Collector prerequisites and permissions](./ESICollector.md): Review the required PowerShell modules, Active Directory feature, Exchange permissions, and network access.
 
-## Deploy the Azure Monitor Log Ingestion API (DCE / DCR / custom tables)
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README_LogIngestionAPI.md
+- [Configure the collector with WinformConfig](./WinformConfigReadme.md): Create or update `CollectExchSecConfiguration.json`, validate the settings, and create the mandatory Windows scheduled task.
 
-## Azure Monitor End-to-End Setup (Entra ID application, certificate, RBAC)
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README_AzureMonitorSetup.md
+## Forwarder
 
-## Migrate from the Log Analytics HTTP Data Collector API to the Log Ingestion API
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md
+- [Forwarder quick start](../Forwarder/QUICKSTART-Forwarder.md): Configure pickup mode, test one file, and install the Forwarder scheduled task.
 
-## WinformConfig editor for CollectExchSecConfiguration.json
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WinformConfigReadme.md
+- [Forwarder Pickup Processor reference](../Forwarder/README-ForwarderPickup.md): Review authentication modes, configuration settings, script parameters, file handling, monitoring, and troubleshooting.
 
-## Forwarder / Pickup deployment
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README-ForwarderPickup.md
+## Workbooks
 
-## Forwarder quick start
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/QUICKSTART-Forwarder.md
+- [Deploy the Microsoft Exchange Security workbooks](./WorkbookDeployement.md): Deploy and configure the workbooks used by the solution.
 
-## How to deploy Woorkbooks
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WorkbookDeployement.md
+- [Delegate access to the workbooks](./WorkbookDelegation.md): Configure Microsoft Entra groups, custom roles, resource group permissions, and Log Analytics access for delegated workbook users.
 
-## Workbook delegation
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WorkbookDelegation.md
+## VIP monitoring
 
-## VIP Management
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/VIPManagement.md
+- [Configure VIP management](./VIPManagement.md): Configure the watchlist used to identify and monitor VIP activity in the Microsoft Exchange Security workbooks.

@@ -1,71 +1,88 @@
-# Exchange Security Insights Collectors
+# Exchange Security Insights Collector for Exchange Server
 
-**Synopsis**
-    This script generates a photography of the Exchange Configuration for Microsoft Exchange Security solution for Microsoft Sentinel.
-**DESCRIPTION**
-    This script has to be scheduled once a day at minimum to generate a snapshot of the Exchange configuration that will be imported into Microsoft Sentinel by using Log Analytics APIs.
+## Overview
 
-    Multiple Exchange Cmdlets and Active-Directory/Microsoft Graph cmdlets are used to extract information that will be used by Microsoft Exchange Security for Microsoft Sentinel to create a secure posture in your Exchange On-Premises/Online environment.
+The Exchange Security Insights Collector generates a snapshot of the Exchange Server configuration for the Microsoft Exchange Security for Exchange On-Premises solution in Microsoft Sentinel. Schedule the collector to run at least once a day so that Microsoft Sentinel receives an up-to-date view of the environment.
 
-    Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
+The collector uses Exchange and Active Directory PowerShell cmdlets to retrieve the information required to assess the security posture of the Exchange Server environment.
 
-## On-Premises Collector
+For a detailed description of the configuration settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md). For version-specific upgrade instructions, see the [Exchange Security Insights Collector README](../Solutions/ESICollector/README.md).
 
-### Mandatory Permissions
+## Prerequisites
 
-The account used to launch the script has to be Organization Management.
+### Azure PowerShell module
 
-  > The collector has to read Active-Directory groups and members, especially "Administrative" groups in 'Microsoft Exchange Security Groups' Organization Units.
+> [!IMPORTANT]
+> Version 8.0.0.0 requires the Azure PowerShell `Az.Accounts` module. Install or update this module on every Windows machine that runs the collector before upgrading.
 
-  > The collector must be able to contact every Exchange Server in WMI and in Remote PowerShell.
+Run the following commands in an elevated Windows PowerShell session to verify that the module and the `Connect-AzAccount` command are available:
 
-(Normally the Organization Management group allow the above rights excepted if you have brake inheritance in AD or made custom **unsupported** hardening between Exchange Servers.)
+```powershell
+Get-Module -ListAvailable -Name Az.Accounts
+Get-Command -Name Connect-AzAccount -Module Az.Accounts
+```
 
-USD Logs (Summary of logs of the Collector) :
+If the module is not installed, install it from the PowerShell Gallery:
 
-  > If the USD Logs storage is AzureStorageAccount, the ManagedIdentity or the created Entra ID Application needs to have the Storage Blob Data Contributor role at minimum to be able to write logs in the storage account.
+```powershell
+Install-Module -Name Az.Accounts -Repository PSGallery -Scope AllUsers -Force
+```
 
-### Network Access
+### Active Directory module for Windows PowerShell
 
-    **Internet**
-    
-        Direct Access to the following URLs or by using a proxy
-        If a proxy is used, configuration has to be done in .\Config\CollectExchSecConfiguration.json file
-        Attention, Explicit Authentication is not supported.
+> [!IMPORTANT]
+> Before running the collector, verify that the Windows Server feature **Active Directory module for Windows PowerShell** is installed on the machine that runs the collector.
 
-        URLs :
-            https://*.ods.opinsights.azure.com
-            https://raw.githubusercontent.com
+In Server Manager, this feature is located under **Add Roles and Features** > **Features** > **Remote Server Administration Tools** > **Role Administration Tools** > **AD DS and AD LDS Tools** > **Active Directory module for Windows PowerShell**.
 
-    **Exchange Servers**
-        
-        The script needs accessing to all Exchange Servers using Remote PowerShell and WMI
+You can verify the feature state from an elevated Windows PowerShell session:
 
-    **Active Directory**
+```powershell
+Get-WindowsFeature -Name RSAT-AD-PowerShell
+```
 
-        The script needs accessing to Domain Controllers using the Active-Directory Management Shell
+The `Install State` must be `Installed`. If the feature is not installed, run:
 
-## Online Collector
+```powershell
+Install-WindowsFeature -Name RSAT-AD-PowerShell
+```
 
-### Mandatory Permissions
+After installation, verify that the `ActiveDirectory` module and its cmdlets are available:
 
-Permissions are added to the Managed Identity of the Automation accounts that you create at the installation. A script was created to help you assigning permissions for Microsoft Graph and Exchange Online API.
+```powershell
+Import-Module ActiveDirectory
+Get-Command -Name Get-ADDomain -Module ActiveDirectory
+```
 
-Microsoft Graph Permissions :
+## Required permissions
 
-  > The collector needs Groups.Read permission to be able to retrieve groups that have rights in Exchange Online for audit.
+The account that runs the collector must be a member of the **Organization Management** role group.
 
-  > The collector needs Users.Read permission to be able to retrieve members of group information
+The collector must also be able to:
 
-  > The collector needs Auditing.Read permission to be able to retrieve the last Sign-in date in the infrastructure for permission audit
+- Read Active Directory groups and their members, especially administrative groups in the **Microsoft Exchange Security Groups** organizational unit.
+- Connect to every Exchange Server by using WMI and remote PowerShell.
+- Contact the domain controllers by using the Active Directory PowerShell module.
 
+Membership in **Organization Management** normally provides the required permissions. Additional configuration might be required if Active Directory inheritance has been disabled or unsupported custom hardening has been.
 
-Exchange Online permissions :
+## Network access
 
-  > The collector has to have Exchange.ManageAsApp permission to be able to connect to Exchange. [learn more](https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps)
+### Internet access
 
-  > The collector must be **Global Reader** or **Security Reader** at minimum to be able to read Exchange Online configuration. This permission has to assigned manually after Managed account creation. [learn more on available roles for ManageAsApp permission](https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps#assign-microsoft-entra-roles-to-the-application)
+The machine that runs the collector requires direct or proxy access to:
 
-USD Logs (Summary of logs of the Collector) :
+- `https://*.ods.opinsights.azure.com`
+- `https://raw.githubusercontent.com`
+- The configured Azure Monitor Data Collection Endpoint when the Log Ingestion API is enabled
+- The Microsoft Entra and Azure endpoints used by `Connect-AzAccount`
 
-  > If the USD Logs storage is AzureStorageAccount, the ManagedIdentity or the created Entra ID Application needs to have the Storage Blob Data Contributor role at minimum to be able to write logs in the storage account.
+Configure the proxy in `.\Config\CollectExchSecConfiguration.json`. Proxies that require explicit authentication are not supported.
+
+### Exchange Server access
+
+The collector must be able to connect to every Exchange Server by using remote PowerShell and WMI.
+
+### Active Directory access
+
+The collector must be able to connect to the domain controllers by using the Active Directory PowerShell module.

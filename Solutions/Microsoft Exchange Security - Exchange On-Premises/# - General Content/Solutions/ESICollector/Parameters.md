@@ -87,7 +87,7 @@ Parameters can be found in the "CollectExchSecConfiguration.json" file for On-Pr
 | ExportDomainsInformation         | Boolean | Export AD Domain Information in Sentinel Table. Moved from the removed `Output` section.                                                                                   | True                 | False                                           |
 
 > [!IMPORTANT]
-> The Log Ingestion API replaces the legacy Log Analytics HTTP Data Collector API. If `SentinelLogIngestionAPIActivated` is `false`, the collector emits a runtime warning banner at each execution. Full migration guide: [Migrate from the Log Analytics HTTP Data Collector API to the Log Ingestion API](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+> The Log Ingestion API replaces the legacy Log Analytics HTTP Data Collector API. If `SentinelLogIngestionAPIActivated` is `false`, the collector emits a runtime warning banner at each execution. For migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
 ### InternetAddonCollectionConfiguration
 
@@ -177,7 +177,7 @@ Parameter selection matrix:
 
 Recommended companion setting: set `MaximalSentinelPacketSizeMb` to `0.9` when the Log Ingestion API is activated (payload limit is 1 MB per POST).
 
-Full end-to-end setup: [README_AzureMonitorSetup.md](../../Documentations/README_AzureMonitorSetup.md). Migration procedure from the legacy API: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+Full Azure Monitor setup and migration procedure: [README_LogIngestionAPI.md](../../Documentations/README_LogIngestionAPI.md).
 
 ### InternetAddonCollectionConfiguration
 
@@ -250,4 +250,4 @@ Configuration version 3.0 introduces the following structural changes:
 - New optional parameter **`ExplicitESIDataPath`** in `Advanced` to override the default data folder used by the collector.
 - The default of **`MaximalSentinelPacketSizeMb`** should be lowered to `0.9` when the new API is used.
 
-Legacy configurations continue to work — the collector keeps supporting the legacy Log Analytics HTTP Data Collector API and displays a runtime warning banner at each execution until the migration is completed. See the dedicated migration guide: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+Legacy configurations continue to work — the collector keeps supporting the legacy Log Analytics HTTP Data Collector API and displays a runtime warning banner at each execution until the migration is completed. See [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).

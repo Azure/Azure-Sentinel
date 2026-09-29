@@ -48,7 +48,7 @@
         - New LogCollection settings : SentinelLogIngestionAPIActivated, DataCollectionEndpointURI, DCRImmutableId, UseManagedIdentity, TargetLogTenantID, TargetLogAppID, TargetLogCertificateThumbprint, TargetLogAppSecretReference.
         - Both APIs are supported simultaneously, controlled by the SentinelLogIngestionAPIActivated toggle, to enable a phased migration.
         - Adding runtime warning banner when the collector still uses the legacy Log Analytics HTTP Data Collector API.
-          See [ESI-PublicContent/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI) for the migration procedure.
+          See [Upgrade an existing deployment](../../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment) for the migration procedure.
         - New Identity sub-property columns exposed by the DCR transformKql : Identity_Depth_d, Identity_DistinguishedName_s, Identity_DomainId_s, Identity_IsDeleted_b, Identity_IsRelativeDn_b, Identity_Name_s, Identity_ObjectGuid_g, Identity_Parent_s, Identity_PartitionFQDN_s, Identity_PartitionGuid_g, Identity_Rdn_s.
         - Create $Script:ESIDataPath to store data in a specific folder and become independant from CSV configuration.
         - Move ExportDomainsInformation to LogCollection Section in configuration. If set to true, the Domain Information will be exported in the Log Collection. Default Value is True as before.

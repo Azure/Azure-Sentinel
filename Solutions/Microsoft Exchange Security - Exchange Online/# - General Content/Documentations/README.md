@@ -1,42 +1,21 @@
-# Folder structure
+# Microsoft Exchange Security for Exchange Online documentation
 
-This folder contains documentations related to the deployment of solutions Microsoft Exchange Security for Exchange On-Premises and Microsoft Exchange Security for Exchange Online :
+This folder contains the documentation for deploying and operating the **Microsoft Exchange Security for Exchange Online** solution in Microsoft Sentinel.
 
-## Overview of Deployement
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-Overview.md
+The Exchange Online collector runs as a PowerShell runbook in Azure Automation and uses the Automation account's system-assigned managed identity.
 
-## Deployment Microsoft Exchange Security for Exchange On-Premises
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-MES-OnPremises.md
+## Collector deployment and configuration
 
-## Deployment Microsoft Exchange Security for Exchange Online
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Deployment-MES-Online.md
+- [Configure the Exchange Security Insights Online Collector with Azure Monitor](./README_LogIngestionAPI.md): Deploy or upgrade the Azure Monitor data connector and Azure Automation collector, configure the managed identity, validate ingestion, and troubleshoot the deployment.
 
-## Collectors Information
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/ESICollector.md
+- [Exchange Security Insights Collector prerequisites and permissions](./ESICollector.md): Review the required Azure Automation modules, Microsoft Graph permissions, Exchange Online permissions, Microsoft Entra directory role, and network access.
 
-## Deploy the Azure Monitor Log Ingestion API (DCE / DCR / custom tables)
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README_LogIngestionAPI.md
+## Workbooks
 
-## Azure Monitor End-to-End Setup (Entra ID application, certificate, RBAC)
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README_AzureMonitorSetup.md
+- [Deploy the Microsoft Exchange Security workbooks](./WorkbookDeployement.md): Deploy and configure the workbooks used by the solution.
 
-## Migrate from the Log Analytics HTTP Data Collector API to the Log Ingestion API
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md
+- [Delegate access to the workbooks](./WorkbookDelegation.md): Configure Microsoft Entra groups, custom roles, resource group permissions, and Log Analytics access for delegated workbook users.
 
-## WinformConfig editor for CollectExchSecConfiguration.json
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WinformConfigReadme.md
+## VIP monitoring
 
-## Forwarder / Pickup deployment
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/README-ForwarderPickup.md
-
-## Forwarder quick start
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/QUICKSTART-Forwarder.md
-
-## How to deploy Woorkbooks
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WorkbookDeployement.md
-
-## Workbook delegation
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/WorkbookDelegation.md
-
-## VIP Management
-https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/VIPManagement.md
+- [Configure VIP management](./VIPManagement.md): Configure the watchlist used to identify and monitor VIP activity in the Microsoft Exchange Security workbooks.

@@ -76,7 +76,7 @@ Parameters can be found in the "CollectExchSecConfiguration.json" file for On-Pr
 | LogTypeName                      | String  | Name of the target table (legacy API) or stream suffix (new API — `Custom-<LogTypeName>` is sent to the DCR).                                                              | ESIExchangeConfig    | False                                           |
 | TogetherMode                     | Boolean | If true, results are stored in a file **in addition to** the Sentinel upload.                                                                                              | false                | False                                           |
 | SentinelLogIngestionAPIActivated | Boolean | Activate the **Azure Monitor Log Ingestion API** (DCE / DCR / Entra ID identity). When `true`, the legacy `WorkspaceId` / `WorkspaceKey` are ignored.                       | false                | False                                           |
-| DataCollectionEndpointURI        | String  | URI of the Data Collection Endpoint (DCE) produced by the ARM template `azuredeploy_ESI_LogIngestionAPI.json`.                                                              | (empty)              | Yes, if new API activated                       |
+| DataCollectionEndpointURI        | String  | URI of the Data Collection Endpoint (DCE) displayed by the **Exchange Security Insights Online Collector (Azure Monitor)** data connector.                                   | (empty)              | Yes, if new API activated                       |
 | DCRImmutableId                   | String  | Immutable ID of the target Data Collection Rule (DCR). One of the outputs of the ARM template (`OnPremises`, `Online`, or `MessageTracking`).                               | (empty)              | Yes, if new API activated                       |
 | UseManagedIdentity               | Boolean | If `true`, the collector uses the system-assigned managed identity (recommended for Azure Automation). If `false`, uses a certificate-based Entra ID service principal.     | false                | False                                           |
 | TargetLogTenantID                | String  | Tenant ID hosting the Entra ID application used for ingestion.                                                                                                             | (empty)              | Yes, if `UseManagedIdentity` = `false`          |
@@ -87,7 +87,7 @@ Parameters can be found in the "CollectExchSecConfiguration.json" file for On-Pr
 | ExportDomainsInformation         | Boolean | Export AD Domain Information in Sentinel Table. Moved from the removed `Output` section.                                                                                   | True                 | False                                           |
 
 > [!IMPORTANT]
-> The Log Ingestion API replaces the legacy Log Analytics HTTP Data Collector API. If `SentinelLogIngestionAPIActivated` is `false`, the collector emits a runtime warning banner at each execution. Full migration guide: [Migrate from the Log Analytics HTTP Data Collector API to the Log Ingestion API](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+> The Log Ingestion API replaces the legacy Log Analytics HTTP Data Collector API. If `SentinelLogIngestionAPIActivated` is `false`, the collector emits a runtime warning banner at each execution. For migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
 ### InternetAddonCollectionConfiguration
 
@@ -160,24 +160,21 @@ Starting with configuration version 3.0, the collector natively supports the Azu
 
 Prerequisites when `SentinelLogIngestionAPIActivated` is `true`:
 
-- A **Data Collection Endpoint (DCE)** and one or several **Data Collection Rules (DCR)** must be deployed. The ARM template [azuredeploy_ESI_LogIngestionAPI.json](/Deployments/azuredeploy_ESI_LogIngestionAPI.json) provisions everything needed (DCE + 3 tables + 3 DCRs, each optional).
-- An **identity** must exist for the collector:
-  - **System-assigned Managed Identity** on the Automation Account (`UseManagedIdentity = true`), or
-  - **Entra ID application** with a **certificate** in the local certificate store (`UseManagedIdentity = false`).
-- The identity must hold the **Monitoring Metrics Publisher** role on the target DCR.
+- Deploy **Exchange Security Insights Online Collector (Azure Monitor)** to create the Data Collection Endpoint, Data Collection Rule, and table.
+- Deploy the Azure Automation template to create the Automation account with a system-assigned managed identity.
+- Keep `UseManagedIdentity` set to `true`.
+- The Automation template assigns **Monitoring Metrics Publisher** to the managed identity on the DCR.
 
 Parameter selection matrix:
 
-| Scenario                                                            | Required parameters                                                                                                                                                                              |
-|---------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Legacy Log Analytics API                                            | `SentinelLogIngestionAPIActivated = false`, `WorkspaceId`, `WorkspaceKey`, `LogTypeName`                                                                                                          |
-| New Log Ingestion API — Azure Automation with Managed Identity      | `SentinelLogIngestionAPIActivated = true`, `DataCollectionEndpointURI`, `DCRImmutableId`, `UseManagedIdentity = true`                                                                             |
-| New Log Ingestion API — Entra ID application with local certificate | `SentinelLogIngestionAPIActivated = true`, `DataCollectionEndpointURI`, `DCRImmutableId`, `UseManagedIdentity = false`, `TargetLogTenantID`, `TargetLogAppID`, `TargetLogCertificateThumbprint`   |
-| New Log Ingestion API — Azure Automation with certificate           | Same as above **plus** `TargetLogAppSecretReference` (Automation variable name storing the certificate reference)                                                                                 |
+| Scenario | Required parameters |
+|----------|---------------------|
+| Legacy Log Analytics API | `SentinelLogIngestionAPIActivated = false`, `WorkspaceId`, `WorkspaceKey`, `LogTypeName` |
+| Azure Monitor with the Automation account managed identity | `SentinelLogIngestionAPIActivated = true`, `DataCollectionEndpointURI`, `DCRImmutableId`, `UseManagedIdentity = true`, `TargetLogTenantID`, `LogTypeName = ESIExchangeOnlineConfig` |
 
 Recommended companion setting: set `MaximalSentinelPacketSizeMb` to `0.9` when the Log Ingestion API is activated (payload limit is 1 MB per POST).
 
-Full end-to-end setup: [README_AzureMonitorSetup.md](../../Documentations/README_AzureMonitorSetup.md). Migration procedure from the legacy API: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+Full Azure Monitor setup and migration procedure: [README_LogIngestionAPI.md](../../Documentations/README_LogIngestionAPI.md).
 
 ### InternetAddonCollectionConfiguration
 
@@ -250,4 +247,4 @@ Configuration version 3.0 introduces the following structural changes:
 - New optional parameter **`ExplicitESIDataPath`** in `Advanced` to override the default data folder used by the collector.
 - The default of **`MaximalSentinelPacketSizeMb`** should be lowered to `0.9` when the new API is used.
 
-Legacy configurations continue to work — the collector keeps supporting the legacy Log Analytics HTTP Data Collector API and displays a runtime warning banner at each execution until the migration is completed. See the dedicated migration guide: [Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md](../../Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md).
+Legacy configurations continue to work — the collector keeps supporting the legacy Log Analytics HTTP Data Collector API and displays a runtime warning banner at each execution until the migration is completed. See [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).

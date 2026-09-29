@@ -1,30 +1,30 @@
-# Microsoft Exchange Security Sentinel Solution - Public Contents
+# Microsoft Exchange Security Solutions for Microsoft Sentinel
 
-**Exchange Servers** have recently been the target of many attacks. The cases and escalations opened recently have revealed poorly managed environments. Exchange Server security assessments regularly discover many insecured configurations putting the messaging system at risk of being compromised without much effort. However Exchange Servers are rarely monitored sufficiently from a security perspective and traces and logs often can’t be collected on time when investigations need to be performed.
+For several years, Exchange Servers have been frequent targets of cyberattacks. Support cases and escalations have repeatedly exposed poorly managed environments, while security assessments continue to uncover insecure configurations that leave messaging systems vulnerable to compromise. Despite these risks—and the highly sensitive nature of the data they store and process—Exchange Servers are often insufficiently monitored from a security perspective, and the logs and traces required for investigations are not always collected or retained in time.
 
 Introducing **M**icrosoft **E**xchange **S**ecurity Solution
 
-We built two Sentinel solutions :
+The Microsoft Exchange Security offering consists of two Microsoft Sentinel solutions:
 
 * **Microsoft Exchange Security for Exchange On-Premises**
 * **Microsoft Exchange Security for Exchange Online**
 
-Both solution collects and detects sensitive security operations happening on On-Premises Exchange Servers and Exchange Online using Microsoft Sentinel. This allows service owners and SOC teams to :
+Both solutions collect data about security-sensitive operations performed in on-premises Exchange and Exchange Online environments. They provide Microsoft Sentinel content that enables service owners and SOC teams to:
 
-* Detect unsecure configurations
-* Detect to attacks targeting Exchange Servers
-* Alert on sensitive administrative operations
-* Report on incorrect RBAC configurations putting the environment at risk
+* Identify insecure configurations
+* Detect attacks targeting Exchange Servers
+* Monitor sensitive administrative operations
+* Identify incorrect or overly permissive RBAC configurations that could put the environment at risk
 
-The solution also allows hunters to search a very diverse set of data to find abnormal behaviors.
+The solutions also provide threat hunters with a broad range of data for identifying suspicious or anomalous behavior.
 
 ## Microsoft Exchange Security for Exchange On-Premises
 
 ### DATA Collection
 
-We build the solution to give you the possibility to collect multiple logs and configurations reports following your needs and the quantity of logs you want to upload to Microsoft Sentinel.
+The solution supports the collection of multiple log types and security configuration reports. You can select the data sources that best meet your security requirements while controlling the volume of data ingested into Microsoft Sentinel.
 
-The collection is based on two connectors :
+Data collection is provided through two connectors:
 
 * Exchange Security Insights On-Premise Collector
 * Microsoft Exchange Logs and Events
@@ -45,9 +45,9 @@ List of workbook based on this connector :
 * Microsoft Exchange Least Privilege with RBAC
 
 #### VIP management
-A watchlist per solution is created.
-Fill it with the name of your VIP.
-These watchlist help track activities on VIP in the Workbook :
+
+A dedicated watchlist is created for each solution. Add the names of your VIP users to this watchlist to monitor activity affecting them in the following workbooks:
+
 * Microsoft Exchange Admin Activity
 * Microsoft Exchange Admin Activity - Online
 
@@ -66,8 +66,9 @@ Connector  brief description :
   * Option 6 : Message Tracking logs for all Exchange servers
   * Option 7 : HTTPProxy logs for all Exchange Servers
 
-All options are **optional**. It is your call to decide which information you want to collect.
-**Be careful**, some options can have result to the upload of a **huge amount**. Ex: IIS log, Messsage Tracking, HTTP Proxy logs. You need to think carefully before configue each options. However, remember that these will be very useful for detection and forensic. You'll find detailed informations on how to choose which logs will be uploaded in the connector configuration in the documentations section.
+All collection options are optional, allowing you to select only the data required for your monitoring and investigation scenarios.
+
+> **Important:** Some options—particularly IIS, Message Tracking, and HTTP proxy logs—can generate a significant volume of data and increase ingestion costs. Carefully assess the expected data volume before enabling each option. These logs can nevertheless provide valuable information for threat detection and forensic investigations. For guidance on selecting the appropriate logs, refer to the connector configuration documentation.
 
 #### Workbook
 
@@ -91,19 +92,16 @@ We build the solution to give you the ability to collect security configuration 
 
 The collection is based on one connector and one additonal solution:
 
-* Data connector : 
-  * Exchange Security Insights Online Collector (using Azure Functions)
-  * This connector come with our solution Microsoft Exchange Security for Exchange Online
-* Solution : Microsoft 365. Microsoft Solution that will transfer Office Activity logs in Sentinel. Required for two workbooks
+* **Exchange Security Insights Online Collector:** Included with the Microsoft Exchange Security for Exchange Online solution
+* **Microsoft 365 solution:** Ingests Office 365 activity logs into Microsoft Sentinel and is required by two of the workbooks
 
 #### Exchange Security Insights Online Collector (using Azure Functions)
 
-Connector  brief description :
+This connector:
 
-* This connectors is **Mandatory**
-* A script deployed using an Azure Automarion, will  collect Security configuration from Exchange Online and send them to Sentinel
-* This connector has functions that help displayed useful information in Workbooks
-
+* Is **mandatory**
+* Collects security configuration data from Exchange Online and sends it to Microsoft Sentinel
+* Deploys functions used by the workbooks to display relevant security information
 ### Workbooks
 
 List of workbook based on this connector :

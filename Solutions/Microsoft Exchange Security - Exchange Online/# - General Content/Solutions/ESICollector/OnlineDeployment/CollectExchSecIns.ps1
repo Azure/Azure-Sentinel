@@ -34,7 +34,7 @@ possibility of such damages
         - Change Github link for Configuration file to use the new repository
         - Adding possibility to use github API insteafd of direct download for configuration file
         - Adding runtime warning banner when the collector still uses the legacy Log Analytics HTTP Data Collector API.
-          See ESI-PublicContent/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md for the migration procedure.
+          See ESI-PublicContent/Documentations/README_LogIngestionAPI.md for the migration procedure.
 
     Version : 7.6.0.1 - Released : 26/07/2024 - nilepagn
         - Adding Try-Catch on Get-AutomationVariable Test
@@ -3804,13 +3804,13 @@ $Script:SupportedConfigurationVersion = "2.4"
                         # legacy Log Analytics API. Clears once SentinelLogIngestionAPIActivated
                         # is set to true and the DCE/DCR configuration is provided.
                         # See migration guide:
-                        #   https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI
+                        #   https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "================================================================================"
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! LEGACY LOG ANALYTICS HTTP DATA COLLECTOR API IS STILL IN USE"
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! This API is deprecated by Microsoft and will be retired."
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Migrate to the Azure Monitor Log Ingestion API BEFORE end of support."
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Set 'SentinelLogIngestionAPIActivated' to 'true' after deploying DCE/DCR."
-                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Migration guide: https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI"
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Migration guide: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment"
                         Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "================================================================================"
                     }
                 }
