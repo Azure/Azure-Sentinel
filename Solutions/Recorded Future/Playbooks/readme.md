@@ -68,7 +68,7 @@ or\
 Deploys the shared Data Collection Endpoint (DCE), Data Collection Rules (DCRs), Log Analytics tables, and connector definition tile used by the Log Ingestion API playbooks (see the [migration callout](#log-ingestion-api-migration-deadline-2026-09-14) above). Deploy this into the same resource group as your Log Analytics Workspace **before** deploying `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, or `RecordedFuture-Sandbox_Outlook_Attachment`.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)</a>
 
 ### Connectors
 The Recorded Future solution uses the following connectors:
