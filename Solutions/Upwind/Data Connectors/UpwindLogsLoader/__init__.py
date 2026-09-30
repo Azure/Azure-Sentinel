@@ -28,14 +28,19 @@ from .upwind_threat_stories_client import UpwindThreatStoriesClient
 from .upwind_vulnerability_client import UpwindVulnerabilityClient
 
 
-def _upload_to_dcr(config, records: list, stream_name: str) -> None:
+def _make_page_uploader(config, stream_name: str):
     """
-    Upload records to Azure Monitor via DCR on the given stream.
-    The SDK handles 1MB chunking and gzip compression internally.
+    Build a callable that uploads one page of records to Azure Monitor.
+
+    The credential and ingestion client are created once and reused across every
+    page, and each page is uploaded as it arrives rather than after the whole
+    dataset has been fetched. That keeps memory flat regardless of dataset size,
+    and means a run cut short by the function timeout still leaves the pages it
+    already fetched in the workspace.
 
     :param config: ConfigStore with Azure DCR configuration.
-    :param records: List of record dictionaries to upload.
     :param stream_name: The DCR stream name to upload to (e.g. "Custom-UpwindCatalogAssets_CL").
+    :return: Tuple of (upload_page callable, stats dict with "uploaded" and "errors").
     """
 
     azure_client_id = config.get("azure_client_id")
@@ -52,7 +57,7 @@ def _upload_to_dcr(config, records: list, stream_name: str) -> None:
     )
     client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential)
 
-    upload_errors = []
+    stats = {"uploaded": 0, "errors": []}
 
     def on_upload_error(error):
         """Callback for per-chunk upload failures."""
@@ -62,44 +67,45 @@ def _upload_to_dcr(config, records: list, stream_name: str) -> None:
             stream_name,
             error.error,
         )
-        upload_errors.append(error)
+        stats["errors"].append(error)
+
+    def upload_page(records: list) -> None:
+        """Upload a single page. Errors are collected so later pages still run."""
+        if not records:
+            return
+
+        # The SDK handles 1MB chunking and gzip compression internally.
+        client.upload(
+            rule_id=dcr_immutableid,
+            stream_name=stream_name,
+            logs=records,
+            on_error=on_upload_error,
+        )
+        stats["uploaded"] += len(records)
+        logging.info(
+            "Uploaded %d records to %s (%d so far).",
+            len(records),
+            stream_name,
+            stats["uploaded"],
+        )
 
     logging.info(
-        "Uploading %d records to stream %s (DCR %s at %s)",
-        len(records),
+        "Streaming records to stream %s (DCR %s at %s)",
         stream_name,
         dcr_immutableid,
         dce_endpoint,
     )
 
-    client.upload(
-        rule_id=dcr_immutableid,
-        stream_name=stream_name,
-        logs=records,
-        on_error=on_upload_error,
-    )
-
-    if upload_errors:
-        total_failed = sum(len(e.failed_logs) for e in upload_errors)
-        logging.error(
-            "Upload to %s completed with errors: %d chunks failed, %d total records lost.",
-            stream_name,
-            len(upload_errors),
-            total_failed,
-        )
-        raise RuntimeError(
-            f"Upload to {stream_name} partially failed: {len(upload_errors)} chunk(s) failed, "
-            f"{total_failed} record(s) not uploaded."
-        )
-
-    logging.info("All %d records uploaded successfully to %s.", len(records), stream_name)
+    return upload_page, stats
 
 
 def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
     """
-    Fetch one Upwind dataset and upload it, isolating failures so one bad
-    dataset doesn't block the others.
+    Fetch one Upwind dataset and upload it page by page, isolating failures so
+    one bad dataset doesn't block the others.
 
+    :param fetch_fn: Callable taking a single ``on_page`` callback, which it
+        invokes with each page of records as they are fetched.
     :return: True if the dataset succeeded (including "no records"), False on failure.
     """
 
@@ -112,11 +118,30 @@ def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
         return True
 
     try:
-        records = fetch_fn()
-        if not records:
+        upload_page, stats = _make_page_uploader(config, stream_name)
+        fetched = fetch_fn(upload_page)
+
+        if not fetched:
             logging.info("%s: no records returned from Upwind API. Nothing to upload.", name)
             return True
-        _upload_to_dcr(config, records, stream_name)
+
+        if stats["errors"]:
+            total_failed = sum(len(e.failed_logs) for e in stats["errors"])
+            logging.error(
+                "%s: upload to %s completed with errors: %d chunks failed, %d records lost.",
+                name,
+                stream_name,
+                len(stats["errors"]),
+                total_failed,
+            )
+            raise RuntimeError(
+                f"Upload to {stream_name} partially failed: {len(stats['errors'])} "
+                f"chunk(s) failed, {total_failed} record(s) not uploaded."
+            )
+
+        logging.info(
+            "All %d records uploaded successfully to %s.", stats["uploaded"], stream_name
+        )
         return True
     except HttpResponseError as e:
         logging.error("%s: Azure Monitor upload failed: %s", name, e.message)
@@ -154,37 +179,37 @@ def main(mytimer: func.TimerRequest = None) -> None:
 
     results["inventory_assets"] = _run_dataset(
         "inventory_assets",
-        lambda: UpwindCatalogClient(config).fetch_catalog_assets(),
+        lambda on_page: UpwindCatalogClient(config).fetch_catalog_assets(on_page),
         config,
         config.get("azure_stream_name_inventory"),
     )
     results["vulnerability_findings"] = _run_dataset(
         "vulnerability_findings",
-        lambda: UpwindVulnerabilityClient(config).fetch_vulnerability_findings(),
+        lambda on_page: UpwindVulnerabilityClient(config).fetch_vulnerability_findings(on_page),
         config,
         config.get("azure_stream_name_vulnerability"),
     )
     results["threat_detections"] = _run_dataset(
         "threat_detections",
-        lambda: UpwindThreatDetectionsClient(config).fetch_threat_detections(lookback_minutes),
+        lambda on_page: UpwindThreatDetectionsClient(config).fetch_threat_detections(lookback_minutes, on_page),
         config,
         config.get("azure_stream_name_threat_detections"),
     )
     results["threat_events"] = _run_dataset(
         "threat_events",
-        lambda: UpwindThreatEventsClient(config).fetch_threat_events(lookback_minutes),
+        lambda on_page: UpwindThreatEventsClient(config).fetch_threat_events(lookback_minutes, on_page),
         config,
         config.get("azure_stream_name_threat_events"),
     )
     results["threat_stories"] = _run_dataset(
         "threat_stories",
-        lambda: UpwindThreatStoriesClient(config).fetch_threat_stories(lookback_minutes),
+        lambda on_page: UpwindThreatStoriesClient(config).fetch_threat_stories(lookback_minutes, on_page),
         config,
         config.get("azure_stream_name_threat_stories"),
     )
     results["configuration_findings"] = _run_dataset(
         "configuration_findings",
-        lambda: UpwindConfigurationFindingsClient(config).fetch_configuration_findings(lookback_minutes),
+        lambda on_page: UpwindConfigurationFindingsClient(config).fetch_configuration_findings(lookback_minutes, on_page),
         config,
         config.get("azure_stream_name_config_findings"),
     )

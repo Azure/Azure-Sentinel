@@ -15,7 +15,7 @@ This playbook sends a Teams adaptive card with an incident report including aler
 2. Fill in the required parameters:
     - Playbook Name
     - Microsoft Graph Endpoint (https://graph.microsoft.com)
-    - Denfeder Portal Endpoint (https://security.microsoft.com)
+    - Defender Portal Endpoint (https://security.microsoft.com)
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FSend-Incident-Teams-Adaptive-Card-XDRPortal%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FSend-Incident-Teams-Adaptive-Card-XDRPortal%2Fazuredeploy.json)

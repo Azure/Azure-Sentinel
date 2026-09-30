@@ -1,0 +1,65 @@
+id: 04e36dfa-05b3-45bd-b39f-28b6fac71337
+name: Netskope - High Severity DLP Alert
+description: |
+  Detects Netskope DLP (Data Loss Prevention) alerts raised with high or critical severity.
+  These alerts indicate sensitive data (e.g. PII, source code, financial records) matched a
+  DLP policy during upload, download, or sharing and may represent data exfiltration.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeAlertsEvents
+    dataTypes:
+      - NetskopeAlerts_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1005
+query: |
+  NetskopeAlerts_CL
+  | where TimeGenerated > ago(1h)
+  | where alert_type =~ "dlp"
+  | where severity has_any ("high", "critical")
+  | summarize
+      AlertCount = count(),
+      DlpRules = make_set(dlp_rule, 20),
+      DlpProfiles = make_set(dlp_profile, 20),
+      Apps = make_set(app, 20),
+      FilePaths = make_set(file_path, 20),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by User = user, UserIp = userip, HostName = hostname, AlertName = alert_name, Severity = severity
+  | order by AlertCount desc
+  | project
+      LastSeen,
+      AlertName,
+      Severity,
+      User,
+      UserIp,
+      HostName,
+      AlertCount,
+      Apps,
+      DlpRules,
+      DlpProfiles,
+      FilePaths,
+      FirstSeen
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: UserIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+version: 1.0.0
+kind: Scheduled

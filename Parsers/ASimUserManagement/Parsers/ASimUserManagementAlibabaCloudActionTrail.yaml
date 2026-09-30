@@ -1,0 +1,527 @@
+Parser:
+  Title: User Management ASIM parser for Alibaba Cloud ActionTrail
+  Version: '0.1.0'
+  LastUpdated: Sep 14, 2026
+Product:
+  Name: Alibaba Cloud ActionTrail
+Normalization:
+  Schema: UserManagement
+  Version: '1.0.0'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Alibaba Cloud ActionTrail Documentation
+  Link: https://www.alibabacloud.com/help/en/actiontrail
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing identity management API activity from Alibaba Cloud ActionTrail's Ims (RAM identity management), CloudSSO and Ram identity services to the ASIM User Management normalized schema. Account-level policy/report/configuration reads and authentication events are out of scope.
+Exceptions:
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Not available as this is not exposed in cloud authentication services.
+- Field: DvcFQDN
+  Warning: Missing recommended field
+  Exception: Not available as this is not exposed in cloud authentication services.
+- Field: DvcHostname
+  Warning: Missing recommended field
+  Exception: Not available as this is not exposed in cloud authentication services.
+- Field: DvcIdType
+  Warning: Missing recommended field
+  Exception: Not available as this is not exposed in cloud authentication services.
+- Field: DvcId
+  Warning: Missing recommended field
+  Exception: Not available as this is not exposed in cloud authentication services.
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: ActionTrail does not report an IP address for the logging device.
+ParserName: ASimUserManagementAlibabaCloudActionTrail
+EquivalentBuiltInParser: _ASim_UserManagement_AlibabaCloudActionTrail
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Ims: RAM identity management (users, groups, access keys, login profiles, MFA)
+  // CloudSSO: Alibaba Cloud SSO directory (SSO users, groups, MFA, access assignments)
+  // Ram: roles and policy attachment
+  // Only API calls whose subject is a user, a role or a group are normalized. Account-level
+  // policy/report/configuration reads, identity-provider and application configuration, and
+  // authentication events are dropped.
+  // ActionTrail never carries the pre-change value of a modified property, so
+  // PreviousPropertyValue is not populated and is not projected.
+  let ASimUserManagementAlibabaCloudActionTrail = (disabled: bool = false, pack: bool = false) {
+      // Alibaba redacts selected values as "***". Observed only on UserName, NewEmail, NewDisplayName and GroupName.
+      let _Unredact = (v: string) { iff(v == "***", "", v) };
+      let UserManagementEventLookup = datatable(
+          serviceName: string
+          , eventName: string
+          , _EventTypeBase: string
+      )
+      [
+          "Ims", "AddUserToGroup",                  "UserAddedToGroup",
+          "Ims", "ChangePassword",                  "PasswordChanged",
+          "Ims", "CreateAccessKey",                 "UserModified",
+          "Ims", "CreateGroup",                     "GroupCreated",
+          "Ims", "CreateUser",                      "UserCreated",
+          "Ims", "DeleteAccessKey",                 "UserModified",
+          "Ims", "DeleteGroup",                     "GroupDeleted",
+          "Ims", "DeleteLoginProfile",              "UserModified",
+          "Ims", "DeleteUser",                      "UserDeleted",
+          "Ims", "DisableVirtualMFA",               "UserModified",
+          "Ims", "GetAccessKeyLastUsed",            "UserRead",
+          "Ims", "GetGroup",                        "GroupRead",
+          "Ims", "GetLoginProfile",                 "UserRead",
+          "Ims", "GetUser",                         "UserRead",
+          "Ims", "GetUserMFAInfo",                  "UserRead",
+          "Ims", "GetUserPersonalDingTalkInfo",     "UserRead",
+          "Ims", "GetVerificationInfo",             "UserRead",
+          "Ims", "ListAccessKeys",                  "UserRead",
+          "Ims", "ListGroups",                      "GroupEnumerated",
+          "Ims", "ListGroupsForUser",               "UserRead",
+          "Ims", "ListPasskeys",                    "UserRead",
+          "Ims", "ListUserBasicInfos",              "UserRead",
+          "Ims", "ListUsers",                       "UserRead",
+          "Ims", "ListUsersForGroup",               "GroupRead",
+          "Ims", "ListUsersInRecycleBin",           "UserRead",
+          "Ims", "RemoveUserFromGroup",             "UserRemovedFromGroup",
+          "Ims", "RestoreAccessKeyFromRecycleBin",  "UserModified",
+          "Ims", "SendVerificationLink",            "UserModified",
+          "Ims", "SetVerificationInfo",             "UserModified",
+          "Ims", "UnbindMFADevice",                 "UserModified",
+          "Ims", "UnbindVerification",              "UserModified",
+          "Ims", "UpdateAccessKey",                 "UserModified",
+          "Ims", "UpdateGroup",                     "GroupModified",
+          "Ims", "UpdateLoginProfile",              "UserModified",
+          "Ims", "UpdateUser",                      "UserModified",
+          "Ims", "UpdateUserProvisionType",         "UserModified",
+          "CloudSSO", "AddUserToGroup",             "UserAddedToGroup",
+          "CloudSSO", "ChangePassword",             "PasswordChanged",
+          "CloudSSO", "CreateAccessAssignment",     "UserModified",          // GroupModified when PrincipalType is Group
+          "CloudSSO", "CreateCloudCredential",      "UserModified",
+          "CloudSSO", "CreateGroup",                "GroupCreated",
+          "CloudSSO", "CreateUser",                 "UserCreated",
+          "CloudSSO", "CreateUserProvisioning",     "UserModified",          // GroupModified when PrincipalType is Group
+          "CloudSSO", "DeleteAccessAssignment",     "UserModified",          // GroupModified when PrincipalType is Group
+          "CloudSSO", "DeleteGroup",                "GroupDeleted",
+          "CloudSSO", "DeleteMFADeviceForUser",     "UserModified",
+          "CloudSSO", "DeleteUser",                 "UserDeleted",
+          "CloudSSO", "DeleteUserProvisioning",     "UserModified",          // GroupModified when PrincipalType is Group
+          "CloudSSO", "GetGroup",                   "GroupRead",
+          "CloudSSO", "GetNewMFADevice",            "UserModified",
+          "CloudSSO", "GetProvisionedRamUser",      "UserRead",
+          "CloudSSO", "GetUser",                    "UserRead",
+          "CloudSSO", "ListGroupMembers",           "GroupRead",
+          "CloudSSO", "ListGroups",                 "GroupEnumerated",
+          "CloudSSO", "ListJoinedGroupsForUser",    "UserRead",
+          "CloudSSO", "ListMFADevices",             "UserRead",
+          "CloudSSO", "ListMFADevicesForUser",      "UserRead",
+          "CloudSSO", "ListUsers",                  "UserRead",
+          "CloudSSO", "RegisterMFADevice",          "UserModified",
+          "CloudSSO", "RemoveUserFromGroup",        "UserRemovedFromGroup",
+          "CloudSSO", "ResetUserPassword",          "PasswordReset",         // admin acting on another user
+          "CloudSSO", "UpdateGroup",                "GroupModified",
+          "CloudSSO", "UpdateUser",                 "UserModified",
+          "CloudSSO", "UpdateUserStatus",           "UserModified",          // UserDisabled / UserEnabled by NewStatus
+          "CloudSSO", "VerifyMFADevice",            "UserModified",
+          "Ram", "AttachPolicyToRole",              "UserModified",
+          "Ram", "CreateRole",                      "UserCreated",
+          "Ram", "CreateServiceLinkedRole",         "UserCreated",
+          "Ram", "DeleteRole",                      "UserDeleted",
+          "Ram", "DetachPolicyFromRole",            "UserModified",
+          "Ram", "GetAccessKeyLastUsed",            "UserRead",
+          "Ram", "GetLoginProfile",                 "UserRead",
+          "Ram", "GetRole",                         "UserRead",
+          "Ram", "GetUser",                         "UserRead",
+          "Ram", "GetUserMFAInfo",                  "UserRead",
+          "Ram", "ListAccessKeys",                  "UserRead",
+          "Ram", "ListGroups",                      "GroupEnumerated",
+          "Ram", "ListGroupsForUser",               "UserRead",
+          "Ram", "ListPoliciesForGroup",            "GroupRead",
+          "Ram", "ListPoliciesForRole",             "UserRead",
+          "Ram", "ListPoliciesForUser",             "UserRead",
+          "Ram", "ListRoles",                       "UserRead",
+          "Ram", "ListRolesForService",             "UserRead",
+          "Ram", "ListUsers",                       "UserRead",
+          "Ram", "ListUsersForGroup",               "GroupRead",
+          "Ram", "UpdateRole",                      "UserModified"
+      ];
+      // Single source of truth for the pre-lookup name filter to prevent drift
+      let _SupportedEventNames = UserManagementEventLookup | distinct eventName;
+      // TargetUserScope by service, mirroring the AWS parser's EventSourceNameLookup.
+      let ServiceScopeLookup = datatable(serviceName: string , TargetUserScope: string)
+      [
+          "CloudSSO", "CloudSSO",
+          "Ims",      "RAM",
+          "Ram",      "RAM"
+      ];
+      AliCloudActionTrailLogs_CL
+      | where not(disabled)
+      | where serviceName in ("Ims", "CloudSSO", "Ram") // Only relevant service names
+      | where eventName in (_SupportedEventNames)
+      | lookup UserManagementEventLookup on serviceName, eventName
+      | where isnotempty(_EventTypeBase) // Dropping combinations not defined above
+      | extend
+          _ActorUserIdentityType = tostring(userIdentity.type)
+          // Fall back to ensure mandatory field is never empty
+          , _ActorUsernameRaw = coalesce(
+              tostring(userIdentity.userName),
+              tostring(userIdentity.principalId),
+              tostring(userIdentity.accountId))
+      | extend
+          ActorUsername = iff(
+              _ActorUserIdentityType == "assumed-role",
+              tostring(split(_ActorUsernameRaw, ":")[-1]),
+              _ActorUsernameRaw)
+      | extend
+          _PrincipalType = coalesce(
+              tostring(requestParameters.PrincipalType),
+              tostring(responseElements.UserProvisioning.PrincipalType)
+          )
+          , _EventType = case(
+              // CloudSSO UpdateUserStatus enables or disables the target user depending on NewStatus.
+              serviceName == "CloudSSO" and eventName == "UpdateUserStatus"
+                  and tostring(requestParameters.NewStatus) =~ "Disabled", "UserDisabled"
+              , serviceName == "CloudSSO" and eventName == "UpdateUserStatus"
+                  and tostring(requestParameters.NewStatus) =~ "Enabled", "UserEnabled"
+              // CloudSSO access assignments and user provisioning target a user or a group, by PrincipalType.
+              , serviceName == "CloudSSO"
+                  and eventName in (
+                      "CreateAccessAssignment", "DeleteAccessAssignment",
+                      "CreateUserProvisioning", "DeleteUserProvisioning"
+                  )
+                  and coalesce(
+                      tostring(requestParameters.PrincipalType),
+                      tostring(responseElements.UserProvisioning.PrincipalType)
+                  ) =~ "Group", "GroupModified"
+              // Ims UpdateLoginProfile can be multiple things
+              , serviceName == "Ims" and eventName == "UpdateLoginProfile"
+                  and (
+                      tostring(requestParameters.GenerateRandomPassword) =~ "true"
+                      or tostring(requestParameters.PasswordResetRequired) =~ "true"
+                      or isnotempty(tostring(requestParameters.Password))
+                  ), "PasswordReset"
+              , serviceName == "Ims" and eventName == "UpdateLoginProfile"
+                  and tostring(requestParameters.Status) =~ "Inactive", "UserDisabled"
+              , serviceName == "Ims" and eventName == "UpdateLoginProfile"
+                  and tostring(requestParameters.Status) =~ "Active", "UserEnabled"
+              , _EventTypeBase
+          )
+      | extend
+          _TargetUsername = case(
+              serviceName == "CloudSSO", coalesce(
+                  _Unredact(tostring(responseElements.User.UserName)),
+                  tostring(responseElements.UserProvisioning.PrincipalName),
+                  _Unredact(tostring(requestParameters.UserName)))
+              , serviceName == "Ims", coalesce(
+                  tostring(responseElements.User.UserPrincipalName),
+                  tostring(requestParameters.UserPrincipalName),
+                  _Unredact(tostring(requestParameters.UserName)),
+                  tostring(requestParameters.NewUserPrincipalName))
+              , serviceName == "Ram", coalesce(
+                  tostring(responseElements.Role.RoleName),
+                  _Unredact(tostring(responseElements.User.UserName)),
+                  _Unredact(tostring(requestParameters.UserName)),
+                  tostring(requestParameters.RoleName))
+              , ""
+          )
+      | extend
+          _ErrorCode = trim(@'"', errorCode)
+          , _ActorUserId = tostring(userIdentity.principalId)
+          , _ActorAccountId = tostring(userIdentity.accountId)
+          , _PrincipalId = coalesce(
+              tostring(requestParameters.PrincipalId),
+              tostring(responseElements.UserProvisioning.PrincipalId))
+      | extend
+          // IPv4, IPv6, service FQDNs such as cloudmonitor.aliyuncs.com or 'internal' observed in sourceIpAddress.
+          _SrcIsIPv4 = coalesce(ipv4_is_match(sourceIpAddress, "0.0.0.0/0"), false)
+          , _SrcIsIPAny = coalesce(ipv6_is_match(sourceIpAddress, "::/0"), false)
+      | extend
+          _SrcIsIp = _SrcIsIPv4 or _SrcIsIPAny
+          , _SrcIsFQDN = not(_SrcIsIPv4)
+              and not(_SrcIsIPAny)
+              and indexof(sourceIpAddress, ".") > 0
+      | extend
+          _TargetUserId = case(
+              serviceName == "CloudSSO", coalesce(
+                  tostring(responseElements.User.UserId),
+                  tostring(requestParameters.UserId),
+                  tostring(requestParameters.CloudSSOUserId),
+                  iff(_PrincipalType =~ "User", _PrincipalId, ""))
+              , serviceName == "Ims", coalesce(
+                  tostring(responseElements.User.UserId),
+                  tostring(requestParameters.UserId))
+              // Ram identifies users, roles and groups by name only. Role.Arn is preserved in AdditionalFields.
+              , ""
+          )
+          , _GroupId = case(
+              serviceName == "CloudSSO", coalesce(
+                  tostring(requestParameters.GroupId),
+                  iff(_PrincipalType =~ "Group", _PrincipalId, ""))
+              , serviceName == "Ims", coalesce(
+                  tostring(responseElements.Group.GroupId),
+                  tostring(requestParameters.GroupId))
+              , ""
+          )
+          , _GroupName = coalesce(
+              _Unredact(tostring(responseElements.Group.GroupName)),
+              tostring(requestParameters.GroupName),
+              tostring(requestParameters.NewGroupName))
+          // A Ram event whose only identity is a role name is acting on a role, not on a RAM user.
+          , _TargetIsRole = serviceName == "Ram"
+              and isempty(tostring(requestParameters.UserName))
+              and isempty(tostring(responseElements.User.UserName))
+              and (
+                  isnotempty(tostring(requestParameters.RoleName))
+                  or isnotempty(tostring(responseElements.Role.RoleName))
+              )
+      | extend
+          EventCount = int(1)
+          , EventStartTime = TimeGenerated
+          , EventEndTime = TimeGenerated
+          , EventVendor = "Alibaba Cloud"
+          , EventProduct = "ActionTrail"
+          , EventSchema = "UserManagement"
+          , EventSchemaVersion = "1.0.0"
+          , EventType = _EventType
+          , EventResult = iff(
+              isempty(_ErrorCode) and isempty(errorMessage), "Success", "Failure"
+          )
+          , EventResultDetails = case(
+              isempty(_ErrorCode) and isempty(errorMessage), ""
+              , _ErrorCode has_any (
+                  "NoPermission", "Forbidden", "AccessDenied",
+                  "Unauthorized", "403"
+              ), "NotAuthorized"
+              , errorMessage has_any (
+                  "not authorized", "no permission", "Forbidden"
+              ), "NotAuthorized"
+              , "Other"
+          )
+          , EventOriginalResultDetails = case(
+              isnotempty(_ErrorCode), _ErrorCode
+              , isnotempty(errorMessage), errorMessage
+              , ""
+          )
+          , EventMessage = errorMessage
+          , EventSeverity = iff(
+              isnotempty(_ErrorCode) or isnotempty(errorMessage)
+              , "Low"
+              , "Informational"
+          )
+          , EventOriginalSubType = eventCategory
+          , EventUid = _ItemId
+          , Dvc = "ActionTrail"
+          , DvcAction = eventRW
+          // Actor fields
+          // assumed-role principalId/userName are "<roleId-or-roleName>:<sessionName>"; sessionName identifies the human who assumed the role.
+          , ActorUserId = iff(
+              _ActorUserIdentityType == "assumed-role"
+              , tostring(split(_ActorUserId, ":")[0])
+              , _ActorUserId
+          )
+          , ActorUserIdType = iff(isnotempty(_ActorUserId), "Other", "")
+          , ActorUserType = case(
+              _ActorUserIdentityType == "root-account", "Admin"
+              , _ActorUserIdentityType == "system", "System"
+              , _ActorUserIdentityType == "assumed-role", "Service Principal"
+              , _ActorUserIdentityType in (
+                  "ram-user", "cloudsso-user", "saml-user",
+                  "oidc-user", "alibaba-cloud-account"
+              ), "Regular"
+              , "Other"
+          )
+          , ActorOriginalUserType = _ActorUserIdentityType
+          , ActorScopeId = _ActorAccountId
+          // assumed-role principals arrive as "<roleId>:<sessionName>".
+          , ActorSessionId = iff(
+              _ActorUserId contains ":"
+              , tostring(split(_ActorUserId, ":")[1])
+              , ""
+          )
+          // Target fields
+          , TargetUserId = _TargetUserId
+          , TargetUserIdType = iff(isnotempty(_TargetUserId), "Other", "")
+          , TargetUsername = _TargetUsername
+          , TargetUserType = case(
+              _TargetIsRole, "Service Principal"
+              , isnotempty(_TargetUsername) or isnotempty(_TargetUserId), "Regular"
+              , ""
+          )
+          , TargetOriginalUserType = case(
+              _TargetIsRole, "ram-role"
+              , isempty(_TargetUsername) and isempty(_TargetUserId), ""
+              , serviceName == "CloudSSO", "cloudsso-user"
+              , "ram-user"
+          )
+          , TargetUserScopeId = case(
+              serviceName == "CloudSSO", coalesce(
+                  tostring(requestParameters.DirectoryId),
+                  tostring(responseElements.OwnerId),
+                  _ActorAccountId)
+              , coalesce(tostring(requestParameters.accountId), _ActorAccountId)
+          )
+          // Group fields
+          , GroupId = _GroupId
+          , GroupIdType = iff(isnotempty(_GroupId), "Simple", "")
+          , GroupName = _GroupName
+          , GroupType = iff(isnotempty(_GroupId) or isnotempty(_GroupName), "Other", "")
+          , GroupOriginalType = case(
+              isempty(_GroupId) and isempty(_GroupName), ""
+              , serviceName == "CloudSSO", "CloudSSO Group"
+              , "RAM Group"
+          )
+          // ActionTrail carries no prior value, so only the new value of a changed property is available.
+          , NewPropertyValue = coalesce(
+              tostring(requestParameters.NewStatus),
+              tostring(requestParameters.Status),
+              tostring(requestParameters.NewUserPrincipalName),
+              tostring(requestParameters.NewGroupName),
+              _Unredact(tostring(requestParameters.NewDisplayName)),
+              _Unredact(tostring(requestParameters.NewEmail)),
+              tostring(requestParameters.NewDescription),
+              iff(
+                  eventName == "UpdateUserProvisionType",
+                  coalesce(
+                      tostring(requestParameters.ProvisionType),
+                      tostring(responseElements.User.ProvisionType)),
+                  ""))
+          // App and source
+          , ActingAppName = serviceName
+          , ActingAppType = iff(isnotempty(serviceName), "Service", "")
+          , SrcIpAddr = iff(_SrcIsIp, sourceIpAddress, "")
+          , SrcFQDN = iff(_SrcIsFQDN, sourceIpAddress, "")
+          , SrcHostname = iff(_SrcIsFQDN, tostring(split(sourceIpAddress, ".")[0]), "")
+          , SrcDomain = iff(
+              _SrcIsFQDN
+              , substring(sourceIpAddress, indexof(sourceIpAddress, ".") + 1)
+              , ""
+          )
+          , SrcDomainType = iff(_SrcIsFQDN, "FQDN", "")
+          // "Internal" and any other dotless non-address name belongs in neither SrcIpAddr nor SrcFQDN.
+          , SrcDescription = iff(
+              not(_SrcIsIp) and not(_SrcIsFQDN) and isnotempty(sourceIpAddress)
+              , strcat("ActionTrail non-network source marker: ", sourceIpAddress)
+              , ""
+          )
+      | extend
+          // Ims and CloudSSO principal names are UPN-shaped (user@<accountId>.onaliyun.com), Ram user and role names are bare.
+          ActorUsernameType = case(
+              isempty(ActorUsername), ""
+              , ActorUsername contains "@", "UPN"
+              , "Simple"
+          )
+          , TargetUsernameType = case(
+              isempty(TargetUsername), ""
+              , TargetUsername contains "@", "UPN"
+              , "Simple"
+          )
+          , GroupNameType = iff(isnotempty(GroupName), "Simple", "")
+          // Limited options with this source and schema
+          , EventSubType = iff(
+              EventType in ("PasswordChanged", "PasswordReset"), "password", ""
+          )
+      | lookup ServiceScopeLookup on serviceName
+      | extend
+          UpdatedPropertyName = EventSubType
+          , Src = coalesce(SrcIpAddr, SrcFQDN)
+          , IpAddr = SrcIpAddr
+          , User = ActorUsername
+      | project-rename
+          EventOriginalUid = eventId
+          , EventOriginalType = eventName
+          , EventProductVersion = eventVersion
+          , HttpUserAgent = userAgent
+      | extend
+          AdditionalFields = iff(
+              pack
+              , pack(
+                  "eventType", eventType
+                  , "eventRW", eventRW
+                  , "serviceName", serviceName
+                  , "eventSource", eventSource
+                  , "sourceIpAddress", sourceIpAddress
+                  , "requestId", requestId
+                  , "apiVersion", apiVersion
+                  , "acsRegion", acsRegion
+                  , "isGlobal", isGlobal
+                  , "actorAccessKeyId", tostring(userIdentity.accessKeyId)
+                  , "principalType", _PrincipalType
+                  , "roleArn", tostring(responseElements.Role.Arn)
+                  , "resourceName", resourceName
+                  , "resourceType", resourceType
+                  , "requestParameters", requestParameters
+                  , "responseElements", responseElements
+                  , "additionalEventData", additionalEventData
+                  , "referencedResources", referencedResources
+              )
+              , dynamic(null)
+          )
+      | project
+          TimeGenerated
+          , EventCount
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventSubType
+          , EventResult
+          , EventResultDetails
+          , EventSeverity
+          , EventProduct
+          , EventVendor
+          , EventSchema
+          , EventSchemaVersion
+          , EventUid
+          , EventOriginalUid
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalResultDetails
+          , EventMessage
+          , EventProductVersion
+          , Dvc
+          , DvcAction
+          , ActorUserId
+          , ActorUserIdType
+          , ActorUsername
+          , ActorUsernameType
+          , ActorUserType
+          , ActorOriginalUserType
+          , ActorScopeId
+          , ActorSessionId
+          , TargetUserId
+          , TargetUserIdType
+          , TargetUsername
+          , TargetUsernameType
+          , TargetUserType
+          , TargetOriginalUserType
+          , TargetUserScope
+          , TargetUserScopeId
+          , GroupId
+          , GroupIdType
+          , GroupName
+          , GroupNameType
+          , GroupType
+          , GroupOriginalType
+          , UpdatedPropertyName
+          , NewPropertyValue
+          , ActingAppName
+          , ActingAppType
+          , HttpUserAgent
+          , SrcIpAddr
+          , SrcFQDN
+          , SrcHostname
+          , SrcDomain
+          , SrcDomainType
+          , SrcDescription
+          , Src
+          , IpAddr
+          , User
+          , AdditionalFields
+          , Type
+  };
+  ASimUserManagementAlibabaCloudActionTrail(disabled=disabled, pack=pack)

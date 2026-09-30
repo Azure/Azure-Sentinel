@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.5       | 22-09-2026                     | Fixed **Netskope Alerts and Events** connector Connect failure ('Expected a value of type Array, but received a value of type String') and renamed it to **Netskope Alerts and Events**. Added **Netskope Client Status** and **Netskope AI SecOps** CCF data connectors with parsers, the **Netskope Client Status Dashboard** workbook and analytic rules **Netskope Client - Private Access disabled by user**, **Netskope Client - Internet Security disabled by user** and **Netskope - High Severity DLP Alert**. Added 12 DLP Incident fields to **NetskopeEventsDLP_CL**. Deprecated **Netskope Web Transactions Data Connector** (using Azure Function). |
 | 3.1.4       | 30-03-2026                     | Fix space in name. Rename to Netskope Alerts and Events (via Codeless Connector Framework)|
 | 3.1.3       | 20-03-2026                     | Rename to Netskope Alerts and Events(via Codeless Connector Framework)|
 | 3.1.2       | 31-10-2025                     | Added Dropdown in CCF UI page for data ingestion |
