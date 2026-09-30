@@ -1,0 +1,27 @@
+id: 6a5923be-81e4-496b-9ce3-f009a5f20737
+name: Top Attacked Users by Phish Threat Classification
+description: |
+  This query surfaces, for each phishing message-intent threat classification, the recipient most frequently targeted by inbound phishing email.
+description-detailed: |
+  Microsoft Defender for Office 365 uses LLM content analysis to classify the intent of phishing messages. This query surfaces, for each intent classification (for example Business intelligence, Contact establishment, Gift card, Invoice, Payroll, PII gathering, Task), the recipient most frequently targeted by inbound phishing email.
+  Messages are de-duplicated to the latest record per NetworkMessageId and recipient, and deliveries to the SecOps mailbox and by the phishing simulation system are excluded.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, "-", RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where ThreatTypes has "Phish" and EmailDirection == "Inbound" and ThreatClassification has_any("Business intelligence","Contact establishment","Gift card","Invoice","Payroll","PII gathering","Task")
+  | summarize EmailCount = count() by ThreatClassification, RecipientEmailAddress
+  | summarize Emails = arg_max(EmailCount, RecipientEmailAddress) by ThreatClassification
+  | sort by Emails desc
+  | project ['Threat Classification'] = ThreatClassification, ['Top Recipient'] = RecipientEmailAddress, ['Emails'] = Emails
+version: 1.0.0

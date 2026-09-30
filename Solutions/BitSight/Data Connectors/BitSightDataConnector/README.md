@@ -107,7 +107,6 @@ Azure_Client_Secret | None
 Azure_Tenant_Id | None
 Companies  | ALL
 Workspace ID  | None
-Workspace Key  | None
 Portfolio_Companies_Table_Name | Portfolio_Companies
 Alerts_Table_Name  | Alerts_data
 Breaches_Table_Name | BitsightBreaches_data

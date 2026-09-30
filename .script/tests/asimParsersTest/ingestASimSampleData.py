@@ -554,8 +554,12 @@ for file in parser_yaml_files:
         response_body=hit_api(url_to_call,request_body,method_to_use)
         print(f"Response of table creation: {response_body.text} {response_body.status_code}")
         if response_body.status_code != 202 and response_body.status_code != 200:
-            print(f"Table creation failed for {table_name}")
-            continue
+            print(
+                f"::error::Table creation failed for {table_name} "
+                f"(HTTP {response_body.status_code})",
+                flush=True,
+            )
+            sys.exit(1)
         else:
             get_table_status(table_name)
         #Once table is created now creating DCR

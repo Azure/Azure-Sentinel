@@ -1,0 +1,28 @@
+id: 7a8e34a4-3fbf-4ab6-a9d9-aa57c9267327
+name: Top Recipients Targeted by Impersonation or BEC
+description: |
+  This query lists the recipients most frequently targeted by impersonation and Business Email Compromise (BEC) attempts, using the EmailEvents table.
+description-detailed: |
+  Impersonation and Business Email Compromise (BEC) attacks concentrate on a small number of high-value recipients, often executives or finance staff. This query lists the inbound recipients most targeted by impersonation detections, with the number of impersonation emails, how many distinct senders were involved, a sample of the sender domains involved, and how many messages were delivered to the inbox. Use it to identify high-risk users who may need extra protection or awareness.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // Recipients most targeted by impersonation / BEC, with distinct senders, a sample of sender domains and inbox delivery.
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound"
+  | where OrgLevelPolicy !in ("Phishing simulation", "SecOps Mailbox")
+  | where DetectionMethods has "Impersonation"
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | summarize ImpersonationEmails = count(), DistinctSenders = dcount(SenderFromAddress), SampleSenderDomains = make_set(SenderFromDomain, 5), DeliveredToInbox = countif(DeliveryLocation has "Inbox") by RecipientEmailAddress
+  | top 20 by ImpersonationEmails
+  | project Recipient = RecipientEmailAddress, ImpersonationEmails, DistinctSenders, SampleSenderDomains = strcat_array(SampleSenderDomains, ", "), DeliveredToInbox
+version: 1.0.0

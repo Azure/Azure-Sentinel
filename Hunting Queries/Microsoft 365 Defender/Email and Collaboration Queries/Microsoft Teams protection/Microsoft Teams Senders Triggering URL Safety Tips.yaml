@@ -1,0 +1,36 @@
+id: f5279911-c49c-4fbe-8b5c-be61e28263a2
+name: Microsoft Teams Senders Triggering URL Safety Tips
+description: |
+  This query lists the Microsoft Teams senders whose messages most often triggered a URL safety-tip warning, with each sender's warning rate.
+description-detailed: |
+  This query lists the Microsoft Teams senders whose messages triggered a URL safety-tip warning over the last 30 days, using Advanced hunting in Microsoft Defender XDR, alongside each sender's total Teams messages and the share that carried a warning. The safety tip is the control that fires at the moment a user is about to act, so it marks content the platform considered risky enough to interrupt someone over, whether or not a threat verdict was ever assigned. That makes it a useful signal in its own right and one that threat-based hunting misses entirely. A sender with a low message count but a very high warning rate is more interesting than a high-volume sender with an occasional warning. Messages are de-duplicated to the latest record per message.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists Microsoft Teams senders whose messages triggered a URL safety-tip warning over the last 30 days,
+  //with each sender's total messages and warning rate.
+  //A safety tip fires at the moment a user is about to act, so it flags content considered risky enough to interrupt
+  //someone over even when no threat verdict was assigned. A low-volume sender with a high warning rate matters most.
+  //Messages are de-duplicated to the latest record per message.
+  let DedupedMessages = MessageEvents
+      | where Timestamp > ago(30d)
+      | summarize arg_max(Timestamp, *) by TeamsMessageId;
+  let SenderTotals = DedupedMessages
+      | summarize TotalMessages = count() by SenderEmailAddress;
+  DedupedMessages
+  | where SafetyTip == "URLMessageWarning"
+  | summarize WarningMessages = count(), FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by SenderEmailAddress
+  | join kind=leftouter (SenderTotals) on SenderEmailAddress
+  | extend WarningPct = round(100.0 * WarningMessages / TotalMessages, 1)
+  | top 20 by WarningMessages desc
+  | project ['Teams Sender']=SenderEmailAddress, ['Warning Messages']=WarningMessages,
+            ['Total Teams Messages']=TotalMessages, ['Warning %']=WarningPct,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

@@ -15,12 +15,14 @@ relevantTechniques:
   - T1566
 query: |
   EmailEvents
+  | where Timestamp > ago(30d)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
   | where EmailDirection == "Inbound"
   | summarize TotalEmailCount = count(),
-  DMARCFailCount = countif(DetectionMethods has_any ('Phish":["Spoof DMARC"]')) by P1Sender=SenderMailFromDomain, P2Sender=SenderFromDomain
+              DMARCFailCount = countif(set_has_element(parse_json(DetectionMethods).Phish, "Spoof DMARC")) by P1Sender=SenderMailFromDomain, P2Sender=SenderFromDomain
   | extend DMARCFail_Traffic_Percentage = todouble(round(DMARCFailCount / todouble(TotalEmailCount) * 100, 2))
-  | where DMARCFailCount !=0
-  | sort by DMARCFailCount desc 
-  | project P1Sender,P2Sender,DMARCFailCount,TotalEmailCount,DMARCFail_Traffic_Percentage
+  | where DMARCFailCount != 0
   | top 10 by DMARCFailCount
-version: 1.0.0
+  | project P1Sender, P2Sender, DMARCFailCount, TotalEmailCount, DMARCFail_Traffic_Percentage
+version: 1.1.0

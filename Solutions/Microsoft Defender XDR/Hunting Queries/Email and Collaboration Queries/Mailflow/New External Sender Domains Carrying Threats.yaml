@@ -1,0 +1,30 @@
+id: 41614487-ccca-458e-81eb-dffbeba0b703
+name: New External Sender Domains Carrying Threats
+description: |
+  This query lists external sender domains seen for the first time in the period that already carried threats, using the EmailEvents table.
+description-detailed: |
+  A brand-new sender domain that already arrives carrying threats is a strong early-warning signal for phishing and business email compromise (BEC). This query lists inbound external sender domains ordered by when they were first seen in the period, keeping only those that carried at least one threat, with message, sender, recipient and threat counts. Treat brand-new domains sending threats as high-priority review.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // TIP: to hide your own accepted domains, uncomment the ExcludeDomains line and the matching where-clause.
+  // let ExcludeDomains = dynamic(["contoso.com", "fabrikam.com"]);
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound" and isnotempty(SenderFromAddress)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend SenderDomain = tostring(split(SenderFromAddress, '@')[1])
+  // | where SenderDomain !in~ (ExcludeDomains)
+  | summarize FirstSeen = min(Timestamp), LastSeen = max(Timestamp), Messages = count(), Senders = dcount(SenderFromAddress), Recipients = dcount(RecipientEmailAddress), ThreatMessages = countif(isnotempty(ThreatTypes)) by SenderDomain
+  | where ThreatMessages > 0
+  | top 20 by FirstSeen desc
+  | project SenderDomain, FirstSeen, Messages, Senders, Recipients, ThreatMessages, LastSeen
+version: 1.0.0

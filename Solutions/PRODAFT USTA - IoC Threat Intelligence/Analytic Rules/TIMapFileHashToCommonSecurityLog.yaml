@@ -1,0 +1,92 @@
+id: 9c2cef4e-c3a3-4be9-8923-a2f820d4face
+name: PRODAFT USTA - TI map File Hash to CommonSecurityLog
+description: |
+  'Identifies a match in CommonSecurityLog data from any file-hash indicator ingested from
+  PRODAFT USTA IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PRODAFTUstaIoCUploadIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let fileHashIndicators = ThreatIntelIndicators
+  // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malware Hashes", etc.)
+  | where SourceSystem startswith "PRODAFT USTA"
+  // ObservableKey is a STIX kv pair ("file:hashes.'SHA-256'") - take the type before the colon
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where IndicatorType == "file"
+  | extend FileHashType = extract(@"hashes\.'([^']+)'", 1, ObservableKey)
+  | where isnotempty(FileHashType)
+  | extend FileHashValue = toupper(ObservableValue)
+  | extend IndicatorId = tostring(split(Id, "--")[2])
+  | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+  // CommonSecurityLog hash casing varies by source, so match both forms
+  (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  | project-reorder *, FileHashType, FileHashValue, Type
+  // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
+  |  join kind=innerunique (
+    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+    )
+  on $left.FileHashValue == $right.FileHash
+  // non-expiring indicators are allowed above, so they must survive this filter too
+  | where isempty(ValidUntil) or CommonSecurityLog_TimeGenerated < ValidUntil
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue
+  | extend Description = tostring(parse_json(Data).description)
+  | extend IndicatorTags = tostring(parse_json(Data).labels)
+  | project CommonSecurityLog_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence,
+  SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType, Url
+  | extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+  | extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceUserName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.0.0
+kind: Scheduled

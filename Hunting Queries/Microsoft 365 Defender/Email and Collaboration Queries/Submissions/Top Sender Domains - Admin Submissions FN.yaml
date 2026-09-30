@@ -14,11 +14,36 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  CloudAppEvents
-  | where ActionType == "AdminSubmissionSubmitted"
-  | extend SubmissionType = tostring((parse_json(RawEventData)).SubmissionType),SubmissionContentType=tostring((parse_json(RawEventData)).SubmissionContentType),P2SenderDomain=tostring((parse_json(RawEventData)).P2SenderDomain)
-  | where SubmissionContentType == "Mail" and SubmissionType in ("2","1","0")
-  | summarize count() by P2SenderDomain
-  | project P2SenderDomain, Emails = count_
-  | top 10 by Emails desc
-version: 1.0.0
+  //Top sender domains that admins reported as false negatives (missed threats), with each domain's Microsoft Defender
+  //for Office 365 detection profile for context: total inbound volume, how many of those already carried a threat
+  //verdict, and the threat-type split.
+  //The submission percentage is the point - 40 reports out of 12,000 inbound messages reads very differently from
+  //40 out of 60, and only the second is a filtering problem worth escalating.
+  let AdminSubmissions = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "AdminSubmissionSubmitted"
+      | extend SubmissionType = tostring((parse_json(RawEventData)).SubmissionType),
+               SubmissionContentType = tostring((parse_json(RawEventData)).SubmissionContentType),
+               P2SenderDomain = tostring((parse_json(RawEventData)).P2SenderDomain)
+      | where SubmissionContentType == "Mail" and SubmissionType in ("2","1","0")
+      | where isnotempty(P2SenderDomain)
+      | summarize AdminSubmissions = count() by P2SenderDomain;
+  let DomainProfile = EmailEvents
+      | where Timestamp > ago(30d)
+      | where EmailDirection == "Inbound"
+      | summarize TotalInbound = count(),
+                  EmailsWithThreats = countif(isnotempty(ThreatTypes)),
+                  Malware = countif(ThreatTypes has "Malware"),
+                  Phish = countif(ThreatTypes has "Phish"),
+                  Spam = countif(ThreatTypes has "Spam")
+          by SenderFromDomain;
+  AdminSubmissions
+  | join kind=leftouter (DomainProfile) on $left.P2SenderDomain == $right.SenderFromDomain
+  //Null rather than a misleading 100% when the domain has no matching inbound mail in the window.
+  | extend AdminSubmissionPct = iif(isnull(TotalInbound) or TotalInbound == 0, real(null), round(AdminSubmissions * 100.0 / todouble(TotalInbound), 2))
+  | top 10 by AdminSubmissions desc
+  | project ['Sender Domain']=P2SenderDomain, ['Admin Submissions']=AdminSubmissions,
+            ['Total Inbound']=coalesce(TotalInbound, 0), ['Admin Submission %']=AdminSubmissionPct,
+            ['Emails With Threats']=coalesce(EmailsWithThreats, 0), ['Malware']=coalesce(Malware, 0),
+            ['Phish']=coalesce(Phish, 0), ['Spam']=coalesce(Spam, 0)
+version: 1.1.0
