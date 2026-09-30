@@ -111,15 +111,16 @@ Before continuing in WinformConfig, verify that:
 In the setup view, select:
 
 - **Target:** `On-Premises`
-- **Execution environment:** `Server`
+- **Execution environment:** (Where will the script run ?) `Server`
+- **Identification Environment** : Enter the name of your environment that will be displayed in the workbook
 - **Instance type:** Select `Def` for the standard Exchange configuration assessment. The `IoC` option is currently in beta and is intended only for the IIS IoC scenario.
 - **Ingestion API:** `AzureMonitorAPI`
 
 Set the environment identification value used by the Microsoft Sentinel workbooks. The default `#ForestName#` value is replaced with the forest name for an on-premises deployment.
 
-### 4. Configure Azure Monitor ingestion
+### 4. Configure Azure MonitorAPI Information 
 
-Use the existing application and DCR values displayed on the data connector page.
+Click on the buttom, Azure MonitorAPI Information. Use the information displayed on the data connector page.
 
 The editor updates the corresponding collector settings, including:
 
@@ -133,6 +134,7 @@ The editor updates the corresponding collector settings, including:
 Enter the thumbprint of the certificate prepared in the previous step.
 
 ### 5. Configure Exchange Server
+Click on the buttom, Exchange On-Premises information.
 
 Verify the Exchange Server binary path. The default is:
 
@@ -140,20 +142,23 @@ Verify the Exchange Server binary path. The default is:
 C:\Program Files\Microsoft\Exchange Server\V15\bin
 ```
 
-Select the Exchange version and review the instance configuration.
+Enter the Exchange version.
+
+> Note : ignore the button Instance Information
 
 ### 6. Configure and create the scheduled task
 
-The mandatory scheduled task must be configured during the same WinformConfig setup session as the other collector parameters.
+The scheduled task should be configured during the same WinformConfig setup session as the other collector parameters.
 
 In the **Server Execution** section, provide:
 
 - A unique scheduled-task name.
 - The daily start time in `hh:mmAM` or `hh:mmPM` format, for example `11:00PM`.
 - The service account in UPN format, for example `svc-exchange@contoso.com`.
+  - ** This account needs to be member of the Organization Management** group.
 - The service account password.
 
-Select **Create the Schedule Task** after reviewing the values.
+click on **Create the Schedule Task** after reviewing the values.
 
 The editor creates a Windows scheduled task that:
 
