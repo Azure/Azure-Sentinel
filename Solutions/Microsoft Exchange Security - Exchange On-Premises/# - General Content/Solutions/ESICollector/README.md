@@ -2,7 +2,9 @@
 
 This README accompanies the on-premises collector package. It documents the current version, package replacement procedure, version-specific configuration changes, and legacy upgrade paths.
 
-For server prerequisites and permissions, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md). For Azure Monitor deployment and migration, see [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). For individual settings, see the [configuration parameter reference](./Parameters.md).
+- For server prerequisites and permissions, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md). 
+- For Azure Monitor deployment and migration, see [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). 
+- For individual settings, see the [configuration parameter reference](./Parameters.md).
 
 ## Current version
 
@@ -68,12 +70,7 @@ Get-ChildItem -LiteralPath .\WinformConfig -Recurse -File |
 
 - **Continue using the legacy API temporarily:** No additional changes are required. The collector displays a warning during each execution until the migration is completed.
 - **Switch to the Log Ingestion API:**
-  1. Update the solution in Microsoft Sentinel Content Hub. The update deploys the **Exchange Security Insights On-Premises Collector (Azure Monitor)** data connector.
-  2. Open **Data connectors** and follow the instructions on the connector page.
-  3. Go to the on-premises collector server.
-  4. Update the required configuration settings by editing the configuration file or, preferably, by using the [WinformConfig editor](../../Documentations/WinformConfigReadme.md).
-  5. Run the collector manually.
-  6. Verify that data is ingested into the expected custom tables and that the collector completes without authentication or ingestion errors.
+  - For complete migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment)
 
 #### Data model changes
 
