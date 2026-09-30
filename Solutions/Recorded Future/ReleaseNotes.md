@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------|
+| 3.2.22 | 11-09-2026 | Implemented a modernized data connector architecture by introducing shared infrastructure templates for DCE, DCR, table, and connector deployment, enabling MSI-authenticated data ingestion through the Logs Ingestion API, and updating workbooks, analytics, and documentation to align with the new _V2_CL schema. |
 | 3.2.21 | 16-08-2026 | Hardened Enterprise Sandbox API key handling and protected sensitive Logic Apps action data. |
 | 3.2.20 | 04-05-2026 | Removed **incident creation** from affected playbooks, in preparation for Microsoft Defender migration. Added Analytic Rules that will handle incident creation.|
 | 3.2.19      | 13-04-2026                     | Added functionality to choose Sandbox region, changed to optional Enterprise Sandbox API token.	Updated Indicator Import, moving evidence details from "labels" to "external_references".  |

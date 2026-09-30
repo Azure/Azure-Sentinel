@@ -1,0 +1,7 @@
+# Changelog for ASimAlertEventWizDefend.yaml
+
+## Version 0.1.0
+
+- (2026-09-17) Initial creation of the parser
+    - Normalizes Wiz Defend threat detections (`WizDetectionsV3_CL`). Vendor/product stay `Wiz`/`Defend` regardless of the underlying `tdrSource` (WIZ, WIZ_SENSOR, GUARD_DUTY)
+- [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)

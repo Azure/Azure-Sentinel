@@ -1,0 +1,90 @@
+id: 0f238f93-cf72-4b17-8731-b687a4a629fc
+Function:
+  Title: Corelight ML Results Events
+  Version: '1.0.0'
+  LastUpdated: '2026-09-24'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_ml_results
+FunctionAlias: corelight_ml_results
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
+    let corelight_ml_results = view () {
+        union isfuzzy=true Corelight_v3_ml_results_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
+        | join kind=leftouter
+            (corelight_conn
+            | project uid, local_orig, local_resp
+            )
+            on $left.uid == $right.uid
+        | project-away uid1
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "ml_results",
+            ts = coalesce(ts, TimeGenerated),
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            signature = predicted_tag_name,
+            sensor_name = coalesce(system_name, "unknown")
+        | extend
+            is_broadcast = iff(src in ("0.0.0.0", "255.255.255.255") or dest in ("255.255.255.255", "0.0.0.0"), "true", "false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction = case(
+                    local_orig == true and local_resp == true,
+                    "internal",
+                    local_orig == true and local_resp == false,
+                    "outbound",
+                    local_orig == false and local_resp == false,
+                    "external",
+                    local_orig == false and local_resp == true,
+                    "inbound",
+                    "unknown"
+                )
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            domain,
+            pipeline,
+            entity,
+            predicted_tag_id,
+            predicted_tag_name,
+            predicted_probability,
+            attack_probability,
+            probability_distribution,
+            feature_contribution,
+            feature_values,
+            feature_importance,
+            feature_differences,
+            nearest_ref_domain,
+            model_version,
+            model_alias,
+            EventVendor,
+            EventProduct,
+            EventType,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            signature,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_ml_results
