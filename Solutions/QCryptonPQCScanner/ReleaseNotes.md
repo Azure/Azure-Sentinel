@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Changes** |
+|-------------|--------------------------------|-------------|
+| 3.0.0       | 17-09-2026                     | Initial release of the QCrypton PQC Scanner solution. Includes: 1 data connector (Codeless Connector Framework — RestApiPoller, `PQReadiness_CL`); 5 scheduled analytic rules (Key Vault vulnerable keys, App Gateway/Front Door classical TLS certs, App Service legacy TLS, long-lived certs signed classically, new vulnerable resource detection); 1 workbook (PQ Readiness posture overview with black & white preview images); 1 playbook (Teams notification on incident). Fixed logo and solution path references; added workbook preview images, playbook README, and WorkbooksMetadata entry. |
