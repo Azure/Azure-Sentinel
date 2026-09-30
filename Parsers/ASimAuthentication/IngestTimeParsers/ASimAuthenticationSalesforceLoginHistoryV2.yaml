@@ -1,0 +1,216 @@
+Parser:
+  DisplayName: Salesforce Login History Authentication ASIM ingestion-time parser
+  Version: '0.1.0'
+  LastUpdated: '2026-09-30'
+Product:
+  Name: Salesforce Login History
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+Author: Microsoft
+Description: |
+  Normalizes Salesforce login history events from the SalesforceLoginHistoryV2_CL raw-table shape into the native ASimAuthenticationEventLogs table during ingestion.
+ParserName: ASimAuthenticationSalesforceLoginHistoryV2
+DCRType: Standard
+InputStream: Custom-SalesforceLoginHistoryV2_CL
+SourceRawTable: SalesforceLoginHistoryV2_CL
+TargetASIMTable: ASimAuthenticationEventLogs
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend EventTime = iif(isnull(LoginTime), now(), LoginTime)
+  | extend TargetUrl = iif(
+      isempty(apiUrl),
+      "",
+      iif(apiUrl startswith "http://"
+          or apiUrl startswith "https://",
+          apiUrl,
+          strcat("https://", apiUrl)))
+  | extend TargetHost = extract(@"^(?:https?://)?([^/:]+)", 1, TargetUrl)
+  | extend TargetHost = iif(isnotempty(TargetHost), TargetHost, apiUrl)
+  | extend TargetHostParts = split(TargetHost, ".")
+  | extend
+      TargetHostname = iif(isempty(TargetHost), "", tostring(TargetHostParts[0])),
+      TargetDomain = iif(
+          array_length(TargetHostParts) > 1,
+          substring(TargetHost, indexof(TargetHost, ".") + 1),
+          ""),
+      TargetDomainType = iif(array_length(TargetHostParts) > 1, "FQDN", ""),
+      TargetResolvedFQDN = iif(array_length(TargetHostParts) > 1, TargetHost, "")
+  | extend
+      TargetAppName = iif(isnotempty(TargetHost), TargetHost, "Salesforce"),
+      ActingAppName = iif(isnotempty(Application), Application, Browser),
+      ActingAppType = case(
+          isnotempty(Application), "SaaS application",
+          isnotempty(Browser), "Browser",
+          "Other"),
+      EventResult = case(
+          Status =~ "Success", "Success",
+          isempty(Status), "NA",
+          "Failure"),
+      EventResultDetails = case(
+          Status =~ "Success" or isempty(Status), "",
+          Status =~ "Invalid Password", "Incorrect password",
+          Status in ("Password Lockout", "User is Frozen"), "User locked",
+          Status =~ "User is Inactive", "User disabled",
+          Status in (
+              "Lightning Login required",
+              "Multi-factor required",
+              "Passwordless Login via Passkeys required"
+          ), "MFA not satisfied",
+          Status in (
+              "Failed: Not approved",
+              "Failed: Not approved for access",
+              "No community access",
+              "Restricted IP",
+              "Username-Password Flow Disabled"
+          ), "Logon violates policy",
+          "Other"),
+      DvcAction = case(
+          Status =~ "Success", "Allowed",
+          isempty(Status), "",
+          "Blocked")
+  | extend
+      LogonMethod = case(
+          LoginSubType =~ "OAuth Client Credentials", "Service Principal",
+          LoginSubType =~ "OAuth OTP Login"
+              or Status in (
+                  "Lightning Login required",
+                  "Multi-factor required",
+                  "Passwordless Login via Passkeys required"
+              )
+              or AuthMethodReference contains "multipleauthn",
+              "Multi factor authentication",
+          AuthMethodReference contains "x509"
+              or AuthMethodReference contains "smartcard",
+              "PKI",
+          LoginType contains "Passwordless"
+              or AuthMethodReference contains "fido",
+              "Passwordless",
+          LoginSubType in (
+              "OAuth Username-Password",
+              "UI Password Reset",
+              "UI Username-Password"
+          )
+              or Status =~ "Invalid Password",
+              "Username & Password",
+          "Other"),
+      LogonProtocol = case(
+          LoginSubType contains "OAuth", "OAuth",
+          LoginSubType contains "SOAP", "SOAP",
+          LoginType contains "SAML", "SAML",
+          LoginSubType startswith "UI", "Basic Auth",
+          LoginSubType =~ "Internal Salesforce Authentication", "Salesforce",
+          "Other"),
+      EventSubType = case(
+          LoginSubType contains "OAuth"
+              or LoginSubType contains "SOAP"
+              or LoginType in (
+                  "Application",
+                  "Other Apex API",
+                  "Remote Access 2.0",
+                  "Remote Access Client",
+                  "Salesforce Outlook Integration"
+              ),
+              "Service",
+          "Interactive"),
+      SrcDeviceType = case(
+          Platform startswith "Android"
+              or Platform in ("iOS/Mac", "iPad", "iPhone"),
+              "Mobile Device",
+          Platform startswith "Windows"
+              or Platform in ("Linux", "Mac OSX"),
+              "Computer",
+          isnotempty(Platform), "Other",
+          "")
+  | extend
+      EventUid = hash_sha256(strcat(
+          tostring(EventTime), "|",
+          UserId, "|",
+          SourceIp, "|",
+          LoginType, "|",
+          LoginSubType, "|",
+          Application, "|",
+          apiUrl, "|",
+          Status)),
+      AdditionalFields = pack(
+          "ApiType", ApiType,
+          "ApiVersion", ApiVersion,
+          "AuthMethodReference", AuthMethodReference,
+          "Browser", Browser,
+          "CipherSuite", CipherSuite,
+          "ClientVersion", ClientVersion,
+          "ForwardedForIp", ForwardedForIp,
+          "LoginGeoId", LoginGeoId,
+          "OptionsIsGet", OptionsIsGet,
+          "OptionsIsPost", OptionsIsPost,
+          "TlsProtocol", TlsProtocol
+      )
+  | project
+      TimeGenerated = EventTime,
+      Type = "SalesforceLoginHistoryV2_CL",
+      EventCount = toint(1),
+      EventEndTime = EventTime,
+      EventMessage = Status,
+      EventOriginalResultDetails = Status,
+      EventOriginalSubType = LoginSubType,
+      EventOriginalType = LoginType,
+      EventProduct = "Salesforce Login History",
+      EventProductVersion = ApiVersion,
+      EventResult,
+      EventResultDetails,
+      EventSchema = "Authentication",
+      EventSchemaVersion = "1.0.0",
+      EventSeverity = "Informational",
+      EventStartTime = EventTime,
+      EventSubType,
+      EventType = "Logon",
+      EventUid,
+      EventVendor = "Salesforce",
+      ActingAppId = AuthenticationServiceId,
+      ActingAppName,
+      ActingAppType,
+      ActingOriginalAppType = ApiType,
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = parse_json("[]"),
+      ActorUserEntityKey = "",
+      AdditionalEntities = parse_json("[]"),
+      AdditionalFields,
+      Application = TargetAppName,
+      Dst = TargetHost,
+      Dvc = "Salesforce Login History",
+      DvcAction,
+      DvcDescription = "Salesforce authentication service",
+      DvcDomain = "",
+      DvcDomainType = "",
+      DvcEntityKey = "",
+      DvcFQDN = "",
+      DvcHostname = "",
+      HttpUserAgent = Browser,
+      IpAddr = SourceIp,
+      LogonMethod,
+      LogonProtocol,
+      LogonTarget = TargetHost,
+      Src = SourceIp,
+      SrcDeviceType,
+      SrcDvcOs = Platform,
+      SrcGeoCountry = CountryIso,
+      SrcHostname = "",
+      SrcIpAddr = SourceIp,
+      SrcSystemEntityKey = "",
+      TargetAppId = NetworkId,
+      TargetApplicationEntityKey = "",
+      TargetAppName,
+      TargetAppType = "SaaS application",
+      TargetDomain,
+      TargetDomainType,
+      TargetFQDN = TargetResolvedFQDN,
+      TargetHostname,
+      TargetSystemEntityKey = "",
+      TargetUrl,
+      TargetUserAdditionalIds = parse_json("[]"),
+      TargetUserEntityKey = "",
+      TargetUserId = UserId,
+      TargetUserIdType = iif(isnotempty(UserId), "SalesforceId", ""),
+      User = UserId
