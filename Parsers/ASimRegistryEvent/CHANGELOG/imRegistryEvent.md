@@ -1,5 +1,9 @@
 # Changelog for imRegistryEvent.yaml
 
+## Version 0.1.5
+
+- (2026-09-01) Add CrowdStrike Falcon Data Replicator to Registry Event schema - [PR #15024](https://github.com/Azure/Azure-Sentinel/pull/15024)
+
 ## Version 0.1.4
 
 - (2024-05-30) ASimRegistryEventMicrosoftWindowsEvent.yaml-53 - [PR #10554](https://github.com/Azure/Azure-Sentinel/pull/10554)

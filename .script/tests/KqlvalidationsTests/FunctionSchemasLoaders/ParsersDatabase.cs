@@ -51,6 +51,11 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
                 },
                 new ParserConfiguration()
                 {
+                    Schema= "ASimEmailEvent",
+                    SampleFunctionName= "_Im_EmailEvent",
+                },
+                new ParserConfiguration()
+                {
                     Schema= "ASimFileEvent",
                     SampleFunctionName= "_Im_FileEvent",
                 },

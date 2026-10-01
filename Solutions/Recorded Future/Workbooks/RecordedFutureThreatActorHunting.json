@@ -73,7 +73,7 @@
             "name": "Category",
             "label": "Threat Actor Category",
             "type": 2,
-            "query": "RecordedFutureThreatMap_CL\r\n| distinct categories_s\r\n| mv-expand parse_json(categories_s)\r\n| distinct id = tostring(categories_s.id), name = tostring(categories_s.name)\r\n",
+            "query": "RecordedFutureThreatMap_V2_CL\r\n| mv-expand actor = todynamic(data)\r\n| project categories_s = tostring(actor.categories)\r\n| mv-expand parse_json(categories_s)\r\n| distinct id = tostring(categories_s.id), name = tostring(categories_s.name)\r\n",
             "typeSettings": {
               "showDefault": false
             },
@@ -90,7 +90,7 @@
             "name": "Watchlist",
             "label": "Recorded Future Watchlist",
             "type": 2,
-            "query": "RecordedFutureThreatMap_CL\r\n| distinct log_entries_s\r\n| mv-expand parse_json(log_entries_s)\r\n| where isnotempty(log_entries_s.watchlist)\r\n| distinct id = tostring(log_entries_s.watchlist.id), name = tostring(log_entries_s.watchlist.name)",
+            "query": "RecordedFutureThreatMap_V2_CL\r\n| mv-expand actor = todynamic(data)\r\n| project log_entries_s = tostring(actor.log_entries)\r\n| mv-expand parse_json(log_entries_s)\r\n| where isnotempty(log_entries_s.watchlist)\r\n| distinct id = tostring(log_entries_s.watchlist.id), name = tostring(log_entries_s.watchlist.name)",
             "typeSettings": {
               "showDefault": false
             },
@@ -122,7 +122,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d,  combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d, combine\n| order by combine desc \n| project MaxTimeGenerated, id_s, name_s, intent_d, opportunity_d\n| take 100\n",
+        "query": "RecordedFutureThreatMap_V2_CL\n| where TimeGenerated {TimeRange:query}\n| mv-expand actor = todynamic(data)\n| extend id_s = tostring(actor.id), name_s = tostring(actor.name), intent_d = toreal(actor.intent), opportunity_d = toreal(actor.opportunity), categories_s = tostring(actor.categories), log_entries_s = tostring(actor.log_entries)\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d,  combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d, combine\n| order by combine desc \n| project MaxTimeGenerated, id_s, name_s, intent_d, opportunity_d\n| take 100\n",
         "size": 0,
         "title": "Threat Actor Map",
         "noDataMessage": "No data found",
@@ -186,7 +186,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d, combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d,combine\n| order by combine desc \n| project Name=name_s, Intent=intent_d, Opportunity=opportunity_d, id_s\n",
+        "query": "RecordedFutureThreatMap_V2_CL\n| where TimeGenerated {TimeRange:query}\n| mv-expand actor = todynamic(data)\n| extend id_s = tostring(actor.id), name_s = tostring(actor.name), intent_d = toreal(actor.intent), opportunity_d = toreal(actor.opportunity), categories_s = tostring(actor.categories), log_entries_s = tostring(actor.log_entries)\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d, combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d,combine\n| order by combine desc \n| project Name=name_s, Intent=intent_d, Opportunity=opportunity_d, id_s\n",
         "size": 0,
         "title": "Threat Actors",
         "exportFieldName": "id_s",
@@ -209,7 +209,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated  {TimeRange:query}\n| where id_s == \"{ThreatActor}\"\n| take 1\n| mv-expand categoriesArray= parse_json(categories_s)\n| mv-expand watchlistArray = parse_json(log_entries_s)\n| summarize  [\"Threat Actor Categories\"] = make_list(categoriesArray.name), WatchLists= make_list_with_nulls(watchlistArray.watchlist.name) by Link=strcat(\"https://app.recordedfuture.com/live/sc/entity/\",id_s), Name=name_s, Id=id_s,  Aliases=array_strcat(parse_json(alias_s),',')",
+        "query": "RecordedFutureThreatMap_V2_CL\n| where TimeGenerated  {TimeRange:query}\n| mv-expand actor = todynamic(data)\n| extend id_s = tostring(actor.id), name_s = tostring(actor.name), categories_s = tostring(actor.categories), log_entries_s = tostring(actor.log_entries), alias_s = tostring(actor.alias)\n| where id_s == \"{ThreatActor}\"\n| take 1\n| mv-expand categoriesArray= parse_json(categories_s)\n| mv-expand watchlistArray = parse_json(log_entries_s)\n| summarize  [\"Threat Actor Categories\"] = make_list(categoriesArray.name), WatchLists= make_list_with_nulls(watchlistArray.watchlist.name) by Link=strcat(\"https://app.recordedfuture.com/live/sc/entity/\",id_s), Name=name_s, Id=id_s,  Aliases=array_strcat(parse_json(alias_s),',')",
         "size": 4,
         "title": "Actor Details",
         "noDataMessage": "Please select a threat actor in the Threat Actors table to display details.",
