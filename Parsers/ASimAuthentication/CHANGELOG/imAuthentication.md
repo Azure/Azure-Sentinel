@@ -2,7 +2,7 @@
 
 ## Version 0.3.21
 
-- (2026-10-01) Add the Zscaler ZPA Authentication filtering parser. [PR #XX](https://github.com/Azure/Azure-Sentinel/pull/XX)
+- (2026-10-01) Add the Zscaler ZPA Authentication filtering parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
 
 ## Version 0.3.20
 
