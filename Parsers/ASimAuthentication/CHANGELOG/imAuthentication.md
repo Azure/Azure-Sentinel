@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.21
+
+- (2026-10-01) Add the Zscaler ZPA Authentication filtering parser. [PR #XX](https://github.com/Azure/Azure-Sentinel/pull/XX)
+
 ## Version 0.3.20
 
 - (2026-09-25) Add the Aruba Networks ClearPass Authentication filtering parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
