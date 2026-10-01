@@ -171,7 +171,7 @@ The `GIBTIA_IOC_Primary_Updated` playbook polls the `ioc/primary/updated` Group-
    | `IndicatorProcessorPlaybookName` | `GIBTIA_IndicatorProcessor_v2`   | Must match the adapter name exactly                                        |
    | `WorkspaceId`                    | Your workspace GUID              | For MSI query calls                                                        |
    | `WorkspaceName`                  | Your workspace name              | Must be in the same resource group: the template creates the cursor table in it and points the DCR at it |
-   | `WorkspaceLocation`              | leave as is                      | The DCR must be created in the workspace's region; the default is this resource group's region. Change it only if your workspace is in a different region |
+   | `WorkspaceLocation`              | leave empty                      | The DCR must be created in the workspace's region; empty means this resource group's region. Set it only if your workspace is in a different region |
    | `AssignRoles`                    | `true`                           | The template grants the playbook's identity its two roles. Set `false` only if your account cannot create role assignments (see §4.4) |
 
 4. Click **Review + create** → **Create**. The deployment creates the Logic App, its Data Collection Rule (named `gib-ioc-primary-<hash>`, tagged with the playbook name), the `GIBCollectionTracking_CL` table if it does not exist, and the two role assignments.

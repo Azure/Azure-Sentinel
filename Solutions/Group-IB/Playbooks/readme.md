@@ -1,8 +1,8 @@
 # Group-IB Threat Intelligence — Microsoft Sentinel Integration
 
-This integration connects the [Group-IB Threat Intelligence](https://www.group-ib.com/products/threat-intelligence/) platform to Microsoft Sentinel using Azure Logic Apps (playbooks). It continuously fetches threat intelligence data from Group-IB TI feeds and delivers it to Sentinel in two complementary forms:
+This integration connects the [Group-IB Threat Intelligence](https://www.group-ib.com/products/threat-intelligence/) platform to Microsoft Sentinel using Azure Logic Apps (playbooks). It continuously fetches threat intelligence data from Group-IB TI feeds and delivers it to Microsoft Sentinel in two complementary forms:
 
-- **Threat indicators** (IPs, domains, URLs, file hashes) pushed to the Sentinel Threat Intelligence blade as STIX 2.1 objects, where they match against your log data in real time.
+- **Threat indicators** (IPs, domains, URLs, file hashes) pushed to Microsoft Sentinel Threat Intelligence as STIX 2.1 objects, where they match against your log data in real time.
 - **Context records** (threat actor profiles, APT reports, malware intelligence, vulnerability data, leaked credential metadata, and more) written to dedicated Log Analytics custom tables for analytics rules and enrichment queries.
 
 ---
@@ -16,7 +16,27 @@ The integration ships in two functionally-equivalent packages — pick one based
 | **Consumption** | 37 separate Logic Apps, each deployed from its own `GIBTIA_<Name>/azuredeploy.json` ARM template. Per-action billing, individual scaling and management per playbook.        | Lighter setups, partial-coverage installs, predictable per-action cost.                                  | [USER_GUIDE.md](USER_GUIDE.md)                   |
 | **Standard**    | One Standard Logic App (`Microsoft.Web/sites` + WS1 plan) hosting all 37 playbooks as nested workflows. Single shared Managed Identity, fixed plan billing. Source in `Playbooks/Standard/`. | Production installs running most/all playbooks, predictable monthly cost, single point of admin and IAM. | [USER_GUIDE_STANDARD.md](USER_GUIDE_STANDARD.md) |
 
-Both packages produce identical downstream Sentinel content (same indicators in `ThreatIntelIndicators`, same `GIB*_CL` context tables). Only the wrapper around the workflow definitions differs.
+Both packages produce identical downstream Microsoft Sentinel content (same indicators in `ThreatIntelIndicators`, same `GIB*_CL` context tables). Only the wrapper around the workflow definitions differs.
+
+### Installing from Content Hub (Consumption package)
+
+The Consumption package is also published as the **Group-IB Threat Intelligence** solution in the
+Microsoft Sentinel **Content hub** (solution package under `../Package/`, built with the
+Create-Azure-Sentinel-Solution V3 tool from `../Data/Solution_Group-IB.json`). Installing the
+solution registers all 37 playbooks as **playbook templates**; it does not create any Logic App.
+After installing:
+
+1. In Microsoft Sentinel go to **Automation → Playbook templates**, filter by *Group-IB*.
+2. Create **GIBTIA_IndicatorProcessor_v2** first, then each collector and enrichment playbook you
+   need. The template wizard asks for the same parameters as the Deploy-to-Azure buttons below
+   (`GIBUsername`, `GIBApiKey`, `WorkspaceName`, …); each collector template also creates its
+   Data Collection Rule, custom tables and role assignments.
+3. Follow the per-playbook *Post-deployment* steps (in each playbook's `readme.md`), then enable
+   the Logic App — every playbook deploys **Disabled**.
+
+The Standard package is **not** part of the Content Hub solution (the packaging tool handles
+Consumption ARM templates only); install it from `Standard/` as described in
+[USER_GUIDE_STANDARD.md](USER_GUIDE_STANDARD.md).
 
 ### Standard package: optional `post-deploy.sh` script
 
@@ -36,7 +56,7 @@ The script (~310 lines, bash):
 2. Assigns the two required MSI roles: `Microsoft Sentinel Contributor` on the workspace and `Monitoring Metrics Publisher` on the Data Collection Rule that `infrastructure-arm.json` creates (usually already granted by the template).
 3. Generates a placeholder `connections.json` so the Designer can render workflows, and zip-deploys the workflows.
 4. Pauses and instructs you through the **one** manual Designer-bind step (~2 minutes of Portal clicks).
-5. Polls Azure for the new Sentinel connection resource to gain a populated `connectionRuntimeUrl` value (typically 1-5 minutes).
+5. Polls Azure for the new Microsoft Sentinel connection resource to gain a populated `connectionRuntimeUrl` value (typically 1-5 minutes).
 6. Writes the final `connections.json` and redeploys.
 7. Restarts the Logic App.
 
@@ -138,13 +158,13 @@ Perform these steps for **each** deployed playbook.
 
 | Playbook file                                   | Purpose                                                                                                                                                                                       | Deploy order |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `GIBTIA_IndicatorProcessor_v2/azuredeploy.json` | Receives batched STIX 2.1 indicators from all collector playbooks and uploads them to Sentinel Threat Intelligence via Managed Identity. **Must be deployed before any indicator collector.** | 1st          |
+| `GIBTIA_IndicatorProcessor_v2/azuredeploy.json` | Receives batched STIX 2.1 indicators from all collector playbooks and uploads them to Microsoft Sentinel Threat Intelligence via Managed Identity. **Must be deployed before any indicator collector.** | 1st          |
 
 ---
 
 ### Indicator Collector Playbooks
 
-These playbooks poll Group-IB TI feeds on an hourly recurrence, transform records into STIX 2.1 indicator objects, and send them to `GIBTIA_IndicatorProcessor_v2` for submission to the Sentinel Threat Intelligence blade.
+These playbooks poll Group-IB TI feeds on an hourly recurrence, transform records into STIX 2.1 indicator objects, and send them to `GIBTIA_IndicatorProcessor_v2` for submission to Microsoft Sentinel Threat Intelligence.
 
 | Playbook file                                       | Group-IB collection         | Indicator types                        | Notes                                                                                                                                                                                                                                                     |
 | --------------------------------------------------- | --------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -188,13 +208,13 @@ These playbooks poll Group-IB TI intelligence collections on an hourly recurrenc
 
 ### Enrichment Playbooks
 
-These playbooks are triggered by Sentinel incidents and add structured context as incident comments. They are not recurrence-based — they run in response to analyst activity or automation rules.
+These playbooks are triggered by Microsoft Sentinel incidents and add structured context as incident comments. They are not recurrence-based — they run in response to analyst activity or automation rules.
 
 | Playbook file                          | Trigger                           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GIBTIA_Enrich_WHOIS/azuredeploy.json` | Sentinel incident created/updated | **Light enrichment** for any incident from any source. For each IP and domain entity: queries Group-IB WHOIS API for registration data and checks `ThreatIntelIndicators` for already-ingested Group-IB indicators. Intended to run on all new incidents automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `GIBTIA_Enrich_IOC/azuredeploy.json`   | Sentinel incident created/updated | **Cross-collection IOC enrichment.** For each IP, domain, URL, or file-hash entity in the incident: (1) calls `/api/v2/user/granted_collections` once to discover which Group-IB collections this API key can read; (2) calls `/api/v2/search?q=<value>` per entity to find matches across all collections; (3) intersects the match list with the granted-collection set; (4) for each granted+matching collection, fetches the first 3 records via the collection-specific link. Posts a comment showing which collections have hits, how many, and the **full JSON record** of each fetched sample (one per line). Output is split across multiple incident comments when it would exceed Sentinel's 30,000-character comment limit ("part N of M"). The granted-collections gate ensures the playbook only fetches data the operator's account is actually entitled to. |
-| `GIBTIA_Score_IP/azuredeploy.json`     | Sentinel incident created/updated | **Risk scoring** for IP entities. Batches all IPs from the incident into a single `POST /api/v2/scoring` call, and posts each IP's GIB risk score (0–100) back as an incident comment. Score is derived from multi-source TI tags weighted by recency, frequency, persistence, and severity.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `GIBTIA_Enrich_WHOIS/azuredeploy.json` | Microsoft Sentinel incident created/updated | **Light enrichment** for any incident from any source. For each IP and domain entity: queries Group-IB WHOIS API for registration data and checks `ThreatIntelIndicators` for already-ingested Group-IB indicators. Intended to run on all new incidents automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `GIBTIA_Enrich_IOC/azuredeploy.json`   | Microsoft Sentinel incident created/updated | **Cross-collection IOC enrichment.** For each IP, domain, URL, or file-hash entity in the incident: (1) calls `/api/v2/user/granted_collections` once to discover which Group-IB collections this API key can read; (2) calls `/api/v2/search?q=<value>` per entity to find matches across all collections; (3) intersects the match list with the granted-collection set; (4) for each granted+matching collection, fetches the first 3 records via the collection-specific link. Posts a comment showing which collections have hits, how many, and the **full JSON record** of each fetched sample (one per line). Output is split across multiple incident comments when it would exceed Microsoft Sentinel's 30,000-character comment limit ("part N of M"). The granted-collections gate ensures the playbook only fetches data the operator's account is actually entitled to. |
+| `GIBTIA_Score_IP/azuredeploy.json`     | Microsoft Sentinel incident created/updated | **Risk scoring** for IP entities. Batches all IPs from the incident into a single `POST /api/v2/scoring` call, and posts each IP's GIB risk score (0–100) back as an incident comment. Score is derived from multi-source TI tags weighted by recency, frequency, persistence, and severity.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -206,7 +226,7 @@ All playbooks authenticate to Azure services using **Managed Identity** — no O
 | ---------------------------------------- | -------------------------------------------------- | ------------------------------ |
 | Log Analytics query (seqUpdate read)     | Managed Identity → ARM endpoint                    | Log Analytics Reader           |
 | Log Analytics write (Logs Ingestion API) | Managed Identity → the playbook's Data Collection Rule | Monitoring Metrics Publisher (on the DCR) |
-| Sentinel Threat Intelligence upload      | Managed Identity → azuresentinel connector         | Microsoft Sentinel Contributor |
+| Microsoft Sentinel Threat Intelligence upload      | Managed Identity → azuresentinel connector         | Microsoft Sentinel Contributor |
 | Group-IB TI API                          | HTTP Basic Auth (username + API key in parameters) | N/A — Group-IB-side credential |
 
 ---
@@ -239,7 +259,7 @@ detail: [`USER_GUIDE.md` §4.10](USER_GUIDE.md) for Consumption,
 
 ## STIX 2.1 Indicator Format
 
-All indicators submitted to Sentinel Threat Intelligence are STIX 2.1 compliant, as required by the Sentinel Upload Indicators API. Each indicator object contains:
+All indicators submitted to Microsoft Sentinel Threat Intelligence are STIX 2.1 compliant, as required by the Microsoft Sentinel Upload Indicators API. Each indicator object contains:
 
 | Field                                 | Value                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -283,7 +303,7 @@ All indicators submitted to Sentinel Threat Intelligence are STIX 2.1 compliant,
 
 | Requirement              | Details                                                                                                           |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Azure subscription       | Active subscription with resource group containing a Sentinel workspace                                           |
+| Azure subscription       | Active subscription with resource group containing a Microsoft Sentinel workspace                                           |
 | Microsoft Sentinel       | Enabled on a Log Analytics workspace                                                                              |
 | Group-IB TI subscription | Active Group-IB TI portal access with API key; access to specific collections depends on your subscription tier   |
 | Logic App region         | Must be in a region supported by the `azuresentinel` managed API; the Data Collection Rule is created in the workspace's region |

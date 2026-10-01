@@ -11,7 +11,6 @@ Polls the Group-IB Threat Intelligence apt/threat_actor collection hourly using 
 - A Group-IB Threat Intelligence subscription with API access to the apt/threat_actor collection.
 - A Log Analytics workspace connected to Microsoft Sentinel.
 - The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
-- The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
 
 ## Post-deployment
 

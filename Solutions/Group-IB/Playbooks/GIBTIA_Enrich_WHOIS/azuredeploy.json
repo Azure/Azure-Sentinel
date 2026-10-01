@@ -1,6 +1,54 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Group-IB TI - Enrich incident with WHOIS data",
+        "description": "Triggered by a Microsoft Sentinel incident. Runs a Group-IB WHOIS lookup for every IP and domain entity on the incident and posts registration and ownership details back as incident comments.",
+        "prerequisites": [
+            "A Group-IB Threat Intelligence subscription with API access.",
+            "A Log Analytics workspace connected to Microsoft Sentinel."
+        ],
+        "postDeployment": [
+            "1. Authorize the Microsoft Sentinel API connection.",
+            "2. Assign the Microsoft Sentinel Responder role to the playbook's managed identity so it can add incident comments.",
+            "3. Set the GIBUsername and GIBApiKey parameters.",
+            "4. Attach the playbook to an automation rule so it runs when an incident is created."
+        ],
+        "lastUpdateTime": "2026-09-21T00:00:00.000Z",
+        "entities": [
+            "ip",
+            "dnsresolution"
+        ],
+        "tags": [
+            "Group-IB",
+            "Enrichment"
+        ],
+        "releaseNotes": [
+            {
+                "version": "2.0",
+                "title": "Rebuilt for the current Group-IB TI API",
+                "notes": [
+                    "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
+                ]
+            },
+            {
+                "version": "2.1",
+                "title": "Review fixes",
+                "notes": [
+                    "The ThreatIntelIndicators lookup now matches the quoted STIX value exactly (contains strcat) instead of the term-based has, which also matched parent domains."
+                ]
+            }
+        ],
+        "support": {
+            "name": "Group-IB",
+            "email": "integration@group-ib.com",
+            "tier": "Partner",
+            "link": "https://tap.group-ib.com/hc/api"
+        },
+        "author": {
+            "name": "Group-IB"
+        }
+    },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "GIBTIA_Enrich_WHOIS",
@@ -49,56 +97,11 @@
         },
         {
             "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2017-07-01",
+            "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
             "tags": {
                 "hidden-SentinelTemplateName": "GIBTIA_Enrich_WHOIS",
                 "hidden-SentinelTemplateVersion": "2.1"
-            },
-            "metadata": {
-                "title": "Group-IB TI - Enrich incident with WHOIS data",
-                "description": "Triggered by a Microsoft Sentinel incident. Runs a Group-IB WHOIS lookup for every IP and domain entity on the incident and posts registration and ownership details back as incident comments.",
-                "prerequisites": [
-                    "A Group-IB Threat Intelligence subscription with API access.",
-                    "A Log Analytics workspace connected to Microsoft Sentinel."
-                ],
-                "postDeployment": [
-                    "1. Authorize the Microsoft Sentinel API connection.",
-                    "2. Assign the Microsoft Sentinel Responder role to the playbook's managed identity so it can add incident comments.",
-                    "3. Set the GIBUsername and GIBApiKey parameters.",
-                    "4. Attach the playbook to an automation rule so it runs when an incident is created."
-                ],
-                "lastUpdateTime": "2026-09-21T00:00:00.000Z",
-                "entities": [
-                    "ip",
-                    "dns"
-                ],
-                "tags": [
-                    "Group-IB",
-                    "Enrichment"
-                ],
-                "releaseNotes": [
-                    {
-                        "version": "2.0",
-                        "title": "Rebuilt for the current Group-IB TI API",
-                        "notes": [
-                            "Replaces the deprecated Microsoft Security Graph API implementation. Calls the Group-IB Threat Intelligence API over HTTPS Basic auth and posts results as incident comments using a managed identity."
-                        ]
-                    },
-                    {
-                        "version": "2.1",
-                        "title": "Review fixes",
-                        "notes": [
-                            "The ThreatIntelIndicators lookup now matches the quoted STIX value exactly (contains strcat) instead of the term-based has, which also matched parent domains."
-                        ]
-                    }
-                ],
-                "support": {
-                    "tier": "community"
-                },
-                "author": {
-                    "name": "Group-IB"
-                }
             },
             "location": "[resourceGroup().location]",
             "identity": {
@@ -251,7 +254,7 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "POST",
-                                        "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'), '/query?api-version=2017-10-01')]",
+                                        "uri": "[concat(environment().resourceManager, 'subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'), '/query?api-version=2017-10-01')]",
                                         "headers": {
                                             "Content-Type": "application/json"
                                         },
@@ -260,7 +263,7 @@
                                         },
                                         "authentication": {
                                             "type": "ManagedServiceIdentity",
-                                            "audience": "https://management.azure.com/"
+                                            "audience": "[environment().resourceManager]"
                                         }
                                     },
                                     "runAfter": {}
@@ -335,7 +338,7 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "POST",
-                                        "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'), '/query?api-version=2017-10-01')]",
+                                        "uri": "[concat(environment().resourceManager, 'subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'), '/query?api-version=2017-10-01')]",
                                         "headers": {
                                             "Content-Type": "application/json"
                                         },
@@ -344,7 +347,7 @@
                                         },
                                         "authentication": {
                                             "type": "ManagedServiceIdentity",
-                                            "audience": "https://management.azure.com/"
+                                            "audience": "[environment().resourceManager]"
                                         }
                                     },
                                     "runAfter": {}

@@ -11,7 +11,6 @@ Polls the Group-IB Threat Intelligence compromised/masked_card collection hourly
 - A Group-IB Threat Intelligence subscription with API access to the compromised/masked_card collection.
 - A Log Analytics workspace connected to Microsoft Sentinel.
 - The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
-- The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
 
 ## Post-deployment
 

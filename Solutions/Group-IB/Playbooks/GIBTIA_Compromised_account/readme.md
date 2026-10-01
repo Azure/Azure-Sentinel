@@ -11,7 +11,6 @@ Polls the Group-IB Threat Intelligence compromised/account_group collection hour
 - A Group-IB Threat Intelligence subscription with API access to the compromised/account_group collection.
 - A Log Analytics workspace connected to Microsoft Sentinel.
 - The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
-- The deploying account holds Owner or User Access Administrator on the resource group (the template creates role assignments), or the AssignRoles parameter is set to false.
 
 ## Post-deployment
 

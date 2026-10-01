@@ -66,7 +66,7 @@ The 29 workflows break down as:
 | **Context collectors** | 14 | `GIBTIA_APT_Threats`, `GIBTIA_OSI_Vulnerability`, `GIBTIA_HI_*`, `GIBTIA_Compromised_BankCard`, `GIBTIA_Compromised_BreachedDB`, … — hourly recurrence, write raw records to Log Analytics custom tables |
 | **Enrichment playbooks** | 10 | `GIBTIA_Enrich_WHOIS`, `GIBTIA_Enrich_IOC`, `GIBTIA_Score_IP` — triggered by Sentinel incident webhook, post enrichment as incident comments; plus their seven **single-entity** variants (`GIBTIA_Score_IP_Single`, `GIBTIA_Enrich_IOC_Single_{IP,Domain,URL,FileHash}`, `GIBTIA_Enrich_WHOIS_Single_{IP,Domain}`) — entity-triggered, run by hand from an entity's **Run playbook** menu, cannot be attached to automation rules |
 
-> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/azuredeploy-GIBTIA_Score_IP.json`).
+> **Note on `GIBTIA_Score_IP`**: this enrichment playbook ships in the Standard package and also has a Consumption ARM template equivalent (`Playbooks/GIBTIA_Score_IP/azuredeploy.json`).
 
 See [§A. Full workflow catalog](#a-full-workflow-catalog) at the bottom of this guide for the complete list with collection slugs and destination tables.
 
