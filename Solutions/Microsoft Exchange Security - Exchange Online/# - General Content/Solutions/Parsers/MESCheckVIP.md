@@ -7,30 +7,30 @@
 // Last Updated:    01/11/2023
 // Comment:  
 //      v1.0 : 
-//          - Function initilisation for Sentinel Solution
+//          - Function initialization for the Microsoft Sentinel solution
 //  
 // DESCRIPTION:
-// This parser could be used to find if a user is a VIP on Microsoft Exchange Security solution.
+// This parser determines whether a user is listed as a VIP for the Microsoft Exchange Security solution.
 //
 // USAGE:
 // 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "MESCheckVIP".
-// Parameters : 1 parameter to add during creation. 
+// Parameters: add this parameter when creating the function.
 //    1. UserToCheck, type string, default value "All"
-// 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+// 3. A saved function can take 10-15 minutes to become available. You can then call the function alias from other queries.
 //
 // DEPENDENCY:
-// This parser is linked to "ExchangeVIP" whatchlist
+// This parser uses the "ExchangeVIP" watchlist when it is available.
 //
 // REFERENCE: 
-// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Using functions in Azure Monitor log queries: https://learn.microsoft.com/azure/azure-monitor/logs/functions
 //
 // LOG SAMPLES:
 // This parser assumes that ExchangeVIP Watchlist is created (but works without the watchlist, returning an empty table)
 //
 //
 // Parameters simulation
-// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
+// To test the parser without saving it as a function, uncomment the variable below to simulate the parameter value.
 //
 //let UserToCheck = "SampleEntry";
 //

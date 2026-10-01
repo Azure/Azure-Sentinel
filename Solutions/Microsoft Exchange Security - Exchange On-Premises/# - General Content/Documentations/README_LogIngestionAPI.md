@@ -100,7 +100,9 @@ The exported `.cer` file contains only the public certificate. The private key r
 Do not create a client secret. The on-premises collector authenticates by using the certificate.
 
 ### Grant the service account access to the private key
-This step is required if the script that run the Scheduled Task is not member or the local Administrator group.
+
+Complete this step when the scheduled task runs under an account that is not a member of the local **Administrators** group.
+
 On the collector server:
 
 1. Run `certlm.msc`.

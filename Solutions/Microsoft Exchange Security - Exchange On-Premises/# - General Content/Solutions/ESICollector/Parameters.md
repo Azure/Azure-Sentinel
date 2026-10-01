@@ -1,6 +1,6 @@
 # ExchSecIns Configuration
 
-Actual Parameter version : 3.0
+Current parameter schema version: **3.0**
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Actual Parameter version : 3.0
     - [InternetAddonCollectionConfiguration](#internetaddoncollectionconfiguration-1)
     - [InstanceConfiguration](#instanceconfiguration-1)
     - [AuditFunctionsFiles](#auditfunctionsfiles-1)
-    - [other parameters](#other-parameters)
+    - [Other parameters](#other-parameters)
   - [Migration from configuration version 2.5 to 3.0](#migration-from-configuration-version-25-to-30)
 
 ## Parameters
@@ -34,8 +34,8 @@ Parameters can be found in the "CollectExchSecConfiguration.json" file for On-Pr
 |-----------------------------|---------|--------------------------------------------------------------------------------------------|------------------|----------|
 | ParallelTimeoutMinutes      | Int     | Maximum time in minutes to wait for a parallel job to finish                               | 5                | False    |
 | MaxParallelRunningJobs      | Int     | Maximum number of parallel jobs running at the same time                                   | 8                | False    |
-| GlobalParallelProcessing    | Boolean | Activate the collection of information by using paralleling mechanism. Recommanded         | true             | False    |
-| PerServerParallelProcessing | Boolean | Activate the collection of information concerning a specific server by using paralleling   | true             | False    |
+| GlobalParallelProcessing    | Boolean | Collect information by using parallel processing. Recommended.                             | true             | False    |
+| PerServerParallelProcessing | Boolean | Collect information for individual servers by using parallel processing.                   | true             | False    |
 | DefaultDurationTracking     | Int     | Default duration tracking in days                                                          | 30               | False    |
 | ESIProcessingType           | String  | Type of processing, online or offline                                                      | Online           | False    |
 | EnvironmentIdentification   | String  | Identification of the environment. Could be any text, the name of the tenant or AD domain  | MyOwnEnvironment | False    |
@@ -49,11 +49,11 @@ Parameters can be found in the "CollectExchSecConfiguration.json" file for On-Pr
 |----------------------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|----------|
 | ParralelWaitRunning              | Int     | Time in seconds to wait for parallel processing before considering a timeout                                                                                | 10                                                     | False    |
 | ParralelPingWaitRunning          | Int     | Time in seconds to wait for parallel ping processing before considering a timeout                                                                           | 10                                                     | False    |
-| OnlyExplicitActivation           | Boolean | Only the explicit activation of the functions are processed. In this mode, each function needs to be taggued for processig                                  | false                                                  | False    |
+| OnlyExplicitActivation           | Boolean | Process only explicitly activated functions. In this mode, each function must be tagged for processing.                                                    | false                                                  | False    |
 | ExchangeServerBinPath            | String  | Path of the Exchange Server Binaries. Could be changed if Exchange is not installed in the default folder path                                              | c:\Program Files\Microsoft\Exchange Server\V15\bin     | False    |
 | BypassServerAvailabilityTest     | Boolean | Bypass the server availability test. If activated, the collector will try to work with all servers including inaccessible servers.                          | false                                                  | False    |
 | ExplicitExchangeServerList       | Array   | List of explicit Exchange servers. If the previous parameter is activated, it could be good to build a static list of servers to use                        | []                                                     | False    |
-| FunctionsListInline              | Boolean | Functions list inline. The functions will be read in the main config file. This option is more for retrocompatibility                                       | false                                                  | False    |
+| FunctionsListInline              | Boolean | Read the function list from the main configuration file. This option is retained for backward compatibility.                                                | false                                                  | False    |
 | FunctionsListWithoutInternet     | Boolean | Functions list without internet. If activated, the collector will use the local files instead of files in the GitHub repository                             | false                                                  | False    |
 | Beta                             | Boolean | Activating Beta feature, collecting Beta version of functions to execute.                                                                                   | false                                                  | False    |
 | Useproxy                         | Boolean | Use Proxy boolean if you need it. The next option needs to be filled.                                                                                       | false                                                  | False    |
@@ -139,8 +139,8 @@ Below are specific parameters and their description.
 
 ### UDSLogProcessor
 
-The UDSLogProcessor allows to describe the way the UDS logs are displayed or stored. It could be stored in a file or an Azure Storage account if needed or only displayed.
-The UDSLogProcessor is an array of object. Each object contains the following parameters:
+`UDSLogProcessor` controls how UDS logs are displayed or stored. Logs can be written to a file or an Azure Storage account, or displayed only.
+`UDSLogProcessor` is an array of objects. Each object contains the following parameters:
 
 - Activated: Boolean. If true, the log will be processed.
 - StorageType: String. The type of storage. Could be Output, File or AzureStorageAccount.
@@ -149,18 +149,18 @@ The UDSLogProcessor is an array of object. Each object contains the following pa
 - LogStorageRetentionDays: Int. The retention days of the log in the storage. It's optional.
 - StorageAccountName: String. The name of the storage account. If the StorageType is AzureStorageAccount, this parameter is required.
 - StorageBlobContainer: String. The name of the storage container. If the StorageType is AzureStorageAccount, this parameter is required.
-- ConnexionType: String. The type of the connexion. Could be ManagedIdentity or Certificate. If the StorageType is AzureStorageAccount, this parameter is required.
+- ConnexionType: String. Connection type. Supported values are `ManagedIdentity` and `Certificate`. This parameter is required when `StorageType` is `AzureStorageAccount`.
 - TenantId: String. The tenant id. If the StorageType is AzureStorageAccount, this parameter is required.
-- ApplicationID: String. The application id. If the StorageType is AzureStorageAccount and ConnexionType is Certificate, this parameter is required.
-- CertificateThumbprint: String. The certificate thumbprint. If the StorageType is AzureStorageAccount and ConnexionType is Certificate, this parameter is required.
+- ApplicationID: String. Application ID. This parameter is required when `StorageType` is `AzureStorageAccount` and `ConnexionType` is `Certificate`.
+- CertificateThumbprint: String. Certificate thumbprint. This parameter is required when `StorageType` is `AzureStorageAccount` and `ConnexionType` is `Certificate`.
 
 ### Azure Monitor Log Ingestion API parameters
 
-Starting with configuration version 3.0, the collector natively supports the Azure Monitor **Log Ingestion API** in addition to the legacy Log Analytics HTTP Data Collector API. The switch between the two APIs is controlled by `SentinelLogIngestionAPIActivated` in the `LogCollection` section. Both APIs are supported simultaneously to enable a phased migration.
+Starting with configuration version 3.0, the collector natively supports the Azure Monitor **Log Ingestion API** in addition to the legacy Log Analytics HTTP Data Collector API. The switch between the two APIs is controlled by `SentinelLogIngestionAPIActivated` in the `LogCollection` section. Both APIs remain supported to enable a phased migration.
 
 Prerequisites when `SentinelLogIngestionAPIActivated` is `true`:
 
-- A **Data Collection Endpoint (DCE)** and one or several **Data Collection Rules (DCR)** must be deployed. The ARM template [azuredeploy_ESI_LogIngestionAPI.json](/Deployments/azuredeploy_ESI_LogIngestionAPI.json) provisions everything needed (DCE + 3 tables + 3 DCRs, each optional).
+- A **Data Collection Endpoint (DCE)** and one or more **Data Collection Rules (DCRs)** must be deployed. The [Azure Monitor ingestion template](../../../Data%20Connectors/azuredeploy_ESI_LogIngestionAPI.json) provisions the DCE and the selected tables and DCRs.
 - An **identity** must exist for the collector:
   - **System-assigned Managed Identity** on the Automation Account (`UseManagedIdentity = true`), or
   - **Entra ID application** with a **certificate** in the local certificate store (`UseManagedIdentity = false`).
@@ -197,14 +197,14 @@ Two modes are supported:
 
 ### InstanceConfiguration
 
-The InstanceConfiguration allows to configure multiple instances to collect different data. 3 main instances are available: Default, IIS-IoCs and ExchangeOnlineMessageTracking. It's possible to configure more instances by using the InstanceExample example where InstanceExample is the name of the instance to configure.
-The InstanceConfiguration is an object. It contains the following parameters:
+`InstanceConfiguration` defines multiple collection instances. Three standard instances are available: `Default`, `IIS-IoCs`, and `ExchangeOnlineMessageTracking`. Additional instances can be created from `InstanceExample`, using the intended instance name as the property name.
+`InstanceConfiguration` is an object that contains the following parameters:
 
 - Default: Object. Default configuration, mandatory. It contains the following parameters:
   - All: Boolean. If true (by default), all the functions are activated.
-  - Capabilities: String. The capabilities to activate. Could be 'OP' for Exchange On-Premises, 'OL' for Exchange Online, 'MGGRAPH' for connexion to Microsoft Graph API and 'ADINFOS' to collect AD Information. The capabilities are used only if the functions require them.
+  - Capabilities: String. Capabilities to activate: `OP` for Exchange On-Premises, `OL` for Exchange Online, `MGGRAPH` for Microsoft Graph, and `ADINFOS` for Active Directory information. Capabilities are used only when required by a function.
   - SelectedAddons: Array, Mandatory if All is deactivated. The list of selected addons to activate by inserting the filename of the addon like "ESICollector-POPIMAPConfiguration.json".
-  - FileteredAddons: Array, Optional. The list of filtered addons to deactivate by inserting the filename of the addon like "ESICollector-POPIMAPConfiguration.json".
+  - FileteredAddons: Array, optional. Add-on filenames to deactivate, for example `ESICollector-POPIMAPConfiguration.json`.
   - OutputName: String, Optional. The name of the output file to use. The Default name in the configuration is used if not present.
 
 - IIS-IoCs: Object. IIS IoCs configuration, a specific configuration to collect information from IIS Logs. It contains the following parameters:
@@ -221,19 +221,19 @@ The InstanceConfiguration is an object. It contains the following parameters:
 - InstanceExample: Object. Instance Example configuration where InstanceExample is the name of the Instance you want to create. It contains the following parameters:
   - All: Boolean. If true, all the functions are activated.
   - SelectedAddons: Array, mandatory only if All is false. The list of selected addons to activate by inserting the filename of the addon like "ESICollector-POPIMAPConfiguration.json".
-  - FileteredAddons: Array. The list of filtered addons to deactivate by inserting the filename of the addon like "ESICollector-POPIMAPConfiguration.json".
-  - Capabilities: String. The capabilities to activate. It could be 'OP' for Exchange On-Premises, 'OL' for Exchange Online, 'MGGRAPH' for connexion to Microsoft Graph API and 'ADINFOS' to collect AD Information, 'IIS' for IIS logs.
-  - OutputName: String. The name of the output file or Log Analytic table.
+  - FileteredAddons: Array. Add-on filenames to deactivate, for example `ESICollector-POPIMAPConfiguration.json`.
+  - Capabilities: String. Capabilities to activate: `OP`, `OL`, `MGGRAPH`, `ADINFOS`, or `IIS`.
+  - OutputName: String. Name of the output file or Log Analytics table.
   - Category: String, optional. The category of the functions to activate. This parameter is linked to "Add-Ons" folders. If the category is not present, the selected functions are selected from the root Add-ons folder. If the category is present, the selected functions are selected from the category folder. 2 categories are available by default: "IIS" and "OnlineMessageTracking".
 
 ### AuditFunctionsFiles
 
-The AuditFunctionsFiles is an array of object. It's used to ignore a specific set of functions grouped in a file like "ESICollector-POPIMAPConfiguration.json". Each object contains the following parameters:
+`AuditFunctionsFiles` is an array of objects used to exclude a set of functions grouped in a file such as `ESICollector-POPIMAPConfiguration.json`. Each object contains the following parameters:
 
 - Filename: String. The filename to ignore like "ESICollector-POPIMAPConfiguration.json".
 - Deactivated: Boolean. If true, the function file is deactivated.
 
-### other parameters
+### Other parameters
 
 The parameter AuditFunctionProtectedArea is not used for the moment. They are reserved for future use.
 The parameter AuditFunctions is not used anymore, only present for backward comptability.

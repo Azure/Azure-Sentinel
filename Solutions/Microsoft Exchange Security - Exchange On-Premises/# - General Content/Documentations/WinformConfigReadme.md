@@ -118,9 +118,9 @@ In the setup view, select:
 
 Set the environment identification value used by the Microsoft Sentinel workbooks. The default `#ForestName#` value is replaced with the forest name for an on-premises deployment.
 
-### 4. Configure Azure MonitorAPI Information 
+### 4. Configure Azure Monitor API information
 
-Click on the buttom, Azure MonitorAPI Information. Use the information displayed on the data connector page.
+Select **Azure MonitorAPI Information** and enter the values displayed on the data connector page.
 
 The editor updates the corresponding collector settings, including:
 
@@ -134,7 +134,8 @@ The editor updates the corresponding collector settings, including:
 Enter the thumbprint of the certificate prepared in the previous step.
 
 ### 5. Configure Exchange Server
-Click on the buttom, Exchange On-Premises information.
+
+Select **Exchange On-Premises information**.
 
 Verify the Exchange Server binary path. The default is:
 
@@ -144,7 +145,8 @@ C:\Program Files\Microsoft\Exchange Server\V15\bin
 
 Enter the Exchange version.
 
-> Note : ignore the button Instance Information
+> [!NOTE]
+> Ignore **Instance Information** for the standard deployment.
 
 ### 6. Configure and create the scheduled task
 
@@ -155,10 +157,10 @@ In the **Server Execution** section, provide:
 - A unique scheduled-task name.
 - The daily start time in `hh:mmAM` or `hh:mmPM` format, for example `11:00PM`.
 - The service account in UPN format, for example `svc-exchange@contoso.com`.
-  - ** This account needs to be member of the Organization Management** group.
+  - This account must be a member of the **Organization Management** role group.
 - The service account password.
 
-click on **Create the Schedule Task** after reviewing the values.
+Select **Create the Schedule Task** after reviewing the values.
 
 The editor creates a Windows scheduled task that:
 

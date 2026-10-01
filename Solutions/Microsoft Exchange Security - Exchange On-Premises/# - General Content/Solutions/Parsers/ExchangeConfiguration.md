@@ -18,28 +18,28 @@
 //          - Simplify the request
 //  
 // DESCRIPTION:
-// This parser takes raw ESI Exchange Configuration Collector to pivot raw information and retrieve a specific date configuration. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.
+// This parser pivots raw ESI Collector records and returns the configuration closest to a specified date. The same parser supports Exchange On-Premises and Exchange Online.
 //
 // USAGE:
 // 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "ExchangeConfiguration".
-// Parameters : 4 parameters to add during creation. 
+// Parameters: add these four parameters when creating the function.
 //    1. SpecificSectionList, type string, default value ""
 //    2. SpecificConfigurationDate, type string, default value "lastdate"
 //    3. Target, type string, default value "On-Premises"
 //    4. SpecificConfigurationEnv, type string, default value "All"
-// 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+// 3. A saved function can take 10-15 minutes to become available. You can then call the function alias from other queries.
 //
 //
 // REFERENCE: 
-// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Using functions in Azure Monitor log queries: https://learn.microsoft.com/azure/azure-monitor/logs/functions
 //
 // LOG SAMPLES:
-// This parser assumes the raw log from the ESI Exchange Collector are on the ESIExchangeConfig_CL and/or ESIExchangeOnlineConfig_CL tables and are uploaded using the builtin REST API uploader of the Collector.
+// This parser reads configuration records from legacy ESIExchange* tables and Azure Monitor ESIAPIExchange* tables.
 //
 //
 // Parameters simulation
-// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
+// To test the parser without saving it as a function, uncomment the variables below to simulate parameter values.
 //
 // let SpecificSectionList = '';
 // let SpecificConfigurationDate = 'lastdate';

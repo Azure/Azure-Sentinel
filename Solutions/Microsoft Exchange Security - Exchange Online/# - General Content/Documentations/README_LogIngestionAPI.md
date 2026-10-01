@@ -59,7 +59,7 @@ For the complete permission requirements, see [Exchange Security Insights Collec
 3. Select **Exchange Security Insights Online Collector (Azure Monitor)**.
 4. Open the connector page and select **Deploy Exchange Collector Push connector resources**.
 5. Wait for the data connector deployment to complete.
-6. Record the tenant ID, DCE URI, DCR immutable ID, and stream name displayed on the connector page. Retrieve the DCR name from its immutable ID  (see [Retrieve the DCR name](#retrieve-the-dcr-name)).
+6. Record the tenant ID, DCE URI, DCR immutable ID, and stream name displayed on the connector page. Retrieve the DCR name from its immutable ID (see [Retrieve the DCR name](#retrieve-the-dcr-name)).
 7. Use the **Deploy to Azure** action on the connector page to deploy and configure the Automation account.
 8. Provide the Automation account name, generic environment display name, tenant ID, DCE URI, DCR immutable ID, and DCR name.
 9. Wait for the Automation deployment to complete.
@@ -73,7 +73,7 @@ For the complete permission requirements, see [Exchange Security Insights Collec
 2. Open **Data connectors** in Microsoft Sentinel.
 3. Select **Exchange Security Insights Online Collector (Azure Monitor)**.
 4. Select **Deploy Exchange Collector Push connector resources** and wait for completion.
-5. Record the DCE URI and DCR immutable ID displayed by the connector. Retrieve the DCR name from its immutable ID  (see [Retrieve the DCR name](#retrieve-the-dcr-name))
+5. Record the DCE URI and DCR immutable ID displayed by the connector. Retrieve the DCR name from its immutable ID (see [Retrieve the DCR name](#retrieve-the-dcr-name)).
 6. Update the existing runbook and `GlobalConfiguration` variable by following [Update an existing Azure Automation deployment](#update-an-existing-azure-automation-deployment).
 7. Verify that the `Start-ESICollector` runbook, modules, `GlobalConfiguration` variable, and daily schedule are configured correctly.
 8. Verify that the Automation account managed identity has **Monitoring Metrics Publisher** on the DCR.
