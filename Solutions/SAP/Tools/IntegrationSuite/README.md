@@ -371,6 +371,7 @@ cf target -o <org> -s <space>
 |-----------|---------|-------------|
 | `DestinationsCsvPath` | `.\destinations.csv` | Path to destinations CSV file |
 | `ConnectionPrefix` | `SAP` | Prefix for connection names (connections named `{prefix}{DestinationName}`) |
+| `DestinationNameFilter` | Empty | Optional wildcard filters that restrict processing to matching RFC destination names, for example `@("*QB4*","*QE4*")`. |
 
 **Integration Suite Service Instance:**
 | Parameter | Default | Description |
@@ -383,6 +384,32 @@ cf target -o <org> -s <space>
 |-----------|---------|-------------|
 | `ApiPathSuffix` | `/microsoft/sentinel/sap-log-trigger` | API path suffix after `/http` |
 | `ApiVersion` | `2025-07-01-preview` | Azure Management API version |
+| `FixedWindowStartUtc` | Empty | Temporary historical recovery window start in UTC. Must be used with `FixedWindowEndUtc`. |
+| `FixedWindowEndUtc` | Empty | Temporary historical recovery window end in UTC. Must be used with `FixedWindowStartUtc`. |
+
+### Temporary historical recovery window
+
+The standard connection dynamically supplies `startTimeUTC` and `endTimeUTC` for every polling cycle. For a one-time recovery test, you can create separate temporary connections that always request a fixed historical interval.
+
+The following example covers the confirmed outage from `2026-09-01 20:30 UTC` through the end of `2026-09-03`. The end value uses the next UTC boundary so the complete final day is included. It restricts creation to RFC destinations whose names contain `QB4` or `QE4`:
+
+```powershell
+.\connect-sentinel-to-integration-suite.ps1 `
+    -SubscriptionId "<azure-sub-id>" `
+    -ResourceGroupName "<rg-name>" `
+    -WorkspaceName "<sentinel-workspace-name>" `
+    -DestinationsCsvPath ".\destinations.csv" `
+    -DestinationNameFilter @("*QB4*", "*QE4*") `
+    -ConnectionPrefix "SAP-Backfill-20260901" `
+    -FixedWindowStartUtc "2026-09-01T20:30:00Z" `
+    -FixedWindowEndUtc "2026-09-04T00:00:00Z"
+```
+
+Confirm that the destination-name filters match every registered QB4 and QE4 client before running the command. If the RFC destination names do not contain the SAP system IDs, create a temporary destinations CSV containing only the affected destinations instead.
+
+Fixed-window connections are still recurring CCF pollers. They request the same historical interval on every execution. Delete or disable the temporary connections immediately after the expected records are ingested, and keep the normal connections active for current collection.
+
+QB4 client `000` had errors before the confirmed outage. Do not assume that `2026-09-01T20:30:00Z` covers its complete gap. After its actual last successful ingestion time is established, run a separate temporary recovery window for that destination using the earlier start time.
 
 ## Troubleshooting
 
