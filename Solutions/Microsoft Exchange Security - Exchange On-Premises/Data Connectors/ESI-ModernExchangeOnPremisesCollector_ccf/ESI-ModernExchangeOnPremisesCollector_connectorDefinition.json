@@ -1,0 +1,202 @@
+{
+    "name": "ESI-ModernExchangeOnPremisesCollector",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "[parameters('workspace-location')]",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "ESI-ModernExchangeOnPremisesCollector",
+            "title": "Exchange Security Insights On-Premises Collector (Azure Monitor)",
+            "publisher": "Microsoft",
+            "descriptionMarkdown": "Connector used to send Exchange Server security configuration data to Microsoft Sentinel through the Azure Monitor Log Ingestion API.",
+            "graphQueries": [
+                {
+                    "metricName": "Total data received",
+                    "legend": "ESIAPIExchangeOnPremisesConfig_CL",
+                    "baseQuery": "ESIAPIExchangeOnPremisesConfig_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "View the configuration entries available in the table",
+                    "query": "ESIAPIExchangeOnPremisesConfig_CL | summarize by GenerationInstanceID_g, EntryDate_s, ESIEnvironment_s"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "ESIAPIExchangeOnPremisesConfig_CL",
+                    "lastDataReceivedQuery": "ESIAPIExchangeOnPremisesConfig_CL | summarize Time = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s  | where isnotempty(Time) |summarize Time = max(Time) | project Time"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "ESIAPIExchangeOnPremisesConfig_CL | summarize LastLogReceived = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s |take 1  | project IsConnected = true"
+                    ]
+                }
+            ],
+            "availability": {
+                "status": 1,
+                "isPreview": false
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                    },
+                    {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign the Monitoring Metrics Publisher role on the Data Collection Rule (DCR). This typically requires the Azure RBAC Owner or User Access Administrator role."
+                    },
+                    {
+                        "name": "Service Account with Organization Management role",
+                        "description": "The service account that runs the scheduled collector task must be a member of the Exchange Organization Management role group."
+                    },
+                    {
+                        "name": "Detailed documentation",
+                        "description": ">**NOTE:** Detailed installation and usage documentation is available [here](https://aka.ms/MicrosoftExchangeSecurityGithub)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "description": ">**NOTE - UPDATE**",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "text": "<H1><b><u>NOTE - UPDATE:</u></b></H1>For an existing deployment, update the collector script to version <b>8.0.0.0</b> or later, before switching to the Azure Monitor Log Ingestion API. <br/>See <a href='https://aka.ms/sentinel-ESI-OnpremisesCollectorUpdate'>ESI On-Premises Collector Update</a> and <a href='https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment'>Upgrade an existing deployment</a>.</br>For detailed documentation for the following steps, refer to the <a href='https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md'>Official Documentation</a>",
+                                "visible": true,
+                                "inline": false
+                            },
+                            "type": "InfoMessage"
+                        }
+                    ]
+                },
+                {
+                    "title": "1. Deploy the Azure Monitor connector resources",
+                    "description": "This connector enables the Exchange Server collector to send security configuration data to Microsoft Sentinel through the Azure Monitor Log Ingestion API.",
+                    "instructions": [
+                        {
+                            "type": "Markdown",
+                            "parameters": {
+                            }
+                        },
+                        {
+                            "type": "DeployPushConnectorButton",
+                            "parameters": {
+                                "label": "Deploy Exchange Collector Push connector resources",
+                                "applicationDisplayName": "Microsoft Exchange On-Premises Collector Push Connector Application"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "title": "2. Install the ESI Collector on the Exchange management server",
+                    "description": "Install the collector on a Windows server that has the **Exchange Management Shell, Active Directory module for Windows PowerShell, and at least Az.Accounts module**.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "title": "Script Deployment",
+                                "instructionSteps": [
+                                    {
+                                        "title": "Download the latest version of ESI Collector",
+                                        "description": "Download the latest `CollectExchSecIns.zip` package from https://aka.ms/ESI-ExchangeCollector-Script."
+                                    },
+                                    {
+                                        "title": "Copy the script folder",
+                                        "description": "Extract the package and copy the collector folder to a server where the Exchange PowerShell cmdlets are available."
+                                    },
+                                    {
+                                        "title": "Unblock the downloaded package",
+                                        "description": "Before extraction, run `Unblock-File -LiteralPath .\\CollectExchSecIns.zip`. If the package is already extracted, unblock the PowerShell files recursively."
+                                    },
+                                    {
+                                        "title": "Configure network access",
+                                        "description": "Ensure that the collector can reach Microsoft Entra ID, `https://raw.githubusercontent.com` (if you accept the script AutoUpdate option), and the Data Collection Endpoint displayed by this connector."
+                                    }
+                                ]
+                            },
+                            "type": "InstructionStepsGroup"
+                        }
+                    ]
+                },
+                {
+                    "title": "3. Configure the ESI Collector and scheduled task",
+                    "description": "Run PowerShell as a local administrator and use `WinformConfig\\SetupCollectExchSecConfiguration.ps1` to configure the collector and daily scheduled task.\n\n Here is the documentation for [WinformConfig](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Documentations/WinformConfigReadme.md).\n\nThe On-Premises collector uses certificate authentication, using an application secret is an available option but this configuration is not recommended.\n\nSee the [Certificate creation guide](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#create-the-authentication-certificate).",
+                    "instructions": [
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Tenant ID (Directory ID)",
+                                "fillWith": [
+                                    "TenantId"
+                                ]
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Entra App Registration Application ID",
+                                "fillWith": [
+                                    "ApplicationId"
+                                ],
+                                "placeholder": "Deploy push connector to get the App Registration Application ID"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Endpoint URI",
+                                "fillWith": [
+                                    "DataCollectionEndpoint"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Rule Immutable ID",
+                                "fillWith": [
+                                    "DataCollectionRuleId"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Stream Name",
+                                "value": "Custom-ESIExchangeConfig"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "title": "4. Verify the scheduled task",
+                    "description": "Verify that WinformConfig created the daily collector task. Remember the account used by the Scheduled Task needs to be a member of the **Organization Management** group.\n\n If the task is missing, create it from the **Server Execution** section in WinformConfig."
+                },
+                {
+                    "title": "",
+                    "description": ">**NOTE:** Parsers are automatically deployed with the solution. For additional information, see the [documentation](https://aka.ms/MicrosoftExchangeSecurityGithub)."
+                }
+            ]
+        }
+    }
+}
