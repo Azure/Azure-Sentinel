@@ -1,0 +1,314 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Zscaler Private Access
+  Version: '0.1.0'
+  LastUpdated: Oct 01, 2026
+Product:
+  Name: Zscaler Private Access
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Zscaler Private Access User Activity log fields
+  Link: https://help.zscaler.com/zpa/about-user-activity-log-fields
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM filtering parser normalizes Zscaler Private Access (ZPA) User Activity logs, ingested into the ZPA_CL custom table, to the ASIM Authentication schema.
+  The parser handles ZPN_STATUS_AUTHENTICATED, ZPN_STATUS_AUTH_FAILED and ZPN_STATUS_DISCONNECTED sessions and supports the standard Authentication filtering parameters.
+Exceptions:
+- Field: DvcAction
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: EventSeverity
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: TargetDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserName: vimAuthenticationZscalerZPA
+EquivalentBuiltInParser: _Im_Authentication_ZscalerZPA
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      username_has_any: dynamic=dynamic([]),
+      targetappname_has_any: dynamic=dynamic([]),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      srchostname_has_any: dynamic=dynamic([]),
+      eventtype_in: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic=dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false,
+      pack: bool=false
+    ) {
+    ZPA_CL
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where (array_length(username_has_any) == 0 or Message has_any (username_has_any))
+    | where (array_length(srchostname_has_any) == 0 or Message has_any (srchostname_has_any))
+    | where Message has "SessionStatus"
+    | where Message !has "SessionType"
+    | parse-kv Message as (
+        LogTimestamp: string,
+        Customer: string,
+        Username: string,
+        SessionID: string,
+        SessionStatus: string,
+        Version: string,
+        ZEN: string,
+        CertificateCN: string,
+        PrivateIP: string,
+        PublicIP: string,
+        Latitude: real,
+        Longitude: real,
+        CountryCode: string,
+        TimestampAuthentication: string,
+        TimestampUnAuthentication: string,
+        TotalBytesRx: long,
+        TotalBytesTx: long,
+        Idp: string,
+        Hostname: string,
+        Platform: string,
+        ClientType: string,
+        TrustedNetworks: string,
+        TrustedNetworksNames: string,
+        SAMLAttributes: string,
+        PosturesHit: string,
+        PosturesMiss: string,
+        ZENLatitude: real,
+        ZENLongitude: real,
+        ZENCountryCode: string,
+        FQDNRegistered: string,
+        FQDNRegisteredError: string,
+        City: string,
+        MicroTenantID: string
+      ) with (pair_delimiter=',', kv_delimiter=':', quote='"')
+    | where SessionStatus in ("ZPN_STATUS_AUTHENTICATED", "ZPN_STATUS_AUTH_FAILED", "ZPN_STATUS_DISCONNECTED")
+    | extend SrcIsFqdn = Hostname matches regex @"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
+    | invoke _ASIM_ResolveSrcFQDN("Hostname")
+    | extend
+        // --- Common fields ---
+        EventCount = int(1),
+        EventStartTime = coalesce(todatetime(TimestampAuthentication), TimeGenerated),
+        EventEndTime = case(
+            SessionStatus == "ZPN_STATUS_DISCONNECTED", coalesce(todatetime(TimestampUnAuthentication), TimeGenerated),
+            coalesce(todatetime(TimestampAuthentication), TimeGenerated)),
+        EventType = case (
+            SessionStatus in ("ZPN_STATUS_AUTHENTICATED", "ZPN_STATUS_AUTH_FAILED"),  "Logon",
+            SessionStatus == "ZPN_STATUS_DISCONNECTED", "Logoff",
+            ""),
+        EventResult = case (
+            SessionStatus in ("ZPN_STATUS_AUTHENTICATED", "ZPN_STATUS_DISCONNECTED"),  "Success",
+            SessionStatus == "ZPN_STATUS_AUTH_FAILED", "Failure",
+            "NA"),
+        EventResultDetails = iif(SessionStatus =~ "ZPN_STATUS_AUTH_FAILED", "Other", ""),
+        EventOriginalResultDetails = SessionStatus,
+        EventOriginalType = SessionStatus,
+        EventProductVersion = Version,
+        EventVendor = "Zscaler",
+        EventProduct = "Private Access",
+        EventSchema = "Authentication",
+        EventSchemaVersion = "1.0.0",
+        EventUid = _ItemId,
+        Dvc = ZEN,
+        DvcHostname = ZEN,
+        TargetHostname = ZEN
+    | extend
+        // --- Authentication-specific ---
+        LogonMethod = "Other"
+    | extend 
+        // --- Actor ---
+        ActorUsername = Username,
+        ActorUsernameType = case (
+            isempty(Username), "",
+            // "ZPA MACHINE@DESKTOP-01" looks like a UPN but is not one.
+            Username startswith "ZPA MACHINE@", "Simple",
+            Username matches regex @"^[^@\\]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$", "UPN",
+            Username has "\\", "Windows",
+            "Simple"),
+        ActorUserType = case (
+            isempty(Username), "",
+            ClientType == "zpn_client_type_machine_tunnel" or Username startswith "ZPA MACHINE@", "Machine",
+            ClientType in ("zpn_client_type_slogger", "zpn_client_type_exporter",
+                           "zpn_client_type_exporter_noauth", "zpn_client_type_branch_connector",
+                           "zpn_client_type_edge_connector", "zpn_client_type_ip_anchoring",
+                           "zpn_client_type_browser_isolation"), "Service",
+            Username has "@", "Regular",
+            "Other"),
+        ActorOriginalUserType = ClientType,
+        ActorSessionId = SessionID
+    // | extend 
+    | extend
+        // --- Target user ---
+        TargetUsername = ActorUsername,
+        TargetUsernameType = ActorUsernameType,
+        TargetUserType = ActorUserType,
+        TargetOriginalUserType = ClientType,
+        TargetSessionId = ActorSessionId,
+        User = ActorUsername
+    | extend 
+        // --- Source ---
+        Src = coalesce(PublicIP, PrivateIP, Hostname),
+        SrcDeviceType = case(
+            Platform in~ ("windows", "mac", "linux"), "Computer",
+            Platform in~ ("ios", "android"), "Mobile Device",
+            isempty(Platform), "",
+            "Other"),
+        SrcHostname = iif(SrcIsFqdn, SrcHostname, Hostname),
+        SrcDomain = iif(SrcIsFqdn, SrcDomain, ""),
+        SrcDomainType = iif(SrcIsFqdn, SrcDomainType, ""),
+        SrcFQDN = iif(SrcIsFqdn, SrcFQDN, ""),
+        SrcIpAddr = coalesce(PublicIP, PrivateIP),
+        SrcDvcOs = Platform,
+        IpAddr = coalesce(PublicIP, PrivateIP),
+        SrcGeoCountry   = CountryCode,
+        SrcGeoCity      = City,
+        SrcGeoLatitude  = Latitude,
+        SrcGeoLongitude = Longitude
+    | extend
+        // --- target application ---
+        TargetAppName = "Zscaler Private Access",
+        Application = "Zscaler Private Access",
+        TargetAppType = "Service",
+        LogonTarget = "Zscaler Private Access"
+    | extend
+        // --- target system ---
+        Dst = TargetAppName,
+        TargetGeoCountry = ZENCountryCode,
+        TargetGeoLatitude = ZENLatitude,
+        TargetGeoLongitude = ZENLongitude
+    | extend // --- Additional fields ---
+        AdditionalFields = iif(true, bag_pack(
+            "CertificateCN", CertificateCN,
+            "Customer", Customer,
+            "ClientPrivateIP", PrivateIP,
+            "Idp", Idp,
+            "TrustedNetworks", TrustedNetworks,
+            "TrustedNetworksNames", TrustedNetworksNames,
+            "SAMLAttributes", SAMLAttributes,
+            "PosturesHit", PosturesHit,
+            "PosturesMiss", PosturesMiss,
+            "TotalBytesRx", TotalBytesRx,
+            "TotalBytesTx", TotalBytesTx,
+            "FQDNRegistered", FQDNRegistered,
+            "FQDNRegisteredError", FQDNRegisteredError,
+            "MicroTenantID", MicroTenantID), dynamic(null))
+    // --- Filtering parameters (applied after the parser logic, which is unchanged) ---
+    | where (array_length(username_has_any) == 0 or ActorUsername has_any (username_has_any))
+    | where (array_length(targetappname_has_any) == 0 or TargetAppName has_any (targetappname_has_any))
+    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+    | where (array_length(srchostname_has_any) == 0 or SrcHostname has_any (srchostname_has_any))
+    | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+    | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+    | where (eventresult == "*" or EventResult == eventresult)
+    | project 
+        TimeGenerated,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventResult,
+        EventResultDetails,
+        EventOriginalResultDetails,
+        EventOriginalType,
+        EventProductVersion,
+        EventVendor,
+        EventProduct,
+        EventSchema,
+        EventSchemaVersion,
+        EventUid,
+        Dvc,
+        DvcHostname,
+        TargetHostname,
+        LogonMethod,
+        ActorUsername,
+        ActorUsernameType,
+        ActorUserType,
+        ActorSessionId,
+        TargetUsername,
+        TargetUsernameType,
+        TargetUserType,
+        TargetSessionId,
+        User,
+        Src,
+        SrcDeviceType,
+        SrcHostname,
+        SrcDomain,
+        SrcDomainType,
+        SrcFQDN,
+        SrcIpAddr,
+        SrcDvcOs,
+        IpAddr,
+        SrcGeoCountry,
+        SrcGeoCity,
+        SrcGeoLatitude,
+        SrcGeoLongitude,
+        TargetAppName,
+        Application,
+        TargetAppType,
+        LogonTarget,
+        Dst,
+        TargetGeoCountry,
+        TargetGeoLatitude,
+        TargetGeoLongitude,
+        AdditionalFields,
+        Type
+  };
+  parser (
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled,
+    pack = pack
+  )

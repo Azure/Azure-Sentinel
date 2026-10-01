@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.24
+
+- (2026-10-01) Add the Zscaler ZPA Authentication parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
+
 ## Version 0.2.23
 
 - (2026-09-25) Add the Aruba Networks ClearPass Authentication parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
