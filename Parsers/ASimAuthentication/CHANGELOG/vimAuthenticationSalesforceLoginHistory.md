@@ -1,10 +1,13 @@
 # Changelog for vimAuthenticationSalesforceLoginHistory
 
-## Version 0.1.0 - 2026-09-30
+## Version 0.1.0 - 2026-10-01
 
-- (2026-09-30) Initial creation of the Salesforce Login History Authentication filtering parser.
+- (2026-10-01) Initial creation of the Salesforce Login History Authentication filtering parser.
 - Add standard Authentication filters for time, user, target application, source IP prefix, source hostname, event type, result details, and result.
+- Apply result-details and target-application filters before unrelated normalization work, including a native `SalesforceDomain` prefilter when the column is populated.
+- Prefer the optional native `SalesforceDomain` column for target resolution, with parsed `LoginUrl` as a backward-compatible fallback.
 - Resolve Salesforce target host, domain, domain type, and FQDN fields with `_ASIM_ResolveFQDN`, and identify the cloud reporting device with the event product.
+- Use `project-rename` for the direct `ActingAppId`, `EventProductVersion`, and `TargetAppId` mappings.
 - Preserve the source table's `TimeGenerated`, use `LoginTime` for the normalized event start/end time, and retain `LoginTime` under its original name in `AdditionalFields`.
 - Populate `SrcIpAddr`, `IpAddr`, and `Src` only when `SourceIp` parses as IPv4 or IPv6, while retaining the raw value in `AdditionalFields`.
 - Support optional packing of unmapped Salesforce login metadata into `AdditionalFields`.

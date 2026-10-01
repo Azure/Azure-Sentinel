@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Salesforce Login History
   Version: '0.1.0'
-  LastUpdated: Sep 30, 2026
+  LastUpdated: Oct 01, 2026
 Product:
   Name: Salesforce Login History
 Normalization:
@@ -86,11 +86,30 @@ ParserQuery: |
           or (eventresult =~ "Success" and Status =~ "Success")
           or (eventresult =~ "Failure" and Status !~ "Success" and isnotempty(Status))
           or (eventresult =~ "NA" and isempty(Status))
-      | extend EventTime = coalesce(LoginTime, TimeGenerated)
-      | extend NormalizedSourceIp = iff(
-          isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)),
-          SourceIp,
-          "")
+      | extend EventResultDetails = case(
+          Status =~ "Success" or isempty(Status), "",
+          Status =~ "Invalid Password", "Incorrect password",
+          Status in~ ("Password Lockout", "User is Frozen"), "User locked",
+          Status =~ "User is Inactive", "User disabled",
+          Status in~ (
+              "Lightning Login required",
+              "Multi-factor required",
+              "Passwordless Login via Passkeys required"
+          ), "MFA not satisfied",
+          Status in~ (
+              "Failed: Not approved",
+              "Failed: Not approved for access",
+              "No community access",
+              "Restricted IP",
+              "Username-Password Flow Disabled"
+          ), "Logon violates policy",
+          "Other")
+      | where array_length(eventresultdetails_in) == 0
+          or EventResultDetails in~ (eventresultdetails_in)
+      | extend SalesforceDomain = tostring(column_ifexists("SalesforceDomain", ""))
+      | where array_length(targetappname_has_any) == 0
+          or isempty(SalesforceDomain)
+          or SalesforceDomain has_any (targetappname_has_any)
       | extend TargetUrl = iff(
           isempty(LoginUrl),
           "",
@@ -98,11 +117,21 @@ ParserQuery: |
               or LoginUrl startswith "https://",
               LoginUrl,
               strcat("https://", LoginUrl)))
-      | extend TargetFQDN = tostring(parse_url(TargetUrl)["Host"])
-      | extend TargetFQDN = iff(isnotempty(TargetFQDN), TargetFQDN, LoginUrl)
+      | extend LoginUrlFQDN = tostring(parse_url(TargetUrl)["Host"])
+      | extend TargetFQDN = case(
+          isnotempty(SalesforceDomain), SalesforceDomain,
+          isnotempty(LoginUrlFQDN), LoginUrlFQDN,
+          LoginUrl)
       | invoke _ASIM_ResolveFQDN('TargetFQDN')
+      | extend TargetAppName = iff(isnotempty(TargetFQDN), TargetFQDN, "Salesforce")
+      | where array_length(targetappname_has_any) == 0
+          or TargetAppName has_any (targetappname_has_any)
+      | extend EventTime = coalesce(LoginTime, TimeGenerated)
+      | extend NormalizedSourceIp = iff(
+          isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)),
+          SourceIp,
+          "")
       | extend
-          TargetAppName = iff(isnotempty(TargetFQDN), TargetFQDN, "Salesforce"),
           ActingAppName = iff(isnotempty(Application), Application, Browser),
           ActingAppType = case(
               isnotempty(Application), "SaaS application",
@@ -112,32 +141,10 @@ ParserQuery: |
               Status =~ "Success", "Success",
               isempty(Status), "NA",
               "Failure"),
-          EventResultDetails = case(
-              Status =~ "Success" or isempty(Status), "",
-              Status =~ "Invalid Password", "Incorrect password",
-              Status in~ ("Password Lockout", "User is Frozen"), "User locked",
-              Status =~ "User is Inactive", "User disabled",
-              Status in~ (
-                  "Lightning Login required",
-                  "Multi-factor required",
-                  "Passwordless Login via Passkeys required"
-              ), "MFA not satisfied",
-              Status in~ (
-                  "Failed: Not approved",
-                  "Failed: Not approved for access",
-                  "No community access",
-                  "Restricted IP",
-                  "Username-Password Flow Disabled"
-              ), "Logon violates policy",
-              "Other"),
           DvcAction = case(
               Status =~ "Success", "Allowed",
               isempty(Status), "",
               "Blocked")
-      | where array_length(targetappname_has_any) == 0
-          or TargetAppName has_any (targetappname_has_any)
-      | where array_length(eventresultdetails_in) == 0
-          or EventResultDetails in~ (eventresultdetails_in)
       | extend
           LogonMethod = case(
               LoginSubType =~ "OAuth Client Credentials", "Service Principal",
@@ -224,6 +231,10 @@ ParserQuery: |
                   "_IsBillable", _IsBillable
               ),
               dynamic({}))
+      | project-rename
+          ActingAppId = AuthenticationServiceId,
+          EventProductVersion = ApiVersion,
+          TargetAppId = NetworkId
       | project
           TimeGenerated,
           Type = "SalesforceLoginHistory",
@@ -234,7 +245,7 @@ ParserQuery: |
           EventOriginalSubType = LoginSubType,
           EventOriginalType = LoginType,
           EventProduct = "Salesforce Login History",
-          EventProductVersion = ApiVersion,
+          EventProductVersion,
           EventResult,
           EventResultDetails,
           EventSchema = "Authentication",
@@ -245,7 +256,7 @@ ParserQuery: |
           EventType = "Logon",
           EventUid,
           EventVendor = "Salesforce",
-          ActingAppId = AuthenticationServiceId,
+          ActingAppId,
           ActingAppName,
           ActingAppType,
           ActingOriginalAppType = ApiType,
@@ -276,7 +287,7 @@ ParserQuery: |
           SrcHostname = "",
           SrcIpAddr = NormalizedSourceIp,
           SrcSystemEntityKey = "",
-          TargetAppId = NetworkId,
+          TargetAppId,
           TargetApplicationEntityKey = "",
           TargetAppName,
           TargetAppType = "SaaS application",

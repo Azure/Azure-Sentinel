@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Salesforce Login History
   Version: '0.1.0'
-  LastUpdated: Sep 30, 2026
+  LastUpdated: Oct 01, 2026
 Product:
   Name: Salesforce Login History
 Normalization:
@@ -33,6 +33,7 @@ ParserQuery: |
   ) {
       SalesforceLoginHistory
       | where not(disabled)
+      | extend SalesforceDomain = tostring(column_ifexists("SalesforceDomain", ""))
       | extend EventTime = coalesce(LoginTime, TimeGenerated)
       | extend NormalizedSourceIp = iff(
           isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)),
@@ -45,8 +46,11 @@ ParserQuery: |
               or LoginUrl startswith "https://",
               LoginUrl,
               strcat("https://", LoginUrl)))
-      | extend TargetFQDN = tostring(parse_url(TargetUrl)["Host"])
-      | extend TargetFQDN = iff(isnotempty(TargetFQDN), TargetFQDN, LoginUrl)
+      | extend LoginUrlFQDN = tostring(parse_url(TargetUrl)["Host"])
+      | extend TargetFQDN = case(
+          isnotempty(SalesforceDomain), SalesforceDomain,
+          isnotempty(LoginUrlFQDN), LoginUrlFQDN,
+          LoginUrl)
       | invoke _ASIM_ResolveFQDN('TargetFQDN')
       | extend
           TargetAppName = iff(isnotempty(TargetFQDN), TargetFQDN, "Salesforce"),
@@ -167,6 +171,10 @@ ParserQuery: |
                   "_IsBillable", _IsBillable
               ),
               dynamic({}))
+      | project-rename
+          ActingAppId = AuthenticationServiceId,
+          EventProductVersion = ApiVersion,
+          TargetAppId = NetworkId
       | project
           TimeGenerated,
           Type = "SalesforceLoginHistory",
@@ -177,7 +185,7 @@ ParserQuery: |
           EventOriginalSubType = LoginSubType,
           EventOriginalType = LoginType,
           EventProduct = "Salesforce Login History",
-          EventProductVersion = ApiVersion,
+          EventProductVersion,
           EventResult,
           EventResultDetails,
           EventSchema = "Authentication",
@@ -188,7 +196,7 @@ ParserQuery: |
           EventType = "Logon",
           EventUid,
           EventVendor = "Salesforce",
-          ActingAppId = AuthenticationServiceId,
+          ActingAppId,
           ActingAppName,
           ActingAppType,
           ActingOriginalAppType = ApiType,
@@ -219,7 +227,7 @@ ParserQuery: |
           SrcHostname = "",
           SrcIpAddr = NormalizedSourceIp,
           SrcSystemEntityKey = "",
-          TargetAppId = NetworkId,
+          TargetAppId,
           TargetApplicationEntityKey = "",
           TargetAppName,
           TargetAppType = "SaaS application",
