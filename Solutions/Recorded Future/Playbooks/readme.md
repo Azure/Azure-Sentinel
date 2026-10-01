@@ -44,6 +44,8 @@ Microsoft article that describes roles and permissions in Microsoft Sentinel <a 
 | Playbook(s), with `create_role_assignment=false` | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_</a> on the **Resource Group** level. **Note:** an Azure administrator must then manually assign the <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor#monitoring-metrics-publisher" target="_blank">_**Monitoring Metrics Publisher**_</a> role on the relevant Data Collection Rule to the playbook's managed identity after deployment. |
 | Analytic Rules | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_</a> permissions. |
 
+**Note:** the roles above are what the **person deploying** the playbook needs on the resource group in order to create it (and, with `create_role_assignment=true`, to grant the role assignment below). They are not roles granted to the playbook itself. See [Log Ingestion API migration](#log-ingestion-api-migration-deadline-2026-09-14) for what the playbook's own managed identity needs.
+
 <a id="api-key"></a>
 ### Recorded Future API Key
 Recorded Future requires API keys to communicate with our API. To obtain API keys. <a href="https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta" target="_blank">Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here</a> or visit <a href="https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens" target="_blank">Recorded Future Requesting API Tokens</a> (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
@@ -66,7 +68,7 @@ or\
 Deploys the shared Data Collection Endpoint (DCE), Data Collection Rules (DCRs), Log Analytics tables, and connector definition tile used by the Log Ingestion API playbooks (see the [migration callout](#log-ingestion-api-migration-deadline-2026-09-14) above). Deploy this into the same resource group as your Log Analytics Workspace **before** deploying `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, or `RecordedFuture-Sandbox_Outlook_Attachment`.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)</a>
 
 ### Connectors
 The Recorded Future solution uses the following connectors:
@@ -308,6 +310,8 @@ Each affected table has been renamed with a `_V2_CL` suffix (Microsoft doesn't a
 4. Redeploy the corresponding Analytic Rules so they query the new `_V2_CL` tables.
 5. _Optional_: If you have other logic apps or processes dependent on the old `_CL` tables, update these references to the new `_V2_CL` tables.
 
+**Note on the first run after deployment:** the very first run may fail with an ingestion authorization error while Azure propagates the new role assignment (can take up to ~30 min). This is expected — see [Troubleshooting](#troubleshooting).
+
 ### From version 3.2
 Microsoft is unifying their security portals, moving Microsoft Sentinel into the Microsoft Defender portal, this changes how incidents are created. Incidents created by Logic Apps are not visible in the Microsoft Defender portal. With the release of version 3.2.20 we are re-hauling how incidents are created. Now we'll rely on saving logs to _custom logs_ and use _analytic rules_ to create incidents. We provide updated Logic Apps and analytic rules for incident creation.
 
@@ -320,6 +324,15 @@ Our support will end when Microsoft shut down the underlying API. More informati
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions.
 
 # Troubleshooting
+
+## "The authentication token provided does not have access to ingest data for the data collection rule..."
+Seen on the `Send Data` action of `RecordedFuture-Alert-Importer`, `RecordedFuture-Playbook-Alert-Importer`, `RecordedFuture-ThreatMap-Importer`, `RecordedFuture-ThreatMapMalware-Importer`, `RecordedFuture-Sandbox_StorageAccount`, or `RecordedFuture-Sandbox_Outlook_Attachment`, typically right after deploying or redeploying one of these playbooks as part of the [Log Ingestion API migration](#log-ingestion-api-migration-deadline-2026-09-14).
+
+**Cause:** this is expected on the first run. Azure hasn't finished propagating the **Monitoring Metrics Publisher** role assignment (created automatically by `create_role_assignment=true`) to the Log Ingestion API yet — this can take up to ~30 minutes, occasionally longer. The playbook's trigger fires almost immediately after deployment, so the first run frequently loses this race.
+
+**Fix:** wait a while, then either run the playbook manually (Overview → Run Trigger) or wait for its next scheduled recurrence — no configuration change is needed.
+
+If the error persists well beyond 30 minutes, confirm the playbook's managed identity has **Monitoring Metrics Publisher** directly on the relevant `recorded-future-dcr-*` Data Collection Rule (Azure Portal → the DCR → Access control (IAM) → Role assignments, scope "This resource"). **Log Analytics Contributor** is not sufficient for ingestion — see the note in [Connector Authorization](#connector-authorization).
 
 ## Query Risk Lists
 After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace.
