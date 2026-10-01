@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.7.1       | 23-09-2026                     | Fixed the Salesforce Service Cloud connector query type parameter mismatch that blocked connection deployment validation. |
 | 3.7.0       | 01-09-2026                     | Added the Salesforce Marketing Cloud CCF connector with audit and security event ingestion, custom tables, DCR transformations, and parser aliases. |
 | 3.6.1       | 26-08-2026                     | Corrected the Salesforce Service Cloud parser metadata version |
 | 3.6.0       | 18-08-2026                     | Added Salesforce Audit Logs parser and table definitions, and updated Salesforce connector configurations. |
