@@ -1,0 +1,82 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2bc7b4ae-eeaa-4538-ba15-ef298ec1ffae
+    path: Analytic Rules/StartStopHealthService.yaml
+    version: 1.0.2
+    querySha256: 6c2275312bd7c7f2c883241459d97d17979c6a4c083bb8a0b6172e3045ae81b4
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - Host.FullName has no supported Custom Detection field
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.001
+properties:
+  id: xdr-starting-or-stopping-healthservice-to-avoid-detection-2bc7b4ae
+  displayName: Starting or Stopping HealthService to Avoid Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 4656
+      | extend EventData = parse_xml(EventData).EventData.Data
+      | mv-expand bagexpansion=array EventData
+      | evaluate bag_unpack(EventData)
+      | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+      | evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)
+      | extend ObjectServer = column_ifexists('ObjectServer', ""), ObjectType = column_ifexists('ObjectType', ""), ObjectName = column_ifexists('ObjectName', "")
+      | where isnotempty(ObjectServer) and isnotempty(ObjectType) and isnotempty(ObjectName)
+      | where ObjectServer =~ "SC Manager" and ObjectType =~ "SERVICE OBJECT" and ObjectName =~ "HealthService"
+      // Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to "NU."
+      | join kind=leftouter (
+        SecurityEvent
+        | where EventID == 4624
+      ) on TargetLogonId
+      | project TimeGenerated, Computer, Account, TargetAccount, IpAddress,TargetLogonId, ObjectServer, ObjectType, ObjectName
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+      | extend timestamp = TimeGenerated
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Starting or Stopping HealthService to Avoid Detection
+      description: |-
+        'This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.
+         The query requires a SACL to audit for access request to the service.'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001

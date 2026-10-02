@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d6190dde-8fd2-456a-ac5b-0a32400b0464
+    path: Analytic Rules/execute_base64_decodedpayload.yaml
+    version: 1.1.4
+    querySha256: b6a99955528144a5970a8904c92e7569ff9b5c6adcf066b6c858496c5838f7d9
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Account mapping was completed with projected column `DnsDomain`
+    - Host.FullName has no supported Custom Detection field
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - Execution
+    - DefenseEvasion
+    originalTechniques:
+    - T1059
+    - T1027
+    - T1140
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-process-executed-from-binary-hidden-in-base64-encoded-file-d6190dde
+  displayName: Process executed from binary hidden in Base64 encoded file
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let ProcessCreationEvents=(union isfuzzy=true
+      (SecurityEvent
+      | where EventID==4688
+      | where isnotempty(CommandLine)
+      | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName
+      ),
+      (WindowsEvent
+      | where EventID==4688
+      | where EventData has_any (".decode('base64')", "base64 --decode", ".decode64(" )
+      | extend CommandLine = tostring(EventData.CommandLine)
+      | where isnotempty(CommandLine)
+      | extend SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+      | extend NewProcessName = tostring(EventData.NewProcessName)
+      | extend FileName=tostring(split(NewProcessName, '\\')[-1])
+      | extend ParentProcessName = tostring(EventData.ParentProcessName)
+      | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, CommandLine, ParentProcessName
+      ));
+      ProcessCreationEvents
+      | where CommandLine contains ".decode('base64')"
+              or CommandLine contains "base64 --decode"
+              or CommandLine contains ".decode64("
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by Computer, Account, AccountDomain, FileName, CommandLine, ParentProcessName
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Process executed from binary hidden in Base64 encoded file
+      description: "'Encoding malicious software is a technique used to obfuscate files from detection. \nThe first CommandLine\
+        \ component is looking for Python decoding base64. \nThe second CommandLine component is looking for Bash/sh command\
+        \ line base64 decoding.\nThe third one is looking for Ruby decoding base64.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Account
+          dnsDomainColumn: DnsDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1027
+        - technique: T1140

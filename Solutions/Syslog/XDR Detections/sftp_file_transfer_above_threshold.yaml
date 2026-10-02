@@ -1,0 +1,74 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bb6a74c8-889d-4c6e-8412-7d5efe33f4ed
+    path: Analytic Rules/sftp_file_transfer_above_threshold.yaml
+    version: 1.0.2
+    querySha256: 229e6a2a0d68cb93844c47305c44c893315f0ea38992d247a65131c3179a3bef
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - File has no supported Custom Detection mapping
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+properties:
+  id: xdr-sftp-file-transfer-above-threshold-bb6a74c8
+  displayName: SFTP File transfer above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 50;
+      Syslog
+      | where ProcessName has "sftp"
+          and SyslogMessage has "close "
+          and SyslogMessage has " bytes read "
+      | parse SyslogMessage with "close \"" filepath "\" bytes read " readbytes: int " written " writtenbytes: int
+      | join kind=leftouter (
+          Syslog
+          | where ProcessName has "sftp" and SyslogMessage has "session opened for"
+          | parse SyslogMessage with "session opened for local user " username: string " from [" src_ip "]"
+          | project username, src_ip, ProcessID
+          )
+          on ProcessID
+      | project-away ProcessID1
+      | summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)
+      | where count_distinct_filepath >= threshold
+      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField","_", tostring(hash(tostring(fileslist)))))
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SFTP File transfer above threshold
+      description: |-
+        'Identifies SFTP File Transfers above certain threshold in a 15min time period. It requires SFTP VERBOSE loglevel to be enabled.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: src_ip
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |------------|-------------------------------|--------------------|
+| 3.0.5      | 10-09-2026                    | Added Defender XDR Custom Detection packaging for the Cloudflare analytic rules. |
 | 3.0.4      | 17-08-2026                    | Added source storage subscription and resource group details to the data connector request for authorization validation. |
 | 3.0.3      | 11-05-2026                    | Modified workbook file and fixed workbook metadata to reference Cloudflare parser and CCF connector; added deployment prerequisites note to connector description |
 | 3.0.2      | 22-04-2026                    | Fixed DCR transformKql for Type field and corrected invalid field data types |

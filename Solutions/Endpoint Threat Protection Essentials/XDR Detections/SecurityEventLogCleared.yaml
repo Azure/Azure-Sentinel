@@ -1,0 +1,78 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 80da0a8f-cfe1-4cd0-a895-8bc1771a720e
+    path: Analytic Rules/SecurityEventLogCleared.yaml
+    version: 1.1.5
+    querySha256: a065228957b93a418ba8c93be4f2c1dab5e7909e50bd3e2d206c6c4e12eb1435
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Host.FullName has no supported Custom Detection field
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1070
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-security-event-log-cleared-80da0a8f
+  displayName: Security Event log cleared
+  status: disabled
+  queryCondition:
+    queryText: |-
+      (union isfuzzy=true
+      (
+      SecurityEvent
+      | where EventID == 1102 and EventSourceName =~ "Microsoft-Windows-Eventlog"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+      ),
+      (
+      WindowsEvent
+      | where EventID == 1102 and Provider =~ "Microsoft-Windows-Eventlog"
+      | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend Activity= "1102 - The audit log was cleared."
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+      )
+      )
+      | extend Name=tostring(split(Account, "@")[0]), UPNSuffix=tostring(split(Account, "@")[1])
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Security Event log cleared
+      description: |-
+        'Checks for event id 1102 which indicates the security event log was cleared.
+        It uses Event Source Name "Microsoft-Windows-Eventlog" to avoid generating false positives from other sources, like AD FS servers for instance.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1070

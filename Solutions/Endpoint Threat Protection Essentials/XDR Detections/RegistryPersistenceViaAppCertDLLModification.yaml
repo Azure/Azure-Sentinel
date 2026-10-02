@@ -1,0 +1,66 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c61ad0ac-ad68-4ebb-b41a-74296d3e0044
+    path: Analytic Rules/RegistryPersistenceViaAppCertDLLModification.yaml
+    version: 1.0.3
+    querySha256: f573dd39fa955c5882e2c2958b46170bae4e40a9abf83b5535c0ceced44c7ab4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - RegistryKey has no supported Custom Detection mapping
+    - Host.FullName has no supported Custom Detection field
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1546.009
+properties:
+  id: xdr-registry-persistence-via-appcert-dll-modification-c61ad0ac
+  displayName: Registry Persistence via AppCert DLL Modification
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+      | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" *
+      | where TargetObject has ("\\Control\\Session Manager\\AppCertDLLs\\")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Registry Persistence via AppCert DLL Modification
+      description: "'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered\
+        \ by AppCert DLLs loaded into processes. \nDynamic-link libraries (DLLs) that are specified in the AppCertDLLs Registry\
+        \ key under HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\Session Manager\\ are loaded into every process\
+        \ that calls the ubiquitously used application programming interface (API) functions CreateProcess, CreateProcessAsUser,\
+        \ CreateProcessWithLoginW, CreateProcessWithTokenW, or WinExec.\nRef: https://attack.mitre.org/techniques/T1546/009/'"
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1546
+          subTechniques:
+          - T1546.009
