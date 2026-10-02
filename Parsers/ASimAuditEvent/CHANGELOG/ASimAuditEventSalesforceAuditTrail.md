@@ -1,8 +1,5 @@
-# Changelog for ASimAuditEventSalesforceAuditTrail
+# Changelog for ASimAuditEventSalesforceAuditTrail.yaml
 
-## Version 0.1.0 - 2026-10-02
+## Version 0.1.0
 
-- (2026-10-02) Initial creation of the Salesforce Audit Trail AuditEvent parser.
-- Normalize Salesforce setup action, section, display message, actor identity, event identifier, and Salesforce domain fields.
-- Infer ASIM audit event types from action and display verbs while defaulting configuration changes to `Set`.
-- Preserve source `TimeGenerated`, use `CreatedDate` for event start/end time, and support optional `AdditionalFields` packing.
+- (2026-10-02) Initial creation of the Salesforce Audit Trail AuditEvent parser - [PR #15248](https://github.com/Azure/Azure-Sentinel/pull/15248)
