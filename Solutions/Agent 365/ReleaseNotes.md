@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.4       | 23-09-2026                     | Added Sentinel Lake last-received reporting for the Agent 365 connector. |
 | 3.1.3       | 06-07-2026                     | Fixed the Microsoft Agent Identities data connector query parsing issue. |
 | 3.1.2       | 29-06-2026                     | Bumped the Microsoft Agent Identities data connector version so Content Hub applies the latest connector content on solution update. |
 | 3.1.1       | 08-06-2026                     | Restored the stable Agent 365 solution content ID to align installed packages with the Content Hub catalog. |
