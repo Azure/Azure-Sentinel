@@ -1,0 +1,240 @@
+Parser:
+  Title: AuditEvent ASIM filtering parser for Salesforce Audit Trail
+  Version: '0.1.0'
+  LastUpdated: Oct 02, 2026
+Product:
+  Name: Salesforce Audit Trail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SalesforceAuditTrail table documentation
+  Link: https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/salesforceaudittrail
+Description: |
+  This ASIM filtering parser normalizes Salesforce setup audit trail events stored in the SalesforceAuditTrail table and supports the standard AuditEvent filter parameters.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: vimAuditEventSalesforceAuditTrail
+EquivalentBuiltInParser: _Im_AuditEvent_SalesforceAuditTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      actorusername_has_any: dynamic = dynamic([]),
+      operation_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresult: string = "*",
+      object_has_any: dynamic = dynamic([]),
+      newvalue_has_any: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      SalesforceAuditTrail
+      | where not(disabled)
+      | where isnull(starttime)
+          or CreatedDate >= starttime
+          or (isnull(CreatedDate) and TimeGenerated >= starttime)
+      | where isnull(endtime)
+          or CreatedDate <= endtime
+          or (isnull(CreatedDate) and TimeGenerated <= endtime)
+      | extend ActorUsername = coalesce(
+          CreatedByUsername,
+          CreatedByEmail,
+          CreatedByName)
+      | where array_length(actorusername_has_any) == 0
+          or ActorUsername has_any (actorusername_has_any)
+      | extend
+          Operation = coalesce(Action, Display, "Salesforce audit event"),
+          Object = coalesce(Section, Action, "Salesforce configuration")
+      | where array_length(operation_has_any) == 0
+          or Operation has_any (operation_has_any)
+      | where array_length(object_has_any) == 0
+          or Object has_any (object_has_any)
+      | where array_length(srcipaddr_has_any_prefix) == 0
+      | where eventresult == "*"
+          or eventresult =~ "Success"
+      | where array_length(newvalue_has_any) == 0
+      | extend EventTypeSource = tolower(strcat(Action, " ", Display))
+      | extend EventType = case(
+          EventTypeSource has_any ("created", "added", "inserted", "provisioned"), "Create",
+          EventTypeSource has_any ("deleted", "removed", "deprovisioned"), "Delete",
+          EventTypeSource has_any ("enabled", "activated", "unfrozen"), "Enable",
+          EventTypeSource has_any ("disabled", "deactivated", "frozen"), "Disable",
+          EventTypeSource has_any ("installed", "upgraded"), "Install",
+          EventTypeSource has_any ("initialized", "initialised"), "Initialize",
+          EventTypeSource has_any ("started", "launched"), "Start",
+          EventTypeSource has_any ("stopped", "paused"), "Stop",
+          EventTypeSource has_any ("terminated", "killed"), "Terminate",
+          EventTypeSource has_any ("cleared", "reset", "purged"), "Clear",
+          EventTypeSource has_any ("executed", "invoked", "ran"), "Execute",
+          EventTypeSource has_any ("viewed", "read", "downloaded", "exported"), "Read",
+          "Set")
+      | where array_length(eventtype_in) == 0
+          or EventType in~ (eventtype_in)
+      | extend
+          SalesforceDomain = tostring(column_ifexists("SalesforceDomain", "")),
+          EventTime = coalesce(CreatedDate, TimeGenerated)
+      | invoke _ASIM_ResolveFQDN('SalesforceDomain')
+      | extend
+          EventUid = coalesce(
+              Id,
+              hash_sha256(strcat(
+                  TenantId, "|",
+                  tostring(EventTime), "|",
+                  CreatedById, "|",
+                  Action, "|",
+                  Section, "|",
+                  Display))),
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = case(
+              CreatedByContext =~ "User", "Regular",
+              isempty(CreatedByContext), "",
+              "Other"),
+          TargetAppName = iff(
+              isnotempty(SalesforceDomain),
+              SalesforceDomain,
+              "Salesforce"),
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "CreatedByIssuer", CreatedByIssuer,
+                  "CreatedByName", CreatedByName,
+                  "DelegateUser", DelegateUser,
+                  "SourceSystem", SourceSystem,
+                  "CreatedDate", CreatedDate,
+                  "TenantId", TenantId,
+                  "_BilledSize", _BilledSize,
+                  "_IsBillable", _IsBillable
+              ),
+              dynamic({}))
+      | project-rename
+          ActorOriginalUserType = CreatedByContext,
+          ActorUserId = CreatedById,
+          ActorUserUpn = CreatedByEmail,
+          EventOriginalUid = Id
+      | project
+          TimeGenerated,
+          Type = "SalesforceAuditTrail",
+          EventCount = toint(1),
+          EventEndTime = EventTime,
+          EventMessage = Display,
+          EventOriginalResultDetails = "",
+          EventOriginalSubType = Section,
+          EventOriginalType = Action,
+          EventOriginalUid,
+          EventProduct = "Salesforce Audit Trail",
+          EventResult = "Success",
+          EventResultDetails = "",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "1.0.0",
+          EventSeverity = "Informational",
+          EventStartTime = EventTime,
+          EventSubType = Section,
+          EventType,
+          EventUid,
+          EventVendor = "Salesforce",
+          ActingAppName = "Salesforce Setup",
+          ActingAppType = "SaaS application",
+          ActingApplicationEntityKey = "",
+          ActorOriginalUserType,
+          ActorUserAdditionalIds = dynamic([]),
+          ActorUserEntityKey = "",
+          ActorUserId,
+          ActorUserIdType = iff(
+              isnotempty(ActorUserId),
+              "SalesforceId",
+              ""),
+          ActorUsername,
+          ActorUsernameType,
+          ActorUserType,
+          ActorUserUpn,
+          AdditionalEntities = dynamic([]),
+          AdditionalFields,
+          Application = TargetAppName,
+          Dst = coalesce(FQDN, tostring(ExtractedHostname), TargetAppName),
+          Dvc = "Salesforce Audit Trail",
+          DvcAction = "Allowed",
+          DvcDescription = "Salesforce setup audit trail service",
+          DvcDomain = "",
+          DvcDomainType = "",
+          DvcEntityKey = "",
+          DvcFQDN = "",
+          DvcHostname = "",
+          NewValue = "",
+          Object,
+          ObjectType = "Configuration Atom",
+          OldValue = "",
+          Operation,
+          OriginalObjectType = Section,
+          Src = "",
+          SrcHostname = "",
+          SrcIpAddr = "",
+          SrcSystemEntityKey = "",
+          TargetApplicationEntityKey = "",
+          TargetAppName,
+          TargetAppType = "SaaS application",
+          TargetDescription = Display,
+          TargetDomain = tostring(Domain),
+          TargetDomainType = DomainType,
+          TargetFQDN = FQDN,
+          TargetHostname = tostring(ExtractedHostname),
+          TargetSystemEntityKey = "",
+          TargetUrl = iff(
+              isnotempty(SalesforceDomain),
+              strcat("https://", SalesforceDomain),
+              ""),
+          User = ActorUsername,
+          Value = "",
+          ValueType = ""
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      operation_has_any=operation_has_any,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      object_has_any=object_has_any,
+      newvalue_has_any=newvalue_has_any,
+      disabled=disabled,
+      pack=pack
+  )
