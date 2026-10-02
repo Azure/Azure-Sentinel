@@ -1,0 +1,39 @@
+id: 3185bf9b-29dd-40fa-8477-e2fd4172e3ce
+name: Delinea - Activity by source IP
+description: |
+  Summarizes Delinea Platform activity grouped by source IP address over the lookback window, with no
+  alerting threshold applied. For each IP it reports the event count, how many distinct users and services
+  it touched, the event-type footprint, and first/last seen. A single IP associated with many distinct
+  accounts can indicate password spraying, a shared NAT / VPN egress, or a compromised host proxying
+  activity; pivot on IPs with an unexpectedly high distinct-user count or originating from unfamiliar
+  networks.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - Discovery
+  - InitialAccess
+relevantTechniques:
+  - T1087
+  - T1078
+query: |
+  let lookback = 24h;
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | extend d = parse_json(RawData)
+  | extend SrcIP = tostring(d.source.host.network.ipAddress)
+  | where isnotempty(SrcIP)
+  | summarize Events = count(),
+              DistinctUsers = dcount(User), Users = make_set(User, 30),
+              DistinctServices = dcount(Service), Services = make_set(Service, 20),
+              DistinctEventTypes = dcount(EventType),
+              FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+          by SrcIP
+  | sort by DistinctUsers desc, Events desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.0.0
