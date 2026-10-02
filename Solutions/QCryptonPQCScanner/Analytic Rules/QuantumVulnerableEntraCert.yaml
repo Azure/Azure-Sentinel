@@ -1,0 +1,36 @@
+id: 2a4b6c8d-1e3f-5a7b-9c0d-4e6f8a2b1c3d
+name: Quantum-vulnerable certificate on Entra app registration
+description: |
+  An Entra ID (Azure AD) app registration or service principal has a certificate
+  credential using a classical algorithm (RSA or elliptic-curve) that is vulnerable
+  to Shor's algorithm. These certificates authenticate workloads and service-to-service
+  flows -- a compromised cert allows impersonation of the application identity.
+  Rotate to a PQ-hybrid certificate or shorten the validity window.
+severity: High
+requiredDataConnectors:
+  - connectorId: QCryptonPQCScanner
+    dataTypes:
+      - PQReadiness_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1552
+query: |
+  PQReadiness_CL
+  | where TimeGenerated > ago(1d)
+  | where AssetKind in ("entra-app-cert", "entra-sp-credential")
+  | where QuantumPosture == "vulnerable"
+  | extend AppId = extract(@'"appId":"([^"]+)"', 1, Metadata)
+  | project TimeGenerated, ResourceName, AssetIdentifier, Algorithm, KeySize, PostureReason, RiskScore, ExpiresOn, AppId
+  | order by RiskScore desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ResourceName
+version: 1.0.0
+kind: Scheduled
