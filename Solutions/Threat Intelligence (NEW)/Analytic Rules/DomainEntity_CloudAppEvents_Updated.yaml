@@ -20,27 +20,13 @@ relevantTechniques:
   - T1071
 query: |
   let dt_lookBack = 1h;
-  let ioc_lookBack = 14d; 
-  let list_tlds =
-    ThreatIntelIndicators
-      | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
-      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
-      //extract key part of kv pair
-      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where IndicatorType == "domain-name"
-      | extend DomainName = tolower(IndicatorType)
-      | extend parts = split(DomainName, '.')
-      | extend tld = parts[(array_length(parts) - 1)]
-      | extend IndicatorId = tostring(split(Id, "--")[2])
-      | summarize count() by tostring(tld)
-      | summarize make_set(tld);
+  let ioc_lookBack = 14d;
   let Domain_Indicators =
     ThreatIntelIndicators
       | where TimeGenerated >= ago(ioc_lookBack)
       | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
       | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
-      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+      | extend IndicatorType = replace(@"\[|\]|""", "", tostring(split(ObservableKey, ":", 0)))
       | where IndicatorType == "domain-name"
       | extend DomainName = tolower(ObservableValue)
       | extend IndicatorId = tostring(split(Id, "--")[2])
@@ -50,14 +36,19 @@ query: |
     CloudAppEvents
       | extend IngestionTime = ingestion_time()
       | where IngestionTime > ago(dt_lookBack)
-      | extend PAUrl = columnifexists("RequestURL", "None")
-      | extend Domain = tolower(trim('"', tostring(parseurl(PAUrl).Host)))
-      | extend parts = split(Domain, '.')
-      | extend tld = parts[(array_length(parts) - 1)]
+      // CloudAppEvents does not expose a top-level URL column; derive the host from real payload fields
+      // (RawEventData.SiteUrl/ObjectId/TargetDomain, ObjectName). Mirrors the pattern in IPEntity_CloudAppEvents_Updated.
+      | extend UrlCandidate = coalesce(
+          tostring(RawEventData.SiteUrl),
+          tostring(RawEventData.ObjectId),
+          tostring(ObjectName))
+      | extend Domain = tolower(trim('"', tostring(parseurl(UrlCandidate).Host)))
+      | extend Domain = iff(isempty(Domain), tolower(tostring(RawEventData.TargetDomain)), Domain)
+      | where isnotempty(Domain)
       | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.DomainName == $right.Domain
       | where CloudAppEvents_TimeGenerated < ValidUntil
       | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId
-      | extend 
+      | extend
             Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),
             ActivityGroupNames = column_ifexists("max_CloudAppEvents_TimeGenerated_ActivityGroupNames", ""),
             ThreatType = column_ifexists("max_CloudAppEvents_TimeGenerated_ThreatType", ""),
@@ -77,5 +68,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.7
+version: 1.0.8
 kind: Scheduled
