@@ -214,7 +214,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-- `Package will now be created in an automated way through an automated pipeline and without the need to run any commands locally to generate the solution package. 'createSolutionV4.ps1' file is specifically for pipeline way of generating package for any of the solutions`. 'createSolutionV4.ps1' file is located at `./Tools/Create-Azure-Sentinel-Solution/pipeline` folder path. This file cannot be run locally and is meant for packaging from pipeline using Github workflows.
+- `Package will now be created in an automated way through an automated pipeline and without the need to run any commands locally to generate the solution package. 'createSolutionV4.ps1' file is specifically for pipeline way of generating package for any of the solutions`. 'createSolutionV4.ps1' file is located at `./Tools/Create-Azure-Sentinel-Solution/V4` folder path. This file cannot be run locally and is meant for packaging from pipeline using Github workflows.
  > **IMPORTANT:** To generate package locally make use of `createSolutionV3.ps1` which is in './Tools/Create-Azure-Sentinel-Solution/V3' folder.
 - Core business logic for 'createSolutionV3.ps1' and 'createSolutionV4.ps1' files are inside of './Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1' file. 
 - For any of the WorkbookMetadata change make use of './Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json' file.

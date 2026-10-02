@@ -53,7 +53,10 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * WorkbookDescription: Workbook description(s), generally from Workbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * PlaybookDescription: Playbook description(s), generally from Playbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * WatchlistDescription: Watchlist description(s), generally from Watchlists' Property data. This field can be a string if 1 description is used across all, and an array if multiple are used. This field is used if the description from the Watchlist resource is not desired in the Create-UI.
- * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo root, or BasePath if provided.
+ * XDR Detections: Optional array of converted Custom Detection YAML files. Each file must declare kind CustomDetection, resourceType Microsoft.Security/detectionRules, a stable properties.id, contentProvenance.source.id matching an Analytic Rule in the same solution, a query, and entity mappings.
+ * XDR Detection Version: Optional content version used when registering Custom Detections. If omitted, the solution Version is used.
+ * Include XDR Content Registration: Optional boolean. Defaults to false because the live resource provider does not yet support Custom Detection content-template registration.
  * SavedSearches: This input assumes a format of any of the following:
  * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
  * -- Array of SavedSearch resources
@@ -73,6 +76,9 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "WorkbookDescription": ["{Description of workbook}"],
   "Workbooks": [],
   "Analytic Rules": [],
+  "XDR Detections": [],
+  "XDR Detection Version": "1.0.0",
+  "Include XDR Content Registration": false,
   "Playbooks": [],
   "PlaybookDescription": ["{Description of playbook}"],
   "Parsers": [],
@@ -86,8 +92,20 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": false
 }
-
 ```
+
+When `XDR Detections` is present, the generated `mainTemplate.json` remains a complete
+solution template. It adds:
+
+- `E5Flavor` (default `false`) to select the existing Sentinel Analytic Rules or their
+  corresponding XDR Custom Detections.
+- One isolated nested deployment per Custom Detection.
+- Optional Custom Detection Content Hub registration when
+  `Include XDR Content Registration` is enabled. This is omitted by default because the
+  live resource provider currently rejects these registrations.
+
+Custom Detections are always packaged disabled. The solution `Version` must be incremented
+when adding or changing XDR content so Content Hub recognizes the package update.
 
 #### **Example of Input File: Solution_McAfeePO.json**
 

@@ -58,7 +58,7 @@ param(
     [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Solution folder name under Solutions/")]
     [string]$SolutionName,
 
-    [ValidateSet("patch", "minor", "major")]
+    [ValidateSet("none", "patch", "minor", "major")]
     [string]$VersionBump = "patch",
 
     [switch]$SkipValidation,

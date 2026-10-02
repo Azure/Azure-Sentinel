@@ -1,0 +1,421 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from jsonschema import Draft202012Validator
+
+from .artifacts import artifact_path, existing_artifact_path, migrate_legacy_artifact
+from .target_context import build_target, write_target
+
+STATE_FILE_NAME = "workflow-state.json"
+SCHEMA_VERSION = "1.1.0"
+WORKFLOW_PROFILES = ("authoring", "qualification")
+STAGES = (
+    "discovery",
+    "conversion",
+    "validation",
+    "packaging",
+    "deployment",
+    "mockIngestion",
+    "alertParity",
+    "report",
+)
+QUALIFICATION_DEPENDENCIES = {
+    "discovery": (),
+    "conversion": ("discovery",),
+    "validation": ("conversion",),
+    "packaging": ("validation",),
+    "deployment": ("packaging",),
+    "mockIngestion": ("deployment",),
+    "alertParity": ("mockIngestion",),
+    "report": ("alertParity",),
+}
+AUTHORING_DEPENDENCIES = {
+    "discovery": (),
+    "conversion": ("discovery",),
+    "validation": ("conversion",),
+    "packaging": ("validation",),
+    "report": ("packaging",),
+}
+AUTHORING_OPTIONAL_STAGES = {"deployment", "mockIngestion", "alertParity"}
+TERMINAL_STATUSES = {"passed", "failed", "blocked"}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _paths(solution: str | Path) -> tuple[Path, Path]:
+    root = Path(solution).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError(f"solution folder does not exist: {root}")
+    return root, artifact_path(root, STATE_FILE_NAME, create_parent=True)
+
+
+def _schema() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[1] / "schema" / "workflow-state.schema.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _validate(state: dict[str, Any]) -> None:
+    errors = sorted(
+        Draft202012Validator(_schema()).iter_errors(state),
+        key=lambda error: list(error.absolute_path),
+    )
+    if errors:
+        details = "; ".join(error.message for error in errors)
+        raise ValueError(f"invalid workflow state: {details}")
+
+
+def _write(path: Path, state: dict[str, Any]) -> None:
+    state["updatedAt"] = _utc_now()
+    _validate(state)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(state, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _load(solution: str | Path) -> tuple[Path, dict[str, Any]]:
+    root, _ = _paths(solution)
+    path = existing_artifact_path(root, STATE_FILE_NAME)
+    if not path.is_file():
+        raise ValueError(
+            f"workflow state does not exist: {path}; run workflow-init first"
+        )
+    state = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(state, dict):
+        raise ValueError(f"workflow state must be a JSON object: {path}")
+    context = state.get("context")
+    if isinstance(context, dict):
+        context.setdefault("profileSelectionConfirmed", False)
+    _validate(state)
+    path = migrate_legacy_artifact(root, STATE_FILE_NAME)
+    return path, state
+
+
+def _stage_result(name: str, *, required: bool = True) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "pending" if required else "notRequired",
+        "attempts": 0,
+        "startedAt": None,
+        "completedAt": None,
+        "message": None if required else "not required for the authoring workflow",
+        "artifacts": {},
+        "evidence": [],
+    }
+
+
+def initialize_workflow(
+    solution: str | Path,
+    *,
+    tenant_id: str | None = None,
+    subscription_id: str | None = None,
+    workspace_resource_id: str | None = None,
+    workspace_customer_id: str | None = None,
+    version_bump: str | None = None,
+    workflow_profile: str | None = None,
+) -> dict[str, Any]:
+    root, path = _paths(solution)
+    if version_bump not in (None, "none", "patch", "minor", "major"):
+        raise ValueError("version bump must be none, patch, minor, or major")
+    if workflow_profile is None:
+        raise ValueError(
+            "workflow profile selection is required: choose authoring or qualification"
+        )
+    if workflow_profile not in WORKFLOW_PROFILES:
+        raise ValueError("workflow profile must be authoring or qualification")
+    target = None
+    if workflow_profile == "qualification":
+        missing = [
+            name
+            for name, value in (
+                ("tenant-id", tenant_id),
+                ("subscription-id", subscription_id),
+                ("workspace-resource-id", workspace_resource_id),
+                ("workspace-customer-id", workspace_customer_id),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "qualification requires a locked target context: "
+                + ", ".join(missing)
+            )
+        target = build_target(
+            tenant_id=tenant_id or "",
+            subscription_id=subscription_id or "",
+            workspace_resource_id=workspace_resource_id or "",
+            workspace_customer_id=workspace_customer_id or "",
+        )
+    requested_context = {
+        "tenantId": target["tenantId"] if target else tenant_id,
+        "subscriptionId": target["subscriptionId"] if target else subscription_id,
+        "workspaceResourceId": (
+            target["workspaceResourceId"] if target else workspace_resource_id
+        ),
+        "workspaceCustomerId": (
+            target["workspaceCustomerId"] if target else workspace_customer_id
+        ),
+        "targetContextLocked": bool(target),
+        "versionBump": version_bump,
+    }
+    existing_path = existing_artifact_path(root, STATE_FILE_NAME)
+    if existing_path.exists():
+        _, state = _load(root)
+        context = state["context"]
+        for key, value in requested_context.items():
+            if key == "targetContextLocked":
+                if value:
+                    context[key] = True
+                continue
+            if value is not None and context.get(key) not in (None, value):
+                raise ValueError(
+                    f"workflow already uses {key}={context.get(key)!r}, "
+                    f"not {value!r}"
+                )
+            if value is not None and context.get(key) is None:
+                context[key] = value
+        _select_workflow_profile(state, workflow_profile)
+        _write(path, state)
+        if target:
+            write_target(root, target)
+        return {
+            **state,
+            "statePath": str(path),
+            "resumed": True,
+            "next": _next_stage_name(state),
+        }
+
+    now = _utc_now()
+    state = {
+        "schemaVersion": SCHEMA_VERSION,
+        "solution": str(root),
+        "workflowStatus": "inProgress",
+        "createdAt": now,
+        "updatedAt": now,
+        "context": requested_context,
+        "stages": {
+            name: _stage_result(
+                name,
+                required=not (
+                    workflow_profile == "authoring"
+                    and name in AUTHORING_OPTIONAL_STAGES
+                ),
+            )
+            for name in STAGES
+        },
+    }
+    state["context"]["workflowProfile"] = workflow_profile
+    state["context"]["profileSelectionConfirmed"] = True
+    _write(path, state)
+    if target:
+        write_target(root, target)
+    return {
+        **state,
+        "statePath": str(path),
+        "resumed": False,
+        "next": _next_stage_name(state),
+    }
+
+
+def _select_workflow_profile(state: dict[str, Any], workflow_profile: str) -> None:
+    context = state["context"]
+    current = context["workflowProfile"]
+    if current != workflow_profile:
+        protected = [
+            name
+            for name in (*AUTHORING_OPTIONAL_STAGES, "report")
+            if state["stages"][name]["status"] not in {"pending", "notRequired"}
+        ]
+        if protected:
+            raise ValueError(
+                "workflow profile cannot change after qualification/report stages "
+                f"started: {', '.join(sorted(protected))}"
+            )
+        for name in AUTHORING_OPTIONAL_STAGES:
+            state["stages"][name] = _stage_result(
+                name,
+                required=workflow_profile == "qualification",
+            )
+        context["workflowProfile"] = workflow_profile
+    context["profileSelectionConfirmed"] = True
+
+
+def _validate_packaging_evidence(
+    state: dict[str, Any],
+    artifacts: dict[str, str],
+) -> None:
+    if artifacts.get("packager") != "V4":
+        raise ValueError("passed packaging stage requires packager=V4")
+    report_value = artifacts.get("packageReport")
+    if not report_value:
+        raise ValueError("passed packaging stage requires a V4 packageReport artifact")
+    report_path = Path(report_value).expanduser().resolve()
+    if not report_path.is_file():
+        raise ValueError(f"V4 package report does not exist: {report_path}")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"V4 package report is invalid: {report_path}: {exc}") from exc
+    if not isinstance(report, dict) or report.get("packager") != "V4":
+        raise ValueError(f"package report does not prove V4 packaging: {report_path}")
+    for name in ("mainTemplate", "createUiDefinition", "testParameters", "zip"):
+        value = artifacts.get(name) or report.get(name)
+        if not value or not Path(value).expanduser().resolve().is_file():
+            raise ValueError(f"V4 packaging evidence is missing artifact: {name}")
+    requested_bump = state["context"].get("versionBump")
+    if requested_bump is not None and report.get("versionBump") != requested_bump:
+        raise ValueError(
+            "V4 package report version bump does not match workflow context: "
+            f"{report.get('versionBump')!r} != {requested_bump!r}"
+        )
+
+
+def workflow_status(solution: str | Path) -> dict[str, Any]:
+    path, state = _load(solution)
+    return {**state, "statePath": str(path), "next": _next_stage_name(state)}
+
+
+def _dependencies(state: dict[str, Any], stage: str) -> tuple[str, ...]:
+    if state["context"]["workflowProfile"] == "authoring":
+        return AUTHORING_DEPENDENCIES.get(stage, ())
+    return QUALIFICATION_DEPENDENCIES[stage]
+
+
+def _next_stage_name(state: dict[str, Any]) -> str | None:
+    running = [
+        name for name in STAGES if state["stages"][name]["status"] == "running"
+    ]
+    if running:
+        return running[0]
+    for name in STAGES:
+        stage = state["stages"][name]
+        if stage["status"] in {"passed", "notRequired"}:
+            continue
+        if all(
+            state["stages"][dependency]["status"] == "passed"
+            for dependency in _dependencies(state, name)
+        ):
+            return name
+    return None
+
+
+def next_workflow_stage(solution: str | Path) -> dict[str, Any]:
+    path, state = _load(solution)
+    name = _next_stage_name(state)
+    blocked_by = []
+    if name is None and state["workflowStatus"] != "completed":
+        for candidate in STAGES:
+            if state["stages"][candidate]["status"] in {"passed", "notRequired"}:
+                continue
+            blocked_by.extend(
+                dependency
+                for dependency in _dependencies(state, candidate)
+                if state["stages"][dependency]["status"] != "passed"
+            )
+            if blocked_by:
+                break
+    return {
+        "solution": state["solution"],
+        "statePath": str(path),
+        "workflowStatus": state["workflowStatus"],
+        "next": name,
+        "blockedBy": blocked_by,
+    }
+
+
+def start_workflow_stage(solution: str | Path, stage: str) -> dict[str, Any]:
+    if stage not in STAGES:
+        raise ValueError(f"unknown workflow stage: {stage}")
+    path, state = _load(solution)
+    current = state["stages"][stage]
+    if current["status"] == "notRequired":
+        raise ValueError(
+            f"workflow stage is not required for "
+            f"{state['context']['workflowProfile']} profile: {stage}"
+        )
+    if current["status"] == "passed":
+        raise ValueError(f"workflow stage already passed: {stage}")
+    if current["status"] == "running":
+        return {**current, "statePath": str(path), "resumed": True}
+
+    blocked_by = [
+        dependency
+        for dependency in _dependencies(state, stage)
+        if state["stages"][dependency]["status"] != "passed"
+    ]
+    if blocked_by:
+        raise ValueError(
+            f"workflow stage {stage} is blocked by: {', '.join(blocked_by)}"
+        )
+
+    current.update(
+        {
+            "status": "running",
+            "attempts": current["attempts"] + 1,
+            "startedAt": _utc_now(),
+            "completedAt": None,
+            "message": None,
+            "artifacts": {},
+            "evidence": [],
+        }
+    )
+    state["workflowStatus"] = "inProgress"
+    _write(path, state)
+    return {**current, "statePath": str(path), "resumed": False}
+
+
+def complete_workflow_stage(
+    solution: str | Path,
+    stage: str,
+    *,
+    status: str,
+    message: str | None = None,
+    artifacts: dict[str, str] | None = None,
+    evidence: list[str] | None = None,
+) -> dict[str, Any]:
+    if stage not in STAGES:
+        raise ValueError(f"unknown workflow stage: {stage}")
+    if status not in TERMINAL_STATUSES:
+        raise ValueError("stage status must be passed, failed, or blocked")
+    if status in {"failed", "blocked"} and not str(message or "").strip():
+        raise ValueError(f"{status} workflow stages require a message")
+
+    path, state = _load(solution)
+    current = state["stages"][stage]
+    if current["status"] != "running":
+        raise ValueError(f"workflow stage is not running: {stage}")
+    final_artifacts = artifacts or {}
+    if stage == "packaging" and status == "passed":
+        _validate_packaging_evidence(state, final_artifacts)
+    current.update(
+        {
+            "status": status,
+            "completedAt": _utc_now(),
+            "message": message,
+            "artifacts": final_artifacts,
+            "evidence": evidence or [],
+        }
+    )
+    if status == "failed":
+        state["workflowStatus"] = "failed"
+    elif status == "blocked":
+        state["workflowStatus"] = "blocked"
+    elif stage == "report":
+        state["workflowStatus"] = "completed"
+    else:
+        state["workflowStatus"] = "inProgress"
+    _write(path, state)
+    return {
+        **current,
+        "statePath": str(path),
+        "workflowStatus": state["workflowStatus"],
+        "next": _next_stage_name(state),
+    }
