@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimDnsGigamonVSeries')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Parameterized DNS ASIM parser for Gigamon V-Series Application Metadata Intelligence",
+        "category": "ASIM",
+        "FunctionAlias": "vimDnsGigamonVSeries",
+        "query": "let parser = (\n    starttime:datetime=datetime(null),\n    endtime:datetime=datetime(null),\n    srcipaddr:string='*',\n    domain_has_any:dynamic=dynamic([]),\n    responsecodename:string='*',\n    response_has_ipv4:string='*',\n    response_has_any_prefix:dynamic=dynamic([]),\n    eventtype:string='Query',\n    pack:bool=false,\n    disabled:bool=false\n) {\n    GigamonV2_CL\n    | where not(disabled)\n    | where isnotempty(dns_query) or isnotempty(dns_name)\n    | extend\n        EventStartTime = coalesce(todatetime(start_time), TimeGenerated),\n        EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),\n        SrcIpAddr = coalesce(src_ip, src_ipv6),\n        Src = coalesce(src_ip, src_ipv6, src_mac),\n        DnsQuery = coalesce(dns_query, dns_name),\n        ResponseCodeName = coalesce(dns_reply_code, \"\")\n    | where (isnull(starttime) or EventStartTime >= starttime)\n        and (isnull(endtime) or EventEndTime <= endtime)\n        and (srcipaddr == '*' or SrcIpAddr == srcipaddr)\n        and (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any))\n        and (array_length(response_has_any_prefix) == 0)\n        and (response_has_ipv4 == '*')\n        and (responsecodename == '*' or ResponseCodeName =~ responsecodename)\n        and (eventtype == 'Query')\n    | project\n        TimeGenerated,\n        EventCount = int(1),\n        EventStartTime,\n        EventEndTime,\n        EventProduct = \"V-Series Application Metadata Intelligence\",\n        EventVendor = \"Gigamon\",\n        EventSchema = \"Dns\",\n        EventSchemaVersion = \"0.1.7\",\n        EventType = \"Query\",\n        EventResult = iff(isempty(dns_reply_code) or dns_reply_code in~ (\"0\", \"NOERROR\"), \"Success\", \"Failure\"),\n        EventResultDetails = ResponseCodeName,\n        Dvc = coalesce(generator, vendor),\n        Src,\n        SrcIpAddr,\n        IpAddr = SrcIpAddr,\n        DstIpAddr = coalesce(dst_ip, dst_ipv6),\n        DnsQuery,\n        Domain = DnsQuery,\n        DnsQueryType = case(\n            isnotnull(toint(dns_query_type)), toint(dns_query_type),\n            dns_query_type =~ \"A\", int(1),\n            dns_query_type =~ \"NS\", int(2),\n            dns_query_type =~ \"CNAME\", int(5),\n            dns_query_type =~ \"SOA\", int(6),\n            dns_query_type =~ \"PTR\", int(12),\n            dns_query_type =~ \"MX\", int(15),\n            dns_query_type =~ \"TXT\", int(16),\n            dns_query_type =~ \"AAAA\", int(28),\n            dns_query_type =~ \"SRV\", int(33),\n            int(null)\n        ),\n        DnsQueryTypeName = dns_query_type,\n        DnsResponseCode = case(\n            isnotnull(toint(dns_reply_code)), toint(dns_reply_code),\n            dns_reply_code =~ \"NOERROR\", int(0),\n            dns_reply_code =~ \"FORMERR\", int(1),\n            dns_reply_code =~ \"SERVFAIL\", int(2),\n            dns_reply_code =~ \"NXDOMAIN\", int(3),\n            dns_reply_code =~ \"NOTIMP\", int(4),\n            dns_reply_code =~ \"REFUSED\", int(5),\n            int(null)\n        ),\n        DnsResponseCodeName = coalesce(dns_reply_code, \"\"),\n        DnsQueryClass = case(\n            isnotnull(toint(coalesce(dns_class, dns_host_class))), toint(coalesce(dns_class, dns_host_class)),\n            coalesce(dns_class, dns_host_class) =~ \"IN\", int(1),\n            coalesce(dns_class, dns_host_class) =~ \"CH\", int(3),\n            coalesce(dns_class, dns_host_class) =~ \"HS\", int(4),\n            coalesce(dns_class, dns_host_class) =~ \"NONE\", int(254),\n            coalesce(dns_class, dns_host_class) =~ \"ANY\", int(255),\n            int(null)\n        ),\n        DnsQueryClassName = coalesce(dns_class, dns_host_class),\n        DnsFlags = dns_flags,\n        DnsTtl = toint(dns_ttl),\n        EventUid = id,\n        Type = \"GigamonV2_CL\"\n};\nparser(\n    starttime=starttime,\n    endtime=endtime,\n    srcipaddr=srcipaddr,\n    domain_has_any=domain_has_any,\n    responsecodename=responsecodename,\n    response_has_ipv4=response_has_ipv4,\n    response_has_any_prefix=response_has_any_prefix,\n    eventtype=eventtype,\n    pack=pack,\n    disabled=disabled\n)\n",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr:string='*',domain_has_any:dynamic=dynamic([]),responsecodename:string='*',response_has_ipv4:string='*',response_has_any_prefix:dynamic=dynamic([]),eventtype:string='Query',pack:bool=False,disabled:bool=False"
+      }
+    }
+  ]
+}
