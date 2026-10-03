@@ -37,10 +37,14 @@ After deployment:
 
 ## Failure and interpretation
 
-Lookups run sequentially, with a 30-second timeout and no automatic retry.
+Lookups run sequentially with no automatic retry. The action declares a
+30-second WDL/asynchronous-action limit. This is not a verified 30-second
+HTTP socket deadline; Azure's HTTP connector/platform timeout also applies.
 This avoids a burst of requests or repeated charges after rate limiting.
 A failed HTTP request, timeout, non-JSON body or malformed response adds an
-explicit unknown/error row. Authentication errors (401/403), quota/rate limits
+explicit unknown/error row. Finalization runs after successful, failed, timed-out
+or skipped loops, and the comment identifies entity/loop statuses so a partial
+lookup is not presented as complete. Authentication errors (401/403), quota/rate limits
 (429) and transient server failures must be corrected and retried deliberately.
 
 `evidence.verdict` comes from the server. Missing optional scores remain empty,

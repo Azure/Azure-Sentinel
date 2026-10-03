@@ -62,6 +62,13 @@ class PlaybookTemplateTests(unittest.TestCase):
         self.assertIn("['evidence']?['verdict']", row["Verdict"])
         self.assertNotIn("sources", row["Blocklist hits"])
 
+    def test_finalizes_failed_and_skipped_loops(self):
+        self.assertEqual(set(self.actions["Create_result_table"]["runAfter"]["For_each_IP"]), {"Succeeded", "Failed", "TimedOut", "Skipped"})
+        self.assertEqual(self.actions["Initialize_results"]["runAfter"], {})
+        self.assertIn("Initialize_results", self.actions["Get_IP_entities"]["runAfter"])
+        comment = self.actions["Add_incident_comment"]["inputs"]["body"]["message"]
+        self.assertIn("Results may be partial", comment)
+
     def test_deploys_disabled(self):
         self.assertEqual(self.template["parameters"]["WorkflowState"]["defaultValue"], "Disabled")
 
