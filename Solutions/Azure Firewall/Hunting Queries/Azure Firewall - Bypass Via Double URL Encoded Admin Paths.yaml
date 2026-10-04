@@ -1,0 +1,61 @@
+id: 16a81a04-3d26-4118-8f6d-6dd3389583cc
+name: Bypass Attempt via Double URL Encoding
+description: |
+  Identifies potential malicious bypass attempts of the Azure Web Application Firewall using Double URL Encoding techniques.
+  Adversaries often use multi-layer encoding to obfuscate payloads targeting administrative or sensitive application directories.
+description-detailed: |
+  This hunting query screens both modern and legacy Azure Application Gateway WAF logs for instances where a request URI,
+  when stripped of query parameters and decoded a second time, reveals a mismatch against its initial decode layer. 
+  It filters these anomalies against critical administrative keywords (e.g., admin, setup, config) to isolate targeted evasion.
+  Verify that the flagged clients are not authorized web scanners or legacy custom applications utilizing eccentric routing configurations.
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureWebApplicationFirewall
+    dataTypes:
+      - AGWFirewallLogs
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1190
+  - T1036
+query: |
+  let TargetAdminPaths = dynamic(["admin", "PSEMHUB", "bin", "config", "setup", "install", "login"]);
+  let ModernWAF = AGWFirewallLogs
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where Action in~ ("Allowed", "Matched")
+  | extend RequestPath = tostring(split(RequestUri, "?")[0])
+  | extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))
+  | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
+  | where SecondaryDecode has_any (TargetAdminPaths) or RequestPath has_any (TargetAdminPaths)
+  | project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action;
+  let LegacyWAF = AzureDiagnostics
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where Category == "ApplicationGatewayFirewallLog"
+  | where action_s in~ ("Allowed", "Matched")
+  | extend RequestPath = tostring(split(requestUri_s, "?")[0])
+  | extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))
+  | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
+  | where SecondaryDecode has_any (TargetAdminPaths) or RequestPath has_any (TargetAdminPaths)
+  | project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s;
+  union isfuzzy=true ModernWAF, LegacyWAF
+  | summarize 
+      StartTime = min(TimeGenerated), 
+      EndTime = max(TimeGenerated),
+      AttackCount = count(),
+      SamplePayloads = make_set(requestUri, 5) 
+      by clientIp, hostname, action
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: clientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: hostname
+customDetails:
+  WAFAction: action
+  TotalAttempts: AttackCount
+version: 1.0.0
