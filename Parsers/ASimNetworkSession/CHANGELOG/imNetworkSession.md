@@ -1,4 +1,9 @@
 # Changelog for imNetworkSession.yaml
+
+## Version 0.6.8
+
+- (2026-09-29) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
+
 ## Version 0.6.7
 
 - (2026-09-22) Add AWS GuardDuty filtering parser to the Network Session unifying parser - [PR #14769](https://github.com/Azure/Azure-Sentinel/pull/14769)
