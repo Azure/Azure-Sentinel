@@ -1,8 +1,12 @@
 # Changelog for ASimAuthentication.yaml
 
-## Version 0.2.24
+## Version 0.2.25
 
 - (2026-09-30) Add the Okta Auth0 Authentication parser. [PR #15230](https://github.com/Azure/Azure-Sentinel/pull/15230)
+
+## Version 0.2.24
+
+- (2026-09-30) Add the Salesforce Login History Authentication parser. [PR #15225](https://github.com/Azure/Azure-Sentinel/pull/15225)
 
 ## Version 0.2.23
 
