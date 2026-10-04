@@ -1,0 +1,272 @@
+Parser:
+  Title: Network Session ASIM parser for Zscaler Private Access (ZPA_CL)
+  Version: '0.1.0'
+  LastUpdated: Sep 21, 2026
+Product:
+  Name: Zscaler Private Access (ZPA)
+Normalization:
+  Schema: NetworkSession
+  Version: '1.0.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Zscaler and Microsoft Sentinel Deployment Guide
+  Link: https://help.zscaler.com/zscaler-technology-partners/zscaler-and-microsoft-sentinel-deployment-guide
+- Title: Developer
+  Link: https://www.bluevoyant.com
+Description: |
+  This ASIM parser supports normalizing Zscaler Private Access (ZPA) logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionZscalerZPA
+EquivalentBuiltInParser: _ASim_NetworkSession_ZscalerZPA
+Exceptions:
+- Field: ASimMatchingHostname
+  Warning: Missing recommended field
+  Exception: no filtering parameters in the parameterless parser
+- Field: ASimMatchingIpAddr
+  Warning: Missing recommended field
+  Exception: no filtering parameters in the parameterless parser
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+- Field: SrcDomain
+  Warning: Missing recommended field
+  Exception: Not available in data source
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false, pack:bool = false)
+  {
+    ZPA_CL
+    | where not(disabled)
+    // Filter on the built-in column before parsing (ASIM performance guidance).
+    // "ConnectionStatus" is present only on session logs, so this drops zpn_auth_log,
+    // zpn_ast_auth_log, zpn_audit_log, zpn_sys_auth_log and the stats feeds.
+    | where Message has "ConnectionStatus"
+    | parse-kv Message as (
+        SessionID: string,
+        ConnectionID: string,
+        InternalReason: string,
+        ConnectionStatus: string,
+        IPProtocol: double,
+        Username: string,
+        ServicePort: int,
+        ServerPort: int,
+        ClientPublicIP: string,
+        ClientPrivateIP: string,
+        ClientLatitude: real,
+        ClientLongitude: real,
+        ClientCountryCode: string,
+        ClientCity: string,
+        ClientZEN: string,
+        Policy: string,
+        Connector: string,
+        ConnectorZEN: string,
+        ConnectorIP: string,
+        ConnectorPort: int,
+        Host: string,
+        ServerIP: string,
+        Application: string,
+        AppGroup: string,
+        PolicyProcessingTime: string,
+        ServerSetupTime: string,
+        TimestampConnectionStart: string,
+        TimestampConnectionEnd: string,
+        ZENTotalBytesRxClient: long,
+        ZENTotalBytesTxClient: long,
+        Idp: string,
+        Platform: string,
+        Hostname: string
+      ) with (pair_delimiter=',', kv_delimiter=':', quote='"')
+    | where isnotempty(ConnectionStatus)
+    | extend
+        DvcAction = iif(InternalReason has_any ("REJECTED_BY_POLICY", "NO_POLICY_FOUND"), "Deny", "Allow"),
+        EventResultDetails = case(
+            isempty(InternalReason), "NA",
+            InternalReason == "OPEN_OR_ACTIVE_CONNECTION", "NA",
+            InternalReason in (
+                "BRK_MT_TERMINATED",
+                "BRK_MT_TERMINATED_IDLE_TIMEOUT",
+                "MT_CLOSED_TLS_CONN_GONE_CLIENT_CLOSED",
+                "MT_CLOSED_TLS_CONN_GONE_UPGRADE",
+                "MT_CLOSED_TERMINATED",
+                "BRK_MT_CLOSED_FROM_ASSISTANT",
+                "BRK_MT_CLOSED_FROM_CLIENT",
+                "ZIA_HALF_CLOSE_S"), "Terminated",
+            InternalReason in (
+                "APP_NOT_REACHABLE",
+                "NO_CONNECTOR_AVAILABLE",
+                "INVALID_DOMAIN",
+                "AST_MT_SETUP_ERR_OPEN_SERVER_CONN",
+                "AST_MT_SETUP_ERR_OPEN_SERVER_ERROR",
+                "AST_MT_SETUP_ERR_NO_DNS_TO_SERVER",
+                "BRK_MT_SETUP_FAIL_CANNOT_SEND_TO_DISPATCHER",
+                "BRK_MT_SETUP_FAIL_APP_PORT_NOT_FOUND"), "Routing issue",
+            InternalReason in (
+                "AST_MT_SETUP_TIMEOUT_CANNOT_CONN_TO_BROKER",
+                "AST_MT_SETUP_TIMEOUT_CANNOT_CONN_TO_SERVER",
+                "AST_MT_SETUP_TIMEOUT_NO_ACK_TO_BIND",
+                "BRK_MT_SETUP_TIMEOUT"), "Timeout",
+            InternalReason in (
+                "BRK_MT_SETUP_FAIL_RATE_LIMIT_EXCEEDED",
+                "BRK_MT_SETUP_FAIL_REPEATED_DISPATCH"), "Maximum Retry",
+            InternalReason == "MT_CLOSED_TLS_CONN_GONE_AST_CLOSED", "Invalid Tunnel",
+            InternalReason == "BRK_MT_TERMINATED_BRK_SWITCHED", "Failover",
+            InternalReason == "BRK_MT_SETUP_FAIL_SAML_EXPIRED", "Transient error",
+            "Unknown"
+        ),
+        DstBytes = coalesce(ZENTotalBytesTxClient, long(0)),
+        SrcBytes = coalesce(ZENTotalBytesRxClient, long(0)),
+        SrcUsername = coalesce(Username, ""),
+        NetworkDuration = toint(datetime_diff("millisecond",
+            todatetime(TimestampConnectionEnd), todatetime(TimestampConnectionStart))),
+        DstIsIp = isnotnull(parse_ipv4(Host))
+    | invoke _ASIM_ResolveDstFQDN('Host')
+    | extend
+        DstHostname   = iif(DstIsIp, Host, DstHostname),
+        DstDomain     = iif(DstIsIp, "", DstDomain),
+        DstDomainType = iif(DstIsIp, "", DstDomainType),
+        DstFQDN       = iif(DstIsIp, "", DstFQDN),
+        DstIpAddr     = coalesce(ServerIP, iif(DstIsIp, Host, ""))
+    | extend // --- Event ---
+        EventCount     = int(1),
+        EventStartTime = coalesce(todatetime(TimestampConnectionStart), TimeGenerated),
+        EventEndTime   = coalesce(todatetime(TimestampConnectionEnd), TimeGenerated),
+        EventType      = "NetworkSession",
+        EventSubType   = case(
+            ConnectionStatus =~ "open",  "Start",
+            ConnectionStatus =~ "close", "End",
+            ""),
+        EventResult = iif(
+            DvcAction == "Deny"
+            or EventResultDetails in ("Routing issue", "Timeout", "Maximum Retry", "Invalid Tunnel"),
+            "Failure", "Success"),
+        EventOriginalResultDetails = InternalReason,
+        EventSeverity      = iif(DvcAction == "Deny", "Low", "Informational"),
+        EventVendor        = "Zscaler",
+        EventProduct       = "Private Access",
+        EventSchema        = "NetworkSession",
+        EventSchemaVersion = "1.0.0",
+        EventUid           = _ItemId
+    | extend // --- Reporting device ---
+        Dvc               = Connector,
+        DvcHostname       = Connector,
+        DvcIpAddr         = ConnectorIP,
+        DvcAction         = DvcAction,
+        DvcOriginalAction = InternalReason
+    | extend // --- Session ---
+        NetworkSessionId = SessionID,
+        SessionId        = SessionID,
+        NetworkProtocol  = case(
+            IPProtocol == 1,  "ICMP",
+            IPProtocol == 6,  "TCP",
+            IPProtocol == 17, "UDP",
+            ""),
+        Duration         = NetworkDuration,
+        NetworkBytes     = DstBytes + SrcBytes,
+        NetworkRuleName  = Policy,
+        Rule             = Policy
+    | extend // --- Source ---
+        Src          = ClientPublicIP,
+        SrcIpAddr    = ClientPublicIP,
+        IpAddr       = ClientPublicIP,
+        SrcNatIpAddr = ClientPrivateIP,
+        SrcUsernameType = case(
+            isempty(SrcUsername), "",
+            indexof(SrcUsername, "@") > 0, "UPN",
+            "Simple"),
+        SrcUserType = case(
+            isempty(SrcUsername), "",
+            SrcUsername == "ZPA LSS Client", "Service",
+            indexof(SrcUsername, "@") > 0, "Regular",
+            "Other"),
+        SrcHostname = Hostname,
+        SrcDeviceType = case(
+            Platform in~ ("windows", "mac", "linux"), "Computer",
+            Platform in~ ("ios", "android"), "Mobile Device",
+            isempty(Platform), "",
+            "Other"),
+        SrcGeoCountry   = ClientCountryCode,
+        SrcGeoCity      = ClientCity,
+        SrcGeoLatitude  = ClientLatitude,
+        SrcGeoLongitude = ClientLongitude
+    | extend // --- Destination ---
+        Dst           = Host,
+        Hostname      = DstHostname,
+        DstPortNumber = toint(coalesce(ServicePort, ServerPort, 0)),
+        DstAppName    = Application,
+        DstAppType    = "Resource"
+    | extend // --- Additional fields ---
+        AdditionalFields = iif(pack, bag_pack(
+            "ConnectionID",         ConnectionID,
+            "AppGroup",             AppGroup,
+            "Idp",                  Idp,
+            "ClientZEN",            ClientZEN,
+            "ConnectorZEN",         ConnectorZEN,
+            "ConnectorPort",        ConnectorPort,
+            "PolicyProcessingTime", PolicyProcessingTime,
+            "ServerSetupTime",      ServerSetupTime), dynamic(null))
+    | project
+        TimeGenerated,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventSubType,
+        EventResult,
+        EventResultDetails,
+        EventOriginalResultDetails,
+        EventSeverity,
+        EventVendor,
+        EventProduct,
+        EventSchema,
+        EventSchemaVersion,
+        EventUid,
+        Dvc,
+        DvcHostname,
+        DvcIpAddr,
+        DvcAction,
+        DvcOriginalAction,
+        NetworkSessionId,
+        SessionId,
+        NetworkProtocol,
+        NetworkDuration,
+        Duration,
+        DstBytes,
+        SrcBytes,
+        NetworkBytes,
+        NetworkRuleName,
+        Rule,
+        Src,
+        SrcIpAddr,
+        IpAddr,
+        SrcNatIpAddr,
+        SrcUsername,
+        SrcUsernameType,
+        SrcUserType,
+        SrcHostname,
+        SrcDeviceType,
+        SrcGeoCountry,
+        SrcGeoCity,
+        SrcGeoLatitude,
+        SrcGeoLongitude,
+        Dst,
+        DstHostname,
+        DstDomain,
+        DstDomainType,
+        DstFQDN,
+        DstIpAddr,
+        Hostname,
+        DstPortNumber,
+        DstAppName,
+        DstAppType,
+        AdditionalFields,
+        Type
+  };
+  parser (disabled=disabled, pack=pack)
