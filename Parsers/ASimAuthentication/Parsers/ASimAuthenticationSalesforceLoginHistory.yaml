@@ -1,0 +1,251 @@
+Parser:
+  Title: Authentication ASIM parser for Salesforce Login History
+  Version: '0.1.0'
+  LastUpdated: Oct 01, 2026
+Product:
+  Name: Salesforce Login History
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SalesforceLoginHistory table documentation
+  Link: https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/salesforceloginhistory
+Description: |
+  This ASIM parser normalizes Salesforce login history events stored in the SalesforceLoginHistory table to the ASIM Authentication schema.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAuthenticationSalesforceLoginHistory
+EquivalentBuiltInParser: _ASim_Authentication_SalesforceLoginHistory
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      SalesforceLoginHistory
+      | where not(disabled)
+      | extend EventTime = coalesce(LoginTime, TimeGenerated)
+      | extend NormalizedSourceIp = iff(
+          isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)),
+          SourceIp,
+          "")
+      | extend TargetUrl = iff(
+          isempty(LoginUrl),
+          "",
+          iff(LoginUrl startswith "http://"
+              or LoginUrl startswith "https://",
+              LoginUrl,
+              strcat("https://", LoginUrl)))
+      | extend LoginUrlFQDN = tostring(parse_url(TargetUrl)["Host"])
+      | extend TargetFQDN = case(
+          isnotempty(SalesforceDomain), SalesforceDomain,
+          isnotempty(LoginUrlFQDN), LoginUrlFQDN,
+          LoginUrl)
+      | invoke _ASIM_ResolveFQDN('TargetFQDN')
+      | extend
+          TargetAppName = iff(isnotempty(TargetFQDN), TargetFQDN, "Salesforce"),
+          ActingAppName = iff(isnotempty(Application), Application, Browser),
+          ActingAppType = case(
+              isnotempty(Application), "SaaS application",
+              isnotempty(Browser), "Browser",
+              "Other"),
+          EventResult = case(
+              Status =~ "Success", "Success",
+              isempty(Status), "NA",
+              "Failure"),
+          EventResultDetails = case(
+              Status =~ "Success" or isempty(Status), "",
+              Status =~ "Invalid Password", "Incorrect password",
+              Status in~ ("Password Lockout", "User is Frozen"), "User locked",
+              Status =~ "User is Inactive", "User disabled",
+              Status in~ (
+                  "Lightning Login required",
+                  "Multi-factor required",
+                  "Passwordless Login via Passkeys required"
+              ), "MFA not satisfied",
+              Status in~ (
+                  "Failed: Not approved",
+                  "Failed: Not approved for access",
+                  "No community access",
+                  "Restricted IP",
+                  "Username-Password Flow Disabled"
+              ), "Logon violates policy",
+              "Other"),
+          DvcAction = case(
+              Status =~ "Success", "Allowed",
+              isempty(Status), "",
+              "Blocked")
+      | extend
+          LogonMethod = case(
+              LoginSubType =~ "OAuth Client Credentials", "Service Principal",
+              LoginSubType =~ "OAuth OTP Login"
+                  or Status in~ (
+                      "Lightning Login required",
+                      "Multi-factor required",
+                      "Passwordless Login via Passkeys required"
+                  )
+                  or AuthMethodReference contains "multipleauthn",
+                  "Multi factor authentication",
+              AuthMethodReference contains "x509"
+                  or AuthMethodReference contains "smartcard",
+                  "PKI",
+              LoginType contains "Passwordless"
+                  or AuthMethodReference contains "fido",
+                  "Passwordless",
+              LoginSubType in~ (
+                  "OAuth Username-Password",
+                  "UI Password Reset",
+                  "UI Username-Password"
+              )
+                  or Status =~ "Invalid Password",
+                  "Username & Password",
+              "Other"),
+          LogonProtocol = case(
+              LoginSubType contains "OAuth", "OAuth",
+              LoginSubType contains "SOAP", "SOAP",
+              LoginType contains "SAML", "SAML",
+              LoginSubType startswith "UI", "Basic Auth",
+              LoginSubType =~ "Internal Salesforce Authentication", "Salesforce",
+              "Other"),
+          EventSubType = case(
+              LoginSubType contains "OAuth"
+                  or LoginSubType contains "SOAP"
+                  or LoginType in~ (
+                      "Application",
+                      "Other Apex API",
+                      "Remote Access 2.0",
+                      "Remote Access Client",
+                      "Salesforce Outlook Integration"
+                  ),
+                  "Service",
+              "Interactive"),
+          SrcDeviceType = case(
+              Platform startswith "Android"
+                  or Platform in~ ("iOS/Mac", "iPad", "iPhone"),
+                  "Mobile Device",
+              Platform startswith "Windows"
+                  or Platform in~ ("Linux", "Mac OSX"),
+                  "Computer",
+              isnotempty(Platform), "Other",
+              "")
+      | extend
+          EventUid = hash_sha256(strcat(
+              TenantId, "|",
+              tostring(EventTime), "|",
+              UserId, "|",
+              SourceIp, "|",
+              LoginType, "|",
+              LoginSubType, "|",
+              Application, "|",
+              LoginUrl, "|",
+              Status)),
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "ApiType", ApiType,
+                  "ApiVersion", ApiVersion,
+                  "AuthMethodReference", AuthMethodReference,
+                  "Browser", Browser,
+                  "CipherSuite", CipherSuite,
+                  "ClientVersion", ClientVersion,
+                  "ForwardedForIp", ForwardedForIp,
+                  "LoginGeoId", LoginGeoId,
+                  "OptionsIsGet", OptionsIsGet,
+                  "OptionsIsPost", OptionsIsPost,
+                  "SourceIp", SourceIp,
+                  "SourceSystem", SourceSystem,
+                  "LoginTime", LoginTime,
+                  "TenantId", TenantId,
+                  "TlsProtocol", TlsProtocol,
+                  "_BilledSize", _BilledSize,
+                  "_IsBillable", _IsBillable
+              ),
+              dynamic({}))
+      | project-rename
+          ActingAppId = AuthenticationServiceId,
+          ActingOriginalAppType = ApiType,
+          EventOriginalSubType = LoginSubType,
+          EventOriginalType = LoginType,
+          EventProductVersion = ApiVersion,
+          HttpUserAgent = Browser,
+          SrcDvcOs = Platform,
+          SrcGeoCountry = CountryIso,
+          TargetAppId = NetworkId
+      | project
+          TimeGenerated,
+          Type = "SalesforceLoginHistory",
+          EventCount = toint(1),
+          EventEndTime = EventTime,
+          EventMessage = Status,
+          EventOriginalResultDetails = Status,
+          EventOriginalSubType,
+          EventOriginalType,
+          EventProduct = "Salesforce Login History",
+          EventProductVersion,
+          EventResult,
+          EventResultDetails,
+          EventSchema = "Authentication",
+          EventSchemaVersion = "1.0.0",
+          EventSeverity = "Informational",
+          EventStartTime = EventTime,
+          EventSubType,
+          EventType = "Logon",
+          EventUid,
+          EventVendor = "Salesforce",
+          ActingAppId,
+          ActingAppName,
+          ActingAppType,
+          ActingOriginalAppType,
+          ActingApplicationEntityKey = "",
+          ActorUserAdditionalIds = dynamic([]),
+          ActorUserEntityKey = "",
+          AdditionalEntities = dynamic([]),
+          AdditionalFields,
+          Application = TargetAppName,
+          Dst = coalesce(FQDN, tostring(ExtractedHostname)),
+          Dvc = "Salesforce Login History",
+          DvcAction,
+          DvcDescription = "Salesforce authentication service",
+          DvcDomain = "",
+          DvcDomainType = "",
+          DvcEntityKey = "",
+          DvcFQDN = "",
+          DvcHostname = "",
+          HttpUserAgent,
+          IpAddr = NormalizedSourceIp,
+          LogonMethod,
+          LogonProtocol,
+          LogonTarget = coalesce(FQDN, tostring(ExtractedHostname)),
+          Src = NormalizedSourceIp,
+          SrcDeviceType,
+          SrcDvcOs,
+          SrcGeoCountry,
+          SrcHostname = "",
+          SrcIpAddr = NormalizedSourceIp,
+          SrcSystemEntityKey = "",
+          TargetAppId,
+          TargetApplicationEntityKey = "",
+          TargetAppName,
+          TargetAppType = "SaaS application",
+          TargetDomain = tostring(Domain),
+          TargetDomainType = DomainType,
+          TargetFQDN = FQDN,
+          TargetHostname = tostring(ExtractedHostname),
+          TargetSystemEntityKey = "",
+          TargetUrl,
+          TargetUserAdditionalIds = dynamic([]),
+          TargetUserEntityKey = "",
+          TargetUserId = UserId,
+          TargetUserIdType = iff(isnotempty(UserId), "SalesforceId", ""),
+          User = UserId
+  };
+  parser(disabled=disabled, pack=pack)
