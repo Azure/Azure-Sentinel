@@ -76,7 +76,7 @@ For the complete permission requirements, see [Exchange Security Insights Collec
 5. Record the DCE URI and DCR immutable ID displayed by the connector. Retrieve the DCR name from its immutable ID (see [Retrieve the DCR name](#retrieve-the-dcr-name)).
 6. Update the existing runbook and `GlobalConfiguration` variable by following [Update an existing Azure Automation deployment](#update-an-existing-azure-automation-deployment).
 7. Verify that the `Start-ESICollector` runbook, modules, `GlobalConfiguration` variable, and daily schedule are configured correctly.
-8. Verify that the Automation account managed identity has **Monitoring Metrics Publisher** on the DCR.
+8. [Verify or assign **Monitoring Metrics Publisher** on the DCR](#verify-or-assign-monitoring-metrics-publisher-on-the-dcr).
 9. If the managed identity was recreated, [assign the Microsoft Graph and Exchange Online permissions](#assign-microsoft-graph-and-exchange-online-permissions) and the [Microsoft Entra directory role](#assign-a-microsoft-entra-directory-role) again.
 10. Run the runbook manually and verify ingestion before relying on the schedule.
 
@@ -118,8 +118,21 @@ Update the existing Automation account manually:
    - `UseManagedIdentity` to `true`.
    - `TargetLogTenantID` to the Microsoft Entra tenant ID.
    - `LogTypeName` to `ESIExchangeOnlineConfig`.
+```json
+{
+  "LogCollection": {
+    "ActivateLogUpdloadToSentinel": "true",
+    "LogTypeName": "ESIExchangeOnlineConfig",
+    "SentinelLogIngestionAPIActivated": "true",
+    "DataCollectionEndpointURI": "<value displayed by the data connector>",
+    "DCRImmutableId": "<value displayed by the data connector>",
+    "UseManagedIdentity": "true",
+    "TargetLogTenantID": "<tenant ID>"
+  }
+}
+```
 7. Verify that the required PowerShell 5.1 modules are installed.
-8. Verify that the Automation account managed identity has **Monitoring Metrics Publisher** on the DCR.
+8. [Verify or assign **Monitoring Metrics Publisher** on the DCR](#verify-or-assign-monitoring-metrics-publisher-on-the-dcr).
 9. Verify that the existing daily schedule remains enabled and linked to `Start-ESICollector`.
 10. If a temporary runbook was created, remove `Export-ESIGlobalConfiguration` and its completed job after the updated collector has been validated.
 
@@ -166,6 +179,93 @@ $dcr | Select-Object Name, ImmutableId, Id
 Use the value in the `Name` column for the `dcrName` deployment parameter. If no result is returned, verify the active subscription, resource group, and immutable ID.
 
 Use these values when deploying the Azure Automation template.
+
+### Verify or assign Monitoring Metrics Publisher on the DCR
+
+The system-assigned managed identity of the Automation account must have the **Monitoring Metrics Publisher** Azure role on the DCR used by the collector. Assign the role at the DCR scope to follow the principle of least privilege.
+
+To create the role assignment, your account must have `Microsoft.Authorization/roleAssignments/write` at the DCR scope or a parent scope. For example, use **Role Based Access Control Administrator**, **User Access Administrator**, or **Owner**.
+
+#### Verify the role in the Azure portal
+
+1. Open the Automation account.
+2. Go to **Account Settings** > **Identity** > **System assigned**.
+3. Confirm that the status is **On**, then copy the **Object (principal) ID**.
+4. Open the DCR identified in [Retrieve the DCR name](#retrieve-the-dcr-name).
+5. Select **Access control (IAM)** > **Role assignments**.
+6. Search for `Monitoring Metrics Publisher`.
+7. Confirm that an assignment exists for the Automation account managed identity:
+   - The role is **Monitoring Metrics Publisher**.
+   - The member matches the Automation account name or the object ID copied in step 3.
+   - The scope is the current DCR or a parent scope from which the role is inherited.
+
+An inherited assignment is effective on the DCR. Do not add a duplicate assignment if the same identity already has the role from a parent scope.
+
+#### Add the role in the Azure portal
+
+If no effective assignment exists:
+
+1. On the DCR, select **Access control (IAM)** > **Add** > **Add role assignment**.
+2. On the **Role** tab, search for and select **Monitoring Metrics Publisher**, then select **Next**.
+3. For **Assign access to**, select **Managed identity**.
+4. Select **Select members**.
+5. Select the subscription and the managed identity type for Azure Automation accounts.
+6. Select the existing Automation account, then choose **Select**.
+7. Select **Review + assign**, review the DCR scope and identity, and select **Review + assign** again.
+8. Return to **Role assignments** and verify that the new assignment appears. Azure RBAC changes can take several minutes to propagate.
+
+#### Verify or add the role with Azure PowerShell
+
+Run the following commands from a PowerShell session with `Az.Accounts`, `Az.Automation`, `Az.Monitor`, and `Az.Resources` installed:
+
+```powershell
+Connect-AzAccount
+Set-AzContext -SubscriptionId "<subscription-id>"
+
+$automationResourceGroup = "<automation-account-resource-group>"
+$automationAccountName = "<automation-account-name>"
+$dcrResourceGroup = "<DCR-resource-group>"
+$dcrName = "<DCR-resource-name>"
+
+$automationAccount = Get-AzAutomationAccount `
+    -ResourceGroupName $automationResourceGroup `
+    -Name $automationAccountName `
+    -ErrorAction Stop
+
+$principalId = $automationAccount.Identity.PrincipalId
+if (-not $principalId) {
+    throw "The Automation account system-assigned managed identity is not enabled."
+}
+
+$dcr = Get-AzDataCollectionRule `
+    -ResourceGroupName $dcrResourceGroup `
+    -Name $dcrName `
+    -ErrorAction Stop
+
+$roleName = "Monitoring Metrics Publisher"
+$roleAssignment = Get-AzRoleAssignment `
+    -ObjectId $principalId `
+    -RoleDefinitionName $roleName `
+    -Scope $dcr.Id `
+    -ErrorAction SilentlyContinue
+
+if ($roleAssignment) {
+    Write-Output "'$roleName' is already assigned to '$automationAccountName' on '$($dcr.Name)'."
+}
+else {
+    New-AzRoleAssignment `
+        -ObjectId $principalId `
+        -RoleDefinitionName $roleName `
+        -Scope $dcr.Id `
+        -ErrorAction Stop
+
+    Write-Output "'$roleName' was assigned to '$automationAccountName' on '$($dcr.Name)'."
+}
+```
+
+This PowerShell check targets an assignment made directly on the DCR. Before creating it, use the portal procedure to confirm that the same role is not already inherited from a parent scope.
+
+For general Azure RBAC procedures, see [Assign Azure roles using the Azure portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal) and [Assign Azure roles using Azure PowerShell](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-powershell).
 
 ## Managed identity configuration
 
