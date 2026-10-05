@@ -340,4 +340,4 @@ ESIAPIExchangeOnPremConfig_CL
 - [Forwarder quick start](./QUICKSTART-Forwarder.md)
 - [Configure the on-premises collector with Azure Monitor](../Documentations/README_LogIngestionAPI.md)
 - [Collector prerequisites](../Documentations/ESICollector.md)
-- [Configure the collector with WinformConfig](../Documentations/WinformConfigReadme.md)
+- [Configure the collector with setup.ps1](../Documentations/ReadmeSetup.PS1.md)

@@ -24,6 +24,26 @@ The current version of the Exchange Security Insights Collector is **8.0.0.0**.
 >
 > For complete migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
+#### Required Azure PowerShell module
+
+> [!IMPORTANT]
+> Version 8.0.0.0 requires the Azure PowerShell `Az.Accounts` module on every Windows server that runs the collector. Install or update this module on the collector server **before replacing or running `CollectExchSecIns.ps1`**. The scheduled task will not be able to authenticate to Azure Monitor if the module is unavailable.
+
+Open an elevated Windows PowerShell session on the collector server and verify that the module and `Connect-AzAccount` command are available:
+
+```powershell
+Get-Module -ListAvailable -Name Az.Accounts
+Get-Command -Name Connect-AzAccount -Module Az.Accounts
+```
+
+If the module is not installed, install it for all users so that it is available to the collector's scheduled-task account:
+
+```powershell
+Install-Module -Name Az.Accounts -Repository PSGallery -Scope AllUsers -Force
+```
+
+For all server requirements, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md).
+
 #### Configuration changes
 
 The configuration schema remains backward compatible. Existing configurations continue to work without changes, but the collector displays a warning until migration to the Log Ingestion API is completed.
@@ -50,17 +70,18 @@ After configuring the new connector, update the configuration on the collector s
 
 #### Collector update
 
-1. Back up the existing `Config\CollectExchSecConfiguration.json` file.
-2. Before extracting the package, unblock the downloaded ZIP file:
+1. Verify or install the required [`Az.Accounts` module](#required-azure-powershell-module) on the collector server.
+2. Back up the existing `Config\CollectExchSecConfiguration.json` file.
+3. Before extracting the package, unblock the downloaded ZIP file:
 
    ```powershell
    Unblock-File -LiteralPath .\CollectExchSecIns.zip
    ```
 
-3. Extract `CollectExchSecIns.zip` into a new folder.
-4. Replace the existing `CollectExchSecIns.ps1` file with the new version.
-5. Copy the new `setup.ps1` file from the newly extracted folder to the existing collector directory, replacing the previous version.
-6. After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
+4. Extract `CollectExchSecIns.zip` into a new folder.
+5. Replace the existing `CollectExchSecIns.ps1` file with the new version.
+6. Copy the new `setup.ps1` file from the newly extracted folder to the existing collector directory, replacing the previous version.
+7. After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
 
 If the package was extracted before the ZIP file was unblocked, unblock the copied scripts in the existing collector directory:
 

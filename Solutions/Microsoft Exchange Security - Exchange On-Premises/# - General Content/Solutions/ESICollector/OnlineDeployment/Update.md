@@ -41,7 +41,7 @@ For a complete Azure Monitor deployment or migration, follow the [solution-speci
 2. Extract the package to a new directory.
 3. Follow the replacement procedure in the [collector package and upgrade guide](../README.md).
 4. Preserve the backed-up `Config\CollectExchSecConfiguration.json` file unless the upgrade guide requires a schema change.
-5. Apply required configuration changes with WinformConfig or by carefully merging the new settings.
+5. Apply the required configuration changes with [`setup.ps1`](../../../Documentations/ReadmeSetup.PS1.md). For an existing deployment, select configuration-only update mode.
 6. Verify that the scheduled task points to the updated collector path.
 7. Run the collector manually and confirm that it completes successfully.
 8. Verify that new data reaches the expected Log Analytics table before relying on the scheduled task.

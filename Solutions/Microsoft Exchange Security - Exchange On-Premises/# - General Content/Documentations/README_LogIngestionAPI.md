@@ -39,23 +39,23 @@ For a new deployment, create a new collector configuration. Do not follow an upg
 5. Wait for the connector deployment to complete.
 6. Create the authentication certificate and add its public part to the Entra application created by the connector by following [Create the authentication certificate](#create-the-authentication-certificate).
 7. Download and extract the latest `CollectExchSecIns.zip` package on the collector server.
-8. Use the [`WinformConfig\SetupCollectExchSecConfiguration.ps1` user interface](./WinformConfigReadme.md) to configure the new `Config\CollectExchSecConfiguration.json` file and create the mandatory scheduled task during the same setup session. Alternatively, `setup.ps1` can configure the file and create the task.
+8. Use [`setup.ps1`](./ReadmeSetup.PS1.md) in full setup mode to configure the new `Config\CollectExchSecConfiguration.json` file and create the mandatory scheduled task.
 9. Run the collector manually and verify ingestion.
 
 ### Upgrade an existing deployment
 
 For an existing deployment, preserve the current configuration and update only the settings required for Azure Monitor ingestion.
 
-1. Update the collector to version 8.0.0.0 or later by following the [collector upgrade instructions](../Solutions/ESICollector/README.md). This includes deploying the updated `WinformConfig` folder.
+1. Update the collector to version 8.0.0.0 or later by following the [collector upgrade instructions](../Solutions/ESICollector/README.md). This includes copying the updated `setup.ps1` file to the existing collector directory.
 2. Back up the existing `Config\CollectExchSecConfiguration.json` file.
 3. Update the **Microsoft Exchange Security for Exchange On-Premises** solution from Microsoft Sentinel Content Hub.
 4. Open **Data connectors** in Microsoft Sentinel.
 5. Select the new **Exchange Security Insights On-Premises Collector (Azure Monitor)** connector.
 6. Open the connector page and select **Deploy Exchange Collector Push connector resources**.
 7. Wait for the connector deployment to complete.
-8. Create or select the authentication certificate and add its public part to the Entra application created by the connector by following [Create the authentication certificate](#create-the-authentication-certificate).
-9. Update the existing `Config\CollectExchSecConfiguration.json` file. Prefer the [`WinformConfig\SetupCollectExchSecConfiguration.ps1` user interface](./WinformConfigReadme.md), and preserve all existing environment, instance, scheduling, and add-on settings.
-10. Verify that the mandatory scheduled task still points to the updated collector. If it is missing, create it during the same WinformConfig setup session.
+8. Create or select the authentication **certificate** and **add its public part to the Entra application** created by the connector by following [Create the authentication certificate](#create-the-authentication-certificate).
+9. Run [`setup.ps1`](./ReadmeSetup.PS1.md) and select configuration-only update mode. This updates the Azure Monitor settings while preserving the existing environment, instance, scheduling, and add-on settings.
+10. Verify that the mandatory scheduled task still points to the updated collector. If it is missing, run `setup.ps1` in full setup mode to recreate it.
 11. Run the collector manually and verify ingestion before relying on the scheduled task.
 
 ## Create the authentication certificate
@@ -110,7 +110,7 @@ On the collector server:
 3. Locate the `ESI-Collector-Auth` certificate.
 4. Right-click the certificate and select **All Tasks** > **Manage Private Keys**.
 5. Add the collector's service account and grant it **Read** permission.
-6. Record the certificate thumbprint for the WinformConfig setup.
+6. Record the certificate thumbprint for the `setup.ps1` configuration.
 
 ## Values provided by the data connector
 
@@ -124,7 +124,7 @@ After deployment, the connector page displays the values required to configure t
 
 You must also provide the thumbprint of the authentication certificate created before configuring the collector.
 
-Use the [WinformConfig editor](./WinformConfigReadme.md) as the preferred method for applying these values and creating the mandatory scheduled task during the same configuration session. The `setup.ps1` script remains available as an alternative guided configuration method.
+Use the [`setup.ps1` guide](./ReadmeSetup.PS1.md) to apply these values. Select configuration-only update mode for an existing deployment, or full setup mode for a new deployment that also requires the mandatory scheduled task.
 
 The on-premises collector uses certificate authentication. Do not configure an application secret.
 
@@ -266,6 +266,6 @@ Confirm that the connector deployment completed successfully and that the collec
 - [Exchange Security Insights Collector prerequisites](./ESICollector.md)
 - [Collector configuration parameters](../Solutions/ESICollector/Parameters.md)
 - [Collector upgrade instructions](../Solutions/ESICollector/README.md)
-- [WinformConfig editor](./WinformConfigReadme.md)
+- [Configure the collector with setup.ps1](./ReadmeSetup.PS1.md)
 - [Forwarder quick start](../Forwarder/QUICKSTART-Forwarder.md)
 - [Forwarder Pickup Processor reference](../Forwarder/README-ForwarderPickup.md)

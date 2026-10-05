@@ -87,12 +87,35 @@ For the complete permission requirements, see [Exchange Security Insights Collec
 
 Update the existing Automation account manually:
 
-1. Back up the existing `GlobalConfiguration` variable.
+> [!WARNING]
+> The temporary runbook procedure below writes the decrypted `GlobalConfiguration` value to the Azure Automation job output. Anyone who can read the job output can read the complete configuration. Restrict access, do not copy the value to an unsecured location, and remove the temporary runbook and its job after the migration is validated.
+
+1. Determine whether the existing `GlobalConfiguration` Automation variable is encrypted:
+   - In the Automation account, open **Shared Resources** > **Variables** > **GlobalConfiguration**.
+   - If the variable is not encrypted, copy its current value to a secure backup and modify only the properties listed in step 6.
+   - If the variable is encrypted, retrieve and back up its complete decrypted value by using a temporary runbook:
+     1. In the existing Automation account, open **Process Automation** > **Runbooks**.
+     2. Select **Create a runbook**.
+     3. Enter a temporary name such as `Export-ESIGlobalConfiguration`.
+     4. Select **PowerShell** as the runbook type and **5.1** as the runtime version.
+     5. Create the runbook and paste the following code:
+
+        ```powershell
+        $value = Get-AutomationVariable -Name 'GlobalConfiguration'
+        Write-Output $value
+        ```
+
+     6. Save and publish the temporary runbook.
+     7. Start the runbook once and wait until its job status is **Completed**.
+     8. Open the completed job, select **Output**, and copy the complete `GlobalConfiguration` value.
+     9. Paste the complete value into a secure text or JSON editor. Keep an unchanged copy as the rollback backup.
 2. Open the `Start-ESICollector` runbook in the Automation account.
 3. Replace the runbook content with the latest `CollectExchSecIns.ps1` content.
 4. Save and publish the runbook.
-5. Update the existing `GlobalConfiguration` variable while preserving all unrelated settings.
-6. Set or update:
+5. Update `GlobalConfiguration` while preserving every unrelated setting:
+   - **Non-encrypted variable:** Open **Shared Resources** > **Variables** > **GlobalConfiguration**, select **Edit**, and add or modify only the properties listed in step 6.
+   - **Encrypted variable:** In the secure editor, add or modify only the properties listed in step 6 in the complete value retrieved from the temporary runbook. Validate that the result is complete, valid JSON. Then open **Shared Resources** > **Variables** > **GlobalConfiguration**, select **Edit**, replace the entire value with the updated content, and save it.
+6. In the `LogCollection` section, set or update:
    - `SentinelLogIngestionAPIActivated` to `true`.
    - `DataCollectionEndpointURI` to the DCE URI displayed by the connector.
    - `DCRImmutableId` to the immutable ID displayed by the connector.
@@ -102,6 +125,7 @@ Update the existing Automation account manually:
 7. Verify that the required PowerShell 5.1 modules are installed.
 8. Verify that the Automation account managed identity has **Monitoring Metrics Publisher** on the DCR.
 9. Verify that the existing daily schedule remains enabled and linked to `Start-ESICollector`.
+10. If a temporary runbook was created, remove `Export-ESIGlobalConfiguration` and its completed job after the updated collector has been validated.
 
 After the update, run `Start-ESICollector` manually and verify ingestion.
 
