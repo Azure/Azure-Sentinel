@@ -1,31 +1,65 @@
 
 $mainTemplateChanged = (Get-Item env:mainTemplateChanged).value
 $createUiChanged = (Get-Item env:createUiChanged).value
+$hasFailures = $false
 
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $PackageFolderPath = './dist/Package'
 
 # RUN FOR MAINTEMPLATE.JSON FILE
-if ($mainTemplateChanged -eq $true) {
+if ($mainTemplateChanged -eq $true)
+{
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json -Skip "Template Should Not Contain Blanks", "URIs Should Be Properly Constructed"
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json
     # SKIP ANY ERRORS ON contentProductId AND id 
     $filterTestResults = New-Object System.Collections.ArrayList
     $hasContentProductIdError = $false
-    foreach ($testInfo in $MainTemplateTestResults) {
-        if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
-            foreach ($errorInfo in $testInfo.Errors) {
+    $hasRequiredDataConnectorsError = $false
+
+    $mainTemplateFilePath = ($PackageFolderPath + "/mainTemplate.json").Replace("//", "/")
+    $mainTemplateContent = Get-Content "$mainTemplateFilePath"
+
+    $filteredTestInfoAllOutput = New-Object System.Collections.ArrayList
+    foreach($testInfo in $MainTemplateTestResults)
+    {
+        if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0)
+        {
+            foreach ($errorInfo in $testInfo.Errors)
+            {
                 if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or 
-                    $errorInfo.Exception.Message -like '*"id"*') {
+                $errorInfo.Exception.Message -like '*"id"*')
+                {
                     $hasContentProductIdError = $true
                 }
-                else {
+                else 
+                {
                     $filterTestResults.Add($testInfo)
                 }
             }
         }
+        elseif($testInfo.Name -eq 'Template Should Not Contain Blanks')
+        {
+            for ($i = 0; $i -lt $testInfo.AllOutput.Count; $i++) {
+                $lineNumber = $testInfo.AllOutput[$i].Location.Line;
+                $selectedLineContent = $mainTemplateContent | Select-Object -First $lineNumber | Select-Object -Last 1;
+                if ($selectedLineContent -like '*"requiredDataConnectors"*') {
+                    $hasRequiredDataConnectorsError = $true
+                } else {
+                    $filteredTestInfoAllOutput.Add($testInfo.AllOutput[$i]);
+                }
+            }
+
+            $testInfo.AllOutput = $filteredTestInfoAllOutput
+            if ($null -ne $testInfo.Summary -and $hasRequiredDataConnectorsError -eq $true -and $filteredTestInfoAllOutput.Count -eq 0) {
+                $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
+                $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+            }
+
+            $filterTestResults.Add($testInfo)
+        }
         else {
-            if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true) {
+            if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true)
+            {
                 $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
                 $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
             }
@@ -36,9 +70,14 @@ if ($mainTemplateChanged -eq $true) {
 
     Write-Output $filterTestResults
 
-    if ($filterTestResults[$filterTestResults.Count - 1].Summary.Fail -gt 0) {
-        Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
-        exit 1
+    $mainTemplateFailures = @($filterTestResults | Where-Object {
+        $null -ne $_.Summary -and $_.Summary.Fail -gt 0
+    })
+
+    if ($mainTemplateFailures.Count -gt 0) {
+        $failureMessage = "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
+        Write-Host "$([char]27)[1;31m$failureMessage$([char]27)[0m"
+        $hasFailures = $true
     } 
     else {
         Write-Host "All tests passed for the 'MainTemplate.json' file!"
@@ -46,21 +85,26 @@ if ($mainTemplateChanged -eq $true) {
 }
 
 # RUN FOR CREATEUIDEFINITION.JSON FILE
-if ($createUiChanged -eq $true) {
+if ($createUiChanged -eq $true)
+{
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
-    $CreateUiTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File CreateUiDefinition.json -Skip "Template Should Not Contain Blanks", "URIs Should Be Properly Constructed"
-    $CreateUiTestPassed = $CreateUiTestResults | Where-Object { -not $_.Failed }
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File CreateUiDefinition.json
+    $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
     Write-Output $CreateUiTestPassed
 
-    $CreateUiTestFailures = $CreateUiTestResults | Where-Object { -not $_.Passed }
+    $CreateUiTestFailures =  $CreateUiTestResults | Where-Object { -not $_.Passed }
 
     if ($CreateUiTestFailures) {
         Write-Host "Please review and rectify the 'CreateUiDefinition.json' file as some of the ARM-TTK tests did not pass!"
-        exit 1
+        $hasFailures = $true
     }
     else {
         Write-Host "All tests passed for the 'CreateUiDefinition.json' file!"
     }
+}
+
+if ($hasFailures) {
+    exit 1
 }
 
 exit 0
