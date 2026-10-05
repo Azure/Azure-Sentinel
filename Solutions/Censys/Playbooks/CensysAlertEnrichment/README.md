@@ -4,6 +4,8 @@
 
 This playbook is triggered by a Microsoft Sentinel Alert. It extracts IP addresses, domains, and certificate file hashes (SHA256) from alert entities, then queries the Censys API to retrieve enrichment data for hosts, web properties, and certificates. The enriched data is ingested into Log Analytics Workspace custom tables (CensysHostAlert, CensysWebPropertyAlert, CensysCertificateAlert). If the alert is associated with an incident, the playbook invokes the CensysAddIncidentComment sub-playbook to add enrichment data as incident comments.
 
+By default this playbook first queries the Censys Host Enrichment API (`v3/global/asset/enrichment/host`) for the IP entities, which returns the standard host record plus GreyNoise, IPinfo (network and privacy) and Mallory third-party data. The enrichment API is a separately entitled feature, so a single probe call decides whether it is available: on 403 (not entitled) or 409 every IP falls back to the standard bulk host API, and any individual IP the enrichment API cannot return falls back on its own. Transient statuses (429, 5xx) and 404 keep the enrichment path enabled. A 401 response terminates the run with an authentication error pointing at the Key Vault secret and Organization ID. Set the `UseHostEnrichment` parameter to `false` to always use the standard host API.
+
 ### Prerequisites
 
 1. Deploy the CensysAddIncidentComment playbook before deploying this playbook.
@@ -17,6 +19,8 @@ This playbook is triggered by a Microsoft Sentinel Alert. It extracts IP address
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
    * PlaybookName: Enter the playbook name here (default: CensysAlertEnrichment).
+   * Ports: Comma-separated list of ports used to build web property identifiers (default: 80,443).
+   * UseHostEnrichment: Set to true (default) to use the Censys Host Enrichment API for additional GreyNoise, IPinfo and Mallory data, or false to always use the standard host API.
    * OrganizationID: Your Censys Organization ID from the Censys platform account settings.
    * IncidentEnrichmentPlaybookName: Name of the deployed CensysAddIncidentComment playbook.
    * KeyVaultName: Name of the Azure Key Vault where the Censys API token is stored.

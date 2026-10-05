@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Censys Add Incident Comment",
-        "description": "This playbook is triggered via HTTP request and is designed to be used as a sub-playbook by other Censys playbooks (CensysIncidentEnrichment, CensysEntityEnrichmentHost, CensysEntityEnrichmentCertificate, CensysEntityEnrichmentWebProperty, CensysAlertEnrichment). It receives enrichment data (host, web_property, certificate) along with the incident ARM ID and parent playbook name. The playbook processes each data type, extracts relevant fields (IP, autonomous system, WHOIS, location, DNS, services, threats, vulnerabilities, labels, software), formats them into HTML tables, and adds them as comments to the Microsoft Sentinel incident. It handles comment character limits (splitting into multiple comments if needed) and enforces a maximum of 100 comments per incident. The enrichment data is also ingested into Azure Log Analytics custom tables (Incident_Enrich_Host_Data_CL, Incident_Enrich_WebProperty_Data_CL, Incident_Enrich_Certificate_Data_CL) for historical analysis. The playbook includes comprehensive error handling and returns appropriate HTTP responses.",
+        "description": "This playbook is triggered via HTTP request and is designed to be used as a sub-playbook by other Censys playbooks (CensysIncidentEnrichment, CensysEntityEnrichmentHost, CensysEntityEnrichmentCertificate, CensysEntityEnrichmentWebProperty, CensysAlertEnrichment). It receives enrichment data (host, web_property, certificate) along with the incident ARM ID and parent playbook name. The playbook processes each data type, extracts relevant fields (IP, autonomous system, WHOIS, location, DNS, services, threats, vulnerabilities, labels, software), formats them into HTML tables, and adds them as comments to the Microsoft Sentinel incident. It handles comment character limits (splitting into multiple comments if needed) and enforces a maximum of 100 comments per incident. The enrichment data is also ingested into Azure Log Analytics custom tables (Incident_Enrich_Host_Data_CL, Incident_Enrich_WebProperty_Data_CL, Incident_Enrich_Certificate_Data_CL) for historical analysis. The playbook includes comprehensive error handling and returns appropriate HTTP responses. Host comments additionally render the Censys reputation (label, score, class probabilities and top signals) and the GreyNoise, IPinfo and Mallory data returned by the Host Enrichment API, when present.",
         "prerequisites": [
             "1. This playbook is intended to be called as a sub-playbook by other Censys playbooks.",
             "2. Ensure the parent playbook (CensysEnrichment, CensysEntityEnrichmentHost, etc.) is deployed and configured.",
@@ -28,7 +28,7 @@
         "author": {
             "name": "Censys"
         },
-        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+        "lastUpdateTime": "2026-09-29T00:00:00.000Z"
     },
     "parameters": {
         "PlaybookName": {
@@ -102,7 +102,7 @@
                         },
                         "Prepare_list_of_enrichment_data_types": {
                             "runAfter": {
-                                "Initialize_Nested_List_Ingestion_Variables": [
+                                "Initialize_Host_Variables_2": [
                                     "Succeeded"
                                 ]
                             },
@@ -149,7 +149,22 @@
                                                                     "incident_arm_id": "@triggerBody()?['incident_arm_id']",
                                                                     "playbook": "@triggerBody()?['parent_playbook']",
                                                                     "type": "host",
-                                                                    "services": "@item()?['resource']?['services']"
+                                                                    "services": "@item()?['resource']?['services']",
+                                                                    "reputation_label": "@item()?['resource']?['reputation']?['label']",
+                                                                    "reputation_score": "@item()?['resource']?['reputation']?['score']",
+                                                                    "reputation_score_suppressed": "@item()?['resource']?['reputation']?['score_suppressed']",
+                                                                    "reputation_class_probabilities": "@item()?['resource']?['reputation']?['class_probabilities']",
+                                                                    "reputation_evidence": "@item()?['resource']?['reputation']?['evidence']",
+                                                                    "whois_network_handle": "@item()?['resource']?['whois']?['network']?['handle']",
+                                                                    "whois_organization_name": "@item()?['resource']?['whois']?['organization']?['name']",
+                                                                    "whois_organization_street": "@item()?['resource']?['whois']?['organization']?['street']",
+                                                                    "autonomous_system_description": "@item()?['resource']?['autonomous_system']?['description']",
+                                                                    "autonomous_system_bgp_prefix": "@item()?['resource']?['autonomous_system']?['bgp_prefix']",
+                                                                    "autonomous_system_country_code": "@item()?['resource']?['autonomous_system']?['country_code']",
+                                                                    "greynoise": "@item()?['resource']?['greynoise']",
+                                                                    "network": "@first(coalesce(item()?['resource']?['network'], json('[]')))",
+                                                                    "privacy": "@first(coalesce(item()?['resource']?['privacy'], json('[]')))",
+                                                                    "mallory": "@first(coalesce(item()?['resource']?['third_party']?['mallory'], json('[]')))"
                                                                 }
                                                             }
                                                         },
@@ -412,9 +427,123 @@
                                                                     },
                                                                     "type": "If"
                                                                 },
-                                                                "Set_Host_Json_Variable_To_Ingest_in_Table_": {
+                                                                "Condition_For_Class_Probabilities_-_Host": {
+                                                                    "actions": {},
                                                                     "runAfter": {
                                                                         "Condition_For_Services_-_Host": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Set_X_class_probabilities_list": {
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "host_class_probabilities_list",
+                                                                                    "value": "@take(items('For_each_host_data')?['reputation_class_probabilities'], variables('reputation_list_data_count'))"
+                                                                                }
+                                                                            },
+                                                                            "For_each_class_probability_data": {
+                                                                                "foreach": "@variables('host_class_probabilities_list')",
+                                                                                "actions": {
+                                                                                    "Append_to_class_probabilities_value_list": {
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "host_class_probabilities_value_list",
+                                                                                            "value": {
+                                                                                                "Label": "@coalesce(items('For_each_class_probability_data')?['label'], 'N/A')",
+                                                                                                "Probability": "@mul(coalesce(items('For_each_class_probability_data')?['probability'], 0), 100)"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "runAfter": {
+                                                                                    "Set_X_class_probabilities_list": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Foreach",
+                                                                                "runtimeConfiguration": {
+                                                                                    "concurrency": {
+                                                                                        "repetitions": 1
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@empty(items('For_each_host_data')?['reputation_class_probabilities'])",
+                                                                                    true
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_For_Top_Signals_-_Host": {
+                                                                    "actions": {},
+                                                                    "runAfter": {
+                                                                        "Condition_For_Class_Probabilities_-_Host": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Set_X_top_signals_list": {
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "host_top_signals_list",
+                                                                                    "value": "@take(items('For_each_host_data')?['reputation_evidence'], variables('reputation_list_data_count'))"
+                                                                                }
+                                                                            },
+                                                                            "For_each_top_signal_data": {
+                                                                                "foreach": "@variables('host_top_signals_list')",
+                                                                                "actions": {
+                                                                                    "Append_to_top_signals_value_list": {
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "host_top_signals_value_list",
+                                                                                            "value": {
+                                                                                                "Contribution": "@mul(coalesce(items('For_each_top_signal_data')?['feature']?['contribution'], 0), 100)",
+                                                                                                "Feature": "@coalesce(items('For_each_top_signal_data')?['feature']?['name'], 'N/A')",
+                                                                                                "Value": "@coalesce(items('For_each_top_signal_data')?['feature']?['value'], 'N/A')",
+                                                                                                "Category": "@coalesce(items('For_each_top_signal_data')?['feature']?['category'], 'N/A')"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "runAfter": {
+                                                                                    "Set_X_top_signals_list": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "Foreach",
+                                                                                "runtimeConfiguration": {
+                                                                                    "concurrency": {
+                                                                                        "repetitions": 1
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@empty(items('For_each_host_data')?['reputation_evidence'])",
+                                                                                    true
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Set_Host_Json_Variable_To_Ingest_in_Table_": {
+                                                                    "runAfter": {
+                                                                        "Condition_For_Top_Signals_-_Host": [
                                                                             "Succeeded"
                                                                         ]
                                                                     },
@@ -443,7 +572,22 @@
                                                                             "playbook": "@triggerBody()?['parent_playbook']",
                                                                             "type": "host",
                                                                             "services": "@variables('host_services_list_to_ingest_data')",
-                                                                            "labels": "@if(empty(variables('host_labels_list')),'N/A',variables('host_labels_list'))"
+                                                                            "labels": "@if(empty(variables('host_labels_list')),'N/A',variables('host_labels_list'))",
+                                                                            "reputation_label": "@items('For_each_host_data')?['reputation_label']",
+                                                                            "reputation_score": "@mul(coalesce(items('For_each_host_data')?['reputation_score'], 0), 100)",
+                                                                            "reputation_score_suppressed": "@items('For_each_host_data')?['reputation_score_suppressed']",
+                                                                            "reputation_class_probabilities": "@variables('host_class_probabilities_value_list')",
+                                                                            "reputation_top_signals": "@variables('host_top_signals_value_list')",
+                                                                            "whois_network_handle": "@items('For_each_host_data')?['whois_network_handle']",
+                                                                            "whois_organization_name": "@items('For_each_host_data')?['whois_organization_name']",
+                                                                            "whois_organization_street": "@items('For_each_host_data')?['whois_organization_street']",
+                                                                            "autonomous_system_description": "@items('For_each_host_data')?['autonomous_system_description']",
+                                                                            "autonomous_system_bgp_prefix": "@items('For_each_host_data')?['autonomous_system_bgp_prefix']",
+                                                                            "autonomous_system_country_code": "@items('For_each_host_data')?['autonomous_system_country_code']",
+                                                                            "greynoise": "@items('For_each_host_data')?['greynoise']",
+                                                                            "network": "@items('For_each_host_data')?['network']",
+                                                                            "privacy": "@items('For_each_host_data')?['privacy']",
+                                                                            "mallory": "@items('For_each_host_data')?['mallory']"
                                                                         }
                                                                     }
                                                                 },
@@ -468,6 +612,30 @@
                                                                     "type": "SetVariable",
                                                                     "inputs": {
                                                                         "name": "host_services_list_to_ingest_data",
+                                                                        "value": []
+                                                                    }
+                                                                },
+                                                                "Set_host_class_probabilities_value_list_empty": {
+                                                                    "runAfter": {
+                                                                        "Set_host_services_list_to_ingest_data_empty": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "host_class_probabilities_value_list",
+                                                                        "value": []
+                                                                    }
+                                                                },
+                                                                "Set_host_top_signals_value_list_empty": {
+                                                                    "runAfter": {
+                                                                        "Set_host_class_probabilities_value_list_empty": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "host_top_signals_value_list",
                                                                         "value": []
                                                                     }
                                                                 },
@@ -1125,207 +1293,246 @@
                             },
                             "type": "If"
                         },
-                        "Initialize_Nested_List_Ingestion_Variables": {
-                            "runAfter": {
-                                "Initialize_certificate_variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "nested_list_data_ingestion_count",
-                                        "type": "integer",
-                                        "value": 3
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_WebProperty_Extraction_Variables": {
-                            "runAfter": {
-                                "Initialize_Host_Variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "web_threats",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_software",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_endpoints",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_software_data",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_threats_data",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_endpoints_data",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_vulns",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "web_vulns_data",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "webproperty",
-                                        "type": "object"
-                                    },
-                                    {
-                                        "name": "webproperty_data",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_Host_Variables": {
-                            "runAfter": {
-                                "Initialize_HTML_Table_Record": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_Incident_Comment_variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "host_services_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_list_to_ingest_data",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_threats_name_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_threats_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_vulns_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_labels_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_labels_value_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_services_vulns_value_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_data_json_to_ingest",
-                                        "type": "object"
-                                    },
-                                    {
-                                        "name": "host_list",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "forward_dns_names",
-                                        "type": "array"
-                                    },
-                                    {
-                                        "name": "host_labels_list",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_HTML_Table_Record": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "html_table_record",
-                                        "type": "string"
-                                    },
-                                    {
-                                        "name": "html_table",
-                                        "type": "string"
-                                    },
-                                    {
-                                        "name": "html_table_services_record",
-                                        "type": "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_Incident_Comment_variables": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "incident_comment_count",
-                                        "type": "integer",
-                                        "value": "@triggerBody()?['incident_comment_count']"
-                                    },
-                                    {
-                                        "name": "comment_char_limit",
-                                        "type": "integer",
-                                        "value": 30000
-                                    },
-                                    {
-                                        "name": "comment_limit",
-                                        "type": "integer",
-                                        "value": 100
-                                    },
-                                    {
-                                        "name": "incident_comment",
-                                        "type": "string"
-                                    },
-                                    {
-                                        "name": "new_incident_comment",
-                                        "type": "string"
-                                    },
-                                    {
-                                        "name": "incident_enrichment_table",
-                                        "type": "string",
-                                        "value": "Incident_Enrich_Data"
-                                    }
-                                ]
-                            }
-                        },
                         "For_each_host": {
                             "foreach": "@variables('host_list')",
                             "actions": {
-                                "Set_HTML_Table_for_Host": {
+                                "For_each_class_probability_of_Host": {
+                                    "foreach": "@item()?['reputation_class_probabilities']",
+                                    "actions": {
+                                        "Append_fields_for_HTML_table_class_probability": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "html_table_class_probabilities_record",
+                                                "value": "<tr>\n    <td>@{item()?['Label']}</td>\n    <td>@{formatNumber(item()?['Probability'], '0.00')}</td>\n</tr>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "For_each_top_signal_of_Host": {
+                                    "foreach": "@item()?['reputation_top_signals']",
+                                    "actions": {
+                                        "Append_fields_for_HTML_table_top_signal": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "html_table_top_signals_record",
+                                                "value": "<tr>\n    <td>@{item()?['Contribution']}</td>\n    <td>@{item()?['Feature']}</td>\n    <td>@{item()?['Value']}</td>\n    <td>@{item()?['Category']}</td>\n</tr>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_class_probability_of_Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Set_HTML_Table_for_Host_Reputation": {
+                                    "runAfter": {
+                                        "For_each_top_signal_of_Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "html_table_record",
-                                        "value": "<p style=\"height:0px\"><table><tbody>\n<tr><th colspan=\"2\" style=\"text-align:left\">Censys Enrichment For Host: @{item()?['ip']} using @{triggerBody()?['parent_playbook']}</th></tr>\n<tr><td>Autonomous System </td><td style=\"text-align:left\">Name: @{coalesce(item()?['autonomous_system_name'],'N/A')}</br>ASN: @{coalesce(item()?['autonomous_system_asn'],'N/A')}</td></tr><tr><td>Whois </td><td style=\"text-align:left\">Network Name: @{coalesce(item()?['whois_network_name'],'N/A')}</br> Network CIDRs: @{coalesce(item()?['whois_network_cidrs'],'N/A')}</td></tr><tr><td>Location</td><td style=\"text-align:left\">City: @{coalesce(item()?['location_city'],'N/A')}</br> Postal Code:  @{coalesce(item()?['location_postal_code'],'N/A')}</br>Province: @{coalesce(item()?['location_province'],'N/A')}</br>Country: @{coalesce(item()?['location_country'],'N/A')}</br>Country Code: @{coalesce(item()?['location_country_code_s'],'N/A')}</br>Continent: @{coalesce(item()?['location_continent'],'N/A')}</br> </td></tr><tr><td>Location Coordinates</td><td style=\"text-align:left\">Latitude: @{coalesce(item()?['location_coordinates_latitude'],'N/A')}</br>Longitude:  @{coalesce(item()?['location_coordinates_longitude'],'N/A')}</td></tr><tr><td>Service Count </td><td style=\"text-align:left\">  @{coalesce(item()?['service_count'],'N/A')}</td></tr><tr><td>DNS names</td><td style=\"text-align:left\">@{coalesce(item()?['dns_names'],'N/A')}</td></tr><tr><td>Reverse DNS names</td><td style=\"text-align:left\">@{coalesce(item()?['reverse_dns_names'],'N/A')}</td></tr><tr><td>Labels</td><td style=\"text-align:left\">@{coalesce(item()?['labels'],'N/A')}</td></tr>"
+                                        "value": "<p class=\"editor-paragraph\"><b>Censys Enrichment For Host: @{item()?['ip']} using @{triggerBody()?['parent_playbook']}</b></p><p class=\"editor-paragraph\"><b>Reputation</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Attribute</th><th style=\"text-align:left\">Value</th></tr></thead><tbody>\n<tr><td>Label</td><td style=\"text-align:left\">@{coalesce(item()?['reputation_label'],'N/A')}</td></tr><tr><td>Score</td><td style=\"text-align:left\">@{if(equals(item()?['reputation_score'], null),'N/A',mul(item()?['reputation_score'],100))}</td></tr><tr><td>Score Suppressed</td><td style=\"text-align:left\">@{if(equals(item()?['reputation_score_suppressed'], null),false,item()?['reputation_score_suppressed'])}</td></tr></tbody></table></p>"
+                                    }
+                                },
+                                "Append_class_probabilities_table_to_HTML_table_record": {
+                                    "runAfter": {
+                                        "Set_HTML_Table_for_Host_Reputation": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "html_table_record",
+                                        "value": "<p class=\"editor-paragraph\"><b>Class Probabilities</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Label</th><th style=\"text-align:left\">Probability(%)</th></tr></thead><tbody>@{if(empty(variables('html_table_class_probabilities_record')), '<tr><td colspan=\"2\">N/A</td></tr>', variables('html_table_class_probabilities_record'))}</tbody></table></p>"
+                                    }
+                                },
+                                "Append_top_signals_table_to_HTML_table_record": {
+                                    "runAfter": {
+                                        "Append_class_probabilities_table_to_HTML_table_record": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "html_table_record",
+                                        "value": "<p class=\"editor-paragraph\"><b>Top Signals</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Contribution(%)</th><th style=\"text-align:left\">Feature</th><th style=\"text-align:left\">Value</th><th style=\"text-align:left\">Category</th></tr></thead><tbody>@{if(empty(variables('html_table_top_signals_record')), '<tr><td colspan=\"4\">N/A</td></tr>', variables('html_table_top_signals_record'))}</tbody></table></p>"
+                                    }
+                                },
+                                "Condition_to_Append_GreyNoise_Table": {
+                                    "runAfter": {
+                                        "Append_top_signals_table_to_HTML_table_record": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_greynoise_table_to_HTML_table_record": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "html_table_record",
+                                                "value": "<p class=\"editor-paragraph\"><b>GreyNoise Data</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Field</th><th style=\"text-align:left\">Value</th></tr></thead><tbody><tr><td>Greynoise Actor</td><td style=\"text-align:left\">@{coalesce(item()?['greynoise']?['actor'],'N/A')}</td></tr><tr><td>Greynoise Classification</td><td style=\"text-align:left\">@{coalesce(item()?['greynoise']?['classification'],'N/A')}</td></tr><tr><td>Greynoise Last Observed Time</td><td style=\"text-align:left\">@{coalesce(item()?['greynoise']?['last_observed_time'],'N/A')}</td></tr></tbody></table></p>"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['greynoise'])",
+                                                        true
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_Append_IPinfo_Table": {
+                                    "runAfter": {
+                                        "Condition_to_Append_GreyNoise_Table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_ipinfo_table_to_HTML_table_record": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "html_table_record",
+                                                "value": "<p class=\"editor-paragraph\"><b>IPinfo</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Field</th><th style=\"text-align:left\">Value</th></tr></thead><tbody><tr><td>Network Hosting</td><td style=\"text-align:left\">@{if(equals(item()?['network']?['hosting'], null),false,item()?['network']?['hosting'])}</td></tr><tr><td>Network Mobile</td><td style=\"text-align:left\">@{if(equals(item()?['network']?['mobile'], null),false,item()?['network']?['mobile'])}</td></tr><tr><td>Network Satellite</td><td style=\"text-align:left\">@{if(equals(item()?['network']?['satellite'], null),false,item()?['network']?['satellite'])}</td></tr><tr><td>Privacy Anonymous</td><td style=\"text-align:left\">@{if(equals(item()?['privacy']?['anonymous'], null),false,item()?['privacy']?['anonymous'])}</td></tr><tr><td>Privacy Tor</td><td style=\"text-align:left\">@{if(equals(item()?['privacy']?['tor'], null),false,item()?['privacy']?['tor'])}</td></tr><tr><td>Privacy Proxy</td><td style=\"text-align:left\">@{if(equals(item()?['privacy']?['proxy'], null),false,item()?['privacy']?['proxy'])}</td></tr><tr><td>Privacy Relay</td><td style=\"text-align:left\">@{if(equals(item()?['privacy']?['relay'], null),false,item()?['privacy']?['relay'])}</td></tr><tr><td>Privacy VPN</td><td style=\"text-align:left\">@{if(equals(item()?['privacy']?['vpn'], null),false,item()?['privacy']?['vpn'])}</td></tr></tbody></table></p>"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['network'])",
+                                                        true
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['privacy'])",
+                                                        true
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['greynoise'])",
+                                                        true
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['mallory'])",
+                                                        true
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_Append_Mallory_Table": {
+                                    "runAfter": {
+                                        "Condition_to_Append_IPinfo_Table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_mallory_table_to_HTML_table_record": {
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "html_table_record",
+                                                "value": "<p class=\"editor-paragraph\"><b>Mallory Data</b></p><p style=\"height:0px\"><table border=\"1\"><thead><tr><th style=\"text-align:left\">Field</th><th style=\"text-align:left\">Value</th></tr></thead><tbody><tr><td>Name</td><td style=\"text-align:left\">@{coalesce(item()?['mallory']?['observable']?['name'],'N/A')}</td></tr><tr><td>Type</td><td style=\"text-align:left\">@{coalesce(item()?['mallory']?['observable']?['type'],'N/A')}</td></tr><tr><td>Last Updated At</td><td style=\"text-align:left\">@{coalesce(item()?['mallory']?['observable']?['updated_at'],'N/A')}</td></tr><tr><td>Description</td><td style=\"text-align:left\">@{coalesce(item()?['mallory']?['observable']?['description'],'N/A')}</td></tr><tr><td>Verdict</td><td style=\"text-align:left\">@{coalesce(first(coalesce(item()?['mallory']?['opinions'], json('[]')))?['verdict'],'N/A')}</td></tr><tr><td>Confidence</td><td style=\"text-align:left\">@{coalesce(first(coalesce(item()?['mallory']?['opinions'], json('[]')))?['confidence'],'N/A')}</td></tr><tr><td>Source</td><td style=\"text-align:left\">@{coalesce(first(coalesce(item()?['mallory']?['opinions'], json('[]')))?['source'],'N/A')}</td></tr></tbody></table></p>"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(item()?['mallory'])",
+                                                        true
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_HTML_Table_for_Host": {
+                                    "runAfter": {
+                                        "Condition_to_Append_Mallory_Table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "html_table_record",
+                                        "value": "<p class=\"editor-paragraph\"><b>Summary</b></p><p style=\"height:0px\"><table><tbody>\n<tr><td>Autonomous System </td><td style=\"text-align:left\">Name: @{coalesce(item()?['autonomous_system_name'],'N/A')}</br>ASN: @{coalesce(item()?['autonomous_system_asn'],'N/A')}</br>Description: @{coalesce(item()?['autonomous_system_description'],'N/A')}</br>BGP Prefix: @{coalesce(item()?['autonomous_system_bgp_prefix'],'N/A')}</br>Country Code: @{coalesce(item()?['autonomous_system_country_code'],'N/A')}</td></tr><tr><td>Whois </td><td style=\"text-align:left\">Network Name: @{coalesce(item()?['whois_network_name'],'N/A')}</br> Network CIDRs: @{coalesce(item()?['whois_network_cidrs'],'N/A')}</br>Network Handle: @{coalesce(item()?['whois_network_handle'],'N/A')}</br>Organization Name: @{coalesce(item()?['whois_organization_name'],'N/A')}</br>Organization Address: @{coalesce(item()?['whois_organization_street'],'N/A')}</td></tr><tr><td>Location</td><td style=\"text-align:left\">City: @{coalesce(item()?['location_city'],'N/A')}</br> Postal Code:  @{coalesce(item()?['location_postal_code'],'N/A')}</br>Province: @{coalesce(item()?['location_province'],'N/A')}</br>Country: @{coalesce(item()?['location_country'],'N/A')}</br>Country Code: @{coalesce(item()?['location_country_code_s'],'N/A')}</br>Continent: @{coalesce(item()?['location_continent'],'N/A')}</br> </td></tr><tr><td>Location Coordinates</td><td style=\"text-align:left\">Latitude: @{coalesce(item()?['location_coordinates_latitude'],'N/A')}</br>Longitude:  @{coalesce(item()?['location_coordinates_longitude'],'N/A')}</td></tr><tr><td>Service Count </td><td style=\"text-align:left\">  @{coalesce(item()?['service_count'],'N/A')}</td></tr><tr><td>DNS names</td><td style=\"text-align:left\">@{coalesce(item()?['dns_names'],'N/A')}</td></tr><tr><td>Reverse DNS names</td><td style=\"text-align:left\">@{coalesce(item()?['reverse_dns_names'],'N/A')}</td></tr><tr><td>Labels</td><td style=\"text-align:left\">@{coalesce(item()?['labels'],'N/A')}</td></tr>"
+                                    }
+                                },
+                                "Set_class_probabilities_table_record_to_empty": {
+                                    "runAfter": {
+                                        "Set_services_table_record_to_empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "html_table_class_probabilities_record",
+                                        "value": "@null"
+                                    }
+                                },
+                                "Set_top_signals_table_record_to_empty": {
+                                    "runAfter": {
+                                        "Set_class_probabilities_table_record_to_empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "html_table_top_signals_record",
+                                        "value": "@null"
                                     }
                                 },
                                 "Append_host_HTML_records_to_HTML_table": {
                                     "runAfter": {
-                                        "Set_services_table_record_to_empty": [
+                                        "Set_top_signals_table_record_to_empty": [
                                             "Succeeded"
                                         ]
                                     },
@@ -2067,22 +2274,6 @@
                                 }
                             }
                         },
-                        "Initialize_certificate_variables": {
-                            "runAfter": {
-                                "Initialize_WebProperty_Extraction_Variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "certificate_data",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
                         "For_each_certificate": {
                             "foreach": "@variables('certificate_data')",
                             "actions": {
@@ -2469,7 +2660,217 @@
                                 ]
                             },
                             "type": "If"
-                    }
+                        },
+                        "Initialize_Host_Variables": {
+                            "runAfter": {
+                                "Initialize_Incident_Comment_variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_services_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_list_to_ingest_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_threats_name_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_threats_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_vulns_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_labels_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_labels_value_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_services_vulns_value_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_data_json_to_ingest",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "host_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "forward_dns_names",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_labels_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_class_probabilities_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_class_probabilities_value_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_top_signals_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_top_signals_value_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_threats",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_software",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_endpoints",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_software_data",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Host_Variables_2": {
+                            "runAfter": {
+                                "Initialize_Host_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "web_threats_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_endpoints_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_vulns",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_vulns_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "webproperty",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "webproperty_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "certificate_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "nested_list_data_ingestion_count",
+                                        "type": "integer",
+                                        "value": 3
+                                    },
+                                    {
+                                        "name": "reputation_list_data_count",
+                                        "type": "integer",
+                                        "value": 5
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_HTML_Table_Record": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html_table_record",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "html_table",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "html_table_services_record",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "html_table_class_probabilities_record",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "html_table_top_signals_record",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Comment_variables": {
+                            "runAfter": {
+                                "Initialize_HTML_Table_Record": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_comment_count",
+                                        "type": "integer",
+                                        "value": "@triggerBody()?['incident_comment_count']"
+                                    },
+                                    {
+                                        "name": "comment_char_limit",
+                                        "type": "integer",
+                                        "value": 30000
+                                    },
+                                    {
+                                        "name": "comment_limit",
+                                        "type": "integer",
+                                        "value": 100
+                                    },
+                                    {
+                                        "name": "incident_comment",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "new_incident_comment",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "incident_enrichment_table",
+                                        "type": "string",
+                                        "value": "Incident_Enrich_Data"
+                                    }
+                                ]
+                            }
+                        }
                     },
                     "outputs": {}
                 },
