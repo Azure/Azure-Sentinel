@@ -4,7 +4,7 @@
   "metadata": {
     "title": "IsMalicious Enrich Incident IPs",
     "description": "Enrich incident IP entities with IsMalicious evidence, scores, freshness and lookup outcomes in an incident comment.",
-    "lastUpdateTime": "2026-10-03T00:00:00.000Z",
+    "lastUpdateTime": "2026-10-05T00:00:00.000Z",
     "entities": [
       "Ip"
     ],
@@ -62,9 +62,11 @@
       "apiVersion": "2016-06-01",
       "name": "[variables('SentinelConnectionName')]",
       "location": "[resourceGroup().location]",
+      "kind": "V1",
       "properties": {
         "displayName": "[variables('SentinelConnectionName')]",
         "customParameterValues": {},
+        "parameterValueType": "Alternative",
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
@@ -75,6 +77,14 @@
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "IsMalicious-EnrichIncidentIPs",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
       ],
@@ -92,8 +102,7 @@
               "type": "SecureString"
             },
             "MaxIPsPerIncident": {
-              "type": "Int",
-              "defaultValue": 10
+              "type": "Int"
             }
           },
           "triggers": {
@@ -239,7 +248,7 @@
                     "name": "Results",
                     "value": {
                       "Indicator": "@items('For_each_IP')?['Address']",
-                      "Status": "@concat('Lookup failed or response invalid (HTTP ', string(coalesce(outputs('Check_IP')?['statusCode'], 0)), '); check authentication, quota or timeout')",
+                      "Status": "@concat('Lookup ', coalesce(actions('Check_IP')?['status'], 'not executed'), ' or response invalid (HTTP ', string(coalesce(actions('Check_IP')?['outputs']?['statusCode'], 0)), '); check authentication, quota or timeout')",
                       "Verdict": "unknown"
                     }
                   },
@@ -314,7 +323,12 @@
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
                 "connectionName": "[variables('SentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
               }
             }
           }

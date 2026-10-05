@@ -1,7 +1,8 @@
 # IsMalicious: enrich incident IP entities
 
-This community Logic Apps playbook enriches up to 10 IP entities per Sentinel
-incident using the IsMalicious `/check` API and writes an incident comment.
+This community Logic Apps playbook enriches up to `MaxIPsPerIncident` IP entities
+per Sentinel incident (default 10, configurable from 1 to 50) using the
+IsMalicious `/check` API and writes an incident comment.
 The comment contains server verdict, risk score, separate confidence, blocklist
 hits, evidence reasons, contradictions, freshness, observed time, review flags
 and a report URL. It performs no containment or automatic blocking.
@@ -23,9 +24,11 @@ The workflow is **Disabled by default** so it cannot issue requests before setup
 
 After deployment:
 
-1. Open the Microsoft Sentinel API connection and authorize it using an identity
-   with permission to read incident entities and add incident comments
-   (Microsoft Sentinel Responder on the workspace, subject to your RBAC policy).
+1. Assign the playbook's system-assigned managed identity permission to read
+   incident entities and add incident comments (Microsoft Sentinel Responder
+   on the workspace, subject to your RBAC policy). The Sentinel API connection
+   uses managed identity authentication, matching the repository's
+   [incident-trigger template](../.template/incident-trigger/azuredeploy.json).
 2. Grant Sentinel the required playbook resource-group permissions and associate
    the playbook with an incident automation rule. Follow
    [Sentinel playbook permissions](https://learn.microsoft.com/en-us/azure/sentinel/automate-responses-with-playbooks).
@@ -42,10 +45,12 @@ Lookups run sequentially with no automatic retry. The action declares a
 HTTP socket deadline; Azure's HTTP connector/platform timeout also applies.
 This avoids a burst of requests or repeated charges after rate limiting.
 A failed HTTP request, timeout, non-JSON body or malformed response adds an
-explicit unknown/error row. Finalization runs after successful, failed, timed-out
-or skipped loops, and the comment identifies entity/loop statuses so a partial
-lookup is not presented as complete. Authentication errors (401/403), quota/rate limits
-(429) and transient server failures must be corrected and retried deliberately.
+explicit unknown/error row. The failure row reads the action status and optional
+HTTP status code safely even when the HTTP action has no outputs. Finalization
+runs after successful, failed, timed-out or skipped loops, and the comment
+identifies entity/loop statuses so a partial lookup is not presented as complete.
+Authentication errors (401/403), quota/rate limits (429) and transient server
+failures must be corrected and retried deliberately.
 
 `evidence.verdict` comes from the server. Missing optional scores remain empty,
 not zero. Risk and confidence are separate columns. Context source rows are
