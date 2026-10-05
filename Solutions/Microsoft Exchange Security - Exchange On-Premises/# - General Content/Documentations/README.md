@@ -10,7 +10,7 @@ The on-premises collector runs on a Windows server as a scheduled PowerShell tas
 
 - [Exchange Security Insights Collector prerequisites and permissions](./ESICollector.md): Review the required PowerShell modules, Active Directory feature, Exchange permissions, and network access.
 
-- [Configure the collector with WinformConfig](./WinformConfigReadme.md): Create or update `CollectExchSecConfiguration.json`, validate the settings, and create the mandatory Windows scheduled task.
+- [Configure the collector with setup.ps1](./ReadmeSetup.PS1.md): Update ingestion settings only, or configure `CollectExchSecConfiguration.json` and create the mandatory Windows scheduled task.
 
 ## Forwarder
 

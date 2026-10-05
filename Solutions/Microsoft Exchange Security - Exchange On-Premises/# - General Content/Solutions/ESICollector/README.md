@@ -46,7 +46,7 @@ Additional configuration changes:
   - `MaximalSentinelPacketSizeMb` defaults to `0.9` when the Log Ingestion API is used because each POST request has a 1 MB payload limit.
   - New GitHub download settings allow configuration retrieval through the GitHub API instead of a raw file download.
 
-After configuring the new connector, update the configuration on the collector server by using the [WinformConfig editor](../../Documentations/WinformConfigReadme.md).
+After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
 
 #### Collector update
 
@@ -59,13 +59,14 @@ After configuring the new connector, update the configuration on the collector s
 
 3. Extract `CollectExchSecIns.zip` into a new folder.
 4. Replace the existing `CollectExchSecIns.ps1` file with the new version.
-5. Copy the new `WinformConfig` folder and all its contents to the collector directory.
+5. Copy the new `setup.ps1` file from the newly extracted folder to the existing collector directory, replacing the previous version.
+6. Run `setup.ps1` from the existing collector directory and select the configuration-only update mode when prompted. See [Configure the collector with setup.ps1](../../Documentations/ReadmeSetup.PS1.md) for the required values and complete procedure.
 
-If the package has already been extracted, unblock every file in `WinformConfig` and its subfolders:
+If the package was extracted before the ZIP file was unblocked, unblock the copied scripts in the existing collector directory:
 
 ```powershell
-Get-ChildItem -LiteralPath .\WinformConfig -Recurse -File |
-    Unblock-File
+Unblock-File -LiteralPath .\CollectExchSecIns.ps1
+Unblock-File -LiteralPath .\setup.ps1
 ```
 
 - **Continue using the legacy API temporarily:** No additional changes are required. The collector displays a warning during each execution until the migration is completed.
