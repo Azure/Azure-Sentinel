@@ -147,6 +147,8 @@ Configuration-only mode always sets:
 - `LogCollection.ExportDomainsInformation` to the JSON Boolean `true`. The obsolete `Global.ExportDomainsInformation` property is removed when present.
 - `Advanced.MaximalSentinelPacketSizeMb` to the JSON number `0.9`.
 
+Every Azure Monitor property written by configuration-only mode is created when it does not already exist in the corresponding JSON section.
+
 In configuration-only mode, the script does not request or change:
 
 - Environment identification.
