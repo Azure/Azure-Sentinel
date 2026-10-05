@@ -1,8 +1,12 @@
 # Changelog for ASimAuthentication.yaml
 
-## Version 0.2.24
+## Version 0.2.25
 
 - (2026-10-05) Add the CyberArk Audit Authentication parser. - [PR #15262](https://github.com/Azure/Azure-Sentinel/pull/15262)
+
+## Version 0.2.24
+
+- (2026-09-30) Add the Salesforce Login History Authentication parser. [PR #15225](https://github.com/Azure/Azure-Sentinel/pull/15225)
 
 ## Version 0.2.23
 
