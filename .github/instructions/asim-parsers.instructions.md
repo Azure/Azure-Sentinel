@@ -47,13 +47,9 @@ Review the extracted `ParserQuery` for all of the following:
 
 Treat same-table or cross-table event enrichment, row fan-out, any `mv-*` operator, and event-record aggregation or reaggregation as 🔴 High priority.
 
-### Parameters and Placeholder Fields
+### Parameters
 
 - **`pack` parameter:** If the query uses `AdditionalFields`, require a `pack: bool = false` parameter. Users must be able to avoid populating `AdditionalFields` when it is not needed.
-- **Applicable placeholder fields:** Determine the complete applicable field set from the target schema and the `Common` rows in `ASimTester.csv`.
-- **Required placeholder fields:** Verify that the parser includes every defined `*EntityKey` and `*AdditionalIds` field, plus `AdditionalEntities` when it is defined.
-- **Exact names and casing:** Placeholder names and casing must match `ASimTester.csv`. Generic names such as `entityKey` or `AdditionalIds` are invalid.
-- **Placeholder values:** Every `*EntityKey` must be an empty string. Every `*AdditionalIds` field and `AdditionalEntities` must be an empty dynamic array until mappings are defined.
 
 ### KQL Performance
 
@@ -73,11 +69,7 @@ Review `ParserParams` and `ParserQuery` for all of the following:
 4. **Parameter completeness:** Verify that the parameters support efficient filtering for common use cases.
 5. **Parameter usage:** Verify that every declared parameter appears in the query.
 6. **Parameters without source columns:** Do not flag a filter that only checks `array_length(<param>) == 0`, or an equivalent expression, when the source data has no corresponding column. This is valid. Flag a parameter as unused only when it is completely absent from the query.
-7. **Placeholder consistency:** Compare placeholder fields and values with the parameterless parser:
-   - Report a field missing from both parsers only in the parameterless parser review.
-   - Report only differences introduced by the parameterized parser, such as a placeholder that is omitted, renamed, or populated when the parameterless parser defines it correctly.
-   - Do not accept a matching omission; ensure it is reported in the parameterless parser review.
-8. **Prohibited-pattern consistency:** Report same-table or cross-table event enrichment, fan-out, `mv-*`, or event-record aggregation or reaggregation introduced only by the parameterized parser as 🔴 High priority.
+7. **Prohibited-pattern consistency:** Report same-table or cross-table event enrichment, fan-out, `mv-*`, or event-record aggregation or reaggregation introduced only by the parameterized parser as 🔴 High priority.
    - Query-local static `datatable` and `lookup` mappings are allowed.
    - If the same violation exists in both parser versions, report it only in the parameterless parser review.
 
