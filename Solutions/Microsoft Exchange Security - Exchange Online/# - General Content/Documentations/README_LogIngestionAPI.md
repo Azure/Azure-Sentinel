@@ -86,10 +86,6 @@ For the complete permission requirements, see [Exchange Security Insights Collec
 > Do not use **Deploy to Azure** as the standard update method for an existing Automation account. The current template generates a new job schedule association identifier during each deployment and uses a fixed runbook content version. A redeployment has not been validated as an idempotent update path.
 
 Update the existing Automation account manually:
-
-> [!WARNING]
-> The temporary runbook procedure below writes the decrypted `GlobalConfiguration` value to the Azure Automation job output. Anyone who can read the job output can read the complete configuration. Restrict access, do not copy the value to an unsecured location, and remove the temporary runbook and its job after the migration is validated.
-
 1. Determine whether the existing `GlobalConfiguration` Automation variable is encrypted:
    - In the Automation account, open **Shared Resources** > **Variables** > **GlobalConfiguration**.
    - If the variable is not encrypted, copy its current value to a secure backup and modify only the properties listed in step 6.
@@ -108,13 +104,13 @@ Update the existing Automation account manually:
      6. Save and publish the temporary runbook.
      7. Start the runbook once and wait until its job status is **Completed**.
      8. Open the completed job, select **Output**, and copy the complete `GlobalConfiguration` value.
-     9. Paste the complete value into a secure text or JSON editor. Keep an unchanged copy as the rollback backup.
+     9. Paste the complete value into a text or JSON editor. Keep an unchanged copy as the rollback backup.
 2. Open the `Start-ESICollector` runbook in the Automation account.
 3. Replace the runbook content with the latest `CollectExchSecIns.ps1` content.
 4. Save and publish the runbook.
 5. Update `GlobalConfiguration` while preserving every unrelated setting:
    - **Non-encrypted variable:** Open **Shared Resources** > **Variables** > **GlobalConfiguration**, select **Edit**, and add or modify only the properties listed in step 6.
-   - **Encrypted variable:** In the secure editor, add or modify only the properties listed in step 6 in the complete value retrieved from the temporary runbook. Validate that the result is complete, valid JSON. Then open **Shared Resources** > **Variables** > **GlobalConfiguration**, select **Edit**, replace the entire value with the updated content, and save it.
+   - **Encrypted variable:** In the editor, add or modify only the properties listed in step 6 in the complete value retrieved from the temporary runbook. Validate that the result is complete, valid JSON. Then open **Shared Resources** > **Variables** > **GlobalConfiguration**, select **Edit**, replace the entire value with the updated content, and save it.
 6. In the `LogCollection` section, set or update:
    - `SentinelLogIngestionAPIActivated` to `true`.
    - `DataCollectionEndpointURI` to the DCE URI displayed by the connector.
