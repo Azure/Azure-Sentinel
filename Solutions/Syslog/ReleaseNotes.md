@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.8       | 05-10-2026                     | Added 7 **XDR Detections** to the solution. |
 | 3.0.7       | 04-11-2024                     |  Updated the Syslog **Data Connector** template to latest version  |
 | 3.0.6       | 01-08-2024                     |  Updated **Analytic rules** for entity mappings and parameter for parser function  |
 | 3.0.5       | 16-07-2024                     |  Added 2 new Workspace Function **Parsers** and a new **Workbook**       |
