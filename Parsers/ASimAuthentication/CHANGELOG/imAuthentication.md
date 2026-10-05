@@ -2,7 +2,7 @@
 
 ## Version 0.3.21
 
-- (2026-10-05) Add the CyberArk Audit Authentication filtering parser. - [PR #tbd](https://github.com/Azure/Azure-Sentinel/pull/tbd)
+- (2026-10-05) Add the CyberArk Audit Authentication filtering parser. - [PR #15262](https://github.com/Azure/Azure-Sentinel/pull/15262)
 
 ## Version 0.3.20
 
