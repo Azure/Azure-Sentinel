@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.10      |     05-10-2026                 | Replaced the offer-derived **usage-attribution tracking ID** with the supplied tracking ID. |
 | 3.0.9       |     05-10-2026                 | Added a separate **usage-attribution deployment** using the solution offer ID alongside the existing **XDR Detections**. |
 | 3.0.8       |     05-10-2026                 | Added 15 **XDR Detections** and updated the solution package to include Defender XDR Custom Detection content. |
 | 3.0.7       |     18-08-2026                 | Updated version and mapping of `connectorId` to `dataTypes` for multiple **Analytic Rules** and **Hunting Queries**.                     |
