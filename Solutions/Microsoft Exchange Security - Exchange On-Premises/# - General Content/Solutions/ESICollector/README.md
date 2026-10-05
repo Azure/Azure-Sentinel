@@ -60,7 +60,7 @@ After configuring the new connector, update the configuration on the collector s
 3. Extract `CollectExchSecIns.zip` into a new folder.
 4. Replace the existing `CollectExchSecIns.ps1` file with the new version.
 5. Copy the new `setup.ps1` file from the newly extracted folder to the existing collector directory, replacing the previous version.
-6. Run `setup.ps1` from the existing collector directory and select the configuration-only update mode when prompted. See [Configure the collector with setup.ps1](../../Documentations/ReadmeSetup.PS1.md) for the required values and complete procedure.
+6. After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
 
 If the package was extracted before the ZIP file was unblocked, unblock the copied scripts in the existing collector directory:
 
