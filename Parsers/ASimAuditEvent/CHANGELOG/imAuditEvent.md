@@ -1,6 +1,11 @@
 # Changelog for imAuditEvent.yaml
 
+## Version 0.1.9
+
+- (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)
+
 ## Version 0.1.8
+
 - (2026-09-24) [ASIM] AuditEvent - Oracle OCI (New Filtering Parser) - [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
 - Add Oracle OCI filtering parser to imAuditEvent
 
