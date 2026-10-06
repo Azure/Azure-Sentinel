@@ -87,40 +87,29 @@ After a successful smoke test, deploy the other entitled feeds in staging, check
 
 ## Analytic Rule Testing
 
-The four templates are in `Analytic Rules/`. Before deploying a rule:
+The four rule source files are in `Analytic Rules/`. Before packaging or deploying a rule:
 
 1. Open Microsoft Sentinel **Logs** in the staging workspace.
-2. Copy the `query` value from the rule JSON and run it as KQL. The query must compile; zero matches is valid when the data does not meet the detection condition.
+2. Copy the `query` value from the rule YAML and run it as KQL. The query must compile; zero matches is valid when the data does not meet the detection condition.
 3. Check whether the returned columns support the rule's entity mappings and intended alert details.
-4. Validate the ARM template and deploy it to staging. Confirm the rule exists, is enabled as intended, and has the expected frequency, period, severity, tactics, and techniques.
+4. Validate the source YAML and then run the repository's solution validation flow so the generated ARM package is checked before deployment. Confirm the rule exists, is enabled as intended, and has the expected frequency, period, severity, tactics, and techniques.
 5. Generate a controlled matching event in staging only if you need to test alert creation end to end. Do not create artificial production incidents just to test a rule.
 
 Example validation for all rule templates:
 
 ```bash
-for file in 'Analytic Rules'/*.json; do
+for file in 'Analytic Rules'/*.yaml; do
   jq empty "$file"
-  az deployment group validate \
-    --resource-group "$RESOURCE_GROUP" \
-    --template-file "$file" \
-    --parameters workspace="$WORKSPACE" workspace-location="$LOCATION"
 done
 ```
 
-After validation, deploy the rules to the staging workspace:
+After source validation, generate and validate the packaged solution with the repository's build-and-validation entry point:
 
 ```bash
-for file in 'Analytic Rules'/*.json; do
-  rule_name=$(basename "$file" .json)
-  az deployment group create \
-    --name "${rule_name}-$(date -u +%Y%m%dT%H%M%SZ)" \
-    --resource-group "$RESOURCE_GROUP" \
-    --template-file "$file" \
-    --parameters workspace="$WORKSPACE" workspace-location="$LOCATION"
-done
+pwsh ./.script/local-validation/build-and-validate.ps1 -SolutionName "WhoisFreaks"
 ```
 
-For each KQL query, use the Logs experience to validate and inspect results before deploying. ARM validation checks the resource template, not KQL execution or alert generation.
+For each KQL query, use the Logs experience to validate and inspect results before deploying. The repo build-and-validation flow checks the generated ARM package, while source YAML validation checks the rule metadata and syntax.
 
 ## Data Verification
 
