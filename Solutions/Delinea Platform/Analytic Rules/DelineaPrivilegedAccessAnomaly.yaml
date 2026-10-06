@@ -1,0 +1,78 @@
+id: e1bfca9b-7980-469f-a57c-16e81451861b
+name: Delinea - Privileged account access anomaly (secret-access volume vs baseline)
+description: |
+  Detects when a user's secret-access volume for the current day significantly exceeds their own
+  recent baseline (per-user daily average plus a standard-deviation factor over the prior ~14 days).
+  A sudden spike relative to a principal's normal behaviour can indicate a compromised privileged
+  account or insider misuse. Tune 'factor' and 'minDaily' to balance noise against coverage.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1555
+  - T1212
+query: |
+  let factor = 3.0;
+  let minDaily = 10;
+  let minBaselineDays = 3;
+  let secretViews = DelineaAuditEvents_CL
+      | where TimeGenerated > ago(14d)
+      | where Level == "PrivilegedActivity"
+      | extend d = parse_json(RawData)
+      | where tostring(d.eventType.name) == "Delinea.Vault.Secret.Viewed"
+      | extend Actor = tostring(d.actor.name), SrcIP = tostring(d.source.host.network.ipAddress)
+      | where isnotempty(Actor);
+  let baseline = secretViews
+      | where TimeGenerated < ago(1d)
+      | summarize Accesses = count() by Actor, Day = bin(TimeGenerated, 1d)
+      | summarize BaselineAvg = avg(Accesses), BaselineStdev = stdev(Accesses), BaselineMax = max(Accesses), DaysObserved = count() by Actor;
+  secretViews
+  | where TimeGenerated >= ago(1d)
+  | summarize TodayAccesses = count(), DistinctSecrets = dcount(SecretId), Secrets = make_set(SecretId, 50),
+              SourceIPs = make_set(SrcIP, 20), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor
+  | join kind=inner baseline on Actor
+  | where DaysObserved >= minBaselineDays
+  | extend AnomalyThreshold = round(BaselineAvg + factor * BaselineStdev, 1)
+  | where TodayAccesses > AnomalyThreshold and TodayAccesses >= minDaily
+  | extend DeviationFactor = round(todouble(TodayAccesses) / (BaselineAvg + 1), 1)
+  | extend SrcIP = tostring(SourceIPs[0])
+  | project Actor, TodayAccesses, DistinctSecrets, BaselineAvg = round(BaselineAvg, 1), BaselineStdev = round(BaselineStdev, 1),
+            BaselineMax, AnomalyThreshold, DeviationFactor, DaysObserved, Secrets, SrcIP, StartTime, EndTime
+  | sort by DeviationFactor desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+customDetails:
+  TodayAccesses: TodayAccesses
+  DistinctSecrets: DistinctSecrets
+  BaselineAvg: BaselineAvg
+  AnomalyThreshold: AnomalyThreshold
+  DeviationFactor: DeviationFactor
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.1.1
+kind: Scheduled
