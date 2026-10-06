@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
-| 3.0.14      | 17-09-2026                     | Added 21 **XDR Detections** and V4 hybrid packaging support for the existing **Analytic Rules** |
+| 3.1.0       | 17-09-2026                     | Added 21 **XDR Detections** and V4 hybrid packaging support for the existing **Analytic Rules**; added root-level Partner Center attribution while preserving the ARM 1.0 root and nested ARM 2.0 XDR deployments |
 | 3.0.13      | 20-07-2026                     | Added **Analytic Rule** WMI Spawning Suspicious Child Process |
 | 3.0.12      | 18-02-2026                     | Removed external blog reference text from "Remote Scheduled Task Creation or Update using ATSVC Named Pipe" and " Scheduled Task Creation or Update from User Writable Directory" **hunting query** description | 
 | 3.0.11      | 28-01-2026                     | Updated **Analytic Rule** to fix the link from the description &  Update **Analytic Rule** NonDCActiveDirectoryReplication - to reduce false positive results |
@@ -9,7 +9,7 @@
 | 3.0.8       | 23-07-2024                     | Updated the Workspace type from resource type picker to resource picker in **Workbook**    |
 | 3.0.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules** NRT_execute_base64_decodedpayload.yaml and ADFSRemoteAuthSyncConnection.yaml |												
 | 3.0.6       | 16-05-2024                     | Fixed wrong fieldMappings of **Analytic Rules** password_not_set.yaml						|												
-| 3.0.5       | 21-03-2024                     | Updated Entity Mappings of **Analytic Rules** 												|					|
+| 3.0.5       | 21-03-2024                     | Updated Entity Mappings of **Analytic Rules** 												|
 | 3.0.4       | 06-03-2024                     | Added New **Hunting Queries**																	|
 | 3.0.3       | 19-02-2024                     | Updated Entity Mapping in 	**Analytical Rule** [Non Domain Controller Active Directory Replication]														|
 | 3.0.2       | 23-01-2024                     | Added Sub-Technique in Template															|
