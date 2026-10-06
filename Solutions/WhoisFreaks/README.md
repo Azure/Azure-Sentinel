@@ -34,12 +34,7 @@ unzip -p Package/3.0.0.zip mainTemplate.json | jq -e '[.. | objects | .pageSize?
 
 If you change templates, rebuild `Package/3.0.0.zip` from the package contents after validating the source files. Confirm that the package contains the same `mainTemplate.json` you intend to release.
 
-Update the existing package archive from its source files with:
-
-```bash
-(cd Package && zip -u 3.0.0.zip mainTemplate.json createUiDefinition.json)
-unzip -t Package/3.0.0.zip
-```
+Rebuild and validate the package through the repository's source-based packaging flow instead of editing the ZIP archive directly. After the solution passes validation, regenerate the package from the approved source files so the generated template and metadata stay in sync with the repo contents.
 
 Set deployment values for a staging workspace. The API key is read without echoing it or placing it literally in shell history:
 
