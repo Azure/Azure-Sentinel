@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.11      |     06-10-2026                 | Aligned the **usage-attribution deployment** with the Marketplace-generated structure, including the `-partnercenter` tracking ID suffix and deployment API version `2020-10-01`. |
 | 3.0.10      |     05-10-2026                 | Replaced the offer-derived **usage-attribution tracking ID** with the supplied tracking ID. |
 | 3.0.9       |     05-10-2026                 | Added a separate **usage-attribution deployment** using the solution offer ID alongside the existing **XDR Detections**. |
 | 3.0.8       |     05-10-2026                 | Added 15 **XDR Detections** and updated the solution package to include Defender XDR Custom Detection content. |
