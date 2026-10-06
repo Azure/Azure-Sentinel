@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                 |
+|-------------|--------------------------------|------------------------------------------------------------------------------------|
+| 3.0.0       | 02-10-2026                     | Initial release. Threat feeds (malware, phishing, spam) and NRD feeds (gTLD, ccTLD, with and without WHOIS). NRD runs read the status endpoint for the latest `last_update` date before fetching. Both NRD tables include `nrd_type` (`gtld`/`cctld`) set by DCR transform. All feeds authenticate via `X-API-KEY` header. |

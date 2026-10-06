@@ -1,0 +1,710 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "defaultValue": "wlaw"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "centralus"
+    },
+    "apiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "WhoisFreaks commercial API key (X-API-KEY). Feeds outside your subscription will fail connectivity or log 401/403 for that feed only if forced on."
+      }
+    },
+    "dataCollectionEndpoint": {
+      "type": "string",
+      "defaultValue": "https://wlaw-6btk.centralus-1.ingest.monitor.azure.com"
+    },
+    "dataCollectionRuleImmutableId": {
+      "type": "string",
+      "defaultValue": "dcr-b84586fbd9d04783af5e2aeb2148636d"
+    },
+    "enableThreatMalware": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable malware threat feed (v3.4/stream/threat-feed/malware)"
+      }
+    },
+    "enableThreatPhishing": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable phishing threat feed"
+      }
+    },
+    "enableThreatSpam": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable spam threat feed"
+      }
+    },
+    "enableNrdGtldWhois": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable NRD gTLD with WHOIS (requires NRD+WHOIS subscription)"
+      }
+    },
+    "enableNrdGtldNoWhois": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable NRD gTLD without WHOIS (requires NRD subscription)"
+      }
+    },
+    "enableNrdCctldWhois": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable NRD ccTLD with WHOIS (requires NRD+WHOIS subscription)"
+      }
+    },
+    "enableNrdCctldNoWhois": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable NRD ccTLD without WHOIS (requires NRD subscription)"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksThreat_malware')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableThreatMalware')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksThreat_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksThreat_malware",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 180,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.threat_feed.malware"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchThreat_malware",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchThreat_malware": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.4/stream/threat-feed/malware",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksThreat_phishing')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableThreatPhishing')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksThreat_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksThreat_phishing",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 180,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.threat_feed.phishing"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchThreat_phishing",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchThreat_phishing": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.4/stream/threat-feed/phishing",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksThreat_spam')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableThreatSpam')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksThreat_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksThreat_spam",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 180,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.threat_feed.spam"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchThreat_spam",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchThreat_spam": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.4/stream/threat-feed/spam",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksNRD_gtld_whois')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableNrdGtldWhois')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksNRD_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksNRD_gtld_whois",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.newly.gtld"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchNrd_gtld_whois",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchNrd_gtld_whois": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.3/stream/domainer/gtld",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+
+                "whois": "true",
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksNRD_gtld_nowhois')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableNrdGtldNoWhois')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksNRDNoWhois_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksNRD_gtld_nowhois",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.newly.gtld"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchNrd_gtld_nowhois",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchNrd_gtld_nowhois": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.3/stream/domainer/gtld",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+
+                "whois": "false",
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksNRD_cctld_whois')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableNrdCctldWhois')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksNRD_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksNRD_cctld_whois",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.newly.cctld"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchNrd_cctld_whois",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchNrd_cctld_whois": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.3/stream/domainer/cctld",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+
+                "whois": "true",
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'WhoisFreaksNRD_cctld_nowhois')]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "condition": "[parameters('enableNrdCctldNoWhois')]",
+      "properties": {
+        "connectorDefinitionName": "WhoisFreaks",
+        "dataType": "WhoisFreaksNRDNoWhois_CL",
+        "dcrConfig": {
+          "streamName": "Custom-WhoisFreaksNRD_cctld_nowhois",
+          "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+          "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apiKey')]",
+          "ApiKeyName": "X-API-KEY",
+          "ApiKeyIdentifier": ""
+        },
+        "request": {
+          "apiEndpoint": "https://files.whoisfreaks.com/v3.4/status",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryWindowInMin": 1440,
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "rateLimitQPS": 2
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.newly.cctld"
+          ],
+          "format": "json"
+        },
+        "stepInfo": {
+          "stepType": "Nested",
+          "nextSteps": [
+            {
+              "stepId": "fetchNrd_cctld_nowhois",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+            }
+          ]
+        },
+        "stepCollectorConfigs": {
+          "fetchNrd_cctld_nowhois": {
+            "shouldJoinNestedData": false,
+            "request": {
+              "httpMethod": "GET",
+              "apiEndpoint": "https://files.whoisfreaks.com/v3.3/stream/domainer/cctld",
+              "headers": {
+                "Accept": "text/csv,text/plain,*/*"
+              },
+              "queryParameters": {
+
+                "whois": "false",
+                "date": "$lastUpdate$"
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 180,
+              "rateLimitQPS": 2
+            },
+            "auth": {
+              "AuthType": "APIKey",
+              "APIKey": "[parameters('apiKey')]",
+              "APIKeyName": "X-API-KEY",
+              "APIKeyIdentifier": ""
+            },
+            "paging": {
+              "pagingType": "Offset",
+              "offsetParaName": "offset",
+              "pageSizeParaName": "limit",
+              "pageSize": 10000,
+              "pagingInfoPlacement": "QueryString"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ],
+              "format": "csv",
+              "hasCsvHeader": false
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "enabledFeeds": {
+      "type": "object",
+      "value": {
+        "threatMalware": "[parameters('enableThreatMalware')]",
+        "threatPhishing": "[parameters('enableThreatPhishing')]",
+        "threatSpam": "[parameters('enableThreatSpam')]",
+        "nrdGtldWhois": "[parameters('enableNrdGtldWhois')]",
+        "nrdGtldNoWhois": "[parameters('enableNrdGtldNoWhois')]",
+        "nrdCctldWhois": "[parameters('enableNrdCctldWhois')]",
+        "nrdCctldNoWhois": "[parameters('enableNrdCctldNoWhois')]"
+      }
+    }
+  }
+}
