@@ -1,9 +1,10 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.12      |     06-10-2026                 | Updated the **usage-attribution deployment** to API version `2025-04-01`, matching the existing **XDR deployments**, while retaining the `-partnercenter` tracking ID suffix. |
 | 3.0.11      |     06-10-2026                 | Aligned the **usage-attribution deployment** with the Marketplace-generated structure, including the `-partnercenter` tracking ID suffix and deployment API version `2020-10-01`. |
 | 3.0.10      |     05-10-2026                 | Replaced the offer-derived **usage-attribution tracking ID** with the supplied tracking ID. |
 | 3.0.9       |     05-10-2026                 | Added a separate **usage-attribution deployment** using the solution offer ID alongside the existing **XDR Detections**. |
-| 3.0.8       |     05-10-2026                 | Added 15 **XDR Detections** and updated the solution package to include Defender XDR Custom Detection content. |
+| 3.0.8       |     06-10-2026                 | Added 15 **XDR Detections** and updated the solution package to deploy Defender XDR Custom Detection content as root-level resources, without nested deployment wrappers or a usage-attribution deployment. |
 | 3.0.7       |     18-08-2026                 | Updated version and mapping of `connectorId` to `dataTypes` for multiple **Analytic Rules** and **Hunting Queries**.                     |
 | 3.0.6       |     20-07-2026                 | Added **Analytic Rule** CertUtil Used for File Download.                     |
 | 3.0.5       |     18-11-2024                 | Removed the broken URL in **Analytic Rule** and **Hunting Query**            |
