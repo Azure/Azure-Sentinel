@@ -78,7 +78,8 @@ and are not automatically merged.
 The export health rule alerts after 60 minutes without a heartbeat by default. It needs at
 least one heartbeat in its one-day query window: it cannot detect an instance that never
 connected or has been silent for longer than a day. Monitor those cases separately. The
-connector's Connected badge uses a two-day heartbeat window and does not confirm that every
+rule creates a separate alert for each missing instance and groups incidents by
+`ProductInstanceId`. The connector's Connected badge uses a two-day heartbeat window and does not confirm that every
 selected module is exporting.
 
 Finding updates do not close Sentinel incidents automatically. A finding deleted at the
@@ -86,6 +87,7 @@ source is not treated as resolved.
 
 ## Reading the data
 
+The workbook time-range selector applies to findings, export health and scan coverage.
 Daily snapshots let you query the latest findings within the retention period. An empty result
 alone does not mean a system is clean: check source timestamps, scan coverage and export health.
 Profile check severity follows the integration's policy; custom profile parameters are unrated.
