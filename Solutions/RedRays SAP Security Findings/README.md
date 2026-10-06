@@ -68,6 +68,13 @@ rules use the same KQL as the RedRays deployment template: they cover new or mat
 findings, plus baseline findings if you enable baseline alerting. Assessment findings do not
 establish that an attack occurred, so the templates do not assign ATT&CK mappings.
 
+Finding rules provide Host, IP and URL entity mappings. If source links are relative, configure
+`redRaysPortalUrls` in each rule query, for example `dynamic({"<ProductInstanceId>": "https://redrays.example"})`.
+Use a separate origin for each RedRays installation. Missing or invalid links do not create URL
+entities. SAP user names remain in custom details with the product instance, system and client;
+they are not treated as global account identities. Cloud findings may have no host, so configure
+the portal origin to enable their URL investigation link.
+
 Rules run every 15 minutes and look back one day. Older events fall outside that window.
 If you change the rule frequency, adjust its ingestion-time filter too and test with delayed
 data. `EventId` removes repeated deliveries within the query window, while `FindingKey`

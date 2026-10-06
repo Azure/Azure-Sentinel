@@ -12,34 +12,41 @@ queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
-query: 'let observations = RedRaysCloudFindings_CL
-
+query: |-
+  // Map each ProductInstanceId to its RedRays origin to resolve relative source links.
+  // Example: dynamic({"<ProductInstanceId>": "https://redrays.example"})
+  let redRaysPortalUrls = dynamic({});
+  let observations = RedRaysCloudFindings_CL
   | where TimeGenerated >= ago(1d)
-
   | extend ArrivedAt = ingestion_time()
-
   | summarize arg_min(ArrivedAt, *) by EventId;
-
   let candidates = observations
-
   | where IsAlertCandidate == true and ArrivedAt > ago(15m)
-
   | project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt
-
   | summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;
-
   observations
-
   | summarize arg_max(Revision, *) by FindingKey
-
   | where IsActionable == true
-
   | where SourceSeverity in ("HIGH", "CRITICAL")
-
   | join kind=inner candidates on FindingKey, AlertFingerprint
-
-  | extend EventId = AlertEventId'
-version: 1.0.0
+  | extend EventId = AlertEventId
+  | extend EntityHost = trim_end(@"\.", trim(@"\s+", tostring(Host)))
+  | extend EntityIP = iff(EntityHost !contains "/" and isnotempty(parse_ipv6(EntityHost)), EntityHost, "")
+  | extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253
+      and EntityHost matches regex @"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+      and not(EntityHost matches regex @"^[0-9.]+$"), tolower(EntityHost), "")
+  | extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)
+  | extend _entityUrlCandidate = case(
+      _sourceLink startswith "/app/" and _portalOrigin matches regex @"(?i)^https?://[^/?#@\s\\]+/?$",
+      strcat(trim_end(@"/+", _portalOrigin), _sourceLink),
+      _sourceLink)
+  | extend _parsedEntityUrl = parse_url(_entityUrlCandidate)
+  | extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ ("https", "http")
+      and isnotempty(tostring(_parsedEntityUrl.Host))
+      and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))
+      and not(_entityUrlCandidate matches regex @"[\s\\]"), _entityUrlCandidate, "")
+  | project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl
+version: 1.0.1
 kind: Scheduled
 tactics: []
 relevantTechniques: []
@@ -62,5 +69,21 @@ customDetails:
   SourceStatus: SourceStatus
   SourceSeverity: SourceSeverity
   SourceUrl: SourceUrl
+  ProductInstanceId: ProductInstanceId
+  SystemId: SystemId
+  SapClient: SapClient
 alertDetailsOverride:
   alertDisplayNameFormat: 'RedRays: {{Title}}'
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: FullName
+    columnName: EntityHost
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: EntityIP
+- entityType: URL
+  fieldMappings:
+  - identifier: Url
+    columnName: EntityUrl

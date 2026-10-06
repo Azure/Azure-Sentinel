@@ -2588,7 +2588,7 @@
         "description": "New or materially changed actionable Vulnerability Assessment findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
-        "query": "let observations = RedRaysVulnerabilities_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysVulnerabilities_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2618,11 +2618,43 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2639,7 +2671,7 @@
         "description": "New or materially changed actionable ABAP Code Security findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
-        "query": "let observations = RedRaysAbapFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysAbapFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2669,11 +2701,43 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2690,7 +2754,7 @@
         "description": "New or materially changed actionable Cloud Security findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
-        "query": "let observations = RedRaysCloudFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysCloudFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2720,11 +2784,43 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2741,7 +2837,7 @@
         "description": "New or materially changed actionable SoD findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
-        "query": "let observations = RedRaysSoDFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysSoDFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2771,11 +2867,44 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient",
+          "AccountName": "AccountName"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2792,7 +2921,7 @@
         "description": "New or materially changed actionable Profile Parameters findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "Medium",
-        "query": "let observations = RedRaysProfileChecks_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceStatus == \"VULNERABLE\"\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysProfileChecks_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceStatus == \"VULNERABLE\"\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2822,11 +2951,43 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2843,7 +3004,7 @@
         "description": "New or materially changed actionable Password Security findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
-        "query": "let observations = RedRaysPasswordFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysPasswordFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "queryFrequency": "PT15M",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -2873,11 +3034,44 @@
           "Module": "Module",
           "SourceStatus": "SourceStatus",
           "SourceSeverity": "SourceSeverity",
-          "SourceUrl": "SourceUrl"
+          "SourceUrl": "SourceUrl",
+          "ProductInstanceId": "ProductInstanceId",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient",
+          "AccountName": "AccountName"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
-        }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EntityHost"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "EntityIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "EntityUrl"
+              }
+            ]
+          }
+        ]
       }
     },
     {
