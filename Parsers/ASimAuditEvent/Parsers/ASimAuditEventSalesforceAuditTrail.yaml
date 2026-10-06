@@ -31,6 +31,110 @@ ParserQuery: |
       disabled: bool = false,
       pack: bool = false
   ) {
+      let SectionObjectTypeLookup = datatable(
+          Section: string,
+          ObjectTypeFromSection: string
+      )[
+          // Directory service objects
+          "Customize Service Resources", "Directory Service Object",
+          "Customize Users", "Directory Service Object",
+          "Department to Roles", "Directory Service Object",
+          "Experiences network Member Group", "Directory Service Object",
+          "Groupe d'ensembles d'autorisations", "Directory Service Object",
+          "Groupes", "Directory Service Object",
+          "Groups", "Directory Service Object",
+          "G\u00e9rer les utilisateurs", "Directory Service Object",
+          "Manage Users", "Directory Service Object",
+          "OAuth Client Credentials User", "Directory Service Object",
+          "Permission Set Group", "Directory Service Object",
+          "Personnaliser les utilisateurs", "Directory Service Object",
+          "Profiles", "Directory Service Object",
+          "Teams", "Directory Service Object",
+          "User Permission Mappings", "Directory Service Object",
+          // Policy rules
+          "Approval Process", "Policy Rule",
+          "Bypass Rules Configurations", "Policy Rule",
+          "Cancellation Approval Rules", "Policy Rule",
+          "Case Allocation To Queues", "Policy Rule",
+          "Case Closure Email Rules", "Policy Rule",
+          "Connected App Session Policy", "Policy Rule",
+          "Custom Permissions", "Policy Rule",
+          "Data Integration Rule", "Policy Rule",
+          "Duplicate Rule", "Policy Rule",
+          "eHS Naming and SSID Rules", "Policy Rule",
+          "Field Dependencies", "Policy Rule",
+          "Key Attachment Document Rules", "Policy Rule",
+          "Keyword Routing Rules", "Policy Rule",
+          "Matching Rule", "Policy Rule",
+          "Password Policies", "Policy Rule",
+          "Portal Case Visibility", "Policy Rule",
+          "Routing Exclusions", "Policy Rule",
+          "R\u00e8gles de partage", "Policy Rule",
+          "Security Controls", "Policy Rule",
+          "Session Settings", "Policy Rule",
+          "Sharing Defaults", "Policy Rule",
+          "Sharing Rules", "Policy Rule",
+          "Sharing Sets", "Policy Rule",
+          "Transaction Security", "Policy Rule",
+          "User Access Configurations", "Policy Rule",
+          "Validation Rules", "Policy Rule",
+          "Workflow Rule", "Policy Rule",
+          // Event logs
+          "Customize Historical Entity Trending", "Event Log",
+          "Customize Historical Field Trending", "Event Log",
+          "Entity History", "Event Log",
+          "Feed Tracking", "Event Log",
+          "Suivre l'historique des champs", "Event Log",
+          "Track Field History", "Event Log",
+          // Scheduled tasks
+          "Customer Journey Tasks", "Scheduled Task",
+          "Data Export", "Scheduled Task",
+          "Duplicate Jobs", "Scheduled Task",
+          // Services
+          "Application", "Service",
+          "Application cliente externe", "Service",
+          "Applications Inbox mobiles et pour le bureau h\u00e9rit\u00e9es", "Service",
+          "Applications personnalis\u00e9es", "Service",
+          "Auth Providers", "Service",
+          "Call Centers", "Service",
+          "Change Data Capture", "Service",
+          "Connected Apps", "Service",
+          "Custom Apps", "Service",
+          "Customer Portal", "Service",
+          "Event Bus Relay", "Service",
+          "Event Manager", "Service",
+          "External Client Application", "Service",
+          "Identity Provider", "Service",
+          "Inbox mobile and legacy desktop apps", "Service",
+          "Omni-Channel", "Service",
+          "Partner Relationship Management", "Service",
+          "Portail client", "Service",
+          "Remote Access", "Service",
+          "Salesforce Voice", "Service",
+          "SIS SF Teacher Integrations", "Service",
+          "Third Party Check Service Messages", "Service",
+          // Cloud resources
+          "Certificate and Key Management", "Cloud Resource",
+          "Custom Objects", "Cloud Resource",
+          "Encription Keys", "Cloud Resource",
+          "External Objects", "Cloud Resource",
+          "My Domain", "Cloud Resource",
+          "Objets personnalis\u00e9s", "Cloud Resource",
+          "PowerBI Reports", "Cloud Resource",
+          "Private Connections", "Cloud Resource",
+          "Ressources statiques", "Cloud Resource",
+          "Sandbox", "Cloud Resource",
+          "Sandboxes", "Cloud Resource",
+          "Second Generation Package Version", "Cloud Resource",
+          "Sites", "Cloud Resource",
+          "Static Resource", "Cloud Resource"
+      ];
+      let directory_object_action_regex = @"(^permset|permissionsetgroup|setupentityaccessaudit_(permissionset|profile)|^profile|^createduser|^deleteduser|^activateduser|^deactivateduser|^frozeuser|^unfrozeuser|^unlockeduser|^changed(username|email|password|profile|role)|^resetpassword$|^group(member|membership)|^queue(member|membership)|^team_|^tm2_user)";
+      let policy_rule_action_regex = @"(rule|policy|sharing)|^(changedvalidation|newvalidation|removedvalidation|password(complexity|expiry|lockout|maxinvalid)|sessiontimeout|locksessiondomain|updatesessionsecuritylevel|loginiprange)";
+      let event_log_action_regex = @"(historytrack|historytracking|entity_history|historicaltrending|feed_field_tracked)";
+      let scheduled_task_action_regex = @"^(bulkjobactions|createbulkjobdefinition|datacategorybatchcomplete)$";
+      let cloud_resource_action_regex = @"^(deletesandbox|discardsandbox|sandboxlicensematch(success)?|archivedmasterencryptionkey|changedstaticresource|createnewsalesforcesite|createdstaticresource|deletescratchorg|deletedstaticresource|insertcertificate)$";
+      let service_action_regex = @"(application|connectedapp|ecapp|authprovider|callcenter|credential|oauth|saml|idp|servicechannel|presenceuserconfig|queuerouting|privateconnection|remoteproxy|packagingapp|loginflow)";
       SalesforceAuditTrail
       | where not(disabled)
       | extend
@@ -41,6 +145,24 @@ ParserQuery: |
               CreatedByName),
           Operation = coalesce(Action, Display, "Salesforce audit event"),
           Object = coalesce(Section, Action, "Salesforce configuration")
+      | lookup SectionObjectTypeLookup on Section
+      | extend ActionKey = tolower(Action)
+      | extend ObjectType = case(
+          isnotempty(ObjectTypeFromSection), ObjectTypeFromSection,
+          isnotempty(Section), "Configuration Atom",
+          ActionKey matches regex directory_object_action_regex,
+              "Directory Service Object",
+          ActionKey matches regex policy_rule_action_regex,
+              "Policy Rule",
+          ActionKey matches regex event_log_action_regex,
+              "Event Log",
+          ActionKey matches regex scheduled_task_action_regex,
+              "Scheduled Task",
+          ActionKey matches regex cloud_resource_action_regex,
+              "Cloud Resource",
+          ActionKey matches regex service_action_regex,
+              "Service",
+          "Configuration Atom")
       | extend EventType = case(
           Action has_any ("created", "added", "inserted", "provisioned")
               or Display has_any ("created", "added", "inserted", "provisioned"), "Create",
@@ -131,6 +253,7 @@ ParserQuery: |
           Dst = coalesce(FQDN, tostring(ExtractedHostname)),
           Dvc = "Salesforce Audit Trail",
           Object,
+          ObjectType,
           Operation,
           OriginalObjectType = Section,
           TargetDescription = Display,
