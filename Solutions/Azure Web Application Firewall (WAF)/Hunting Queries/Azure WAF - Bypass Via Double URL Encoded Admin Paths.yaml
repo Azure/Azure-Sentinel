@@ -15,37 +15,39 @@ requiredDataConnectors:
       - AGWFirewallLogs
       - AzureDiagnostics
 tactics:
-  - InitialAccess
   - DefenseEvasion
 relevantTechniques:
-  - T1190
-  - T1036
+  - T1027
 query: |
-  let TargetAdminPaths = dynamic(["admin", "PSEMHUB", "bin", "config", "setup", "install", "login"]);
-  let ModernWAF = AGWFirewallLogs
+  let StartTime = ago(1d);
+  let EndTime = now();
+  let TargetAdminPathRegex = @"^/?(admin|psemhub|bin|config|setup|install|login)";
+  let ModernWAF = (AGWFirewallLogs
   | where TimeGenerated between (StartTime .. EndTime)
   | where Action in~ ("Allowed", "Matched")
   | extend RequestPath = tostring(split(RequestUri, "?")[0])
   | extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))
   | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
-  | where SecondaryDecode has_any (TargetAdminPaths) or RequestPath has_any (TargetAdminPaths)
-  | project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action;
-  let LegacyWAF = AzureDiagnostics
+  | extend NormalizedPath = tolower(SecondaryDecode)
+  | where NormalizedPath matches regex TargetAdminPathRegex
+  | project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action);
+  let LegacyWAF = (AzureDiagnostics
   | where TimeGenerated between (StartTime .. EndTime)
   | where Category == "ApplicationGatewayFirewallLog"
   | where action_s in~ ("Allowed", "Matched")
   | extend RequestPath = tostring(split(requestUri_s, "?")[0])
   | extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))
   | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
-  | where SecondaryDecode has_any (TargetAdminPaths) or RequestPath has_any (TargetAdminPaths)
-  | project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s;
+  | extend NormalizedPath = tolower(SecondaryDecode)
+  | where NormalizedPath matches regex TargetAdminPathRegex
+  | project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s);
   union isfuzzy=true ModernWAF, LegacyWAF
-  | summarize 
-      StartTime = min(TimeGenerated), 
-      EndTime = max(TimeGenerated),
-      AttackCount = count(),
-      SamplePayloads = make_set(requestUri, 5) 
-      by clientIp, hostname, action
+  | summarize
+  FirstSeen = min(TimeGenerated),
+  LastSeen = max(TimeGenerated),
+  AttackCount = count(),
+  SamplePayloads = make_set(requestUri, 5)
+  by clientIp, hostname, action
 entityMappings:
   - entityType: IP
     fieldMappings:
