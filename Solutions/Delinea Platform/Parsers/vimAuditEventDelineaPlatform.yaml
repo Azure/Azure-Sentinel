@@ -1,0 +1,302 @@
+id: 94c033f2-24ba-49f2-bd96-2a19d4535f84
+Function:
+  Title: Audit Event ASIM filtering parser for Delinea Platform
+  Version: '1.1.1'
+  LastUpdated: '2026-08-31'
+Category: Microsoft Sentinel Parser
+FunctionName: vimAuditEventDelineaPlatform
+FunctionAlias: vimAuditEventDelineaPlatform
+FunctionParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+FunctionQuery: |
+  // Filters and normalizes Delinea Platform privileged-access audit events from
+  // the DelineaAuditEvents_CL table to the ASIM Audit Event schema (version 0.1.2).
+  //
+  // The audit-events API (X-Api-Version 2.0) returns the event descriptors as
+  // nested objects - eventType, service, actor, target and source. The data
+  // collection rule promotes only eventType.name and service.type to the
+  // EventType and Service columns, so every normalized value is read from
+  // RawData, which the rule fills with the complete event document.
+  //
+  // Event names are PascalCase compounds whose trailing word is the verb, for
+  // example 'PolicyDeploymentStateUpdated'. eventType.verb is used when the
+  // reporting service populates it; the event name is the fallback.
+  let EventTypeLookup = datatable(DelineaVerbKey: string, NormalizedEventType: string)
+  [
+      'viewed',         'Read',
+      'view',           'Read',
+      'read',           'Read',
+      'retrieved',      'Read',
+      'accessed',       'Read',
+      'exported',       'Read',
+      'downloaded',     'Read',
+      'checkedout',     'Read',
+      'created',        'Create',
+      'added',          'Create',
+      'imported',       'Create',
+      'generated',      'Create',
+      'registered',     'Create',
+      'deleted',        'Delete',
+      'removed',        'Delete',
+      'revoked',        'Delete',
+      'updated',        'Set',
+      'changed',        'Set',
+      'modified',       'Set',
+      'renamed',        'Set',
+      'moved',          'Set',
+      'assigned',       'Set',
+      'unassigned',     'Set',
+      'synchronized',   'Set',
+      'checkedin',      'Set',
+      'enabled',        'Enable',
+      'activated',      'Enable',
+      'unlocked',       'Enable',
+      'disabled',       'Disable',
+      'deactivated',    'Disable',
+      'locked',         'Disable',
+      'executed',       'Execute',
+      'launched',       'Execute',
+      'started',        'Execute',
+      'ran',            'Execute',
+      'installed',      'Install',
+      'cleared',        'Clear',
+      'purged',         'Clear',
+  ];
+  // ASIM ObjectType is an enumerated list [ Configuration Atom, Policy Rule,
+  // Cloud Resource, Other ]. The platform reports target.type as an identifier
+  // name such as 'PolicyId' or 'SecretId', so the trailing 'Id' is trimmed
+  // before lookup and the original value is preserved in AdditionalFields.
+  let ObjectTypeLookup = datatable(DelineaTargetType: string, NormalizedObjectType: string)
+  [
+      'SECRET',           'Cloud Resource',
+      'FOLDER',           'Cloud Resource',
+      'SERVER',           'Cloud Resource',
+      'MACHINE',          'Cloud Resource',
+      'ACCOUNT',          'Cloud Resource',
+      'DATABASE',         'Cloud Resource',
+      'RESOURCE',         'Cloud Resource',
+      'SESSION',          'Cloud Resource',
+      'ENGINE',           'Cloud Resource',
+      'CONNECTOR',        'Cloud Resource',
+      'USER',             'Configuration Atom',
+      'IDENTITY',         'Configuration Atom',
+      'GROUP',            'Configuration Atom',
+      'ROLE',             'Configuration Atom',
+      'APPLICATION',      'Configuration Atom',
+      'CONFIGURATION',    'Configuration Atom',
+      'COLLECTION',       'Configuration Atom',
+      'ORGUNIT',          'Configuration Atom',
+      'SERVICE',          'Configuration Atom',
+      'TENANT',           'Configuration Atom',
+      'POLICY',           'Policy Rule',
+      'CREDENTIALPOLICY', 'Policy Rule',
+      'PERMISSION',       'Policy Rule',
+      'ENTITLEMENT',      'Policy Rule',
+      'RULE',             'Policy Rule',
+  ];
+  let parser = (disabled: bool = false, starttime: datetime = datetime(null), endtime: datetime = datetime(null), srcipaddr_has_any_prefix: dynamic = dynamic([]), actorusername_has_any: dynamic = dynamic([]), operation_has_any: dynamic = dynamic([]), object_has_any: dynamic = dynamic([]), newvalue_has_any: dynamic = dynamic([]), eventtype_in: dynamic = dynamic([]), eventresult: string = '*')
+  {
+      DelineaAuditEvents_CL
+      | where not(disabled)
+      // The actor, target and event names now live inside the event document,
+      // so the pre-filters run against the raw text to narrow the scan. They are
+      // deliberately permissive; the exact filters are applied to the normalized
+      // columns once those exist.
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (array_length(actorusername_has_any) == 0 or RawData has_any (actorusername_has_any))
+          and (array_length(operation_has_any) == 0 or RawData has_any (operation_has_any))
+          and (array_length(object_has_any) == 0 or RawData has_any (object_has_any))
+          and (array_length(newvalue_has_any) == 0 or RawData has_any (newvalue_has_any))
+          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(RawData, srcipaddr_has_any_prefix))
+      | extend
+          DelineaEvent = parse_json(RawData)
+      | extend
+          DelineaEventType = DelineaEvent.eventType,
+          DelineaActor = DelineaEvent.actor,
+          DelineaTarget = DelineaEvent.target,
+          DelineaSourceHost = DelineaEvent.source.host,
+          DelineaAttributes = DelineaEvent.additionalAttributes
+      | extend
+          DelineaEventName = tostring(coalesce(DelineaEventType.name, DelineaEventType.internalName)),
+          DelineaTargetHost = DelineaTarget.host
+      | extend
+          DelineaEventNameKey = tolower(DelineaEventName),
+          // eventType.verb is reported empty for most events, in which case the
+          // verb is the trailing word of the PascalCase event name.
+          DelineaVerb = iff(isnotempty(tostring(DelineaEventType.verb)),
+                            tostring(DelineaEventType.verb),
+                            extract(@'([A-Za-z][a-z]+)$', 1, DelineaEventName)),
+          DelineaTargetTypeOriginal = tostring(coalesce(DelineaTarget.type, DelineaEventType.targetType)),
+          // The attributes bag carries either scalars or single element arrays
+          // depending on the reporting service.
+          DelineaFailReason = tostring(coalesce(DelineaAttributes.FailReason[0], DelineaAttributes.FailReason)),
+          DelineaMfaResult = tostring(coalesce(DelineaAttributes.MfaResult[0], DelineaAttributes.MfaResult)),
+          DelineaFactorPassword = tostring(coalesce(DelineaAttributes.FactorPassword[0], DelineaAttributes.FactorPassword))
+      | extend
+          DelineaVerbKey = tolower(DelineaVerb),
+          DelineaTargetType = trim_end(@'ID', toupper(DelineaTargetTypeOriginal)),
+          // '0.0.0.0' is the placeholder reported for events that have no
+          // network origin, such as system initiated events.
+          DelineaSrcIpAddr = tostring(DelineaSourceHost.network.ipAddress),
+          DelineaDstIpAddr = tostring(DelineaTargetHost.network.ipAddress)
+      | lookup EventTypeLookup on DelineaVerbKey
+      | lookup ObjectTypeLookup on DelineaTargetType
+      | extend
+          EventType = case(
+              isnotempty(NormalizedEventType), NormalizedEventType,
+              // Names that do not end in a verb are matched on their content.
+              // The compound names are not term indexed, so 'contains' is used.
+              DelineaEventNameKey contains 'delete' or DelineaEventNameKey contains 'remove' or DelineaEventNameKey contains 'revoke', 'Delete',
+              DelineaEventNameKey contains 'update' or DelineaEventNameKey contains 'change' or DelineaEventNameKey contains 'modif' or DelineaEventNameKey contains 'rename' or DelineaEventNameKey contains 'assign' or DelineaEventNameKey contains 'checkedin' or DelineaEventNameKey contains 'checkin', 'Set',
+              DelineaEventNameKey contains 'create' or DelineaEventNameKey contains 'import' or DelineaEventNameKey contains 'generate' or DelineaEventNameKey contains 'add', 'Create',
+              DelineaEventNameKey contains 'enable' or DelineaEventNameKey contains 'activate' or DelineaEventNameKey contains 'unlock', 'Enable',
+              DelineaEventNameKey contains 'disable' or DelineaEventNameKey contains 'deactivate' or DelineaEventNameKey contains 'lock', 'Disable',
+              DelineaEventNameKey contains 'view' or DelineaEventNameKey contains 'read' or DelineaEventNameKey contains 'retriev' or DelineaEventNameKey contains 'export' or DelineaEventNameKey contains 'download' or DelineaEventNameKey contains 'checkedout' or DelineaEventNameKey contains 'checkout', 'Read',
+              DelineaEventNameKey contains 'execut' or DelineaEventNameKey contains 'launch' or DelineaEventNameKey contains 'invoke' or DelineaEventNameKey contains 'run', 'Execute',
+              DelineaEventNameKey contains 'install', 'Install',
+              DelineaEventNameKey contains 'clear' or DelineaEventNameKey contains 'purge', 'Clear',
+              'Other'),
+          ObjectType = iff(isempty(NormalizedObjectType), 'Other', NormalizedObjectType),
+          EventCount = int(1),
+          EventVendor = 'Delinea',
+          EventProduct = 'Delinea Platform',
+          EventSchema = 'AuditEvent',
+          EventSchemaVersion = '0.1.2',
+          // eventDateTime is when the platform recorded the event, ahead of the
+          // processedTime at which it became available to the connector.
+          EventStartTime = coalesce(todatetime(DelineaEvent.eventDateTime), TimeGenerated),
+          EventEndTime = coalesce(todatetime(DelineaEvent.eventDateTime), TimeGenerated),
+          EventUid = _ItemId,
+          EventOriginalUid = tostring(DelineaEvent.eventMessageId),
+          EventOriginalType = DelineaEventName,
+          EventMessage = tostring(coalesce(DelineaEvent.displayMessage, DelineaEvent.notes)),
+          Operation = DelineaEventName,
+          EventResult = case(
+              DelineaMfaResult =~ 'Failed' or DelineaFactorPassword =~ 'Failed' or isnotempty(DelineaFailReason), 'Failure',
+              DelineaVerbKey in ('failed', 'denied', 'rejected', 'blocked'), 'Failure',
+              DelineaEventNameKey contains 'fail' or DelineaEventNameKey contains 'denied' or DelineaEventNameKey contains 'reject' or DelineaEventNameKey contains 'blocked' or DelineaEventNameKey contains 'unauthorized', 'Failure',
+              'Success'),
+          ActorUsername = tostring(coalesce(DelineaActor.email, DelineaActor.name, DelineaActor.displayName)),
+          ActorUserId = tostring(DelineaActor.id),
+          ActorUserIdType = 'Other',
+          ActorOriginalUserType = tostring(DelineaActor.type),
+          ActorUserType = case(
+              tostring(DelineaActor.type) =~ 'system' or tostring(DelineaEvent.isSystem) =~ 'true', 'System',
+              tostring(DelineaActor.type) =~ 'user', 'Regular',
+              tostring(DelineaActor.type) in~ ('service', 'serviceuser', 'application'), 'Service Principal',
+              'Other'),
+          ActorSessionId = tostring(DelineaEvent.sessionId),
+          // SecretId is a promoted string column while the target fields are dynamic, so
+          // each is converted before coalesce - a mixed argument list is rejected. coalesce
+          // skips empty strings, so the name / displayName / containerName / SecretId order holds.
+          Object = coalesce(tostring(DelineaTarget.name), tostring(DelineaTarget.displayName), tostring(DelineaTarget.containerName), SecretId),
+          ObjectId = tostring(DelineaTarget.id),
+          SrcIpAddr = iff(DelineaSrcIpAddr in ('', '0.0.0.0'), '', DelineaSrcIpAddr),
+          SrcHostname = tostring(DelineaSourceHost.machineName),
+          DstIpAddr = iff(DelineaDstIpAddr in ('', '0.0.0.0'), '', DelineaDstIpAddr),
+          DstHostname = tostring(DelineaTargetHost.machineName),
+          OldValue = tostring(DelineaEvent.fieldChanges[0].oldValue),
+          NewValue = tostring(DelineaEvent.fieldChanges[0].newValue),
+          ValueType = 'Other',
+          // The Delinea event level is an audit category - SecurityAudit,
+          // PrivilegedActivity or SystemActivity - rather than an ASIM severity,
+          // so it is carried in AdditionalFields and severity is derived from
+          // the event result.
+          AdditionalFields = bag_pack(
+              'DelineaEventTypeId', DelineaEventType.id,
+              'DelineaEventInternalName', DelineaEventType.internalName,
+              'DelineaLevel', DelineaEvent.level,
+              'DelineaService', DelineaEvent.service.type,
+              'DelineaServiceVersion', DelineaEvent.service.version,
+              'DelineaTargetType', DelineaTargetTypeOriginal,
+              'DelineaTargetContainer', DelineaTarget.containerName,
+              'DelineaTargetPlatformId', DelineaTarget.platformId,
+              'DelineaActorPlatformId', DelineaActor.platformId,
+              'DelineaDelegatedUserName', DelineaActor.delegatedUserName,
+              'DelineaTenantId', DelineaEvent.tenantId,
+              'DelineaIsSystem', DelineaEvent.isSystem,
+              'DelineaVerb', DelineaVerb,
+              'DelineaProcessedTime', DelineaEvent.processedTime,
+              'DelineaTags', DelineaEvent.tags,
+              'DelineaAnalyticData', DelineaEvent.analyticData,
+              'DelineaSourceNetwork', DelineaSourceHost.network,
+              'DelineaTargetNetwork', DelineaTargetHost.network,
+              'AdditionalAttributes', DelineaAttributes,
+              'FieldChanges', DelineaEvent.fieldChanges)
+      | extend
+          EventSeverity = iff(EventResult == 'Failure', 'Low', 'Informational'),
+          EventResultDetails = iff(EventResult == 'Failure', DelineaFailReason, ''),
+          ActorUsernameType = case(isempty(ActorUsername), '', ActorUsername contains '@', 'UPN', 'Simple'),
+          Dvc = strcat(EventVendor, '/', EventProduct)
+      // Filters that require normalized values are applied once they exist.
+      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+          and ('*' in (eventresult) or EventResult in (eventresult))
+          and (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
+          and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+          and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+          and (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+      // aliases
+      | extend
+          User = ActorUsername,
+          Value = NewValue,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr
+      | project-away
+          DelineaEvent,
+          DelineaEventType,          // used by EventType, Operation and AdditionalFields
+          DelineaActor,              // used by the Actor fields
+          DelineaTarget,             // used by Object and ObjectId
+          DelineaSourceHost,         // used by the Src fields
+          DelineaTargetHost,         // used by the Dst fields
+          DelineaAttributes,         // used by EventResult and AdditionalFields
+          DelineaEventName,          // used by EventOriginalType and Operation
+          DelineaEventNameKey,       // used by EventType and EventResult
+          DelineaVerb,               // used by AdditionalFields
+          DelineaVerbKey,            // used by EventType
+          DelineaTargetType,         // used by ObjectType
+          DelineaTargetTypeOriginal, // used by AdditionalFields
+          DelineaFailReason,         // used by EventResult and EventResultDetails
+          DelineaMfaResult,          // used by EventResult
+          DelineaFactorPassword,     // used by EventResult
+          DelineaSrcIpAddr,          // used by SrcIpAddr
+          DelineaDstIpAddr,          // used by DstIpAddr
+          NormalizedEventType,
+          NormalizedObjectType,
+          RawData,                   // fully expanded above
+          Service,                   // service.type scalar, read from RawData
+          Level,                     // used by AdditionalFields, read from RawData
+          SecretId,                  // used by Object
+          TenantId
+  };
+  parser(disabled=disabled, starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, actorusername_has_any=actorusername_has_any, operation_has_any=operation_has_any, object_has_any=object_has_any, newvalue_has_any=newvalue_has_any, eventtype_in=eventtype_in, eventresult=eventresult)
