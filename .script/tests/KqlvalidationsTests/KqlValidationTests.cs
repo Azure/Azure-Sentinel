@@ -7,6 +7,7 @@ using Xunit;
 using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
+using Kqlvalidations.Tests.TableSchemasLoaders;
 using System;
 using Newtonsoft.Json;
 using Octokit;
@@ -22,11 +23,14 @@ namespace Kqlvalidations.Tests
 
         public KqlValidationTests()
         {
+            var customTablesPath = Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables");
+            var customFunctionsPath = Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions");
+
             _queryValidator = new KqlQueryAnalyzerBuilder()
-               .WithSentinelDefaultTablesAndFunctionsSchemas()
-               .WithCustomTableSchemasLoader(new CustomJsonDirectoryTablesLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables")))
-               .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
-               .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
+               .WithCustomTableSchemasLoader(new LocalOverrideTablesLoader(customTablesPath))
+               .WithCustomFunctionSchemasLoader(new SentinelDefaultFunctionsLoader())
+               .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(customFunctionsPath))
+               .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(customFunctionsPath))
                .WithCustomFunctionSchemasLoader(new CommonFunctionsLoader())
                .Build();
         }

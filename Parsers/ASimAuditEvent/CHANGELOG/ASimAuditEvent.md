@@ -1,9 +1,15 @@
 # Changelog for ASimAuditEvent.yaml
 
+## Version 0.1.11
+
+- (2026-10-06) Add the Salesforce Audit Trail AuditEvent parser. [PR #15248](https://github.com/Azure/Azure-Sentinel/pull/15248)
+
 ## Version 0.1.10
-- (2026-10-02) Add the Salesforce Audit Trail AuditEvent parser. [PR #15248](https://github.com/Azure/Azure-Sentinel/pull/15248)
+
+- (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)
 
 ## Version 0.1.9
+
 - (2026-09-24) [ASIM] AuditEvent - Oracle OCI (New Parser) - [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
 - Add Oracle OCI parser to ASimAuditEvent
 
