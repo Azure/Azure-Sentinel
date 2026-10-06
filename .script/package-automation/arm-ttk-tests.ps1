@@ -1,59 +1,59 @@
 
 try {
-    #$diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
-    git fetch origin master
-    $diff = git diff --diff-filter=d --name-only origin/master...HEAD
+    $diff = @()
+    if (!$env:PR_BASE_SHA -or !$env:PR_HEAD_SHA) {
+        Write-Warning "PR_BASE_SHA or PR_HEAD_SHA is missing. Treating this as no changes and skipping ARM-TTK."
+    }
+    else {
+        try {
+            $diff = git diff --diff-filter=d --name-only "$($env:PR_BASE_SHA)...$($env:PR_HEAD_SHA)"
+            if ($LASTEXITCODE -ne 0) {
+                throw "Git comparison failed (exit code $LASTEXITCODE)."
+            }
+        }
+        catch {
+            Write-Warning "Unable to identify PR changes: $_ Treating this as no changes and skipping ARM-TTK."
+            $diff = @()
+        }
+    }
     Write-Host "List of files in PR: $diff"
 
-    $hasmainTemplateChanged = $false
-    $hasCreateUiDefinitionTemplateChanged = $false
-
-    $isChangeInSolutionsFolder = [bool]($diff | Where-Object {$_ -like 'Solutions/*'})
-    if (!$isChangeInSolutionsFolder)
-    {
-        Write-Host "Skipping as change is not in Solutions folder!"
-        exit 0
+    $filteredFiles = $diff | Where-Object {
+        $_ -match '^Solutions/[^/]+/Package/(mainTemplate|createUiDefinition)\.json$'
     }
-
-    $requiredFiles = @("mainTemplate.json", "createUiDefinition.json")
-    $filteredFiles = $diff | Where-Object {$_ -match ($requiredFiles -Join "|")}
     Write-Host "Filtered Files $filteredFiles"
 
-    $sName = ''
-    $hasmainTemplateChanged = $false
-    $hasCreateUiDefinitionTemplateChanged = $false
+    $solutions = @{}
+    foreach ($file in $filteredFiles) {
+        if ($file -match '^Solutions/([^/]+)/Package/(mainTemplate|createUiDefinition)\.json$') {
+            $solutionName = $matches[1]
+            $templateName = $matches[2]
 
-    if ($filteredFiles.Count -gt 0)
-    {
-        $mainTemplateValue = $filteredFiles -match "mainTemplate.json" 
-        $createUiValue = $filteredFiles -match "createUiDefinition.json"
+            if (!$solutions.ContainsKey($solutionName)) {
+                $solutions[$solutionName] = [ordered]@{
+                    solutionName = $solutionName
+                    mainTemplateChanged = $false
+                    createUiChanged = $false
+                }
+            }
 
-        if ($mainTemplateValue -or $createUiValue)
-        {
-            $hasmainTemplateChanged = $true
-            $hasCreateUiDefinitionTemplateChanged = $true
-        }
-
-        if ($filteredFiles.Count -eq 1)
-        {
-            $packageIndex = $filteredFiles.IndexOf("/Package")
-            $sName = $filteredFiles.SubString(10, $packageIndex - 10)
-        }
-        else
-        {
-            $packageIndex = $filteredFiles[0].IndexOf("/Package")
-            $sName = $filteredFiles[0].SubString(10, $packageIndex - 10)
+            if ($templateName -eq 'mainTemplate') {
+                $solutions[$solutionName].mainTemplateChanged = $true
+            }
+            else {
+                $solutions[$solutionName].createUiChanged = $true
+            }
         }
     }
 
-    Write-Host "solutionName $sName, mainTemplateChanged $hasmainTemplateChanged, createUiChanged $hasCreateUiDefinitionTemplateChanged"
-    Write-Output "solutionName=$sName" >> $env:GITHUB_OUTPUT
-    Write-Output "mainTemplateChanged=$hasmainTemplateChanged" >> $env:GITHUB_OUTPUT
-    Write-Output "createUiChanged=$hasCreateUiDefinitionTemplateChanged" >> $env:GITHUB_OUTPUT
+    $solutionsJson = ConvertTo-Json -InputObject @($solutions.Values) -Compress
+    if (!$solutionsJson) {
+        $solutionsJson = '[]'
+    }
+
+    Write-Host "Solutions to validate: $solutionsJson"
+    Write-Output "solutionsJson=$solutionsJson" >> $env:GITHUB_OUTPUT
 }
 catch {
-    Write-Host "Skipping as exception has occured Error Details: $_"
-    Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
-    Write-Output "mainTemplateChanged=$false" >> $env:GITHUB_OUTPUT
-    Write-Output "createUiChanged=$false" >> $env:GITHUB_OUTPUT
+    throw
 }
