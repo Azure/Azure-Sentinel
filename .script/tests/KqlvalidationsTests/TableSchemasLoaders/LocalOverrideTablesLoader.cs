@@ -6,6 +6,9 @@ using System.Linq;
 
 namespace Kqlvalidations.Tests.TableSchemasLoaders
 {
+    /// <summary>
+    /// Loads Sentinel table schemas, allowing local schemas to override defaults with matching names.
+    /// </summary>
     public class LocalOverrideTablesLoader : ITableSchemasLoader
     {
         private readonly string _customTablesPath;
@@ -15,6 +18,9 @@ namespace Kqlvalidations.Tests.TableSchemasLoaders
             _customTablesPath = customTablesPath;
         }
 
+        /// <summary>
+        /// Returns default and local table schemas after applying local overrides.
+        /// </summary>
         public IEnumerable<TableSchema> Load()
         {
             var customTables = new CustomJsonDirectoryTablesLoader(_customTablesPath)
