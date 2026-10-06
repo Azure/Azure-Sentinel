@@ -1,0 +1,211 @@
+Parser:
+  Title: ASIM Authentication parser for Auth0
+  Version: '0.1.0'
+  LastUpdated: Sep 30, 2026
+Product:
+  Name: Auth0
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Auth0 Tenant Logs Documentation
+  Link: https://auth0.com/docs/tenant-logs
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the Auth0 login activities ingested in 'Auth0Logs_CL' table (via Codeless Connector Framework) to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationOktaAuth0
+EquivalentBuiltInParser: _ASim_Authentication_OktaAuth0
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Auth0LoginParser = (
+      disabled: bool = false,
+      pack: bool = false
+  )
+  {
+  let EventLookup = datatable( EventOriginalType: string, EventType: string, EventResult: string, EventOriginalResultDetails: string, EventResultDetails: string)
+      [
+      //Login
+      "f","Logon","Failure","Failed Login","No such user or password",
+      "fcoa","Logon","Failure","Failed Cross-Origin Authentication","Other",
+      "fens","Logon","Failure","Failed exchange for Native Social Login","Other",
+      "fp","Logon","Failure","Failed login due to invalid password","Incorrect password",
+      "fu","Logon","Failure","Failed login due to invalid username","No such user",
+      "s","Logon","Success","Successful Login","Other",
+      "scoa","Logon","Success","Successful Cross-Origin Authentication","Other",
+      "sdel","Logon","Success","Successful Delegated Login","Other",
+      "sens","Logon","Success","Successful Exchange - Native Social Login","Other",
+      //Logout
+      "federated_logout_failed","Logoff","Failure","Failed to logout of the upstream Identity Provider","Other",
+      "flo","Logoff","Failure","Failed Logout","Other",
+      "oidc_backchannel_logout_failed","Logoff","Failure","Failed OIDC Back-Channel Logout request","Other",
+      "universal_logout_failed","Logoff","Failure","Failed Universal Logout request","Other",
+      "oidc_backchannel_logout_succeeded","Logoff","Success","Successful OIDC Back-Channel Logout request","Other",
+      "slo","Logoff","Success","Successful Logout","Other",
+      "universal_logout_succeeded","Logoff","Success","Successful Universal Logout request","Other",
+      //Silent Authentication
+      "fdelsa","Logon","Failure","Failed Delegated Silent Authentication","Session expired",
+      "fsa","Logon","Failure","Failed Silent Auth","Session expired",
+      "sdelsa","Logon","Success","Successful Delegated Silent Authentication","Other",
+      "ssa","Logon","Success","Successful Silent Auth","Other",
+      //Token Exchange - Success Events
+      "ciba_exchange_succeeded", "Logon", "Success", "Successful CIBA Exchange","Other",
+      "feta", "Logon", "Failure", "Failed token exchange at Token Vault","Other",
+      "idjag_exchange_succeeded", "Logon", "Success", "Successful Exchange of Identity Assertion Authorization Grant JWT for Access Token","Other",
+      "sdeleacft", "Logon", "Success", "Successful Exchange of Delegated Authorization Code for Access Token","Other",
+      "seacft", "Logon", "Success", "Successful Exchange of Authorization Code for Access Token","Other",
+      "seccft", "Logon", "Success", "Successful Exchange of Access Token for a Client Credentials Grant","Other",
+      "secte", "Logon", "Success", "Successful Exchange via Custom Token Exchange","Other",
+      "sede",  "Logon", "Success", "Successful Exchange of Device Code for Access Token","Other",
+      "seoobft", "Logon", "Success", "Successful Exchange of Password and OOB Challenge for Access Token","Other",
+      "seotpft", "Logon", "Success", "Successful Exchange of Password and OTP Challenge for Access Token","Other",
+      "sepft", "Logon", "Success", "Successful Exchange of Password for Access Token","Other",
+      "sepkoobft", "Logon", "Success", "Successful Exchange of Passkey and OOB Challenge for Access Token","Other",
+      "sepkotpft", "Logon", "Success", "Successful Exchange of Passkey and OTP Challenge for Access Token","Other",
+      "sepkrcft","Logon", "Success", "Successful Exchange of Passkey and MFA Recovery Code for Access Token","Other",
+      "sercft", "Logon", "Success", "Successful Exchange of Password and MFA Recovery Codeode for Access Token","Other",
+      "sertft", "Logon", "Success", "Successful Exchange of Refresh Token for Access Token","Other",
+      "seta", "Logon", "Success", "Successful token exchange at Token Vault","Other",
+      "success_on_behalf_of_token_exchange", "Logon", "Success", "Successful Exchange via On-Behalf-Of Token Exchange","Other",
+      //Token Exchange - Failure Events
+      "ciba_exchange_failed", "Logon", "Failure", "Failed CIBA Exchange","Other",
+      "failed_on_behalf_of_token_exchange", "Logon", "Failure", "Failed Exchange via On-Behalf-Of Token Exchange","Other",
+      "fdeleacft", "Logon", "Failure", "Failed to Exchange Delegated Authorization Code for Access Token","Other",
+      "feacft", "Logon", "Failure", "Failed to Exchange Authorization Code for Access Token","Other",
+      "feccft", "Logon", "Failure", "Failed exchange of Access Token for a Client Credentials Grant","Incorrect key",
+      "fecte", "Logon", "Failure", "Failed Exchange via Custom Token Exchange","Other",
+      "fede", "Logon", "Failure", "Failed to exchange Device Code for Access Token","Other",
+      "feoobft", "Logon", "Failure", "Failed exchange of Password and OOB Challenge for Access Token","Incorrect password",
+      "feotpft", "Logon", "Failure", "Failed exchange of Password and OTP Challenge for Access Token","Incorrect password",
+      "fepft", "Logon", "Failure", "Failed exchange of Password for Access Token","Incorrect password",
+      "fepotpft", "Logon", "Failure", "Failed exchange of Passwordless OTP for Access Token","Other",
+      "fercft", "Logon", "Failure", "Failed Exchange of Password and MFA Recovery Code for Access Token","Incorrect password",
+      "ferrt", "Logon", "Failure", "Failed Exchange of Rotating Refresh Token. This could occur when reuse is detected.","Logon violates policy",
+      "fertft", "Logon", "Failure", "Failed Exchange of Refresh Token for Access Token. This could occur if the refresh token is revoked or expired.","Session expired",
+      "idjag_exchange_failed", "Logon", "Failure", "Failed Exchange of Identity Assertion Authorization Grant JWT for Access Token","Other",
+      "jwt_bearer_exchange_failed", "Logon", "Failure", "Failed Exchange of JWT Bearer Assertion for Access Token","Incorrect key",
+      //Other events
+      "gd_auth_failed", "Logon", "Failure", "Multi-factor authentication failed. This could happen due to a wrong code entered for SMS/Voice/Email/TOTP factors, or a system failure.","Incorrect key",
+      "gd_auth_rejected", "Logon", "Failure", "User rejected a multi-factor authentication request via push-notification","Logon violates policy",
+      "gd_auth_succeed", "Logon", "Success", "Multi-factor authentication success.","Other",
+      "gd_recovery_failed", "Logon", "Failure", "A user entered a wrong Recovery Code when attempting to authenticate","Incorrect key",
+      "gd_recovery_succeed", "Logon", "Success", "Multi-factor recovery code succeeded authorization","Other",
+      "gd_webauthn_challenge_failed", "Logon", "Failure", "WebAuthn browser failure","Incorrect key",
+      "passkey_challenge_failed", "Logon", "Failure", "A native passkey challenge failed","Incorrect key"
+      ];
+  let AuthEvents = toscalar(
+      EventLookup
+      | summarize make_set(EventOriginalType)
+  );
+  Auth0Logs_CL
+  | where not(disabled)
+  | project-rename EventOriginalType = EventType
+  | where EventOriginalType in~ (AuthEvents)
+  | lookup EventLookup on EventOriginalType 
+  | extend 
+      EventProduct = "Auth0"
+      , TargetAppName = ClientName
+      , Src = SrcHostname
+      , SrcGeoCountry = tostring(LocationInfo.country_name)
+      , SrcGeoCity = tostring(LocationInfo.city_name)
+      , SrcGeoLongitude = toreal(LocationInfo.longitude)
+      , SrcGeoLatitude = toreal(LocationInfo.latitude)
+      , TargetSessionId = tostring(Details.session_id)
+      , TransactionId = tostring(Details.transaction_id)
+      , RedirectUri = tostring(Details.qs.redirect_uri)
+      , Actions = tostring(Details.actions)
+      , Prompt = tostring(Details.prompts)
+      , LoginStats = tostring(Details.stats)
+  | extend TargetUsernameType =
+      case ( 
+          ActorUsername contains "@" , "UPN"
+          , ActorUsername contains "\\", "Windows"
+          , (ActorUsername has "CN=" or ActorUsername has "OU=" or ActorUsername has "DC="), "DN"
+          , isempty(ActorUsername), ""
+          , "Simple"
+      )
+  | extend TargetUsername =
+      case (
+          ActorUsername contains "@" , tostring(split(ActorUsername,"@")[0])
+          , ActorUsername contains "\\", tostring(split(ActorUsername,"\\")[0])
+          , ActorUsername
+      )
+  | extend AdditionalFields = iff(
+      pack == true,
+      bag_pack(
+          "Connection", Connection,
+          "ConnectionId", ConnectionId,
+          "Audience", Audience,
+          "Scope", Scope,
+          "Strategy", Strategy,
+          "StrategyType", StrategyType,
+          "Actions", Actions,
+          "Prompt", Prompt,
+          "RedirectUri", RedirectUri,
+          "LoginStats", LoginStats,
+          "TransactionId", TransactionId,
+          "Details",Details,
+          "TenantName",TenantName,
+          "IsMobile", IsMobile,
+          "TenantId", TenantId,
+          "_ResourceId",_ResourceId
+      ),
+      dynamic({})
+  )
+  | project
+        //madatory fields
+        TimeGenerated
+        , EventCount = int(1)
+        , EventStartTime = iff(isempty(event_date),TimeGenerated, event_date)
+        , EventEndTime = iff(isempty(event_date),TimeGenerated, event_date)
+        , EventType 
+        , EventResult
+        , EventProduct
+        , EventVendor = "Okta"
+        , EventSchema = "Authentication"
+        , EventSchemaVersion = "1.0.0"
+        , Type
+        //recommended
+        , EventResultDetails
+        , EventOriginalResultDetails
+        , EventUid = _ItemId
+        //optional
+        , UserId = tostring(ActorUserId)
+        , TargetUsername
+        , TargetUsernameType
+        , EventMessage = Description
+        , EventOriginalUid = LogId
+        , EventOriginalType
+        , AdditionalFields
+        //other fields
+        , TargetSessionId
+        , TargetAppId = ClientId
+        , TargetAppName
+        , TargetAppType = "Other"
+        , Src
+        , SrcIpAddr
+        , SrcGeoCountry
+        , SrcGeoCity
+        , SrcGeoLongitude
+        , SrcGeoLatitude
+        , HttpUserAgent
+        // aliases
+        , User = TargetUsername
+        , IpAddr = SrcIpAddr
+        , Application = TargetAppName
+        , Dvc = EventProduct
+  };
+  Auth0LoginParser(
+      disabled = disabled,
+      pack = pack
+  )
