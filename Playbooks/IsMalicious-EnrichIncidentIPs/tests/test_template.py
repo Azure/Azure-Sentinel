@@ -140,6 +140,23 @@ class PlaybookTemplateTests(unittest.TestCase):
             self.template["parameters"]["WorkflowState"]["defaultValue"], "Disabled"
         )
 
+    def test_deployment_metadata_contains_operator_instructions(self):
+        for field in ("prerequisites", "postDeployment"):
+            with self.subTest(field=field):
+                instructions = self.template["metadata"].get(field)
+                self.assertIsInstance(instructions, list)
+                self.assertGreater(len(instructions), 0)
+                for instruction in instructions:
+                    self.assertIsInstance(instruction, str)
+                    self.assertTrue(instruction.strip())
+
+    def test_arm_parameters_have_deployment_descriptions(self):
+        for name, parameter in self.template["parameters"].items():
+            with self.subTest(parameter=name):
+                description = parameter.get("metadata", {}).get("description")
+                self.assertIsInstance(description, str)
+                self.assertTrue(description.strip())
+
     def test_all_run_after_edges_reference_sibling_actions(self):
         def validate(actions):
             for action in actions.values():
