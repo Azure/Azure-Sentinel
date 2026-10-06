@@ -5,27 +5,72 @@ This playbook processes each URL entity to query VirusTotal for detailed URL inf
 
 ## Prerequisites
 - Obtain a VirusTotal API key by registering with the VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)
+- For the Logs Ingestion API playbooks to deploy successfully, the log analytics workspace and the resource group need to be in the same region.
+- The identity deploying a Logs Ingestion API playbook must be able to create Log Analytics tables, Data Collection Endpoints, Data Collection Rules, and role assignments.
 
 ## Quick Deployment
-**Deploy with Incident Trigger** (Recommended)
+### Logs Ingestion API playbooks
+
+These playbooks write VirusTotal URL results to the `VirusTotalURLReport_CL` table through the Logs Ingestion API, instead of the older `VTURLReport_CL` table. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
+
+#### Data stored in `VirusTotalURLReport_CL`
+
+The Logs Ingestion API playbooks create a limited set of dedicated, queryable columns. The complete VirusTotal response is retained in `RawData`, so fields that are not listed below are still available for investigation.
+
+| Column | Description |
+| --- | --- |
+| `TimeGenerated` | Time when the record is ingested into Log Analytics. |
+| `Url` | URL entity processed by the playbook. |
+| `VirusTotalId` | VirusTotal identifier for the URL report. |
+| `Suspicious` | Number of URL analyses classified as suspicious. |
+| `Malicious` | Number of URL analyses classified as malicious. |
+| `Harmless` | Number of URL analyses classified as harmless. |
+| `Undetected` | Number of URL analyses with no detection. |
+| `Timeout` | Number of URL analyses that timed out. |
+| `Stats` | VirusTotal analysis statistics, stored as a string. |
+| `RawData` | Complete VirusTotal response, serialized as JSON; any fields not represented by the dedicated columns are retained here. |
+
+**URL Enrichment - Virus Total Report - Incident Triggered using Log Ingestion API** (Recommended)
 
 Deploy this playbook and attach it to an **automation rule** to ensure it runs automatically whenever an incident is created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger-logingestionapi%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger-logingestionapi%2Fazuredeploy.json)
+
+**URL Enrichment - Virus Total Report - Alert Triggered using Log Ingestion API**
+
+Deploy this playbook to process alert URL entities. Attach it to an **automation rule** and ensure the analytics rule maps the URL entity.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger-logingestionapi%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger-logingestionapi%2Fazuredeploy.json)
+
+Provide the following values during deployment:
+
+- **Workspace Name**: Name of the Log Analytics workspace. The workspace must be in the deployment resource group.
+- **Workspace Resource ID**: Full Azure resource ID of that workspace.
+- **Workspace Location**: Azure region of that workspace; the DCE and DCR are created in this region.
+- **Data Collection Endpoint Name**: Name for the DCE. The default is `dce-VirusTotalURLReport`.
+- **Data Collection Rule Name**: Name for the DCR. The default is `dcr-VirusTotalURLReport`.
+
+### Connector-based playbooks
+
+The following variants use the existing connector-based ingestion implementation.
+
+**Deploy with Incident Trigger**
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Fincident-trigger%2Fazuredeploy.json)
 
 **Deploy with Alert Trigger**
 
 Deploy this playbook to run manually on alerts or attach it to an **analytics rule** to execute automatically when an alert is generated.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalURLReport%2Falert-trigger%2Fazuredeploy.json)
 
 ## Post Deployment Instructions
 
 **1. Authorize Connections**
 
-After deployment, authorize all connections:
+After deployment, authorize the Microsoft Sentinel and VirusTotal connections. Logs ingestion uses the playbook's managed identity and does not require a separate API connection authorization:
 
 1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
@@ -46,9 +91,9 @@ This playbook uses a managed identity, which must have the Microsoft Sentinel Re
 6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'.
 7. Click Save to assign the role.
 
-**3. Only for Alert Triggered Playbooks - Assign the Log Analytics Reader Role to Playbook**
+**3. Assign the Log Analytics Reader Role to Playbook**
 
-Alert triggered playbooks need to read data from Log Analytics workspace, assign the Log Analytics Reader role to its managed identity:
+Assign the Log Analytics Reader role to both Logs Ingestion API playbooks. For the connector-based playbooks, this role is required only by the alert-triggered variant:
 
 1. Go to the Azure portal and navigate to your Log Analytics Workspace.
 2. In the left menu, select **Access control (IAM)**.

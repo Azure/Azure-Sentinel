@@ -1,7 +1,7 @@
 id: 50f0cdfb-8b01-4eca-823d-2bbe6b8a5b95
 name: '[Anomaly] Anomalous Increase in DNS activity by clients (ASIM DNS Solution)'
 description: |
-  'Checks for an anomalous increase in DNS activity per client in the last 24 hours as compared to the last 14 days. Please note: To enhance performance, this query uses summarized data if available.'
+  'Checks for an anomalous increase in DNS activity per client in the last 24 hours as compared to the last 14 days. Please note: To enhance performance, this query uses summarized data if available. The Hunting query also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and configured before you use this Hunting query.'
 tags:
   - Schema: ASimDns
     SchemaVersion: 0.1.6
@@ -27,7 +27,8 @@ query: |
   let maxSummarizedTime = toscalar (
     union isfuzzy=true 
         (
-        DNS_Summarized_Logs_ip_CL 
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL") 
         | where EventTime_t >= min_t
         | summarize max_TimeGenerated=max(EventTime_t)
         | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)
@@ -41,7 +42,8 @@ query: |
   let summarizationexist = materialize(
     union isfuzzy=true 
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > ago(1d) 
         | project v = int(2)
         ),
@@ -93,7 +95,8 @@ query: |
         | project-away exists, maxv, sum*
         ),
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)
         | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
         );
@@ -116,4 +119,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
-version: 1.0.0
+version: 1.0.1

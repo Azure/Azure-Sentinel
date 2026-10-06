@@ -1,0 +1,50 @@
+id: cdfc54c4-ea78-4008-9b50-da7e886bd8e2
+name: Microsoft Teams Calls and Impersonation-Style Calls by Hour of Day
+description: |
+  This query compares all Microsoft Teams calls against impersonation-style calls across the 24 hours of the day in UTC.
+description-detailed: |
+  This query counts distinct Microsoft Teams calls by their starting hour of day in UTC over the last 30 days, using Advanced hunting in Microsoft Defender XDR, and plots two series side by side: every call, and only those where a participant's display name or address impersonates IT support, helpdesk, security or account maintenance, or where the participant is calling from a throwaway .onmicrosoft.com tenant. All 24 hours are returned in order so quiet hours stay visible. Comparing the two series is the point: normal calling follows the working day, whereas social-engineering calls cluster when the real helpdesk is unavailable and the user cannot verify the request through a colleague. An hour with few total calls but a high share of impersonation-style calls is far more interesting than the busiest hour of the day.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query compares all Microsoft Teams calls with impersonation-style calls by starting hour of day (UTC) over the
+  //last 30 days, returning all 24 hours so quiet hours stay visible. Normal calling tracks the working day; social
+  //engineering calls cluster when the real helpdesk is closed, so an hour with few calls but a high impersonation
+  //share matters more than the busiest hour.
+  //Background: Microsoft Threat Intelligence, "Impersonating IT support: how threat actors turn a remote session into
+  //enterprise-wide access" (2 September 2026)
+  //https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/
+  let suspRegex = @"(?i)help ?desk|helpdesk|it ?support|service ?desk|sys ?admin|administrator|security|microsoft|google|apple|amazon|paypal|support|update|verif|account|password|mfa|maintenance";
+  let CallStarts = CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "CallParticipantDetail"
+      | extend R = parse_json(RawEventData)
+      | extend CallId = tostring(R.CallId), JoinTime = todatetime(R.JoinTime), Attendees = R.Attendees
+      | where isnotempty(CallId) and isnotempty(JoinTime)
+      | summarize CallStart = min(JoinTime), Attendees = take_any(Attendees) by CallId;
+  let ImpersonationCalls = CallStarts
+      | mv-expand Attendee = Attendees
+      | extend CallerAddress = tolower(tostring(Attendee.UPN)), CallerName = tostring(Attendee.DisplayName)
+      | extend CallerDomain = tostring(split(CallerAddress, "@")[1])
+      | where CallerName matches regex suspRegex
+           or CallerAddress matches regex suspRegex
+           or CallerDomain endswith ".onmicrosoft.com"
+      | distinct CallId;
+  let ByHour = CallStarts
+      | extend IsImpersonationStyle = CallId in (ImpersonationCalls)
+      | summarize TeamsCalls = count(), ImpersonationStyleCalls = countif(IsImpersonationStyle)
+          by HourUTC = tolong(hourofday(CallStart));
+  range HourUTC from 0 to 23 step 1
+  | join kind=leftouter (ByHour) on HourUTC
+  | extend TeamsCalls = coalesce(TeamsCalls, 0), ImpersonationStyleCalls = coalesce(ImpersonationStyleCalls, 0)
+  | extend HourLabel = strcat(iif(HourUTC < 10, strcat("0", tostring(HourUTC)), tostring(HourUTC)), ":00")
+  | order by HourUTC asc
+  | project ['Hour of Day (UTC)']=HourLabel, ['Teams Calls']=TeamsCalls, ['Impersonation-Style Teams Calls']=ImpersonationStyleCalls
+  | render columnchart
+version: 1.0.0

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimNetworkSessionGigamonVSeries')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Network Session ASIM parser for Gigamon V-Series Application Metadata Intelligence",
+        "category": "ASIM",
+        "FunctionAlias": "ASimNetworkSessionGigamonVSeries",
+        "query": "let parser = (disabled:bool=false) {\n    GigamonV2_CL\n    | where not(disabled)\n    | extend\n        EventStartTime = coalesce(todatetime(start_time), TimeGenerated),\n        EventEndTime = coalesce(todatetime(end_time), todatetime(start_time), TimeGenerated),\n        NetworkProtocol = case(\n            isempty(protocol), \"\",\n            protocol in~ (\"6\", \"TCP\"), \"TCP\",\n            protocol in~ (\"17\", \"UDP\"), \"UDP\",\n            protocol\n        )\n    | project\n        TimeGenerated,\n        EventCount = int(1),\n        EventStartTime,\n        EventEndTime,\n        EventProduct = \"V-Series Application Metadata Intelligence\",\n        EventVendor = \"Gigamon\",\n        EventSchema = \"NetworkSession\",\n        EventSchemaVersion = \"0.2.7\",\n        EventType = \"NetworkSession\",\n        EventResult = \"Success\",\n        Dvc = coalesce(generator, vendor),\n        SrcIpAddr = coalesce(src_ip, src_ipv6),\n        IpAddr = coalesce(src_ip, src_ipv6),\n        DstIpAddr = coalesce(dst_ip, dst_ipv6),\n        Src = coalesce(src_ip, src_ipv6, src_mac),\n        Dst = coalesce(dst_ip, dst_ipv6, dst_mac),\n        SrcPortNumber = toint(src_port),\n        DstPortNumber = toint(dst_port),\n        NetworkProtocol,\n        SrcBytes = tolong(src_bytes),\n        DstBytes = tolong(dst_bytes),\n        SrcPackets = tolong(src_packets),\n        DstPackets = tolong(dst_packets),\n        EventUid = id,\n        Type = \"GigamonV2_CL\"\n};\nparser(disabled=disabled)\n",
+        "version": 1,
+        "functionParameters": "disabled:bool=False"
+      }
+    }
+  ]
+}

@@ -1,0 +1,356 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "PRODAFT USTA - Import Malicious URLs",
+    "description": "Polls the PRODAFT USTA malicious-URL IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Malicious URLs'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids). The watermark query and the upload both use the playbook's managed identity, which needs two roles on the workspace: 'Microsoft Sentinel Contributor' for the Upload STIX Objects call, and 'Log Analytics Reader' for the watermark query - Microsoft Sentinel Contributor does not cover Microsoft.OperationalInsights/workspaces/read.",
+    "prerequisites": [
+      "1. A PRODAFT USTA long-lived API key with access to the Security Intelligence IoC endpoints.",
+      "2. The name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to.",
+      "3. The core 'Threat Intelligence' solution installed from the Content hub (provides the Threat Intelligence blade and the ThreatIntelIndicators table)."
+    ],
+    "postDeployment": [
+      "1. Grant the playbook's system-assigned managed identity TWO roles on the Log Analytics workspace (Access control (IAM) -> Add role assignment; open IAM on the workspace, NOT on the Logic App, otherwise the assignment is scoped to the playbook itself and grants no workspace access): 'Microsoft Sentinel Contributor' for the Upload STIX Objects call, and 'Log Analytics Reader' for the watermark query. Microsoft Sentinel Contributor alone is not sufficient for the query - it grants Microsoft.OperationalInsights/workspaces/*/read, which does not cover the bare Microsoft.OperationalInsights/workspaces/read action the Azure Monitor Logs connection performs, so the run fails with AuthorizationFailed. Both API connections deployed with the playbook authenticate with that same managed identity, so no interactive connection authorization is needed.",
+      "2. Optionally adjust the Recurrence frequency and the LookBackHours parameter."
+    ],
+    "lastUpdateTime": "2026-07-08T00:00:00.000Z",
+    "entities": [ "url", "dnsresolution" ],
+    "tags": [ "ThreatIntelligence" ],
+    "author": { "name": "PRODAFT" },
+    "support": {
+      "name": "PRODAFT",
+      "email": "integration@prodaft.com",
+      "tier": "Partner",
+      "link": "https://www.prodaft.com"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "PRODAFTUstaIoC-ImportMaliciousUrls",
+      "type": "string",
+      "metadata": { "description": "Name of the Logic App playbook." }
+    },
+    "UstaBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://usta.prodaft.com",
+      "metadata": { "description": "PRODAFT USTA API base URL." }
+    },
+    "UstaApiKey": {
+      "type": "securestring",
+      "metadata": { "description": "PRODAFT USTA long-lived API key." }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": { "description": "Name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to." }
+    },
+    "WorkspaceResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": { "description": "Resource group of the workspace. Leave as default if it is in the same resource group as this deployment." }
+    },
+    "LookBackHours": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": { "description": "First-run / fallback look-back window (hours), used only when no PRODAFT USTA indicator has been imported yet (empty watermark). On subsequent runs the fetch window starts from the import watermark instead." }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "SentinelWorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('AzureMonitorLogsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+        "parameterValueSet": {
+          "name": "managedIdentityAuth",
+          "values": {}
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+      ],
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "PRODAFTUstaIoC-ImportMaliciousUrls",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" },
+            "UstaBaseUrl": { "defaultValue": "", "type": "String" },
+            "UstaApiKey": { "type": "SecureString" },
+            "WorkspaceID": { "type": "String" },
+            "WorkspaceName": { "type": "String" },
+            "WorkspaceResourceGroup": { "type": "String" },
+            "SubscriptionId": { "type": "String" },
+            "LookBackHours": { "defaultValue": 2, "type": "Int" }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": { "frequency": "Hour", "interval": 1 },
+              "runtimeConfiguration": { "concurrency": { "runs": 1 } }
+            }
+          },
+          "actions": {
+            "Get_Import_Watermark": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "connection": { "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']" }
+                },
+                "method": "post",
+                "path": "/queryData",
+                "body": "ThreatIntelIndicators | where SourceSystem == 'PRODAFT USTA - Malicious URLs' | summarize MaxCreated = max(Created) | extend StartTime = coalesce(MaxCreated, ago(@{parameters('LookBackHours')}h)) - 5m | project StartTime",
+                "queries": {
+                  "subscriptions": "@parameters('SubscriptionId')",
+                  "resourcegroups": "@parameters('WorkspaceResourceGroup')",
+                  "resourcetype": "Log Analytics Workspace",
+                  "resourcename": "@parameters('WorkspaceName')",
+                  "timerange": "Set in query"
+                },
+                "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT20S" }
+              }
+            },
+            "Initialize_NextUrl": {
+              "type": "InitializeVariable",
+              "runAfter": { "Get_Import_Watermark": [ "Succeeded" ] },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "NextUrl",
+                    "type": "string",
+                    "value": "@{concat(parameters('UstaBaseUrl'), '/api/threat-stream/v4/security-intelligence/ioc/malicious-urls?ordering=created&size=100&start=', encodeUriComponent(formatDateTime(first(body('Get_Import_Watermark')?['value'])?['StartTime'], 'yyyy-MM-ddTHH:mm:ssZ')))}"
+                  }
+                ]
+              }
+            },
+            "Initialize_FetchFailed": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_NextUrl": [ "Succeeded" ] },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FetchFailed",
+                    "type": "boolean",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            "Until_All_Pages_Processed": {
+              "type": "Until",
+              "expression": "@empty(variables('NextUrl'))",
+              "limit": { "count": 1000, "timeout": "PT1H" },
+              "runAfter": { "Initialize_FetchFailed": [ "Succeeded" ] },
+              "actions": {
+                "Fetch_USTA_Page": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "runtimeConfiguration": { "secureData": { "properties": [ "inputs", "outputs" ] } },
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@variables('NextUrl')",
+                    "headers": {
+                      "Accept": "application/json",
+                      "Authorization": "Bearer @{parameters('UstaApiKey')}",
+                      "User-Agent": "Azure-Sentinel-USTA-Integration/1.0"
+                    },
+                    "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT20S" }
+                  }
+                },
+                "Check_Fetch_Response": {
+                  "type": "If",
+                  "runAfter": { "Fetch_USTA_Page": [ "Succeeded", "Failed", "TimedOut" ] },
+                  "expression": {
+                    "and": [
+                      { "equals": [ "@coalesce(outputs('Fetch_USTA_Page')?['statusCode'], 0)", 200 ] }
+                    ]
+                  },
+                  "actions": {
+                    "Update_NextUrl": {
+                      "type": "SetVariable",
+                      "runAfter": {},
+                      "inputs": {
+                        "name": "NextUrl",
+                        "value": "@coalesce(body('Fetch_USTA_Page')?['next'], '')"
+                      }
+                    },
+                    "If_Page_Has_Records": {
+                      "type": "If",
+                      "runAfter": { "Update_NextUrl": [ "Succeeded" ] },
+                      "expression": {
+                        "and": [
+                          { "greater": [ "@length(coalesce(body('Fetch_USTA_Page')?['results'], json('[]')))", 0 ] }
+                        ]
+                      },
+                      "actions": {
+                        "Map_To_STIX": {
+                          "type": "Select",
+                          "runAfter": {},
+                          "inputs": {
+                            "from": "@body('Fetch_USTA_Page')?['results']",
+                            "select": {
+                              "type": "indicator",
+                              "spec_version": "2.1",
+                              "pattern_type": "stix",
+                              "id": "@concat('indicator--', item()?['id'])",
+                              "name": "@item()?['url']",
+                              "description": "@concat('PRODAFT USTA - Malicious URL. Host: ', coalesce(item()?['host'], ''))",
+                              "pattern": "@concat(if(or(startsWith(item()?['url'], 'http://'), startsWith(item()?['url'], 'https://')), concat('[url:value = ''', item()?['url'], ''']'), if(equals(item()?['is_domain'], true), concat('[domain-name:value = ''', item()?['host'], ''']'), concat('[url:value = ''http://', item()?['url'], ''']'))), if(empty(coalesce(item()?['ip_addresses']?[0], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[0]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[0]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[1], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[1]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[1]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[2], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[2]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[2]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[3], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[3]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[3]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[4], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[4]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[4]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[5], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[5]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[5]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[6], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[6]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[6]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[7], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[7]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[7]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[8], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[8]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[8]), ''']')), if(empty(coalesce(item()?['ip_addresses']?[9], '')), '', concat(' OR [', if(contains(string(item()?['ip_addresses']?[9]), ':'), 'ipv6-addr', 'ipv4-addr'), ':value = ''', string(item()?['ip_addresses']?[9]), ''']')))",
+                              "indicator_types": [ "malicious-activity" ],
+                              "labels": "@if(empty(item()?['tags']), json('[\"Malicious\"]'), item()?['tags'])",
+                              "confidence": 85,
+                              "valid_from": "@item()?['valid_from']",
+                              "valid_until": "@item()?['valid_until']",
+                              "created": "@item()?['created']",
+                              "modified": "@utcNow()",
+                              "object_marking_refs": [ "marking-definition--f88d31f6-486f-44da-b317-01333bde0b82" ]
+                            }
+                          }
+                        },
+                        "Upload_STIX_Objects": {
+                          "type": "ApiConnection",
+                          "runAfter": { "Map_To_STIX": [ "Succeeded" ] },
+                          "inputs": {
+                            "host": {
+                              "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" }
+                            },
+                            "method": "post",
+                            "body": {
+                              "stixobjects": "@body('Map_To_STIX')",
+                              "sourcesystem": "PRODAFT USTA - Malicious URLs"
+                            },
+                            "path": "/ThreatIntelligence/@{encodeURIComponent(uriComponent(parameters('WorkspaceID')))}/UploadStixObjects/",
+                            "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT20S" }
+                          }
+                        }
+                      },
+                      "else": { "actions": {} }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Mark_Fetch_Failed": {
+                        "type": "SetVariable",
+                        "runAfter": {},
+                        "inputs": {
+                          "name": "FetchFailed",
+                          "value": true
+                        }
+                      },
+                      "Stop_Paging": {
+                        "type": "SetVariable",
+                        "runAfter": { "Mark_Fetch_Failed": [ "Succeeded" ] },
+                        "inputs": {
+                          "name": "NextUrl",
+                          "value": ""
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Fail_If_Fetch_Failed": {
+              "type": "If",
+              "runAfter": { "Until_All_Pages_Processed": [ "Succeeded" ] },
+              "expression": {
+                "and": [
+                  { "equals": [ "@variables('FetchFailed')", true ] }
+                ]
+              },
+              "actions": {
+                "Terminate_Run_As_Failed": {
+                  "type": "Terminate",
+                  "runAfter": {},
+                  "inputs": {
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "UstaFetchFailed",
+                      "message": "The 'Fetch USTA Page' request did not return HTTP 200 (for example, HTTP 403 when the USTA API key lacks the required Security Intelligence IoC permissions). Failing the run so the error is not silently reported as success. Verify the USTA API key permissions and re-run."
+                    }
+                  }
+                }
+              },
+              "else": { "actions": {} }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              }
+            }
+          },
+          "UstaBaseUrl": { "value": "[parameters('UstaBaseUrl')]" },
+          "UstaApiKey": { "value": "[parameters('UstaApiKey')]" },
+          "WorkspaceID": { "value": "[reference(variables('SentinelWorkspaceResourceId'), '2025-02-01').customerId]" },
+          "WorkspaceName": { "value": "[parameters('WorkspaceName')]" },
+          "WorkspaceResourceGroup": { "value": "[parameters('WorkspaceResourceGroup')]" },
+          "SubscriptionId": { "value": "[subscription().subscriptionId]" },
+          "LookBackHours": { "value": "[parameters('LookBackHours')]" }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "playbookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]"
+    }
+  }
+}
