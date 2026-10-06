@@ -29,9 +29,10 @@ After deployment:
    on the workspace, subject to your RBAC policy). The Sentinel API connection
    uses managed identity authentication, matching the repository's
    [incident-trigger template](../.template/incident-trigger/azuredeploy.json).
-2. Grant Sentinel the required playbook resource-group permissions and associate
-   the playbook with an incident automation rule. Follow
-   [Sentinel playbook permissions](https://learn.microsoft.com/en-us/azure/sentinel/automate-responses-with-playbooks).
+2. Grant the Microsoft Sentinel service account the Microsoft Sentinel Automation
+   Contributor role on the playbook resource group and associate the playbook
+   with an incident automation rule. Follow
+   [Sentinel playbook permissions](https://learn.microsoft.com/azure/sentinel/automation/automate-responses-with-playbooks#extra-permissions-required-for-microsoft-sentinel-to-run-playbooks).
 3. Verify the trigger/connection in the designer, enable the workflow and run it
    on a test incident before enabling the automation rule.
 4. Restrict rule scope and the IP cap before production use. Each IP uses one
