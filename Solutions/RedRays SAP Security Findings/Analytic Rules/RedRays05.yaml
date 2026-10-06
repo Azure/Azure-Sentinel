@@ -1,0 +1,63 @@
+id: 708b461c-40b0-571a-8ec5-a3791dce23a4
+name: RedRays - Profile Parameters
+description: Alerts on new or materially changed, actionable profile parameter checks from RedRays. Checks marked
+  VULNERABLE raise Medium severity alerts under the integration's policy. Initial findings raise alerts only if
+  you enable baseline alerting in RedRays. Records outside the one-day query window do not trigger this rule.
+severity: Medium
+requiredDataConnectors:
+- connectorId: RedRaysSAPSecurityFindings
+  dataTypes:
+  - RedRaysProfileChecks_CL
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+query: 'let observations = RedRaysProfileChecks_CL
+
+  | where TimeGenerated >= ago(1d)
+
+  | extend ArrivedAt = ingestion_time()
+
+  | summarize arg_min(ArrivedAt, *) by EventId;
+
+  let candidates = observations
+
+  | where IsAlertCandidate == true and ArrivedAt > ago(15m)
+
+  | project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt
+
+  | summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;
+
+  observations
+
+  | summarize arg_max(Revision, *) by FindingKey
+
+  | where IsActionable == true
+
+  | where SourceStatus == "VULNERABLE"
+
+  | join kind=inner candidates on FindingKey, AlertFingerprint
+
+  | extend EventId = AlertEventId'
+version: 1.0.0
+kind: Scheduled
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: Selected
+    groupByCustomDetails:
+    - FindingKey
+customDetails:
+  FindingKey: FindingKey
+  EventId: EventId
+  Module: Module
+  SourceStatus: SourceStatus
+  SourceSeverity: SourceSeverity
+  SourceUrl: SourceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'RedRays: {{Title}}'
