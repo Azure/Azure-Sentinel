@@ -1103,7 +1103,7 @@ try
         $isWatchListInsideOfWorkbooksFolder = $false
     }
 
-    ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    ./Tools/Create-Azure-Sentinel-Solution/V4/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     Write-Host "packageCreationPath $packageCreationPath"
