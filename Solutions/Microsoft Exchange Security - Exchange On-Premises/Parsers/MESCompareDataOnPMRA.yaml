@@ -1,8 +1,8 @@
 id: 0a0f4ea0-6b94-4420-892e-41ca985f2f01
 Function:
   Title: Parser for MRA Configuration Data Comparison On-Premises
-  Version: '1.0.0'
-  LastUpdated: '2024-08-30'
+  Version: '1.0.1'
+  LastUpdated: '2026-10-07'
 Category: Microsoft Sentinel Parser
 FunctionName: MESCompareDataOnPMRA
 FunctionAlias: MESCompareDataOnPMRA
@@ -36,8 +36,8 @@ FunctionParams:
     Description: List of actors to exclude. Default value is "dynamic('')".
     Default: dynamic('')
 FunctionQuery: |
-  // Version:         1.0.0
-  // Last Updated:    30/08/2024
+  // Version:         1.0.1
+  // Last Updated:    07/10/2026
   //  
   // DESCRIPTION:
   // This parser is used to compare the data of a specific section of the Exchange Online Configuration. It will compare the data of a specific section between two dates and return the differences between them.
@@ -66,7 +66,7 @@ FunctionQuery: |
   // Parameters definition
   let _SectionCompare = SectionCompare;
   let _EnvList =EnvList;
-  let _TypeEnv = TypeEnv;
+  let _TypeEnv = iff(isnull(TypeEnv) or isempty(TypeEnv), "On-Premises", TypeEnv);
   let _CurrentRole =CurrentRole;
   let _ExclusionsAcct = ExclusionsAcct;
   let _DateCompare = DateCompare;
@@ -113,7 +113,9 @@ FunctionQuery: |
       ;
   let i=0;
   let allDataRange = 
-      ESIExchangeConfig_CL
+      union isfuzzy=true withsource=TableName ESIExchangeConfig_CL, ESIAPIExchangeOnPremisesConfig_CL, ESIExchangeOnlineConfig_CL, ESIAPIExchangeOnlineConfig_CL
+      | extend Source = iff(TableName contains "Online", "Online", "On-Premises")
+      | where _TypeEnv == "All" or Source == _TypeEnv
       | where TimeGenerated between (_DateCompareB .. _CurrentDateB)
       | where ESIEnvironment_s == _EnvList
       | where Section_s == "MRA"
