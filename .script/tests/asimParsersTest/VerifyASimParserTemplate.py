@@ -12,7 +12,7 @@
 # 6.  Parser.Version - must be present and in X.X.X format
 # 7.  Parser.LastUpdated - must be present and in "Mon DD, YYYY" format (e.g. Jun 29, 2024)
 # 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
-# 9.  Normalization.Version - must match the expected version for the schema in SCHEMA_INFO
+# 9.  Normalization.Version - must use X.X.X format and match the expected schema version
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
@@ -153,7 +153,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - Parser.Version is present and in X.X.X format
     - Parser.LastUpdated is present and in 'Mon DD, YYYY' format
     - Normalization.Schema matches a known ASIM schema name
-    - Normalization.Version matches the expected schema version
+    - Normalization.Version uses X.X.X format and matches the expected schema version
     - References include correct schema-specific and ASIM doc links
     - ParserName follows the naming convention <FileType><Schema>...
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
@@ -262,15 +262,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     else:
         results.append((f'{RED}Schema{RESET}', f'{RED}ASIM schema name {info['SchemaName']} not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
-    # Check if Schema Version exists in yaml_file's 'Normalization'->'Schema' and matches with our SchemaInfo
+    # Check if Schema Version exists, matches the X.X.X format, and matches our SchemaInfo
     if schemaVersion:
-        for info in SCHEMA_INFO:
-            if schema == info.get('SchemaName'):
-                if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
-                    results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
-                    break
-                else:
-                    results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
+        if not re.match(r'^\d+\.\d+\.\d+$', schemaVersion):
+            results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}The ASIM schema version should be in a three-digit format, e.g., 0.1.0{RESET}', f'{RED}Fail{RESET}'))
+        else:
+            for info in SCHEMA_INFO:
+                if schema == info.get('SchemaName'):
+                    if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
+                        results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
+                        break
+                    else:
+                        results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}Version{RESET}', f'{RED}ASIM schema {schema} version not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
 
