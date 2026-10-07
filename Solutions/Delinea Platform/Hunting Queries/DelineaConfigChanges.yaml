@@ -1,0 +1,44 @@
+id: 7adfee87-8c63-4625-a2db-c6971a3233b6
+name: Delinea - Configuration changes
+description: |
+  Threshold-free audit trail of state-changing modifications to Delinea platform configuration over the
+  lookback window - authentication profiles, security / access policies, SSO or identity-provider
+  (SAML / OIDC / federation) settings, IP range / restriction rules, integration / webhook / connector
+  settings, and role / permission changes. Read-only "viewed" events are excluded so only add / update /
+  delete / enable / disable actions remain. The matching analytic rule only fires on its own schedule;
+  this query lets an analyst review the full change history and inspect the FieldChanges before/after.
+  Tune 'configPattern' to your tenant's event taxonomy.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1556
+  - T1484
+  - T1098
+query: |
+  let lookback = 7d;
+  let configPattern = @"(?i)policy|profile|authentication|\bsso\b|saml|oidc|oauth|federation|identityprovider|\bidp\b|iprange|iprestriction|webhook|integration|connector|setting|configuration|\brole\b|permission";
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | extend d = parse_json(RawData)
+  | extend EventName = tostring(d.eventType.name), Msg = tostring(d.displayMessage),
+           Target = tostring(d.target.displayName), SrcIP = tostring(d.source.host.network.ipAddress),
+           FieldChanges = tostring(d.fieldChanges)
+  | where (EventName matches regex configPattern or Msg matches regex configPattern)
+      and EventName !has "Viewed" and Msg !has "viewed"
+  | project TimeGenerated, User, Service, EventName, Target, Msg, FieldChanges, SrcIP
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.0.0

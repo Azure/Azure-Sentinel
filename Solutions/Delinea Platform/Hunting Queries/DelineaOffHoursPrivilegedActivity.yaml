@@ -1,0 +1,42 @@
+id: 4c68acd6-286e-4f8c-ac4e-606a41984957
+name: Delinea - Off-hours privileged activity
+description: |
+  Surfaces privileged-activity events (Level == "PrivilegedActivity") that occur outside normal business
+  hours - before 'bizStartHourUtc', after 'bizEndHourUtc', or on a weekend - over the lookback window,
+  with no alerting threshold applied. Privileged operations such as secret access or configuration changes
+  performed at unusual times can indicate a compromised account, an attacker operating in a different time
+  zone, or insider activity outside oversight. Tune the business-hours window (UTC) to your operating
+  region.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1555
+  - T1212
+query: |
+  let lookback = 7d;
+  let bizStartHourUtc = 7;
+  let bizEndHourUtc = 19;
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | where Level == "PrivilegedActivity"
+  | extend d = parse_json(RawData)
+  | extend EventName = tostring(d.eventType.name), Msg = tostring(d.displayMessage),
+           SrcIP = tostring(d.source.host.network.ipAddress)
+  | extend HourUtc = datetime_part("hour", TimeGenerated), Dow = dayofweek(TimeGenerated)
+  | where HourUtc < bizStartHourUtc or HourUtc >= bizEndHourUtc or Dow == 0d or Dow == 6d
+  | project TimeGenerated, HourUtc, User, Service, EventName, SecretId, Msg, SrcIP
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.0.1

@@ -1,7 +1,12 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.23
+
+- (2026-10-07) Add the Zscaler ZPA Authentication filtering parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
+
 ## Version 0.3.22
-- (2026-10-01) Add the Zscaler ZPA Authentication filtering parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
+
+- (2026-10-05) Add the CyberArk Audit Authentication filtering parser. - [PR #15262](https://github.com/Azure/Azure-Sentinel/pull/15262)
 
 ## Version 0.3.21
 
@@ -9,19 +14,19 @@
 
 ## Version 0.3.20
 
-- (2026-09-25) Add the Aruba Networks ClearPass Authentication filtering parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
+- (2026-09-25) Add the Aruba Networks ClearPass Authentication filtering parser. - [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
 
 ## Version 0.3.19
 
-- (2026-09-24) Add the Oracle OCI Authentication filtering parser. [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
+- (2026-09-24) Add the Oracle OCI Authentication filtering parser. - [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
 
 ## Version 0.3.18
 
-- (2026-09-17) Add the Wiz Cloud Authentication filtering parser. [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+- (2026-09-17) Add the Wiz Cloud Authentication filtering parser. - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
 
 ## Version 0.3.17
 
-- (2026-09-14) Add the Alibaba Cloud ActionTrail Authentication filtering parser.  - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
+- (2026-09-14) Add the Alibaba Cloud ActionTrail Authentication filtering parser. - [PR #15120](https://github.com/Azure/Azure-Sentinel/pull/15120)
 
 ## Version 0.3.16
 
