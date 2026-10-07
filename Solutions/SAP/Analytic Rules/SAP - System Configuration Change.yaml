@@ -1,0 +1,79 @@
+id: f4da8e9d-3515-4a2a-8cf0-43334fa29d91
+kind: Scheduled
+name: SAP - System Configuration Change
+description: |
+  Identifies changes for system configuration.
+
+  Source Action:  Adapt system change options or software components modifcation using SE06 transaction code.
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1dt12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - DefenseEvasion
+  - Persistence
+relevantTechniques: []
+query: |
+  // Audit Log Classes - System Change Configuration
+  // !!!IMPORTANT!!!
+  // please make sure "Lookup data from the last" parameter is greater than a full user master data update cycle
+  // please keep "Lookup data from the last" to be 7 days to allow coverage of user master data required
+  // actual lookback is set by setting TimeAgo
+  let TimeAgo= 1h;
+  // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+  let SelectedSystemRoles =  dynamic(["All System Roles"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  // here you can exclude system users which are OK to perform this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'SystemConfigOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['SystemConfigOK']); // can also do dynamic(['SystemConfigOK','SAP_ALL'])
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  let AuditClasses = dynamic(['EU1']); // Relevant message
+  SAPAuditLog
+  | where TimeGenerated > ago(TimeAgo)
+  | where MessageID in (AuditClasses)
+  | where SystemID in (SelectedSystems)
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | project
+  // Details
+  TimeGenerated,Instance, ClientID ,SystemID, User, TransactionCode, SoftwareComponent = Variable1, NewModifiabilityStatus = Variable2, MessageText,
+  Email, TerminalIPv6, Host
+  | extend AlertRuleUniqueName = 'systemconfigurationchange'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

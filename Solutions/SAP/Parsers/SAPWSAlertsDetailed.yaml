@@ -1,0 +1,39 @@
+Contentkind: Function
+Description: SAPWSAlertsDetailed
+Function:
+  Title: SAPWSAlertsDetailed
+  Version: 3.3.0
+  LastUpdated: '2025-02-16'
+Category: SAPWorkspaceManagement
+FunctionName: SAPWSAlertsDetailed
+FunctionQuery: |
+  let AlertsWithEntities= SecurityAlert
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | project ExtendedProperties, TimeGenerated, SystemAlertId, Entities, DisplayName, StartTime, Tactics=parse_csv(replace_string(Tactics," ",""))
+  | extend ExtendedProperties = parse_json(ExtendedProperties)
+  | extend AnalyticRuleId= tostring(todynamic(replace_regex(tostring(ExtendedProperties["Analytic Rule Ids"]), "\\r", ""))[0])
+  | extend AnalyticRuleName= tostring(ExtendedProperties["Analytic Rule Name"])
+  | extend AnalyticsTemplateId= tostring(ExtendedProperties["Analytics Template Id"])
+  | extend BagOfEntities= tostring(ExtendedProperties.Query), SystemAlertId
+  | extend BagOfEntities= tostring(split(BagOfEntities, "'",1)[0])
+  | extend BagOfEntities = todynamic(zlib_decompress_from_base64_string(BagOfEntities))
+  // | evaluate bag_unpack(BagOfEntities, ignoredProperties= dynamic(["TimeGenerated"]), columnsConflict= "keep_source")
+  | mv-expand CustomDetails= parse_json(ExtendedProperties.["Custom Details"])
+  | mv-expand Entities = parse_json(Entities)
+  | project-away ExtendedProperties
+  | extend CustomDetailsReplaced = replace_regex(tostring(CustomDetails), "\\r", ""), AlertDisplayName= tostring(DisplayName), Entities, SystemAlertId, AnalyticRuleName
+  | project-rename AlertStartTime = StartTime
+  | extend SAP_User = tostring(parse_json(tostring(parse_json(CustomDetailsReplaced).SAP_User))[0])
+  | extend Name= parse_json(tostring(Entities.Name))
+  | extend ADAccountT= tostring(iff(Entities.Type == "account", Name, ""))
+  | extend Address= tostring(parse_json(tostring(Entities.Address)))
+  | extend IPAddressT= tostring(iff(Entities.Type == "ip", Address, ""))
+  | extend SAPSystemT= tostring(iff(Entities.Type == "cloud-application", Name, ""))
+  | project-away CustomDetailsReplaced, Entities, Name
+  | summarize take_any(*), ADAccount= take_anyif(ADAccountT, isnotempty(ADAccountT)), IPAddress=take_anyif(IPAddressT, isnotempty( IPAddressT)), SAPSystem= take_anyif(SAPSystemT, isnotempty( SAPSystemT))
+  by SystemAlertId
+  | project-away ADAccountT, IPAddressT, SAPSystemT, CustomDetails
+  | extend AlertRuleUniqueName= column_ifexists("AlertRuleUniqueName","")
+  | project-reorder AnalyticRuleName
+  | lookup (SAPWSAlertRuleMetaData | project AnalyticsTemplateId, RecommendedConfiguration) on AnalyticsTemplateId;
+  AlertsWithEntities

@@ -1,0 +1,22 @@
+Contentkind: Function
+Description: SAPWSIncidentsDetailed
+Function:
+  Title: SAPWSIncidentsDetailed
+  Version: 3.0.0
+  LastUpdated: '2023-11-17'
+Category: SAPWorkspaceManagement
+FunctionName: SAPWSIncidentsDetailed
+FunctionQuery: |
+  let DetailedIncidents= SecurityIncident
+  | summarize arg_max(TimeGenerated, *) by IncidentNumber
+  | project-away TenantId, IncidentName, RelatedAnalyticRuleIds
+  | mv-expand AlertIds| extend AlertIds = tostring(AlertIds)
+  | join kind= fullouter
+  SAPWSAlertsDetailed
+  on $left.AlertIds == $right.SystemAlertId
+  | extend IsPrivateIP= ipv4_is_private(IPAddress)
+  | extend Owner = todynamic(Owner.assignedTo)
+  | extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0]))
+  | extend Tactics = set_union(todynamic(AdditionalData.tactics), todynamic(Tactics))
+  | project-away AdditionalData;
+  DetailedIncidents
