@@ -1,0 +1,130 @@
+{
+  "name": "QCryptonPQCScannerCCPDefinition",
+  "apiVersion": "2025-03-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "QCryptonPQCScannerCCPDefinition",
+      "title": "QCrypton PQC Scanner (via Codeless Connector Framework)",
+      "publisher": "QCrypton, Inc.",
+      "descriptionMarkdown": "The [QCrypton PQC Scanner](https://www.qcrypton.com/) data connector provides the capability to ingest post-quantum cryptography readiness findings from your Azure environment into Microsoft Sentinel through the QCrypton API. Findings include Key Vault key posture (RSA/ECC vs. PQ-hybrid), TLS certificate signature algorithms on public endpoints, Storage Account and App Service TLS configuration, and CMK provenance.",
+      "graphQueries": [
+        {
+          "metricName": "Total PQ readiness findings received",
+          "legend": "PQReadiness_CL",
+          "baseQuery": "PQReadiness_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All quantum-vulnerable findings in the last 24h",
+          "query": "PQReadiness_CL\n| where TimeGenerated > ago(24h)\n| where QuantumPosture == 'vulnerable'\n| project TimeGenerated, ResourceName, AssetKind, Algorithm, PostureReason, RiskScore\n| order by RiskScore desc"
+        },
+        {
+          "description": "Vulnerable Key Vault keys grouped by subscription",
+          "query": "PQReadiness_CL\n| where AssetKind == 'kv-key' and QuantumPosture == 'vulnerable'\n| summarize count() by SubscriptionId, Algorithm"
+        },
+        {
+          "description": "TLS certs expiring after 2030 still using classical signatures",
+          "query": "PQReadiness_CL\n| where AssetKind in ('tls-cert', 'kv-cert') and QuantumPosture == 'vulnerable'\n| where ExpiresOn > datetime(2030-01-01)\n| project ResourceName, AssetIdentifier, SignatureAlgorithm, ExpiresOn, RiskScore"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "PQReadiness_CL",
+          "lastDataReceivedQuery": "PQReadiness_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "QCrypton API Key",
+            "description": "A QCrypton PQC Scanner API key is required. Obtain one from the [QCrypton Portal](https://portal.qcrypton.com)."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect QCrypton PQC Scanner to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This connector polls the QCrypton PQC Scanner API to retrieve post-quantum cryptography readiness findings and ingest them into the **PQReadiness_CL** table in your Log Analytics workspace."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. API Key\nObtain your QCrypton API key from the [QCrypton Portal](https://portal.qcrypton.com). Navigate to **Settings > API Keys** and generate a key with read access to scan findings."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. API Server URL\nEnter the base URL of your QCrypton API server. The default is `https://api.qcrypton.com`. If you use a dedicated or regional instance, enter the URL provided by QCrypton."
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Key",
+                "placeholder": "Enter your QCrypton API key",
+                "type": "password",
+                "name": "apiKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Server URL",
+                "placeholder": "https://api.qcrypton.com",
+                "type": "text",
+                "name": "apiServerUrl",
+                "description": "Enter the QCrypton API base URL. Do not include a trailing slash or path.",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
