@@ -65,8 +65,8 @@
       "name": "health",
       "content": {
         "version": "KqlItem/1.0",
-        "title": "Export health",
-        "query": "RedRaysExportHealth_CL\n| where RecordKind == 'HEARTBEAT'\n| summarize arg_max(TimeGenerated, *) by ProductInstanceId\n| project ProductInstanceId, LastObservation=TimeGenerated, SourceStatus, QueuedCount, PendingCount",
+        "title": "Export health (stale after 60 minutes)",
+        "query": "let maxHeartbeatAge = 60m;\nRedRaysExportHealth_CL\n| where RecordKind == 'HEARTBEAT'\n| summarize arg_max(TimeGenerated, *) by ProductInstanceId\n| extend HeartbeatAge = now() - TimeGenerated\n| extend ExportHealth = iff(HeartbeatAge > maxHeartbeatAge, 'STALE', 'RECENT')\n| project ProductInstanceId, LastObservation=TimeGenerated, HeartbeatAge, ExportHealth, SourceStatus, QueuedCount, PendingCount",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "table",
@@ -86,6 +86,13 @@
         "visualization": "table",
         "timeContextFromParameter": "TimeRange",
         "showExportToExcel": true
+      }
+    },
+    {
+      "type": 1,
+      "name": "health-guidance",
+      "content": {
+        "json": "Export health is operational monitoring, not an ATT&CK detection. Adjust the 60-minute threshold above the export interval and ingestion delay. Only instances with a heartbeat in the selected time range appear; an empty result does not prove that exports are healthy. For notifications, configure a separate Azure Monitor log search alert with an explicit inventory of expected instances."
       }
     }
   ],

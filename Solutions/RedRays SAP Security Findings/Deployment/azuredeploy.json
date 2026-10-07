@@ -32,14 +32,6 @@
     "enableAnalyticsRules": {
       "type": "bool",
       "defaultValue": false
-    },
-    "maxHeartbeatAgeMinutes": {
-      "type": "int",
-      "defaultValue": 60,
-      "minValue": 15,
-      "metadata": {
-        "description": "Set above the configured RedRays export interval and expected ingestion delay."
-      }
     }
   },
   "variables": {
@@ -1253,7 +1245,7 @@
       "name": "[concat(parameters('workspaceName'), '/', variables('tables')[copyIndex()].name)]",
       "copy": {
         "name": "redraysTables",
-        "count": "[length(variables('tables'))]"
+        "count": 8
       },
       "properties": {
         "plan": "Analytics",
@@ -3001,7 +2993,7 @@
       ],
       "properties": {
         "displayName": "RedRays - Password Security",
-        "description": "New or materially changed actionable Password Security findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. Profile parameter severity is an integration policy. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
+        "description": "Identifies new or materially changed actionable password security findings from RedRays. Initial imports alert only when explicitly enabled in RedRays. CredentialAccess / T1110 describes password recovery during an authorized assessment, not evidence of an adversary attack. Backlogs older than the one-day query window remain searchable but do not trigger this rule.",
         "enabled": "[parameters('enableAnalyticsRules')]",
         "severity": "High",
         "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysPasswordFindings_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceSeverity in (\"HIGH\", \"CRITICAL\")\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
@@ -3071,48 +3063,13 @@
               }
             ]
           }
+        ],
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "techniques": [
+          "T1110"
         ]
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2024-03-01",
-      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', guid(resourceGroup().id, parameters('workspaceName'), 'redrays-export-health'))]",
-      "kind": "Scheduled",
-      "condition": "[parameters('deployAnalyticsRules')]",
-      "dependsOn": [
-        "redraysTables"
-      ],
-      "properties": {
-        "displayName": "RedRays - export heartbeat missing",
-        "description": "A previously connected RedRays instance stopped sending scheduled heartbeats. Configure the threshold above its export schedule and expected ingestion delay.",
-        "enabled": "[parameters('enableAnalyticsRules')]",
-        "severity": "Medium",
-        "query": "[concat('RedRaysExportHealth_CL | where RecordKind == \"HEARTBEAT\" | summarize LastSeen=max(TimeGenerated) by ProductInstanceId | where LastSeen < ago(', string(parameters('maxHeartbeatAgeMinutes')), 'm)')]",
-        "queryFrequency": "PT15M",
-        "queryPeriod": "P1D",
-        "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0,
-        "suppressionDuration": "PT1H",
-        "suppressionEnabled": true,
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "lookbackDuration": "PT24H",
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": [
-              "ProductInstanceId"
-            ]
-          }
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "ProductInstanceId": "ProductInstanceId"
-        }
       }
     }
   ],

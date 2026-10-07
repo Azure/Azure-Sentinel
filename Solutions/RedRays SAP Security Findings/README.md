@@ -15,7 +15,7 @@ populate `ABAPAuditLog` or activate Microsoft's built-in SAP audit detections.
 
 ## Set up the integration
 
-The Content Hub package installs a data connector definition, seven analytics rule templates
+The Content Hub package installs a data connector definition, six analytics rule templates
 and a workbook template. You configure the connection and enable the rules after installation.
 The connector guides you through setup; RedRays sends the data. The package does not deploy
 a RedRays server, Azure Function, VM or polling agent.
@@ -40,7 +40,7 @@ a RedRays server, Azure Function, VM or polling agent.
    `RedRaysExportHealth_CL` for `RecordKind == 'HEARTBEAT'`. A successful test means Azure
    accepted the request; the data may take time to appear in queries.
 5. **Enable the content you need.** In Manage solution, create the workbook and your chosen
-   analytics rules. Review the initial findings first. Set the export health threshold above
+   analytics rules. Review the initial findings first. Set the workbook export health threshold above
    your export interval, allowing time for ingestion.
 
 Allow outbound HTTPS from RedRays to Microsoft Entra and the Azure Monitor ingestion endpoint.
@@ -64,9 +64,12 @@ update it in RedRays before it expires. Keep credentials out of the solution pac
 
 Most finding rules select actionable High or Critical findings with `IsAlertCandidate=true`.
 The profile rule selects `SourceStatus=VULNERABLE` and raises Medium severity alerts. These
-rules use the same KQL as the RedRays deployment template: they cover new or materially changed
+rules use the same finding-selection logic as the RedRays deployment template: they cover new or materially changed
 findings, plus baseline findings if you enable baseline alerting. Assessment findings do not
-establish that an attack occurred, so the templates do not assign ATT&CK mappings.
+establish that an attack occurred, and must not be interpreted as observed adversary behavior. The password assessment rule maps
+to CredentialAccess / T1110 (Brute Force), covering authorized password recovery without
+asserting an online or offline sub-technique. The broader assessment templates retain empty
+mappings pending agreement with Microsoft on a valid assessment-content classification.
 
 Finding rules provide Host, IP and URL entity mappings. If source links are relative, configure
 `redRaysPortalUrls` in each rule query, for example `dynamic({"<ProductInstanceId>": "https://redrays.example"})`.
@@ -82,12 +85,13 @@ identifies a finding within a RedRays instance and module. Delivery is at least 
 duplicate incidents remain possible. Records from separate scans may have different identities
 and are not automatically merged.
 
-The export health rule alerts after 60 minutes without a heartbeat by default. It needs at
-least one heartbeat in its one-day query window: it cannot detect an instance that never
-connected or has been silent for longer than a day. Monitor those cases separately. The
-rule creates a separate alert for each missing instance and groups incidents by
-`ProductInstanceId`. The connector's Connected badge uses a two-day heartbeat window and does not confirm that every
-selected module is exporting.
+The workbook flags a previously connected instance as STALE after 60 minutes without a
+heartbeat. Set the threshold above the export interval and expected ingestion delay.
+Only instances with a heartbeat in the selected time range are visible; never-connected
+instances require a separate expected-instance inventory. Heartbeat loss is operational
+monitoring and has no ATT&CK mapping, so it is not packaged as a Sentinel analytics rule.
+For notifications, configure an Azure Monitor log search alert separately. The connector's
+Connected badge uses a two-day heartbeat window and does not confirm every module is exporting.
 
 Finding updates do not close Sentinel incidents automatically. A finding deleted at the
 source is not treated as resolved.
@@ -126,7 +130,16 @@ Building the package does not complete release validation. Maintainers should:
 - Install in a clean Sentinel workspace and check the connector and workbook.
 - Test all six modules, initial and changed findings, retries, multiple RedRays instances,
   disabled modules and delayed ingestion.
-- Create rules from the templates and check incidents, heartbeat alerts and threshold changes.
+- Create rules from the templates and check incidents and workbook heartbeat threshold changes.
 - Test redeployment and upgrades, then capture light and dark workbook previews for the registry.
 - Check the shared logo and workbook registry entries, and update the publish dates for the release.
 - Submit the reviewed sources to Azure-Sentinel and the build package to Partner Center separately.
+
+## Connector architecture and packaged assets
+
+RedRays scheduler -> Microsoft Entra token endpoint -> Azure Monitor Logs Ingestion API -> DCR -> Log Analytics.
+The sender runs in the customer-controlled RedRays backend. There is no Azure Function or
+CCF polling component. Any CCF migration requires an agreed design for this push-based model.
+The connector embeds its SVG for portal rendering; the source is also included as
+`Data Connectors/RedRays.svg`. Light and dark previews are included inside
+`Workbooks/Images/Preview/` as well as the repository workbook gallery.

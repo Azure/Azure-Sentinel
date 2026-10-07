@@ -1,13 +1,13 @@
-id: 699d4ec8-6c5c-5440-8664-df92012636ad
-name: RedRays - SoD
-description: Alerts on new or materially changed, actionable segregation of duties findings from RedRays. Only High
-  or Critical findings are selected. Initial findings raise alerts only if you enable baseline alerting in RedRays.
-  Records outside the one-day query window do not trigger this rule.
-severity: High
+id: 708b461c-40b0-571a-8ec5-a3791dce23a4
+name: RedRays - Profile Parameters
+description: Identifies new or materially changed, actionable profile parameter checks from RedRays. Checks marked
+  VULNERABLE raise Medium severity alerts under the integration's policy. Initial findings raise alerts only if
+  you enable baseline alerting in RedRays. Records outside the one-day query window do not trigger this rule.
+severity: Medium
 requiredDataConnectors:
 - connectorId: RedRaysSAPSecurityFindings
   dataTypes:
-  - RedRaysSoDFindings_CL
+  - RedRaysProfileChecks_CL
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -16,7 +16,7 @@ query: |-
   // Map each ProductInstanceId to its RedRays origin to resolve relative source links.
   // Example: dynamic({"<ProductInstanceId>": "https://redrays.example"})
   let redRaysPortalUrls = dynamic({});
-  let observations = RedRaysSoDFindings_CL
+  let observations = RedRaysProfileChecks_CL
   | where TimeGenerated >= ago(1d)
   | extend ArrivedAt = ingestion_time()
   | summarize arg_min(ArrivedAt, *) by EventId;
@@ -27,7 +27,7 @@ query: |-
   observations
   | summarize arg_max(Revision, *) by FindingKey
   | where IsActionable == true
-  | where SourceSeverity in ("HIGH", "CRITICAL")
+  | where SourceStatus == "VULNERABLE"
   | join kind=inner candidates on FindingKey, AlertFingerprint
   | extend EventId = AlertEventId
   | extend EntityHost = trim_end(@"\.", trim(@"\s+", tostring(Host)))
@@ -46,7 +46,7 @@ query: |-
       and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))
       and not(_entityUrlCandidate matches regex @"[\s\\]"), _entityUrlCandidate, "")
   | project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 tactics: []
 relevantTechniques: []
@@ -72,7 +72,6 @@ customDetails:
   ProductInstanceId: ProductInstanceId
   SystemId: SystemId
   SapClient: SapClient
-  AccountName: AccountName
 alertDetailsOverride:
   alertDisplayNameFormat: 'RedRays: {{Title}}'
 entityMappings:
