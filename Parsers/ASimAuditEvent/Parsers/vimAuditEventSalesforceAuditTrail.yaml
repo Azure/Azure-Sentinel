@@ -165,12 +165,6 @@ ParserQuery: |
           "Sites", "Cloud Resource",
           "Static Resource", "Cloud Resource"
       ];
-      let directory_object_action_regex = @"(^permset|permissionsetgroup|setupentityaccessaudit_(permissionset|profile)|^profile|^createduser|^deleteduser|^activateduser|^deactivateduser|^frozeuser|^unfrozeuser|^unlockeduser|^changed(username|email|password|profile|role)|^resetpassword$|^group(member|membership)|^queue(member|membership)|^team_|^tm2_user)";
-      let policy_rule_action_regex = @"(rule|policy|sharing)|^(changedvalidation|newvalidation|removedvalidation|password(complexity|expiry|lockout|maxinvalid)|sessiontimeout|locksessiondomain|updatesessionsecuritylevel|loginiprange)";
-      let event_log_action_regex = @"(historytrack|historytracking|entity_history|historicaltrending|feed_field_tracked)";
-      let scheduled_task_action_regex = @"^(bulkjobactions|createbulkjobdefinition|datacategorybatchcomplete)$";
-      let cloud_resource_action_regex = @"^(deletesandbox|discardsandbox|sandboxlicensematch(success)?|archivedmasterencryptionkey|changedstaticresource|createnewsalesforcesite|createdstaticresource|deletescratchorg|deletedstaticresource|insertcertificate)$";
-      let service_action_regex = @"(application|connectedapp|ecapp|authprovider|callcenter|credential|oauth|saml|idp|servicechannel|presenceuserconfig|queuerouting|privateconnection|remoteproxy|packagingapp|loginflow)";
       SalesforceAuditTrail
       | where not(disabled)
       | where isnull(starttime)
@@ -186,8 +180,8 @@ ParserQuery: |
       | where array_length(actorusername_has_any) == 0
           or ActorUsername has_any (actorusername_has_any)
       | extend
-          Operation = coalesce(Action, Display, "Salesforce audit event"),
-          Object = coalesce(Section, Action, "Salesforce configuration")
+          Operation = coalesce(Action, Display),
+          Object = coalesce(Section, Action)
       | where array_length(operation_has_any) == 0
           or Operation has_any (operation_has_any)
       | where array_length(object_has_any) == 0
@@ -197,17 +191,88 @@ ParserQuery: |
       | extend ObjectType = case(
           isnotempty(ObjectTypeFromSection), ObjectTypeFromSection,
           isnotempty(Section), "Configuration Atom",
-          ActionKey matches regex directory_object_action_regex,
+          ActionKey startswith_cs "permset"
+              or ActionKey contains_cs "permissionsetgroup"
+              or ActionKey contains_cs "setupentityaccessaudit_permissionset"
+              or ActionKey contains_cs "setupentityaccessaudit_profile"
+              or ActionKey startswith_cs "profile"
+              or ActionKey startswith_cs "createduser"
+              or ActionKey startswith_cs "deleteduser"
+              or ActionKey startswith_cs "activateduser"
+              or ActionKey startswith_cs "deactivateduser"
+              or ActionKey startswith_cs "frozeuser"
+              or ActionKey startswith_cs "unfrozeuser"
+              or ActionKey startswith_cs "unlockeduser"
+              or ActionKey startswith_cs "changedusername"
+              or ActionKey startswith_cs "changedemail"
+              or ActionKey startswith_cs "changedpassword"
+              or ActionKey startswith_cs "changedprofile"
+              or ActionKey startswith_cs "changedrole"
+              or ActionKey == "resetpassword"
+              or ActionKey startswith_cs "groupmember"
+              or ActionKey startswith_cs "groupmembership"
+              or ActionKey startswith_cs "queuemember"
+              or ActionKey startswith_cs "queuemembership"
+              or ActionKey startswith_cs "team_"
+              or ActionKey startswith_cs "tm2_user",
               "Directory Service Object",
-          ActionKey matches regex policy_rule_action_regex,
+          ActionKey contains_cs "rule"
+              or ActionKey contains_cs "policy"
+              or ActionKey contains_cs "sharing"
+              or ActionKey startswith_cs "changedvalidation"
+              or ActionKey startswith_cs "newvalidation"
+              or ActionKey startswith_cs "removedvalidation"
+              or ActionKey startswith_cs "passwordcomplexity"
+              or ActionKey startswith_cs "passwordexpiry"
+              or ActionKey startswith_cs "passwordlockout"
+              or ActionKey startswith_cs "passwordmaxinvalid"
+              or ActionKey startswith_cs "sessiontimeout"
+              or ActionKey startswith_cs "locksessiondomain"
+              or ActionKey startswith_cs "updatesessionsecuritylevel"
+              or ActionKey startswith_cs "loginiprange",
               "Policy Rule",
-          ActionKey matches regex event_log_action_regex,
+          ActionKey contains_cs "historytrack"
+              or ActionKey contains_cs "historytracking"
+              or ActionKey contains_cs "entity_history"
+              or ActionKey contains_cs "historicaltrending"
+              or ActionKey contains_cs "feed_field_tracked",
               "Event Log",
-          ActionKey matches regex scheduled_task_action_regex,
+          ActionKey in (
+              "bulkjobactions",
+              "createbulkjobdefinition",
+              "datacategorybatchcomplete"
+          ),
               "Scheduled Task",
-          ActionKey matches regex cloud_resource_action_regex,
+          ActionKey in (
+              "deletesandbox",
+              "discardsandbox",
+              "sandboxlicensematch",
+              "sandboxlicensematchsuccess",
+              "archivedmasterencryptionkey",
+              "changedstaticresource",
+              "createnewsalesforcesite",
+              "createdstaticresource",
+              "deletescratchorg",
+              "deletedstaticresource",
+              "insertcertificate"
+          ),
               "Cloud Resource",
-          ActionKey matches regex service_action_regex,
+          ActionKey contains_cs "application"
+              or ActionKey contains_cs "connectedapp"
+              or ActionKey contains_cs "ecapp"
+              or ActionKey contains_cs "authprovider"
+              or ActionKey contains_cs "callcenter"
+              or ActionKey contains_cs "credential"
+              or ActionKey contains_cs "oauth"
+              or ActionKey contains_cs "saml"
+              or ActionKey contains_cs "idp"
+              or ActionKey contains_cs "servicechannel"
+              or ActionKey contains_cs "presenceuserconfig"
+              or ActionKey contains_cs "queuerouting"
+              or ActionKey contains_cs "privateconnection"
+              or ActionKey contains_cs "remoteproxy"
+              or ActionKey contains_cs "packagingapp"
+              or ActionKey contains_cs "loginflow",
               "Service",
           "Configuration Atom")
       // This parser does not support srcipaddr_has_any_prefix filtering.
