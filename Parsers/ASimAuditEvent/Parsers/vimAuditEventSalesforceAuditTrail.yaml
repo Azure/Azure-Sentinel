@@ -215,9 +215,6 @@ ParserQuery: |
       | where array_length(srcipaddr_has_any_prefix) == 0
       | where eventresult == "*"
           or eventresult =~ "Success"
-      // This parser does not support newvalue_has_any filtering.
-      // Intentionally fail closed: any non-empty newvalue_has_any input returns 0 rows.
-      | where array_length(newvalue_has_any) == 0
       | extend EventType = case(
           Action has_any ("created", "added", "inserted", "provisioned")
               or Display has_any ("created", "added", "inserted", "provisioned"), "Create",
@@ -246,6 +243,74 @@ ParserQuery: |
           "Set")
       | where array_length(eventtype_in) == 0
           or EventType in~ (eventtype_in)
+      | parse Display with * " from " ParsedOldValue: string " to " ParsedNewValue: string
+      | parse Display with CreatedValue: string " was created"
+      | parse Display with DeletedValue: string " was deleted"
+      | parse Display with * " assigned to " AssignedValue: string
+      | parse Display with * " removed from " RemovedValue: string
+      | extend
+          OldValue = case(
+              isnotempty(ParsedOldValue),
+                  trim(@"\s+", ParsedOldValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Active",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Inactive",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Enabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Disabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Frozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Unfrozen",
+              isnotempty(DeletedValue),
+                  trim(@"\s+", DeletedValue),
+              isnotempty(RemovedValue),
+                  trim(@"\s+", RemovedValue),
+              ""),
+          NewValue = case(
+              isnotempty(ParsedNewValue),
+                  trim(@"\s+", ParsedNewValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Inactive",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Active",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Disabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Enabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Unfrozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Frozen",
+              isnotempty(CreatedValue),
+                  trim(@"\s+", CreatedValue),
+              isnotempty(AssignedValue),
+                  trim(@"\s+", AssignedValue),
+              "")
+      | where array_length(newvalue_has_any) == 0
+          or NewValue has_any (newvalue_has_any)
       | extend EventTime = coalesce(CreatedDate, TimeGenerated)
       | invoke _ASIM_ResolveFQDN('SalesforceDomain')
       | extend
@@ -310,8 +375,10 @@ ParserQuery: |
           AdditionalFields,
           Dst = coalesce(FQDN, tostring(ExtractedHostname)),
           Dvc = "Salesforce Audit Trail",
+          NewValue,
           Object,
           ObjectType,
+          OldValue,
           Operation,
           OriginalObjectType = Section,
           TargetDescription = Display,
@@ -323,7 +390,8 @@ ParserQuery: |
               isnotempty(SalesforceDomain),
               strcat("https://", SalesforceDomain),
               ""),
-          User = ActorUsername
+          User = ActorUsername,
+          Value = NewValue
   };
   parser(
       starttime=starttime,

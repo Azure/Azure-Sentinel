@@ -189,6 +189,72 @@ ParserQuery: |
           Action has_any ("viewed", "read", "downloaded", "exported")
               or Display has_any ("viewed", "read", "downloaded", "exported"), "Read",
           "Set")
+      | parse Display with * " from " ParsedOldValue: string " to " ParsedNewValue: string
+      | parse Display with CreatedValue: string " was created"
+      | parse Display with DeletedValue: string " was deleted"
+      | parse Display with * " assigned to " AssignedValue: string
+      | parse Display with * " removed from " RemovedValue: string
+      | extend
+          OldValue = case(
+              isnotempty(ParsedOldValue),
+                  trim(@"\s+", ParsedOldValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Active",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Inactive",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Enabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Disabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Frozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Unfrozen",
+              isnotempty(DeletedValue),
+                  trim(@"\s+", DeletedValue),
+              isnotempty(RemovedValue),
+                  trim(@"\s+", RemovedValue),
+              ""),
+          NewValue = case(
+              isnotempty(ParsedNewValue),
+                  trim(@"\s+", ParsedNewValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Inactive",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Active",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Disabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Enabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Unfrozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Frozen",
+              isnotempty(CreatedValue),
+                  trim(@"\s+", CreatedValue),
+              isnotempty(AssignedValue),
+                  trim(@"\s+", AssignedValue),
+              "")
       | invoke _ASIM_ResolveFQDN('SalesforceDomain')
       | extend
           EventUid = coalesce(
@@ -252,8 +318,10 @@ ParserQuery: |
           AdditionalFields,
           Dst = coalesce(FQDN, tostring(ExtractedHostname)),
           Dvc = "Salesforce Audit Trail",
+          NewValue,
           Object,
           ObjectType,
+          OldValue,
           Operation,
           OriginalObjectType = Section,
           TargetDescription = Display,
@@ -265,6 +333,7 @@ ParserQuery: |
               isnotempty(SalesforceDomain),
               strcat("https://", SalesforceDomain),
               ""),
-          User = ActorUsername
+          User = ActorUsername,
+          Value = NewValue
   };
   parser(disabled=disabled, pack=pack)
