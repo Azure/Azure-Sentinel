@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.23
+
+- (2026-10-07) Add the Zscaler ZPA Authentication filtering parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
+
 ## Version 0.3.22
 
 - (2026-10-05) Add the CyberArk Audit Authentication filtering parser. - [PR #15262](https://github.com/Azure/Azure-Sentinel/pull/15262)
