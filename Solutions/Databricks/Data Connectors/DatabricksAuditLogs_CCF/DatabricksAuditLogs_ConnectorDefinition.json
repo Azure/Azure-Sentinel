@@ -1,0 +1,183 @@
+{
+  "name": "DatabricksAuditLogs",
+  "apiVersion": "2024-09-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "DatabricksAuditLogs",
+      "title": "Databricks Audit Logs via Amazon S3 (via Codeless Connector Framework)",
+      "publisher": "LevelBlue",
+      "descriptionMarkdown": "Ingests the account and workspace audit logs that [Databricks on AWS](https://docs.databricks.com/aws/en/admin/account-settings/audit-logs) delivers to an Amazon S3 bucket. Microsoft Sentinel polls an Amazon SQS queue for new objects, reads them from S3 with an IAM role it assumes through OpenID Connect, and writes one row per audit event to the **DatabricksAudit_CL** table through a data collection rule. No code runs in your subscription and no AWS access keys are stored.\n\nAzure Databricks is not covered by this connector; it writes to Log Analytics through diagnostic settings.",
+      "graphQueriesTableName": "DatabricksAudit_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total audit events received",
+          "legend": "Databricks audit events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Latest audit events",
+          "query": "{{graphQueriesTableName}}\n| take 20"
+        },
+        {
+          "description": "Failed logins by source IP, last 24 hours",
+          "query": "{{graphQueriesTableName}}\n| where TimeGenerated > ago(24h)\n| where ServiceName == \"accounts\" and ActionName has \"login\" and ResponseStatusCode >= 400\n| summarize Failures = count(), Users = make_set(UserEmail, 20) by SourceIPAddress, WorkspaceId\n| order by Failures desc"
+        },
+        {
+          "description": "Events by service and action, last 7 days",
+          "query": "{{graphQueriesTableName}}\n| where TimeGenerated > ago(7d)\n| summarize Events = count() by ServiceName, ActionName\n| order by Events desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors",
+          "value": null
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Databricks",
+            "description": "A Databricks account on the Premium or Enterprise tier with audit log delivery to Amazon S3 configured (log type AUDIT_LOGS, output format JSON)."
+          },
+          {
+            "name": "AWS",
+            "description": "Permission to create an IAM role and OpenID Connect provider, an SQS queue, and an S3 bucket notification in the account that holds the Databricks delivery bucket."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 1. Databricks: deliver audit logs to S3\nIn the Databricks account console, configure audit log delivery with `log_type` **AUDIT_LOGS**, `output_format` **JSON** and a `delivery_path_prefix`. Databricks writes objects to `<prefix>/workspaceId=<id>/date=<yyyy-mm-dd>/auditlogs_<id>.json`, one JSON object per line. Confirm with `aws s3 ls s3://<bucket>/<prefix>/` that `workspaceId=` folders exist before continuing.\n"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 2. AWS: identity provider, role, queue and notification\nDeploy the two CloudFormation templates from the solution's `Data Connectors/CloudFormationTemplates` folder in the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create), or run `aws/setup-aws.sh` from the companion package.\n\n1. **OIDCWebIdProvider.json**: the OpenID Connect provider for Microsoft Sentinel. Skip it if another Microsoft Sentinel AWS connector already created it in this account.\n2. **DatabricksAuditLogsResources.json**: the IAM role (name must start with `OIDC_`), the SQS queue and dead-letter queue, and the queue policy. Enter the Workspace ID below as the `SentinelWorkspaceId` parameter and the Databricks bucket and prefix as `BucketName` and `DeliveryPathPrefix`.\n3. If the bucket already exists (the usual case, since Databricks writes to it), add an **ObjectCreated** event notification on the bucket to the queue the stack created, filtered on the prefix. The template does this for you only when it creates the bucket.\n\nNote the **Role ARN** and **Queue URL** from the stack outputs.\n"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Workspace ID",
+                "fillWith": [
+                  "WorkspaceId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "OpenID Connect provider URL",
+                "value": "sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Audience",
+                "value": "api://1462b192-27f7-4cb9-8523-0f4ecb54b47e"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### 3. Connect new collectors\nClick **Add new collector**, paste the Role ARN and the Queue URL, and click **Connect**. Rows appear in the table within 5 to 15 minutes of the next object being written to S3. Objects already in the bucket are not read."
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnValue": "properties.roleArn",
+                    "columnName": "Role ARN"
+                  },
+                  {
+                    "columnValue": "properties.sqsUrls[0]",
+                    "columnName": "Queue URL"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "contextPaneType": "DataConnectorsContextPane",
+                "title": "Add new collector",
+                "subtitle": "Databricks audit logs via Amazon S3",
+                "label": "Add new collector",
+                "instructionSteps": [
+                  {
+                    "title": "AWS details",
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Role ARN",
+                          "type": "text",
+                          "name": "roleArn",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Queue URL",
+                          "type": "text",
+                          "name": "queueUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": false
+    }
+  }
+}

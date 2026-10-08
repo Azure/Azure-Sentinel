@@ -1,0 +1,36 @@
+id: 5f3a7c9e-1b4d-4e6f-9a2c-8d0b2f4e6a91
+name: Databricks - User activity from a source IP not seen in the previous 14 days
+description: |
+  Lists users whose Databricks activity in the last day came from a source IP address not seen for that user in the preceding 14 days. New addresses are expected for mobile users and are worth checking when they coincide with token creation, secret reads or admin actions.
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  let lookback = 14d;
+  let recent = 1d;
+  let known = DatabricksAudit_CL
+      | where TimeGenerated between (ago(lookback + recent) .. ago(recent))
+      | where isnotempty(UserEmail) and isnotempty(SourceIPAddress)
+      | summarize by UserEmail, SourceIPAddress;
+  DatabricksAudit_CL
+  | where TimeGenerated > ago(recent)
+  | where isnotempty(UserEmail) and isnotempty(SourceIPAddress)
+  | join kind=leftanti known on UserEmail, SourceIPAddress
+  | summarize Events = count(), Services = make_set(ServiceName, 20), Actions = make_set(ActionName, 30), FirstSeen = min(EventTime), LastSeen = max(EventTime)
+      by UserEmail, SourceIPAddress, WorkspaceId
+  | order by Events desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+version: 1.0.0

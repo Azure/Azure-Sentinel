@@ -1,0 +1,235 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Databricks/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe [Databricks](https://www.databricks.com/) solution for Microsoft Sentinel ingests the account and workspace [audit logs](https://docs.databricks.com/aws/en/admin/account-settings/audit-logs) that Databricks on AWS delivers to an Amazon S3 bucket, using the Codeless Connector Framework and Microsoft Sentinel's Amazon S3 poller. No Function App is required and no AWS access keys are stored; access uses OpenID Connect federation to an IAM role.\n\n**Underlying Microsoft Technologies used:**\n\na. [Codeless Connector Framework](https://learn.microsoft.com/azure/sentinel/create-codeless-connector)\n\nb. [Azure Monitor data collection rules](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview)\n\n**Pre-requisites:**\n\n1. A Databricks account on the Premium or Enterprise tier with audit log delivery to S3 configured (log type AUDIT_LOGS, output format JSON).\n\n2. Rights in the AWS account to deploy the two CloudFormation templates in the solution (OpenID Connect provider; IAM role, SQS queue and queue policy) and to add an S3 event notification to the delivery bucket.\n\nAzure Databricks is not covered; it writes to Log Analytics through diagnostic settings.\n\n**Data Connectors:** 1, **Analytic Rules:** 4, **Hunting Queries:** 3\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Solution installs the data connector for Databricks Audit Logs via Amazon S3 (via Codeless Connector Framework). You can get Databricks Audit Logs via Amazon S3 (via Codeless Connector Framework) data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link1",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - Multiple failed logins from a single IP",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects ten or more failed Databricks login attempts from one source IP address within an hour. Repeated failures from one address against one or several accounts can indicate password guessing or credential stuffing against the workspace or account console."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - Account or workspace admin privilege granted",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects a user or service principal being made a Databricks account admin or workspace admin, or being added to the admins group. Administrative access to Databricks grants control over clusters, data access and secrets and should be rare and expected."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - IP access list or network setting changed",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects creation, modification or deletion of a Databricks IP access list, or a change to the workspace setting that enables IP access lists. Loosening these controls lets a workspace or account console be reached from addresses that were previously blocked."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - Personal access token created with long or no expiry",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects a Databricks personal access token being created with a lifetime longer than 90 days or with no expiry. Long-lived tokens outlive the session controls applied to interactive logins and are a common persistence mechanism after an account compromise."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view."
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - Secret reads outside business hours",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Lists reads of Databricks secrets (getSecret) between 19:00 and 07:00 UTC in the last 7 days, grouped by user and source IP. Secret reads at unusual hours from unusual addresses can indicate credential harvesting from notebooks or jobs. Adjust the hours to the customer's time zone. This hunting query depends on DatabricksAuditLogs data connector (DatabricksAudit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - Notebook exports and large result downloads",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Lists notebook exports and downloads of query or notebook results in the last 7 days, by user. A spike in exports or downloads by one user, or exports from a user who does not normally perform them, can indicate data exfiltration. This hunting query depends on DatabricksAuditLogs data connector (DatabricksAudit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Databricks - User activity from a source IP not seen in the previous 14 days",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Lists users whose Databricks activity in the last day came from a source IP address not seen for that user in the preceding 14 days. New addresses are expected for mobile users and are worth checking when they coincide with token creation, secret reads or admin actions. This hunting query depends on DatabricksAuditLogs data connector (DatabricksAudit_CL Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

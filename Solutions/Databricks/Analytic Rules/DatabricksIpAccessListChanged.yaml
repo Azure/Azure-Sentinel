@@ -1,0 +1,39 @@
+id: c1f7a9d3-6e4b-4a2c-8f1d-5b3e9c0a7d26
+name: Databricks - IP access list or network setting changed
+description: |
+  Detects creation, modification or deletion of a Databricks IP access list, or a change to the workspace setting that enables IP access lists. Loosening these controls lets a workspace or account console be reached from addresses that were previously blocked.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+query: |
+  DatabricksAudit_CL
+  | where (ServiceName == "ipAccessList" and ActionName in ("create", "update", "delete", "replace"))
+      or (ServiceName == "workspace" and ActionName == "workspaceConfEdit" and tostring(RequestParams.workspaceConfKeys) has "enableIpAccessLists")
+      or (ServiceName == "accounts" and ActionName == "accountIpAclsValidationFailed")
+  | where ResponseStatusCode < 400
+  | project EventTime, WorkspaceId, AccountId, UserEmail, SourceIPAddress, ServiceName, ActionName, RequestParams
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+customDetails:
+  Action: ActionName
+  Workspace: WorkspaceId
+version: 1.0.0
+kind: Scheduled

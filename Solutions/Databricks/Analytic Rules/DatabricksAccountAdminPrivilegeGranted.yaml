@@ -1,0 +1,49 @@
+id: 9e2d4c7a-3b1f-4e8d-a6c5-2d9f0b1e7c43
+name: Databricks - Account or workspace admin privilege granted
+description: |
+  Detects a user or service principal being made a Databricks account admin or workspace admin, or being added to the admins group. Administrative access to Databricks grants control over clusters, data access and secrets and should be rare and expected.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1098
+  - T1078.004
+query: |
+  DatabricksAudit_CL
+  | where ServiceName in ("accounts", "accountsAccessControl", "accountsManager")
+  | where ActionName in ("setAdmin", "updateRuleSet", "setAccountAdmin")
+      or (ActionName == "addPrincipalToGroup" and tostring(RequestParams.targetGroupName) =~ "admins")
+  | where ResponseStatusCode < 400
+  | extend TargetUser = coalesce(tostring(RequestParams.targetUserName), tostring(RequestParams.user), tostring(RequestParams.targetUserId))
+  | project EventTime, WorkspaceId, AccountId, UserEmail, SourceIPAddress, ServiceName, ActionName, TargetUser, RequestParams
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUser
+customDetails:
+  Action: ActionName
+  TargetUser: TargetUser
+  Workspace: WorkspaceId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Databricks admin privilege granted by {{UserEmail}} ({{ActionName}})"
+version: 1.0.0
+kind: Scheduled
