@@ -23,3 +23,25 @@ This templates deploy ASIM empty custom unifying parsers which are used as part 
 | RegistryEvent only | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FRegistryEventDeploymentCustomUnifyingParsers.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FRegistryEventDeploymentCustomUnifyingParsers.json) |
 | UserManagement only | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FUserManagementDeploymentCustomUnifyingParsers.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FUserManagementDeploymentCustomUnifyingParsers.json) |
 | WebSession only | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FWebSessionDeploymentCustomUnifyingParsers.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2Fdeploy%2FEmptyCustomUnifyingParsers%2FWebSessionDeploymentCustomUnifyingParsers.json) |
+
+## Verify function parameters
+
+Run `python UpdateFunctionParameters.py` from this directory to verify every
+`Im_{Schema}Custom.json` template against the `ParserParams` in
+`Parsers/ASim{Schema}/Parsers/im{Schema}.yaml` and every
+`ASim_{Schema}Custom.json` template against the `ParserParams` in
+`Parsers/ASim{Schema}/Parsers/ASim{Schema}.yaml`. The command exits with status
+1 when it finds a mismatch. If a canonical parser has no `ParserParams`, the
+corresponding template must omit `functionParameters`.
+
+Pass one or more schema names to check only those templates:
+
+```powershell
+python UpdateFunctionParameters.py WebSession Dns
+```
+
+Add `--update` to replace mismatched `functionParameters` values:
+
+```powershell
+python UpdateFunctionParameters.py --update
+```
