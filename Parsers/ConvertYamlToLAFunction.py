@@ -173,7 +173,6 @@ class Main_Parser(Parser):
         self.parsers = []
         self.secondary_main_name = ''
         self.secondary_main_query = ''
-        self.description = ''
     
     def set_parsers(self, parsers):
         self.parsers = parsers
