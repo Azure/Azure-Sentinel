@@ -17,6 +17,7 @@
 # 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -81,6 +82,9 @@ GREEN = '\033[92m'
 YELLOW = '\033[93m'
 RED = '\033[91m'
 RESET = '\033[0m'  # Reset to default color
+
+OPTIONAL_VIM_PARSER_PARAMS = {'pack'}
+VIM_CONTROL_PARAMS = {'disabled'}
 
 def run():
     """Main function to execute the script logic."""
@@ -158,6 +162,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - ParserName follows the naming convention <FileType><Schema>...
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
     - Sample data CSV file exists locally (ASim parsers only)
+    - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
         Parser_file (dict): Parsed YAML content of the parser file.
@@ -179,6 +184,9 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     schema = normalization.get('Schema')
     schemaVersion = normalization.get('Version')
     references = Parser_file.get('References', [])
+
+    if FileType == 'vim':
+        results.append(validate_vim_parser_params(Parser_file, Union_Parser__file))
 
     # ParserQuery property is the KQL query extracted from the YAML file
     parser_query = Parser_file.get('ParserQuery', '')
@@ -329,6 +337,42 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
         else:
             results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
     return results
+
+def validate_vim_parser_params(parser_file, union_parser_file):
+    parser_params = {
+        parameter.get('Name')
+        for parameter in parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    supported_params = {
+        parameter.get('Name')
+        for parameter in union_parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    parser_params.discard(None)
+    supported_params.discard(None)
+
+    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
+
+    if not missing_params and not unsupported_params:
+        return (
+            ', '.join(sorted(parser_params)),
+            'ParserParams match the parameters supported by the schema union parser',
+            'Pass'
+        )
+
+    differences = []
+    if missing_params:
+        differences.append(f'missing: {", ".join(sorted(missing_params))}')
+    if unsupported_params:
+        differences.append(f'unsupported: {", ".join(sorted(unsupported_params))}')
+
+    return (
+        f'{RED}{", ".join(differences)}{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}Fail{RESET}'
+    )
 
 def filter_yaml_files(modified_files):
     # Take only the YAML files
