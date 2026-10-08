@@ -168,13 +168,12 @@ class Parser:
 
 class Main_Parser(Parser):
     def __init__(self, schema, parameters_file):
-        Parser.__init__(self, schema, parameters_file)
+        Parser.__init__(self, schema, parameters_file, kind="Parser")
         self.parsers_names = []
         self.parsers = []
         self.secondary_main_name = ''
         self.secondary_main_query = ''
         self.description = ''
-        self.kind = "Parser"
     
     def set_parsers(self, parsers):
         self.parsers = parsers
