@@ -2,7 +2,7 @@
 
 ## Version 0.2.27
 
-- (2026-10-08) Corrected the Fortinet FortiGate, CrowdStrike Falcon Host, and Illumio SaaS Core parser disable watchlist keys.
+- (2026-10-08) Corrected the Fortinet FortiGate, CrowdStrike Falcon Host, and Illumio SaaS Core parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
 
 ## Version 0.2.26
 

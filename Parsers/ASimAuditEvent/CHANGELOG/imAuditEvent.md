@@ -2,7 +2,7 @@
 
 ## Version 0.1.11
 
-- (2026-10-08) Corrected the Microsoft Event parser disable watchlist key.
+- (2026-10-08) Corrected the Microsoft Event parser disable watchlist key - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
 
 ## Version 0.1.10
 
