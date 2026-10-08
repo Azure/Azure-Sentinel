@@ -39,6 +39,7 @@ class GTIUploader:
             f"{gti_base_url}/api/v3/private/files/upload_url",
             headers={
                 "x-apikey": api_key,
+                "x-tool": "ms-sentinel-gti",
                 "User-Agent": "azure-sentinel-gti-upload-function/1.0",
             },
             timeout=60,
@@ -67,6 +68,7 @@ class GTIUploader:
             upload_url,
             headers={
                 "x-apikey": api_key,
+                "x-tool": "ms-sentinel-gti",
                 "User-Agent": "azure-sentinel-gti-upload-function/1.0",
             },
             files={"file": (file_name, file_content)},

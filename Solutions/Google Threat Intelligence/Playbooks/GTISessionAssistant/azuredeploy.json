@@ -1,0 +1,1011 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Google Threat Intelligence - Session Assistant",
+    "description": "This playbook lets analysts ask Google Threat Intelligence (GTI) questions directly from a Microsoft Sentinel incident. When an analyst adds an incident comment that starts with '#ask-gti:', the playbook sends the question and the incident context to the GTI Agentspace Session API and posts the answer back to the incident. Follow-up questions on the same incident continue the same multi-turn GTI session, which is tracked with the GTI-Session and GTI-LastProcessed incident tags. The full answer is saved as an HTML page in a private Azure Blob Storage container and shared as a time-limited, read-only SAS link in the incident comment; if saving or linking fails, the answer is posted inline instead.",
+    "prerequisites": [
+      "1. Obtain the Key Vault name and secret name where the GTI (VirusTotal) API key is stored.",
+      "a. Create a Key Vault with a unique name, or use an existing one.",
+      "b. Go to Key Vaults → <your keyvault> → Secrets → Generate/Import, and create a secret that contains the GTI API key.",
+      "c. Note the Key Vault name and the secret name; they are used as the KeyVaultName and KeyVaultSecretName parameters.",
+      "NOTE: Make sure the Permission model in the Access Configuration of the Key Vault is set to 'Azure role-based access control'.",
+      "2. Obtain the Storage Account name where the GTI answer pages will be saved.",
+      "a. Use an existing Azure Storage Account. The blob container is created automatically on first use.",
+      "b. Note the Storage Account name; it is used as the StorageAccountName parameter.",
+      "3. Obtain the Storage Account access key.",
+      "a. Go to Azure Portal → Storage Accounts → <your storage account> → Security + networking → Access keys.",
+      "b. Copy the value of key1 or key2.",
+      "c. Provide it as the StorageAccountKey parameter, preferably as a Key Vault reference in your parameters file. It is required only to generate the time-limited answer link (SAS), which does not support managed identity.",
+      "4. (Optional) Decide whether answer pages should be deleted automatically.",
+      "a. Set the BlobRetentionDays parameter to a value greater than or equal to SASExpiryDays to create a lifecycle rule on the Storage Account.",
+      "NOTE: A Storage Account has a single lifecycle policy, so providing this value replaces any existing policy. Leave it empty to keep answer pages indefinitely."
+    ],
+    "entities": [],
+    "tags": ["GTI", "Session", "Chat", "Incident", "Automation", "AskGTI"],
+    "support": { "tier": "partner" },
+    "author": { "name": "Crest Data" },
+    "postDeployment": [
+      "**a. Grant the Logic App managed identity 'Key Vault Secrets User' on the Key Vault**",
+      "1. In the Azure portal, go to the Key Vault entered as KeyVaultName.",
+      "2. In the left menu, click on Access control (IAM).",
+      "3. Click on Add, then choose Add role assignment.",
+      "4. Select Key Vault Secrets User as the role and click on next.",
+      "5. In Assign access to, select User, group, or service principal.",
+      "6. Click on Add members, type the playbook's name (e.g. GTISessionAssistant), and select it. Now click on Review + assign and then again click on Review + assign.",
+      "Reference link: https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal",
+      "**b. Grant the Logic App managed identity 'Storage Blob Data Contributor' on the Storage Account**",
+      "1. In the Azure portal, go to the Storage Account entered as StorageAccountName.",
+      "2. In the left menu, click on Access control (IAM).",
+      "3. Click on Add, then choose Add role assignment.",
+      "4. Select Storage Blob Data Contributor as the role and click on next.",
+      "5. In Assign access to, select User, group, or service principal.",
+      "6. Click on Add members, type the playbook's name (e.g. GTISessionAssistant), and select it. Now click on Review + assign and then again click on Review + assign.",
+      "Reference link: https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal",
+      "**c. Grant the Logic App managed identity 'Microsoft Sentinel Responder' on the Sentinel workspace**",
+      "1. In the Azure portal, go to the Log Analytics workspace on which Microsoft Sentinel is enabled.",
+      "2. In the left menu, click on Access control (IAM).",
+      "3. Click on Add, then choose Add role assignment.",
+      "4. Select Microsoft Sentinel Responder as the role and click on next.",
+      "5. In Assign access to, select User, group, or service principal.",
+      "6. Click on Add members, type the playbook's name (e.g. GTISessionAssistant), and select it. Now click on Review + assign and then again click on Review + assign.",
+      "Reference link: https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal",
+      "**d. Create an Automation Rule to trigger the playbook**",
+      "1. In Microsoft Sentinel, go to Automation.",
+      "2. Click on Create -> Automation rule.",
+      "3. Give the rule a name, e.g. Trigger GTI Session Assistant on Comment.",
+      "4. Under Trigger, select When incident is updated.",
+      "5. Click Add condition, set it to Updated field -> Comments and value Added, so the rule only fires when a new comment is added to the incident.",
+      "6. Under Actions, select Run playbook and choose Google Threat Intelligence - Session Assistant.",
+      "7. Set the rule order, ensure it's enabled, and click Apply.",
+      "**e. Verify API connections**",
+      "The azuresentinel, keyvault and azureblob connections use the playbook's managed identity and the azureblobkey connection uses the supplied StorageAccountKey, so no interactive sign-in is needed.",
+      "1. Go to your logic app → API connections and open each connection.",
+      "2. If a connection shows as unauthorized, click Edit API connection, then Save, and re-check the role assignments above.",
+      "**f. Ask GTI a question**",
+      "1. Open an incident in Microsoft Sentinel and add a comment in the form '#ask-gti: <your question>'.",
+      "2. The answer is posted back as an incident comment. Follow-up questions on the same incident continue the same GTI session.",
+      "NOTE: The answer link is a bearer token; anyone with the URL can view that page until it expires (SASExpiryDays, default 30 days). Do not set the expiry longer than necessary."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial version",
+        "notes": [
+          "Initial release.",
+          "Ask Google Threat Intelligence questions from a Microsoft Sentinel incident comment using '#ask-gti:'.",
+          "Multi-turn GTI sessions are kept per incident using incident tags, and expired sessions are restarted automatically.",
+          "Answers are saved as an HTML page in Blob Storage and shared as a time-limited SAS link, with an inline fallback if saving or linking fails."
+        ]
+      }
+    ],
+    "lastUpdateTime": "2026-09-24T00:00:00.000Z",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "GTISessionAssistant",
+      "type": "String",
+      "metadata": { "description": "Name for this playbook (Logic App) as it will appear in Azure. Optional - defaults to GTISessionAssistant." }
+    },
+    "KeyVaultName": {
+      "type": "String",
+      "metadata": { "description": "Name of your existing Azure Key Vault that holds the GTI (VirusTotal) API key. Required - this playbook cannot create a Key Vault for you." }
+    },
+    "KeyVaultSecretName": {
+      "defaultValue": "GTIApiKey",
+      "type": "String",
+      "minLength": 1,
+      "metadata": { "description": "Name of the secret inside that Key Vault which contains the GTI (VirusTotal) API key value. Required - a value must be provided. The field is pre-filled with the suggested name GTIApiKey; keep it or enter the actual secret name." }
+    },
+    "StorageAccountName": {
+      "type": "String",
+      "minLength": 3,
+      "maxLength": 24,
+      "metadata": { "description": "Name of your existing Azure Storage account where GTI answer pages will be saved. Required - enter the real storage account name; there is no default." }
+    },
+    "ContainerName": {
+      "defaultValue": "gti-session-answers",
+      "type": "String",
+      "minLength": 3,
+      "maxLength": 63,
+      "metadata": { "description": "Name of the private blob container that will hold the GTI answer pages. Required - a value must be provided. The field is pre-filled with the suggested name gti-session-answers; keep it or enter your own (3-63 characters: lowercase letters, numbers and hyphens). The container is created automatically if it does not already exist." }
+    },
+    "SASExpiryDays": {
+      "defaultValue": 30,
+      "type": "Int",
+      "minValue": 1,
+      "maxValue": 365,
+      "metadata": { "description": "How many days each answer shareable link stays valid before it expires. Required - a value must be provided (1-365). The field is pre-filled with the suggested value 30. The link needs no sign-in to view, so keep this as short as your organization risk tolerance allows." }
+    },
+    "BlobRetentionDays": {
+      "defaultValue": "",
+      "type": "String",
+      "metadata": { "description": "Optional. Number of days after creation (whole number, 1 or more) that each answer page is permanently deleted from the container via a storage lifecycle management rule. Leave EMPTY (default) to keep answer pages indefinitely and not create any rule. Must be greater than or equal to SASExpiryDays (deployment fails otherwise), because deleting a page before its link expires would break the link; a value one day longer (for example 31) is recommended. WARNING: a storage account has a single lifecycle policy and providing a value replaces it, so if the account already has lifecycle rules you need to keep, leave this empty and add the rule manually. Azure evaluates lifecycle rules about once a day, so deletion can lag by up to 24 hours." }
+    },
+    "StorageAccountKey": {
+      "type": "SecureString",
+      "metadata": { "description": "Access key for the storage account named in StorageAccountName. Required - needed only to generate the time-limited answer link (SAS), since that operation does not support managed-identity authentication. Supply this via a Key Vault reference in your parameters file; never enter it directly or as plain text." }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "AzureBlobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]",
+    "AzureBlobKeyConnectionName": "[concat('azureblobkey-', parameters('PlaybookName'))]",
+    "GTIBaseUri": "https://www.virustotal.com",
+    "DefaultContainerName": "gti-session-answers",
+    "BlobRetentionDaysEffective": "[if(empty(trim(parameters('BlobRetentionDays'))), 0, if(less(int(trim(parameters('BlobRetentionDays'))), parameters('SASExpiryDays')), int('INVALID PARAMETERS - BlobRetentionDays must be greater than or equal to SASExpiryDays'), int(trim(parameters('BlobRetentionDays')))))]",
+    "ContainerNameEffective": "[if(empty(trim(parameters('ContainerName'))), variables('DefaultContainerName'), toLower(trim(parameters('ContainerName'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyVaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyVaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureBlobConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureBlobConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueSet": { "name": "managedIdentityAuth", "values": {} },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureBlobKeyConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureBlobKeyConnectionName')]",
+        "customParameterValues": {},
+        "parameterValues": {
+          "accountName": "[parameters('StorageAccountName')]",
+          "accessKey": "[parameters('StorageAccountKey')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+        }
+      }
+    },
+    {
+      "condition": "[greater(variables('BlobRetentionDaysEffective'), 0)]",
+      "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(parameters('StorageAccountName'), '/default')]",
+      "properties": {
+        "policy": {
+          "rules": [
+            {
+              "enabled": true,
+              "name": "delete-gti-session-answers",
+              "type": "Lifecycle",
+              "definition": {
+                "filters": {
+                  "blobTypes": [ "blockBlob" ],
+                  "prefixMatch": [ "[concat(variables('ContainerNameEffective'), '/')]" ]
+                },
+                "actions": {
+                  "baseBlob": {
+                    "delete": { "daysAfterCreationGreaterThan": "[variables('BlobRetentionDaysEffective')]" }
+                  },
+                  "snapshot": {
+                    "delete": { "daysAfterCreationGreaterThan": "[variables('BlobRetentionDaysEffective')]" }
+                  },
+                  "version": {
+                    "delete": { "daysAfterCreationGreaterThan": "[variables('BlobRetentionDaysEffective')]" }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "GTISessionAssistant",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureBlobKeyConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "GTIBaseUri": {
+              "type": "String",
+              "defaultValue": "[variables('GTIBaseUri')]"
+            },
+            "StorageAccountName": {
+              "type": "String",
+              "defaultValue": "[parameters('StorageAccountName')]"
+            },
+            "StorageEndpointSuffix": {
+              "type": "String",
+              "defaultValue": "[environment().suffixes.storage]"
+            },
+            "ContainerName": {
+              "type": "String",
+              "defaultValue": "[variables('ContainerNameEffective')]"
+            },
+            "SASExpiryDays": {
+              "type": "Int",
+              "defaultValue": "[parameters('SASExpiryDays')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                "path": "/incident-creation"
+              },
+              "runtimeConfiguration": { "concurrency": { "runs": 1 } }
+            }
+          },
+          "actions": {
+
+            "Get_GTI_API_Key_From_Key_Vault": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['keyvault']['connectionId']" } },
+                "method": "get",
+                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": ["inputs", "outputs"] }
+              }
+            },
+            "Stop_If_API_Key_Unavailable": {
+              "type": "Terminate",
+              "inputs": { "runStatus": "Cancelled" },
+              "runAfter": { "Get_GTI_API_Key_From_Key_Vault": ["Failed", "TimedOut", "Skipped"] }
+            },
+
+            "Initialize_Incident_Arm_Id": {
+              "type": "InitializeVariable",
+              "runAfter": { "Get_GTI_API_Key_From_Key_Vault": ["Succeeded"] },
+              "inputs": {
+                "variables": [{ "name": "IncidentArmId", "type": "String", "value": "@{triggerBody()?['object']?['id']}" }]
+              }
+            },
+            "Initialize_GTI_Session_Id": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Incident_Arm_Id": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "GTISessionId", "type": "String", "value": "" }] }
+            },
+            "Initialize_Last_Processed_Time": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_GTI_Session_Id": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "LastProcessedTime", "type": "String", "value": "" }] }
+            },
+            "Initialize_New_Last_Processed_Time": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Last_Processed_Time": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "NewLastProcessedTime", "type": "String", "value": "" }] }
+            },
+            "Initialize_Existing_Session_Tag": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_New_Last_Processed_Time": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "ExistingSessionTag", "type": "String", "value": "" }] }
+            },
+            "Initialize_Existing_Last_Processed_Tag": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Existing_Session_Tag": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "ExistingLastProcessedTag", "type": "String", "value": "" }] }
+            },
+            "Initialize_Has_New_Question_Flag": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Existing_Last_Processed_Tag": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "HasNewQuestion", "type": "Boolean", "value": false }] }
+            },
+            "Initialize_Session_Was_Reset_Flag": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Has_New_Question_Flag": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "SessionWasReset", "type": "Boolean", "value": false }] }
+            },
+            "Initialize_GTI_Call_Failed_Flag": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Session_Was_Reset_Flag": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "GTICallFailed", "type": "Boolean", "value": false }] }
+            },
+            "Initialize_Error_Message": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_GTI_Call_Failed_Flag": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "ErrorMessage", "type": "String", "value": "" }] }
+            },
+            "Initialize_Analyst_Question": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Error_Message": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "AnalystQuestion", "type": "String", "value": "" }] }
+            },
+            "Initialize_GTI_Answer": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Analyst_Question": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "GTIAnswer", "type": "String", "value": "" }] }
+            },
+            "Initialize_Multipart_Boundary": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_GTI_Answer": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "MultipartBoundary", "type": "String", "value": "----GTIBoundary7MA4YWxkTrZu0gW" }] }
+            },
+            "Initialize_Newest_Question_Comment": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Multipart_Boundary": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "NewestQuestionComment", "type": "String", "value": "" }] }
+            },
+            "Initialize_Newest_Question_Comment_Time": {
+              "type": "InitializeVariable",
+              "runAfter": { "Initialize_Newest_Question_Comment": ["Succeeded"] },
+              "inputs": { "variables": [{ "name": "NewestQuestionCommentTime", "type": "String", "value": "" }] }
+            },
+            "Select_Related_Entity_Summary": {
+              "type": "Select",
+              "runAfter": { "Initialize_Newest_Question_Comment_Time": ["Succeeded"] },
+              "inputs": {
+                "from": "@coalesce(triggerBody()?['object']?['properties']?['relatedEntities'], json('[]'))",
+                "select": "@concat(coalesce(item()?['kind'], 'Entity'), ': ', if(equals(toLower(string(coalesce(item()?['kind'], ''))), 'azureresource'), coalesce(item()?['properties']?['resourceName'], item()?['properties']?['resourceType'], 'azure-resource'), coalesce(item()?['properties']?['friendlyName'], item()?['properties']?['address'], item()?['properties']?['url'], item()?['properties']?['hostName'], item()?['properties']?['netBiosName'], item()?['properties']?['accountName'], item()?['properties']?['upn'], item()?['properties']?['mailboxPrimaryAddress'], item()?['properties']?['displayName'], item()?['properties']?['fileName'], item()?['properties']?['directory'], item()?['properties']?['hashValue'], item()?['properties']?['malwareName'], item()?['properties']?['commandLine'], item()?['properties']?['processId'], item()?['properties']?['key'], item()?['properties']?['hive'], item()?['properties']?['valueName'], item()?['properties']?['distinguishedName'], item()?['properties']?['sid'], item()?['properties']?['objectGuid'], item()?['properties']?['appName'], item()?['properties']?['instanceName'], item()?['properties']?['domainName'], item()?['properties']?['deviceName'], item()?['properties']?['deviceId'], item()?['properties']?['subject'], item()?['properties']?['sender'], item()?['properties']?['recipient'], item()?['properties']?['submitter'], item()?['properties']?['query'], item()?['properties']?['macAddress'], item()?['properties']?['alertDisplayName'], item()?['properties']?['bookmarkName'], item()?['properties']?['name'], item()?['properties']?['category'], item()?['properties']?['value'], 'unknown')))"
+              }
+            },
+            "Compose_Incident_Context_For_Prompt": {
+              "type": "Compose",
+              "runAfter": { "Select_Related_Entity_Summary": ["Succeeded"] },
+              "inputs": "@{concat('Incident context (background only — do not repeat this verbatim; use it to inform your answer to the analyst question below):', '\n', '- Title: ', coalesce(triggerBody()?['object']?['properties']?['title'], 'N/A'), '\n', '- Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'N/A'), '\n', '- Status: ', coalesce(triggerBody()?['object']?['properties']?['status'], 'N/A'), '\n', '- Incident Number: ', string(coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 0)), '\n', '- Description: ', coalesce(triggerBody()?['object']?['properties']?['description'], 'N/A'), '\n', '- MITRE Tactics: ', if(empty(coalesce(triggerBody()?['object']?['properties']?['tactics'], json('[]'))), 'N/A', join(coalesce(triggerBody()?['object']?['properties']?['tactics'], json('[]')), ', ')), '\n', '- Related Entities: ', if(empty(body('Select_Related_Entity_Summary')), 'None', concat(join(take(body('Select_Related_Entity_Summary'), 50), '; '), if(greater(length(body('Select_Related_Entity_Summary')), 50), concat(' (+', string(sub(length(body('Select_Related_Entity_Summary')), 50)), ' more entities omitted)'), ''))))}"
+            },
+            "Compose_Answer_Format_Instruction": {
+              "type": "Compose",
+              "runAfter": { "Compose_Incident_Context_For_Prompt": ["Succeeded"] },
+              "inputs": "@{concat('Formatting instruction: respond using clean, self-contained HTML markup with INLINE styles only (no <style> blocks, no external CSS, no class names) — <p>, <b>, <i>, <ul><li>, <br>, and <table> are all allowed. This will be embedded directly inside an HTML paragraph in a Microsoft Sentinel incident comment that analysts may view on EITHER a light or a dark theme, so never rely on the container''s inherited text or background color. For structured field data (IDs, titles, severity, status, CVE numbers, key-value pairs, etc.), prefer a <table> laid out EXACTLY like this working example — copy this structure and styling pattern precisely, only changing the header text, row count, and cell content: <table style=\"width:100%;border-collapse:collapse;margin-top:10px;border:1px solid #cccccc\"><tr style=\"background-color:#37474F;color:#ffffff\"><th style=\"padding:8px;border:1px solid #cccccc;text-align:left\" colspan=\"2\">Section Title</th></tr><tr style=\"background-color:#ffffff;color:#1a1a1a\"><td style=\"padding:8px;border:1px solid #cccccc;font-weight:bold;width:30%\">Field Name</td><td style=\"padding:8px;border:1px solid #cccccc\">Field Value</td></tr><tr style=\"background-color:#f2f2f2;color:#1a1a1a\"><td style=\"padding:8px;border:1px solid #cccccc;font-weight:bold\">Next Field</td><td style=\"padding:8px;border:1px solid #cccccc\">Next Value</td></tr></table> — alternate row background-color between #ffffff and #f2f2f2 as shown, and EVERY <th>/<td> must have both a border and padding; never emit a <table>, <tr>, or <td> that is missing the border/padding/background-color/color styles shown in that example, since a bare unstyled table renders as an unreadable stacked list in this comment widget. For a short narrative summary before/after a table, use plain <p> paragraphs (optionally with the same background-color:#1565C0 or #37474F banner style as a section header). For a genuine list of similar short items, a plain unstyled <ul><li> list is also fine. Whenever an element needs a visible background or text color, ALWAYS set both background-color and color together as an explicit inline style pair on that same element — never color alone against an inherited/transparent background, since that becomes invisible on one of the two themes. Never output bare colored text (e.g. a <span style=\"color:red\">) without also setting a matching background-color on the same element. Do not use Markdown syntax (no **, backticks, #, or - bullet markers). Do not wrap the response in <html>, <head>, or <body> tags.')}"
+            },
+
+            "Filter_Incident_Tags_For_Session": {
+              "type": "Query",
+              "runAfter": { "Compose_Answer_Format_Instruction": ["Succeeded"] },
+              "inputs": {
+                "from": "@coalesce(triggerBody()?['object']?['properties']?['labels'], json('[]'))",
+                "where": "@startsWith(coalesce(item()?['labelName'], ''), 'GTI-Session:')"
+              }
+            },
+            "Set_Existing_Session_Tag": {
+              "type": "SetVariable",
+              "runAfter": { "Filter_Incident_Tags_For_Session": ["Succeeded"] },
+              "inputs": {
+                "name": "ExistingSessionTag",
+                "value": "@if(empty(body('Filter_Incident_Tags_For_Session')), '', coalesce(first(body('Filter_Incident_Tags_For_Session'))?['labelName'], ''))"
+              }
+            },
+            "Set_Session_Id_From_Tag": {
+              "type": "SetVariable",
+              "runAfter": { "Set_Existing_Session_Tag": ["Succeeded"] },
+              "inputs": {
+                "name": "GTISessionId",
+                "value": "@if(equals(variables('ExistingSessionTag'), ''), '', trim(substring(variables('ExistingSessionTag'), length('GTI-Session:'))))"
+              }
+            },
+
+            "Filter_Incident_Tags_For_Last_Processed": {
+              "type": "Query",
+              "runAfter": { "Compose_Answer_Format_Instruction": ["Succeeded"] },
+              "inputs": {
+                "from": "@coalesce(triggerBody()?['object']?['properties']?['labels'], json('[]'))",
+                "where": "@startsWith(coalesce(item()?['labelName'], ''), 'GTI-LastProcessed:')"
+              }
+            },
+            "Set_Existing_Last_Processed_Tag": {
+              "type": "SetVariable",
+              "runAfter": { "Filter_Incident_Tags_For_Last_Processed": ["Succeeded"] },
+              "inputs": {
+                "name": "ExistingLastProcessedTag",
+                "value": "@if(empty(body('Filter_Incident_Tags_For_Last_Processed')), '', coalesce(first(body('Filter_Incident_Tags_For_Last_Processed'))?['labelName'], ''))"
+              }
+            },
+            "Set_Last_Processed_Time_From_Tag": {
+              "type": "SetVariable",
+              "runAfter": { "Set_Existing_Last_Processed_Tag": ["Succeeded"] },
+              "inputs": {
+                "name": "LastProcessedTime",
+                "value": "@if(equals(variables('ExistingLastProcessedTag'), ''), '', trim(substring(variables('ExistingLastProcessedTag'), length('GTI-LastProcessed:'))))"
+              }
+            },
+
+            "For_Each_Incident_Comment": {
+              "type": "Foreach",
+              "runAfter": {
+                "Set_Session_Id_From_Tag": ["Succeeded"],
+                "Set_Last_Processed_Time_From_Tag": ["Succeeded"]
+              },
+              "foreach": "@coalesce(triggerBody()?['incidentUpdates']?['comments'], json('[]'))",
+              "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+              "actions": {
+                "Select_Comment_Text_Segments": {
+                  "type": "Select",
+                  "runAfter": {},
+                  "inputs": {
+                    "from": "@split(concat('<x>', replace(replace(replace(replace(coalesce(items('For_Each_Incident_Comment')?['properties']?['message'], ''), '<br>', ' '), '<br/>', ' '), '<br />', ' '), '&nbsp;', ' ')), '<')",
+                    "select": "@if(contains(item(), '>'), join(skip(split(item(), '>'), 1), '>'), item())"
+                  }
+                },
+                "Compose_Comment_Without_Html_Tags": {
+                  "type": "Compose",
+                  "runAfter": { "Select_Comment_Text_Segments": ["Succeeded"] },
+                  "inputs": "@join(body('Select_Comment_Text_Segments'), '')"
+                },
+                "Compose_Comment_Plain_Text": {
+                  "type": "Compose",
+                  "runAfter": { "Compose_Comment_Without_Html_Tags": ["Succeeded"] },
+                  "inputs": "@trim(outputs('Compose_Comment_Without_Html_Tags'))"
+                },
+                "Check_Comment_Is_New_Question": {
+                  "type": "If",
+                  "runAfter": { "Compose_Comment_Plain_Text": ["Succeeded"] },
+                  "expression": {
+                    "and": [
+                      { "startsWith": ["@toLower(outputs('Compose_Comment_Plain_Text'))", "#ask-gti:"] },
+                      {
+                        "or": [
+                          { "equals": ["@variables('LastProcessedTime')", ""] },
+                          { "greater": ["@items('For_Each_Incident_Comment')?['properties']?['createdTimeUtc']", "@variables('LastProcessedTime')"] }
+                        ]
+                      },
+                      {
+                        "or": [
+                          { "equals": ["@variables('NewestQuestionCommentTime')", ""] },
+                          { "greater": ["@items('For_Each_Incident_Comment')?['properties']?['createdTimeUtc']", "@variables('NewestQuestionCommentTime')"] }
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Set_Newest_Question_Comment": {
+                      "type": "SetVariable",
+                      "runAfter": {},
+                      "inputs": { "name": "NewestQuestionComment", "value": "@outputs('Compose_Comment_Plain_Text')" }
+                    },
+                    "Set_Newest_Question_Comment_Time": {
+                      "type": "SetVariable",
+                      "runAfter": { "Set_Newest_Question_Comment": ["Succeeded"] },
+                      "inputs": { "name": "NewestQuestionCommentTime", "value": "@{items('For_Each_Incident_Comment')?['properties']?['createdTimeUtc']}" }
+                    }
+                  },
+                  "else": { "actions": {} }
+                }
+              }
+            },
+
+            "Check_Question_Found": {
+              "type": "If",
+              "runAfter": { "For_Each_Incident_Comment": ["Succeeded"] },
+              "expression": { "and": [{ "not": { "equals": ["@variables('NewestQuestionCommentTime')", ""] } }] },
+              "actions": {
+                "Set_Has_New_Question_Flag": {
+                  "type": "SetVariable",
+                  "runAfter": {},
+                  "inputs": { "name": "HasNewQuestion", "value": true }
+                },
+                "Set_New_Last_Processed_Time": {
+                  "type": "SetVariable",
+                  "runAfter": { "Set_Has_New_Question_Flag": ["Succeeded"] },
+                  "inputs": { "name": "NewLastProcessedTime", "value": "@{variables('NewestQuestionCommentTime')}" }
+                },
+                "Compose_Question_Text": {
+                  "type": "Compose",
+                  "runAfter": { "Set_New_Last_Processed_Time": ["Succeeded"] },
+                  "inputs": "@{if(greater(length(variables('NewestQuestionComment')), length('#ask-gti:')), trim(substring(variables('NewestQuestionComment'), length('#ask-gti:'))), '')}"
+                },
+                "Set_Analyst_Question": {
+                  "type": "SetVariable",
+                  "runAfter": { "Compose_Question_Text": ["Succeeded"] },
+                  "inputs": { "name": "AnalystQuestion", "value": "@outputs('Compose_Question_Text')" }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Stop_No_New_Question_Found": {
+                    "type": "Terminate",
+                    "runAfter": {},
+                    "inputs": { "runStatus": "Cancelled" }
+                  }
+                }
+              }
+            },
+
+            "Check_Question_Is_Not_Empty": {
+              "type": "If",
+              "runAfter": { "Check_Question_Found": ["Succeeded"] },
+              "expression": {
+                "and": [
+                  { "equals": ["@variables('HasNewQuestion')", true] },
+                  { "not": { "equals": ["@variables('AnalystQuestion')", ""] } }
+                ]
+              },
+              "actions": {
+
+                "Try_Call_GTI_Session_API": {
+                  "type": "Scope",
+                  "runAfter": {},
+                  "actions": {
+
+                    "Check_Existing_Session_Id": {
+                      "type": "If",
+                      "runAfter": {},
+                      "expression": { "and": [{ "equals": ["@variables('GTISessionId')", ""] }] },
+                      "actions": {
+
+                        "Start_New_GTI_Session": {
+                          "type": "Http",
+                          "runAfter": {},
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/agentspace/sessions')}",
+                            "headers": {
+                              "x-apikey": "@body('Get_GTI_API_Key_From_Key_Vault')?['value']",
+                              "x-tool": "ms-sentinel-gti",
+                              "User-Agent": "azure-sentinel-gti-playbook/1.0.0",
+                              "Content-Type": "@{concat('multipart/form-data; boundary=', variables('MultipartBoundary'))}"
+                            },
+                            "body": "@{concat('--', variables('MultipartBoundary'), '\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\n', outputs('Compose_Incident_Context_For_Prompt'), '\n\nAnalyst question: ', variables('AnalystQuestion'), '\n\n', outputs('Compose_Answer_Format_Instruction'), '\r\n--', variables('MultipartBoundary'), '--')}",
+                            "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT10S", "minimumInterval": "PT10S", "maximumInterval": "PT2M" }
+                          },
+                          "limit": { "timeout": "PT230S" },
+                          "runtimeConfiguration": { "secureData": { "properties": ["inputs"] } }
+                        },
+                        "Compose_New_Session_Id": {
+                          "type": "Compose",
+                          "runAfter": { "Start_New_GTI_Session": ["Succeeded", "Failed"] },
+                          "inputs": "@if(or(equals(outputs('Start_New_GTI_Session')?['statusCode'], 200), equals(outputs('Start_New_GTI_Session')?['statusCode'], 201)), coalesce(body('Start_New_GTI_Session')?['data']?['id'], variables('GTISessionId')), variables('GTISessionId'))"
+                        },
+                        "Set_Session_Id_From_New_Session": {
+                          "type": "SetVariable",
+                          "runAfter": { "Compose_New_Session_Id": ["Succeeded"] },
+                          "inputs": { "name": "GTISessionId", "value": "@outputs('Compose_New_Session_Id')" }
+                        },
+                        "Set_Answer_From_New_Session": {
+                          "type": "SetVariable",
+                          "runAfter": { "Set_Session_Id_From_New_Session": ["Succeeded"] },
+                          "inputs": {
+                            "name": "GTIAnswer",
+                            "value": "@{coalesce(last(body('Start_New_GTI_Session')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[0]?['markdown_text_widget']?['text'], last(body('Start_New_GTI_Session')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[1]?['markdown_text_widget']?['text'], '(GTI did not return a text response)')}"
+                          }
+                        },
+                        "Set_Failed_Flag_For_New_Session": {
+                          "type": "SetVariable",
+                          "runAfter": { "Set_Answer_From_New_Session": ["Succeeded"] },
+                          "inputs": {
+                            "name": "GTICallFailed",
+                            "value": "@not(or(equals(outputs('Start_New_GTI_Session')?['statusCode'], 200), equals(outputs('Start_New_GTI_Session')?['statusCode'], 201)))"
+                          }
+                        },
+                        "Compose_New_Session_Error": {
+                          "type": "Compose",
+                          "runAfter": { "Set_Failed_Flag_For_New_Session": ["Succeeded"] },
+                          "inputs": "@if(variables('GTICallFailed'), concat('GTI create-session failed. Status: ', string(coalesce(outputs('Start_New_GTI_Session')?['statusCode'], 'no response')), if(equals(outputs('Start_New_GTI_Session')?['statusCode'], 401), ' (invalid or revoked API key - check the Key Vault secret).', if(equals(outputs('Start_New_GTI_Session')?['statusCode'], 403), ' (API key lacks access to the GTI Agentspace API).', if(equals(outputs('Start_New_GTI_Session')?['statusCode'], 429), ' (GTI API rate limit exceeded - try again shortly).', '.')))), variables('ErrorMessage'))"
+                        },
+                        "Set_New_Session_Error": {
+                          "type": "SetVariable",
+                          "runAfter": { "Compose_New_Session_Error": ["Succeeded"] },
+                          "inputs": { "name": "ErrorMessage", "value": "@outputs('Compose_New_Session_Error')" }
+                        }
+
+                      },
+                      "else": {
+                        "actions": {
+
+                          "Send_Followup_To_Existing_Session": {
+                            "type": "Http",
+                            "runAfter": {},
+                            "inputs": {
+                              "method": "POST",
+                              "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/agentspace/sessions/', encodeURIComponent(variables('GTISessionId')))}",
+                              "headers": {
+                                "x-apikey": "@body('Get_GTI_API_Key_From_Key_Vault')?['value']",
+                                "x-tool": "ms-sentinel-gti",
+                                "User-Agent": "azure-sentinel-gti-playbook/1.0.0",
+                                "Content-Type": "@{concat('multipart/form-data; boundary=', variables('MultipartBoundary'))}"
+                              },
+                              "body": "@{concat('--', variables('MultipartBoundary'), '\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\n', variables('AnalystQuestion'), '\n\n', outputs('Compose_Answer_Format_Instruction'), '\r\n--', variables('MultipartBoundary'), '--')}",
+                              "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT10S", "minimumInterval": "PT10S", "maximumInterval": "PT2M" }
+                            },
+                            "limit": { "timeout": "PT230S" },
+                            "runtimeConfiguration": { "secureData": { "properties": ["inputs"] } }
+                          },
+                          "Set_Failed_Flag_For_Followup": {
+                            "type": "SetVariable",
+                            "runAfter": { "Send_Followup_To_Existing_Session": ["Succeeded", "Failed"] },
+                            "inputs": { "name": "GTICallFailed", "value": "@not(or(equals(outputs('Send_Followup_To_Existing_Session')?['statusCode'], 200), equals(outputs('Send_Followup_To_Existing_Session')?['statusCode'], 201)))" }
+                          },
+                          "Check_Followup_Failed": {
+                            "type": "If",
+                            "runAfter": { "Set_Failed_Flag_For_Followup": ["Succeeded"] },
+                            "expression": { "and": [{ "equals": ["@variables('GTICallFailed')", true] }] },
+                            "actions": {
+
+                              "Restart_Session_After_Expiry": {
+                                "type": "Http",
+                                "runAfter": {},
+                                "inputs": {
+                                  "method": "POST",
+                                  "uri": "@{concat(parameters('GTIBaseUri'), '/api/v3/agentspace/sessions')}",
+                                  "headers": {
+                                    "x-apikey": "@body('Get_GTI_API_Key_From_Key_Vault')?['value']",
+                                    "x-tool": "ms-sentinel-gti",
+                                    "User-Agent": "azure-sentinel-gti-playbook/1.0.0",
+                                    "Content-Type": "@{concat('multipart/form-data; boundary=', variables('MultipartBoundary'))}"
+                                  },
+                                  "body": "@{concat('--', variables('MultipartBoundary'), '\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\n', outputs('Compose_Incident_Context_For_Prompt'), '\n\nAnalyst question: ', variables('AnalystQuestion'), '\n\n', outputs('Compose_Answer_Format_Instruction'), '\r\n--', variables('MultipartBoundary'), '--')}",
+                                  "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT10S", "minimumInterval": "PT10S", "maximumInterval": "PT2M" }
+                                },
+                                "limit": { "timeout": "PT230S" },
+                                "runtimeConfiguration": { "secureData": { "properties": ["inputs"] } }
+                              },
+                              "Compose_Restarted_Session_Id": {
+                                "type": "Compose",
+                                "runAfter": { "Restart_Session_After_Expiry": ["Succeeded", "Failed"] },
+                                "inputs": "@if(or(equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 200), equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 201)), coalesce(body('Restart_Session_After_Expiry')?['data']?['id'], variables('GTISessionId')), variables('GTISessionId'))"
+                              },
+                              "Set_Session_Id_From_Restarted_Session": {
+                                "type": "SetVariable",
+                                "runAfter": { "Compose_Restarted_Session_Id": ["Succeeded"] },
+                                "inputs": { "name": "GTISessionId", "value": "@outputs('Compose_Restarted_Session_Id')" }
+                              },
+                              "Set_Session_Was_Reset_Flag": {
+                                "type": "SetVariable",
+                                "runAfter": { "Set_Session_Id_From_Restarted_Session": ["Succeeded"] },
+                                "inputs": {
+                                  "name": "SessionWasReset",
+                                  "value": "@or(equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 200), equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 201))"
+                                }
+                              },
+                              "Set_Answer_From_Restarted_Session": {
+                                "type": "SetVariable",
+                                "runAfter": { "Set_Session_Was_Reset_Flag": ["Succeeded"] },
+                                "inputs": {
+                                  "name": "GTIAnswer",
+                                  "value": "@{coalesce(last(body('Restart_Session_After_Expiry')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[0]?['markdown_text_widget']?['text'], last(body('Restart_Session_After_Expiry')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[1]?['markdown_text_widget']?['text'], '(GTI did not return a text response)')}"
+                                }
+                              },
+                              "Set_Failed_Flag_For_Restarted_Session": {
+                                "type": "SetVariable",
+                                "runAfter": { "Set_Answer_From_Restarted_Session": ["Succeeded"] },
+                                "inputs": {
+                                  "name": "GTICallFailed",
+                                  "value": "@not(or(equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 200), equals(outputs('Restart_Session_After_Expiry')?['statusCode'], 201)))"
+                                }
+                              },
+                              "Compose_Restarted_Session_Error": {
+                                "type": "Compose",
+                                "runAfter": { "Set_Failed_Flag_For_Restarted_Session": ["Succeeded"] },
+                                "inputs": "@if(variables('GTICallFailed'), concat('GTI follow-up call failed (status ', string(coalesce(outputs('Send_Followup_To_Existing_Session')?['statusCode'], 'no response')), ') and fallback new-session creation also failed (status ', string(coalesce(outputs('Restart_Session_After_Expiry')?['statusCode'], 'no response')), ').'), variables('ErrorMessage'))"
+                              },
+                              "Set_Restarted_Session_Error": {
+                                "type": "SetVariable",
+                                "runAfter": { "Compose_Restarted_Session_Error": ["Succeeded"] },
+                                "inputs": { "name": "ErrorMessage", "value": "@outputs('Compose_Restarted_Session_Error')" }
+                              }
+
+                            },
+                            "else": {
+                              "actions": {
+                                "Set_Answer_From_Followup": {
+                                  "type": "SetVariable",
+                                  "runAfter": {},
+                                  "inputs": {
+                                    "name": "GTIAnswer",
+                                    "value": "@{coalesce(last(body('Send_Followup_To_Existing_Session')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[0]?['markdown_text_widget']?['text'], last(body('Send_Followup_To_Existing_Session')?['data']?['attributes']?['events'])?['agent_final_response']?['widgets']?[1]?['markdown_text_widget']?['text'], '(GTI did not return a text response)')}"
+                                  }
+                                }
+                              }
+                            }
+                          }
+
+                        }
+                      }
+                    }
+
+                  }
+                },
+                "Catch_GTI_Session_API_Error": {
+                  "type": "Scope",
+                  "runAfter": { "Try_Call_GTI_Session_API": ["Failed", "TimedOut", "Skipped"] },
+                  "actions": {
+                    "Set_Failed_Flag_On_Unexpected_Error": {
+                      "type": "SetVariable",
+                      "runAfter": {},
+                      "inputs": { "name": "GTICallFailed", "value": true }
+                    },
+                    "Append_Unexpected_Error_Details": {
+                      "type": "AppendToStringVariable",
+                      "runAfter": { "Set_Failed_Flag_On_Unexpected_Error": ["Succeeded"] },
+                      "inputs": {
+                        "name": "ErrorMessage",
+                        "value": "@{concat('Unexpected error calling GTI Session API: ', string(result('Try_Call_GTI_Session_API')), ' | ')}"
+                      }
+                    }
+                  }
+                },
+
+                "Compose_GTI_Agent_Error_Description": {
+                  "type": "Compose",
+                  "runAfter": { "Catch_GTI_Session_API_Error": ["Succeeded", "Failed", "Skipped"] },
+                  "inputs": "@coalesce(last(coalesce(body('Send_Followup_To_Existing_Session')?['data']?['attributes']?['events'], json('[]')))?['error']?['description'], last(coalesce(body('Restart_Session_After_Expiry')?['data']?['attributes']?['events'], json('[]')))?['error']?['description'], last(coalesce(body('Start_New_GTI_Session')?['data']?['attributes']?['events'], json('[]')))?['error']?['description'], '')"
+                },
+                "Check_GTI_Call_Failed": {
+                  "type": "If",
+                  "runAfter": { "Compose_GTI_Agent_Error_Description": ["Succeeded"] },
+                  "expression": {
+                    "or": [
+                      { "equals": ["@variables('GTICallFailed')", true] },
+                      { "equals": ["@variables('GTIAnswer')", ""] },
+                      { "equals": ["@variables('GTIAnswer')", "(GTI did not return a text response)"] }
+                    ]
+                  },
+                  "actions": {
+                    "Add_Incident_Comment_With_Error": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@variables('IncidentArmId')",
+                          "message": "@{concat('<p class=\"editor-paragraph\"><b style=\"background-color:#B71C1C;color:#ffffff;padding:4px 8px\">GTI Session Assistant &mdash; Error</b></p><p class=\"editor-paragraph\"><b>Question:</b> ', variables('AnalystQuestion'), '</p><p class=\"editor-paragraph\"><b>Details:</b> Could not get a response from GTI. ', variables('ErrorMessage'), if(equals(outputs('Compose_GTI_Agent_Error_Description'), ''), if(variables('GTICallFailed'), '', 'The GTI agent accepted the request but ended without producing an answer.'), concat('GTI agent error: ', outputs('Compose_GTI_Agent_Error_Description'))), '</p><p class=\"editor-paragraph\"><i>This is usually transient &mdash; post your question again with the #ask-gti: prefix to retry.</i></p>')}"
+                        },
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+
+                      "Compose_Answer_Report_Page": {
+                        "type": "Compose",
+                        "runAfter": {},
+                        "inputs": "@{concat('<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>GTI Session Answer</title><style>body{font-family:Arial,sans-serif;background-color:#ffffff;color:#1a1a1a;margin:24px} h1{background-color:#1565C0;color:#ffffff;padding:8px 12px} .question{background-color:#f2f2f2;color:#1a1a1a;padding:10px;border:1px solid #dddddd;margin-bottom:16px} .answer{padding:0 4px} .meta{color:#666666;font-size:12px;margin-top:24px;border-top:1px solid #dddddd;padding-top:8px}</style></head><body>', '<h1>GTI Session Assistant</h1>', '<div class=\"question\"><b>Question:</b> ', variables('AnalystQuestion'), '</div>', '<div class=\"answer\">', variables('GTIAnswer'), '</div>', '<div class=\"meta\">', if(variables('SessionWasReset'), 'Session context was reset (previous session expired). ', ''), 'Session: ', variables('GTISessionId'), ' | Incident #', string(coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 0)), ' | Generated ', utcNow(), '</div>', '</body></html>')}"
+                      },
+                      "Compose_Answer_Report_File_Name": {
+                        "type": "Compose",
+                        "runAfter": { "Compose_Answer_Report_Page": ["Succeeded"] },
+                        "inputs": "@{concat('gti-answer-', string(coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 0)), '-', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '-', substring(guid(), 0, 8), '.html')}"
+                      },
+                      "Create_Blob_Container_If_Missing": {
+                        "type": "Http",
+                        "runAfter": { "Compose_Answer_Report_File_Name": ["Succeeded"] },
+                        "inputs": {
+                          "method": "PUT",
+                          "uri": "https://@{parameters('StorageAccountName')}.blob.@{parameters('StorageEndpointSuffix')}/@{parameters('ContainerName')}?restype=container",
+                          "headers": {
+                            "x-ms-version": "2021-08-06",
+                            "User-Agent": "azure-sentinel-gti-playbook/1.0.0"
+                          },
+                          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://storage.azure.com/" }
+                        }
+                      },
+                      "Try_Publish_Answer_Report": {
+                        "type": "Scope",
+                        "runAfter": { "Create_Blob_Container_If_Missing": ["Succeeded", "Failed"] },
+                        "actions": {
+                          "Upload_Answer_Report_To_Blob": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                              "method": "post",
+                              "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files",
+                              "queries": {
+                                "folderPath": "@{parameters('ContainerName')}",
+                                "name": "@{outputs('Compose_Answer_Report_File_Name')}",
+                                "queryParametersSingleEncoded": true
+                              },
+                              "headers": { "Content-Type": "text/html" },
+                              "body": "@{outputs('Compose_Answer_Report_Page')}"
+                            }
+                          },
+                          "Create_Answer_Report_Sas_Link": {
+                            "type": "ApiConnection",
+                            "runAfter": { "Upload_Answer_Report_To_Blob": ["Succeeded"] },
+                            "inputs": {
+                              "host": { "connection": { "name": "@parameters('$connections')['azureblobkey']['connectionId']" } },
+                              "method": "post",
+                              "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/CreateSharedLinkByPath",
+                              "queries": {
+                                "path": "@{concat('/', parameters('ContainerName'), '/', outputs('Compose_Answer_Report_File_Name'))}"
+                              },
+                              "body": {
+                                "AccessProtocol": "HttpsOnly",
+                                "ExpiryTime": "@{addDays(utcNow(), parameters('SASExpiryDays'))}",
+                                "Permissions": "Read"
+                              }
+                            }
+                          },
+                          "Add_Incident_Comment_With_Report_Link": {
+                            "type": "ApiConnection",
+                            "runAfter": { "Create_Answer_Report_Sas_Link": ["Succeeded"] },
+                            "inputs": {
+                              "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                              "method": "post",
+                              "body": {
+                                "incidentArmId": "@variables('IncidentArmId')",
+                                "message": "@{concat('<p class=\"editor-paragraph\"><b style=\"background-color:#1565C0;color:#ffffff;padding:4px 8px\">GTI Session Assistant</b></p><p class=\"editor-paragraph\"><b>Question:</b> ', variables('AnalystQuestion'), '</p><p class=\"editor-paragraph\"><b>Answer:</b> <a href=\"', body('Create_Answer_Report_Sas_Link')?['WebUrl'], '\">Open full answer</a></p><p class=\"editor-paragraph\"><b>Answer path:</b> ', parameters('ContainerName'), '/', outputs('Compose_Answer_Report_File_Name'), '</p><p class=\"editor-paragraph\"><b>Session:</b> ', variables('GTISessionId'), '</p>')}"
+                              },
+                              "path": "/Incidents/Comment"
+                            }
+                          }
+                        }
+                      },
+                      "Catch_Answer_Report_Failure": {
+                        "type": "Scope",
+                        "runAfter": { "Try_Publish_Answer_Report": ["Failed", "TimedOut", "Skipped"] },
+                        "actions": {
+                          "Add_Incident_Comment_With_Inline_Answer": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                              "method": "post",
+                              "body": {
+                                "incidentArmId": "@variables('IncidentArmId')",
+                                "message": "@{concat('<p class=\"editor-paragraph\"><b style=\"background-color:#1565C0;color:#ffffff;padding:4px 8px\">GTI Session Assistant</b></p><p class=\"editor-paragraph\"><b>Question:</b> ', variables('AnalystQuestion'), '</p><p class=\"editor-paragraph\"><b>Answer:</b><br>', if(greater(length(variables('GTIAnswer')), 29800), concat(substring(variables('GTIAnswer'), 0, 29800), ' ... [truncated]'), variables('GTIAnswer')), '</p><p class=\"editor-paragraph\"><i>Full-answer report page could not be saved or linked (blob/SAS step failed) — showing inline answer instead. ', if(variables('SessionWasReset'), 'Session context was reset (previous session expired). ', ''), 'Session: ', variables('GTISessionId'), ' | ', utcNow(), '</i></p>')}"
+                              },
+                              "path": "/Incidents/Comment"
+                            }
+                          }
+                        }
+                      }
+
+                    }
+                  }
+                },
+
+                "Compose_Tags_To_Remove": {
+                  "type": "Compose",
+                  "runAfter": { "Check_GTI_Call_Failed": ["Succeeded", "Failed", "Skipped"] },
+                  "inputs": "@union(if(equals(variables('ExistingSessionTag'), ''), json('[]'), createArray(json(concat('{\"Tag\":\"', variables('ExistingSessionTag'), '\"}')))), if(equals(variables('ExistingLastProcessedTag'), ''), json('[]'), createArray(json(concat('{\"Tag\":\"', variables('ExistingLastProcessedTag'), '\"}')))))"
+                },
+                "Compose_Tags_To_Add": {
+                  "type": "Compose",
+                  "runAfter": { "Compose_Tags_To_Remove": ["Succeeded"] },
+                  "inputs": "@union(if(equals(variables('GTISessionId'), ''), json('[]'), createArray(json(concat('{\"Tag\":\"GTI-Session:', variables('GTISessionId'), '\"}')))), if(equals(variables('NewLastProcessedTime'), ''), json('[]'), createArray(json(concat('{\"Tag\":\"GTI-LastProcessed:', variables('NewLastProcessedTime'), '\"}')))))"
+                },
+                "Update_Incident_Session_Tags": {
+                  "type": "ApiConnection",
+                  "runAfter": { "Compose_Tags_To_Add": ["Succeeded"] },
+                  "inputs": {
+                    "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                    "method": "put",
+                    "body": {
+                      "incidentArmId": "@variables('IncidentArmId')",
+                      "tagsToRemove": { "TagsToRemove": "@outputs('Compose_Tags_To_Remove')" },
+                      "tagsToAdd": { "TagsToAdd": "@outputs('Compose_Tags_To_Add')" }
+                    },
+                    "path": "/Incidents"
+                  }
+                }
+
+              },
+              "else": {
+                "actions": {
+                  "Add_Incident_Comment_With_Usage_Help": {
+                    "type": "ApiConnection",
+                    "runAfter": {},
+                    "inputs": {
+                      "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                      "method": "post",
+                      "body": {
+                        "incidentArmId": "@variables('IncidentArmId')",
+                        "message": "<p class=\"editor-paragraph\">Please include your question right after <code>#ask-gti:</code>, for example: <code>#ask-gti: is this domain malicious?</code></p>"
+                      },
+                      "path": "/Incidents/Comment"
+                    }
+                  },
+                  "Stop_Question_Text_Empty": {
+                    "type": "Terminate",
+                    "runAfter": { "Add_Incident_Comment_With_Usage_Help": ["Succeeded", "Failed"] },
+                    "inputs": { "runStatus": "Cancelled" }
+                  }
+                }
+              }
+            }
+
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "connectionName": "[variables('KeyVaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "azureblob": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "connectionName": "[variables('AzureBlobConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "azureblobkey": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobKeyConnectionName'))]",
+                "connectionName": "[variables('AzureBlobKeyConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "String",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}
