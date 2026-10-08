@@ -18,6 +18,8 @@ second feed connector or constitute a certified Content Hub solution.
   alone is insufficient. Treat the encoded credential as a secret.
 
 Deploy `azuredeploy.json` as a custom ARM template in the desired resource group.
+The workflow uses the `Microsoft.Logic/workflows` resource API `2019-05-01`;
+its workflow definition schema remains `2016-06-01`.
 `IsMaliciousCredential` is a secure-string deployment/workflow parameter.
 Set `MaxIPsPerIncident` between 1 and 50, based on your account quota.
 The workflow is **Disabled by default** so it cannot issue requests before setup.
@@ -69,3 +71,25 @@ These validate the template and failure paths; they do not replace an Azure
 ARM deployment and Sentinel incident test. A live Azure deployment, connection
 authorization and incident run remain required before this playbook is used in
 production. No live Sentinel execution is claimed by this submission.
+
+### Deployment and test-incident acceptance checks
+
+Run these checks in an existing non-production Sentinel workspace, using an
+isolated test incident and an IsMalicious credential with sufficient quota.
+Follow [Run playbooks manually](https://learn.microsoft.com/azure/sentinel/automation/run-playbooks)
+to select the incident and invoke the playbook after deployment and permission
+setup. Do not activate a production automation rule during validation.
+
+| Check | Expected result and evidence to retain |
+| --- | --- |
+| ARM deployment | Both the API connection and workflow deploy successfully. Record the deployment name, provisioning status and template commit. The workflow initially stays Disabled. |
+| Identity and connection | Confirm the SystemAssigned identity, the workspace role assignment and a healthy Sentinel API connection before enabling the test workflow. |
+| Single-IP incident | The run retrieves the incident IP, completes the lookup and writes one incident comment with verdict, separate risk/confidence, evidence and a report URL. Record the incident ID, run ID and redacted comment. |
+| IP cap | On an incident with more IP entities than `MaxIPsPerIncident`, only the configured number is looked up. The comment states the cap. |
+| No IP entities | The run issues no IsMalicious lookup and finishes with an empty results table. |
+| Authentication failure | Use an invalid credential only in the isolated test deployment. The incident comment reports an unknown/error row rather than a safe verdict. Restore the valid credential afterward. |
+| Credential safety | Verify that `Check_IP` inputs and outputs are hidden in run history and that neither the comment nor exported evidence contains the credential. |
+
+Record actual results alongside these expectations. Redact credentials and
+customer data before sharing evidence. ARM/schema checks alone do not satisfy
+the live deployment and incident-run requirements.
