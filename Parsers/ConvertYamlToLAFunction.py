@@ -308,8 +308,8 @@ class Schema:
     def merge_manifests (self, new_functions):
         base_folder = sys.argv[1]
         path = f"{base_folder}/{self.manifest_target}"
-        manifest_file = open(path)
-        manifest_json = json.load(manifest_file)
+        with open(path, 'r') as manifest_file:
+            manifest_json = json.load(manifest_file)
         existing_functions = manifest_json['functions']
         id_list = [function['id'] for function in new_functions]
         name_list = [function['name'] for function in new_functions]
