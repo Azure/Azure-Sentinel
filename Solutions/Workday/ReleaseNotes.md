@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
 |-------------|--------------------------------|--------------------------------------------------------------|
+| 3.2.0       | 07-10-2026                     | Added multi-instance support for the Workday **Data Connector**. |
 | 3.1.0       | 18-08-2026                     | Added support for a configurable page size for the Workday data connector and aliases and grid management. |
 | 3.0.3       | 23-12-2025                     | Updated page size for the Workday **Data connector** and configure the query window + updated **Data Connector** to support dynamic Redirect URI|
 | 3.0.2       | 02-04-2025                     | Updated **Data Connector** guidelines.     |
