@@ -154,6 +154,7 @@ def process_template(
         / f"{parser_name}.yaml"
     )
 
+    # TODO: Generate the required templates when a new schema is added or files are missing.
     if not template_path.is_file():
         raise ValidationError(f"Template not found: {template_path}")
     if not parser_path.is_file():
