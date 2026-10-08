@@ -1,5 +1,9 @@
 # Changelog for imAuditEvent.yaml
 
+## Version 0.1.11
+
+- (2026-10-08) Corrected the Microsoft Event parser disable watchlist key.
+
 ## Version 0.1.10
 
 - (2026-10-06) Add the Salesforce Audit Trail AuditEvent filtering parser. [PR #15248](https://github.com/Azure/Azure-Sentinel/pull/15248)

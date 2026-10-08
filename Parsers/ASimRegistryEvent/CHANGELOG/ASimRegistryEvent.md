@@ -1,5 +1,9 @@
 # Changelog for ASimRegistryEvent.yaml
 
+## Version 0.1.5
+
+- (2026-10-08) Corrected the schema-level parser disable watchlist key.
+
 ## Version 0.1.4
 
 - (2026-09-01) Add CrowdStrike Falcon Data Replicator to Registry Event schema - [PR #15024](https://github.com/Azure/Azure-Sentinel/pull/15024)
@@ -17,4 +21,3 @@
 
 - (2023-10-12) ASIM Registry Event schema parser with its sample and test data for VMware Carbon Black Cloud - [PR #8775](https://github.com/Azure/Azure-Sentinel/pull/8775)
 - (2023-09-22) ASIM Registry schema parser with its sample and test data for SentinelOne - [PR #8678](https://github.com/Azure/Azure-Sentinel/pull/8678)
-

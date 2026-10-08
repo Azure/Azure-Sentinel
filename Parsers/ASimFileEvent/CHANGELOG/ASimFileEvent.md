@@ -1,5 +1,9 @@
 # Changelog for ASimFileEvent.yaml
 
+## Version 0.1.5
+
+- (2026-10-08) Corrected the schema-level parser disable watchlist key.
+
 ## Version 0.1.4
 
 - (2026-02-04) [ASIM] FileEvent - AWSCloudTrail (New Parser) [PR #13569](https://github.com/Azure/Azure-Sentinel/pull/13569)
@@ -20,4 +24,3 @@
 ## Version 0.1.0
 
 - (2023-09-22) ASIM File Event schema parser with its sample and test data for SentinelOne - [PR #8667](https://github.com/Azure/Azure-Sentinel/pull/8667)
-
