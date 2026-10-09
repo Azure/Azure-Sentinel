@@ -1,0 +1,43 @@
+{
+  "name": "Perimeter81ActivityLogsV2DCR",
+  "apiVersion": "2022-06-01",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "location": "{{location}}",
+  "properties": {
+    "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'Perimeter81ActivityLogsV2-DCE')]",
+    "streamDeclarations": {
+      "Custom-Perimeter81ActivityLogsV2_CL": {
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "workspaceResourceId": "{{workspaceResourceId}}",
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Custom-Perimeter81ActivityLogsV2_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "outputStream": "Custom-Perimeter81ActivityLogsV2_CL",
+        "transformKql": "source\r\n| extend CefMessageCount = countof(RawData, base64_decodestring(\"KD9tKV4oPzo8WzAtOV17MSwzfT4xIFteXHJcbl0qPyApP0NFRjo=\"), \"regex\")\r\n| extend CefMessage = extract(base64_decodestring(\"KD9zKV4oPzo8WzAtOV17MSwzfT4xIFteXHJcbl0qPyApPyhDRUY6LiopJA==\"), 1, RawData)\r\n| extend CanParse = CefMessageCount == 1 and\r\n    CefMessage matches regex base64_decodestring(\"XkNFRjpbXnxcXFxyXG5dK1x8KD86KD86W158XFxcclxuXXxcXFteXHJcbl0pKlx8KXs2fVteXHJcbl0qW1xyXG5dKiQ=\")\r\n| extend CefMessage = replace(\";\", \" \", CefMessage)\r\n| extend ParsedCef = parse_cef_dictionary(iff(CanParse,\r\n    CefMessage, \"CEF:0|Unknown|Unknown|0|Unknown|Unknown|0|placeholder=1\"))\r\n| extend ParseStatus = case(CefMessageCount > 1, \"Batched\",\r\n    CefMessageCount == 0, \"NonCef\",\r\n    CanParse == false or isnull(ParsedCef[\"Extension\"]), \"MalformedCef\", \"Parsed\")\r\n| extend CefExtensions = iff(ParseStatus == \"Parsed\", ParsedCef[\"Extension\"], parse_json(\"{}\"))\r\n| extend EventTime = iff(isnotnull(todatetime(CefExtensions[\"createdAt\"])),\r\n    todatetime(CefExtensions[\"createdAt\"]), todatetime(CefExtensions[\"time\"]))\r\n| project TimeGenerated = iff(isnotnull(EventTime), EventTime, TimeGenerated),\r\n    RawData, ParseStatus,\r\n    EventId = tostring(CefExtensions[\"id\"]),\r\n    EventTime,\r\n    EventName = iff(isnotempty(tostring(CefExtensions[\"event\"])),\r\n        tostring(CefExtensions[\"event\"]), tostring(CefExtensions[\"product\"])),\r\n    EventCategory = iff(isnotempty(tostring(CefExtensions[\"category\"])),\r\n        tostring(CefExtensions[\"category\"]), tostring(CefExtensions[\"product_family\"])),\r\n    Severity = tostring(CefExtensions[\"severity\"]),\r\n    ActorEmail = tostring(CefExtensions[\"createdBy\"]),\r\n    Module = tostring(CefExtensions[\"module\"]),\r\n    Message = iff(isnotempty(tostring(CefExtensions[\"eventData\"])),\r\n        tostring(CefExtensions[\"eventData\"]),\r\n        tostring(parse_json(tostring(CefExtensions[\"data\"]))[\"message\"])),\r\n    CefExtensions"
+      }
+    ]
+  }
+}
