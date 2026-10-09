@@ -1,0 +1,40 @@
+id: d2deed97-6c0c-4a57-95fd-675d3c6fb949
+name: WhoisFreaks - newly registered domain seen in threat feed
+description: |
+  Identifies newly registered domains that are later observed in WhoisFreaks threat feeds.
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksThreat_CL
+      - WhoisFreaksNRD_CL
+      - WhoisFreaksNRDNoWhois_CL
+severity: High
+status: Available
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - ResourceDevelopment
+relevantTechniques:
+  - T1583
+  - T1566
+query: |
+  let nrd = union WhoisFreaksNRD_CL, WhoisFreaksNRDNoWhois_CL
+  | where TimeGenerated > ago(7d)
+  | distinct domain_name;
+  WhoisFreaksThreat_CL
+  | where TimeGenerated > ago(1d)
+  | join kind=inner (nrd) on $left.domain == $right.domain_name
+  | summarize arg_max(TimeGenerated, *) by domain, threat_type
+  | project TimeGenerated, domain, threat_type, confidence, domain_name
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: domain
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+version: 1.0.0
+kind: Scheduled
