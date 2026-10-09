@@ -1,0 +1,62 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f6502545-ae3a-4232-a8b0-79d87e5c98d7
+    path: Analytic Rules/WDigestDowngradeAttack.yaml
+    version: 1.0.3
+    querySha256: fa4bce6bcdb1c3184b3619365759d926c5ab29f70adaa501ebd91dda7d0aa6d9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - RegistryKey has no supported Custom Detection mapping
+    - Host.FullName has no supported Custom Detection field
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1003
+properties:
+  id: xdr-wdigest-downgrade-attack-f6502545
+  displayName: WDigest downgrade attack
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+      | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" *
+      | where TargetObject=~"HKLM\\System\\CurrentControlSet\\Control\\SecurityProviders\\WDigest\\UseLogonCredential" and Details !="DWORD (0x00000000)"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: WDigest downgrade attack
+      description: |-
+        'When the WDigest Authentication protocol is enabled, plain text passwords are stored in the Local Security Authority Subsystem Service (LSASS) exposing them to theft. This setting will prevent WDigest from storing credentials in memory.
+        Ref: https://www.stigviewer.com/stig/windows_7/2016-12-19/finding/V-72753'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1003

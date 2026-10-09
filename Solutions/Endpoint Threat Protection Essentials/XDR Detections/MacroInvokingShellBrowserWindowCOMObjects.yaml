@@ -1,0 +1,69 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e7470b35-0128-4508-bfc9-e01cfb3c2eb7
+    path: Analytic Rules/MacroInvokingShellBrowserWindowCOMObjects.yaml
+    version: 1.0.4
+    querySha256: d2032ada6f462b2b6c555bee806cf4ec608e290baffa849197d43e172d53da07
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Process has no supported Custom Detection mapping
+    - Host.FullName has no supported Custom Detection field
+    - Account mapping was completed with projected column `DnsDomain`
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1021.003
+properties:
+  id: xdr-detecting-macro-invoking-shellbrowserwindow-com-objects-e7470b35
+  displayName: Detecting Macro Invoking ShellBrowserWindow COM Objects
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+       | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==1
+       | parse EventData with * 'Image">' Image "<" * 'CommandLine">' CommandLine "<" * 'ParentImage">' ParentImage "<" *
+       | where ParentImage has "svchost.exe" and Image has "rundll32.exe" and CommandLine has "{c08afd90-f2a1-11d1-8455-00a0c91f3880}"
+       | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Description">' Description "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
+       | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description
+       | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detecting Macro Invoking ShellBrowserWindow COM Objects
+      description: '''This query detects a macro invoking ShellBrowserWindow COM Objects evade naive parent/child Office detection
+        rules.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        accounts:
+        - id: account1
+          nameColumn: User
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+          subTechniques:
+          - T1021.003

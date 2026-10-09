@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4a9d3c2e-7f1b-4e58-9a0c-2d5b8e3f1a7c
+    path: Analytic Rules/Certutil-Download-Abuse.yaml
+    version: 1.0.0
+    querySha256: 2f456bffe591a084ad3c4409bce544fce261fa043c7d9236623d645a5dc646bc
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - query mixes native Defender and Sentinel workload tables; time columns were preserved and require runtime validation
+    - Host.FullName has no supported Custom Detection field
+    - Process has no supported Custom Detection mapping
+    - multiple source tactics were resolved by the configured per-rule override
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    - DefenseEvasion
+    originalTechniques:
+    - T1105
+    - T1218
+    - T1140
+    acceptedReviewReasons:
+    - query mixes native Defender and Sentinel workload tables; time columns were preserved and require runtime validation
+properties:
+  id: xdr-certutil-used-for-file-download-living-off-the-land-4a9d3c2e
+  displayName: CertUtil Used for File Download (Living off the Land)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Lookback = 1h;
+      let AllowlistedDomains = dynamic([
+        "windowsupdate.microsoft.com",
+        "download.microsoft.com",
+        "dl.delivery.mp.microsoft.com",
+        "ctldl.windowsupdate.com"
+      ]);
+      let MDE_Results =
+        DeviceProcessEvents
+        | where Timestamp >= ago(Lookback)
+        | where FileName =~ "certutil.exe"
+        | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+        | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
+        | where not(ProcessCommandLine has_any (AllowlistedDomains))
+        | extend
+            AccountName   = InitiatingProcessAccountName,
+            AccountDomain = InitiatingProcessAccountDomain,
+            HostName      = DeviceName,
+            EventTime     = Timestamp
+        | project EventTime, HostName, AccountName, AccountDomain,
+            ProcessCommandLine, InitiatingProcessFileName;
+      let SecEvent_Results =
+        SecurityEvent
+        | where TimeGenerated >= ago(Lookback)
+        | where EventID == 4688
+        | where NewProcessName endswith "\\certutil.exe"
+        | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+        | where CommandLine has_any ("http://", "https://", "ftp://")
+        | where not(CommandLine has_any (AllowlistedDomains))
+        | extend
+            AccountName   = SubjectUserName,
+            AccountDomain = SubjectDomainName,
+            HostName      = Computer,
+            EventTime     = TimeGenerated,
+            ProcessCommandLine = CommandLine,
+            InitiatingProcessFileName = ParentProcessName
+        | project EventTime, HostName, AccountName, AccountDomain,
+            ProcessCommandLine, InitiatingProcessFileName;
+      union MDE_Results, SecEvent_Results
+      | sort by EventTime desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: CertUtil Used for File Download (Living off the Land)
+      description: |-
+        Detects certutil.exe being used to download files from remote URLs via the
+        -urlcache or -verifyctl flags. CertUtil is a signed Windows binary (LOLBin)
+        that attackers abuse to download payloads while bypassing application
+        whitelisting and network controls.
+        Tune AllowlistedDomains to match your PKI/CA infrastructure.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          ntDomainColumn: AccountDomain
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1105

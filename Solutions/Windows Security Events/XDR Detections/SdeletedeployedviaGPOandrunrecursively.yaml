@@ -1,0 +1,73 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d9f28fdf-abc8-4f1a-a7e7-1aaec87a2fc5
+    path: Analytic Rules/SdeletedeployedviaGPOandrunrecursively.yaml
+    version: 1.0.2
+    querySha256: 8002598ba3d8277ad09f5a08c0ae2d03c09bc02fa49253518cf330e0e82348ea
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - source queryPeriod has no direct Custom Detection schedule field; verify the KQL lookback
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - Host.FullName has no supported Custom Detection field
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+properties:
+  id: xdr-sdelete-deployed-via-gpo-and-run-recursively-d9f28fdf
+  displayName: Sdelete deployed via GPO and run recursively
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+        | where EventID == 4688
+        | where Process =~ "svchost.exe"
+        | where CommandLine has "-k GPSvcGroup" or CommandLine has "-s gpsvc"
+        | extend timekey = bin(TimeGenerated, 1m)
+        | project timekey, NewProcessId, Computer
+        | join kind=inner (SecurityEvent
+        | where EventID == 4688
+        | where Process =~ "sdelete.exe" or CommandLine has "sdelete"
+        | where ParentProcessName endswith "svchost.exe"
+        | where CommandLine has_all ("-s", "-r")
+        | extend newProcess = Process
+        | extend timekey = bin(TimeGenerated, 1m)
+        ) on $left.NewProcessId == $right.ProcessId, timekey, Computer
+        | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+        | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Sdelete deployed via GPO and run recursively
+      description: '''This query looks for the Sdelete process being run recursively after being deployed to a host via GPO.
+        Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485

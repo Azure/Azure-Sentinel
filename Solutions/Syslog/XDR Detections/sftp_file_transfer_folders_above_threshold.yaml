@@ -1,0 +1,76 @@
+schemaVersion: 1.0.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7355434e-09d5-4401-b56d-e03e9379dfb1
+    path: Analytic Rules/sftp_file_transfer_folders_above_threshold.yaml
+    version: 1.0.2
+    querySha256: 8daccb633fccaa9d478b094eb88b2f48eb8f55378a903c7a7b1633bbf36dea5c
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - File has no supported Custom Detection mapping
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+properties:
+  id: xdr-sftp-file-transfer-folder-count-above-threshold-7355434e
+  displayName: SFTP File transfer folder count above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      Syslog
+      | where ProcessName has "sftp"
+          and SyslogMessage has "close "
+          and SyslogMessage has " bytes read "
+      | parse SyslogMessage with "close \"" filepath "\" bytes read " readbytes: int " written " writtenbytes: int
+      | parse kind=regex filepath with dirpath:string "/" filename:string
+      | join kind=leftouter (
+          Syslog
+          | where ProcessName has "sftp" and SyslogMessage has "session opened for"
+          | parse SyslogMessage with "session opened for local user " username: string " from [" src_ip "]"
+          | project username, src_ip, ProcessID
+          )
+          on ProcessID
+      | project-away ProcessID1
+      | summarize count_distinct_dirpath=dcount(dirpath), dirlist=make_set(dirpath) by Computer, username, src_ip, bin(TimeGenerated, 15m)
+      | where count_distinct_dirpath >= threshold
+      | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SFTP File transfer folder count above threshold
+      description: |-
+        'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.
+         It requires SFTP VERBOSE loglevel to be enabled.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: src_ip
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
