@@ -9,6 +9,8 @@ requiredDataConnectors:
   - EntraIdSignInEvents
 tactics:
 - Persistence
+relevantTechniques:
+- T1098.005
 query: |
   let mfaMethodAdded=CloudAppEvents
   | where ActionType =~ "Update user." 
@@ -23,7 +25,8 @@ query: |
   let riskySignins=EntraIdSignInEvents
   | where hasusersWithNewMFAMethod
   | where AccountObjectId in (usersWithNewMFAMethod)
-  | where RiskLevelDuringSignIn in ("50","100") //Medium and High sign-in risk level.
+  // Medium and High sign-in risk level
+  | where RiskLevelDuringSignIn in ("50","100")
   | where Application in ("Office 365 Exchange Online", "OfficeHome")
   | where isnotempty(SessionId)
   | project SignInTimestamp=Timestamp, Application, SessionId, AccountObjectId, IPAddress,RiskLevelDuringSignIn
@@ -31,6 +34,27 @@ query: |
   mfaMethodAdded
   | join kind=inner riskySignins on AccountObjectId
   | extend TimeDelta = MfaAddedTimestamp - SignInTimestamp
-  // risky sign-in before MFA method added by a maximum of 6h
+  // Risky sign-in before MFA method added by a maximum of 6h
   | where TimeDelta between (0min .. 6h)
   | project-away AccountObjectId1
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUpn
+  - identifier: AadUserId
+    columnName: AccountObjectId
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+version: 1.0.1
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
