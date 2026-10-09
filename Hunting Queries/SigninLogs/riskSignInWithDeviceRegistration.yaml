@@ -39,8 +39,10 @@ query: |
   | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn 
   | summarize SignInTimestamp=argmin(SignInTimestamp,*) by AppDisplayName, CorrelationId, AccountObjectId, IPAddress, RiskLevelDuringSignIn;
   registeredDevices 
-  | join riskySignins on AccountObjectId 
-  | where DeviceRegistrationTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
+  | join kind=inner riskySignins on AccountObjectId
+  | extend SignInToRegistration = DeviceRegistrationTimestamp - SignInTimestamp
+  // Risky sign-in before registration by a maximum of 6 hours
+  | where SignInToRegistration between (0min .. timeDelta)
   | project-away AccountObjectId1
   | extend timestamp = DeviceRegistrationTimestamp, AccountCustomEntity = AccountUpn, IPCustomEntity = IPAddress
 entityMappings:
@@ -54,4 +56,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.0
+version: 1.0.1
