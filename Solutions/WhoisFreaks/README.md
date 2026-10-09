@@ -7,83 +7,15 @@ This solution ingests WhoisFreaks threat intelligence and newly registered domai
 - Azure CLI logged in to the target subscription (`az login`).
 - A staging Microsoft Sentinel workspace for integration tests. Validate production changes in staging before deploying them to production.
 - A WhoisFreaks API key entitled to each feed you enable.
-- The workspace resource group, workspace name, workspace region, DCE URL, and DCR immutable ID. The values in `Infra/connect-pollers.json` are examples/defaults; verify them against the target environment.
-- `jq`, `unzip`, and `zip` for local checks and package inspection.
+- Workspace resource group and workspace name for checking deployed connector resources.
 
 Do not commit API keys, generated parameter files containing secrets, or deployment outputs with secrets. Supply the key through a protected shell variable or a secret manager.
 
-## Pre-PR Validation
+## Validation and Packaging
 
-Run from this solution directory. These checks verify JSON syntax, require all seven nested feed requests to use a page size of 10000, and verify the package contains a valid template:
+The source connector configuration is in `Data Connectors/WhoisFreaks_CCF/`. Validate and package the solution with the repository's V3 build-and-validation flow. The solution manifest lists the four analytic-rule YAML files so the generated package includes their templates.
 
-```bash
-set -euo pipefail
-
-jq empty Infra/connect-pollers.json
-jq empty Package/mainTemplate.json
-jq empty 'Data Connectors/WhoisFreaks_CCF/WhoisFreaks_PollingConfig.json'
-
-for file in Infra/connect-pollers.json Package/mainTemplate.json 'Data Connectors/WhoisFreaks_CCF/WhoisFreaks_PollingConfig.json'; do
-  test "$(jq '[.. | objects | .pageSize? // empty] | length' "$file")" -eq 7
-  jq -e '[.. | objects | .pageSize? // empty] | all(. == 10000)' "$file" >/dev/null
-done
-
-unzip -p Package/3.0.0.zip mainTemplate.json | jq empty
-unzip -p Package/3.0.0.zip mainTemplate.json | jq -e '[.. | objects | .pageSize? // empty] | length == 7 and all(. == 10000)' >/dev/null
-```
-
-If you change templates, rebuild `Package/3.0.0.zip` from the package contents after validating the source files. Confirm that the package contains the same `mainTemplate.json` you intend to release.
-
-Rebuild and validate the package through the repository's source-based packaging flow instead of editing the ZIP archive directly. After the solution passes validation, regenerate the package from the approved source files so the generated template and metadata stay in sync with the repo contents.
-
-Set deployment values for a staging workspace. The API key is read without echoing it or placing it literally in shell history:
-
-```bash
-export RESOURCE_GROUP='your-staging-resource-group'
-export WORKSPACE='your-staging-workspace'
-export LOCATION='your-workspace-region'
-export DCE_URL='https://your-dce.ingest.monitor.azure.com'
-export DCR_IMMUTABLE_ID='dcr-your-immutable-id'
-read -rsp 'WhoisFreaks API key: ' WHOISFREAKS_API_KEY; printf '\n'
-```
-
-Validate and preview the poller deployment. These commands check the ARM deployment and planned resource changes; they do not prove that every external feed is accessible or that the full poll succeeds:
-
-```bash
-az deployment group validate \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file Infra/connect-pollers.json \
-  --parameters workspace="$WORKSPACE" location="$LOCATION" \
-    dataCollectionEndpoint="$DCE_URL" \
-    dataCollectionRuleImmutableId="$DCR_IMMUTABLE_ID" \
-    apiKey="$WHOISFREAKS_API_KEY"
-
-az deployment group what-if \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file Infra/connect-pollers.json \
-  --parameters workspace="$WORKSPACE" location="$LOCATION" \
-    dataCollectionEndpoint="$DCE_URL" \
-    dataCollectionRuleImmutableId="$DCR_IMMUTABLE_ID" \
-    apiKey="$WHOISFREAKS_API_KEY"
-```
-
-The Sentinel connector UI offers a multi-select feed list, with all seven selected by default. Select only feeds included in the API subscription. `Infra/connect-pollers.json` is a direct-deployment/test template and exposes one boolean per feed. A real deployment performs CCF connectivity checks and can start ingestion, so test in staging first:
-
-```bash
-az deployment group create \
-  --name "whoisfreaks-smoke-$(date -u +%Y%m%dT%H%M%SZ)" \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file Infra/connect-pollers.json \
-  --parameters workspace="$WORKSPACE" location="$LOCATION" \
-    dataCollectionEndpoint="$DCE_URL" \
-    dataCollectionRuleImmutableId="$DCR_IMMUTABLE_ID" \
-    apiKey="$WHOISFREAKS_API_KEY" \
-    enableThreatMalware=true enableThreatPhishing=false enableThreatSpam=false \
-    enableNrdGtldWhois=false enableNrdGtldNoWhois=false \
-    enableNrdCctldWhois=false enableNrdCctldNoWhois=false
-```
-
-After a successful smoke test, deploy the other entitled feeds in staging, check ingestion and rule behavior, then repeat the reviewed deployment in production. Use the DCE and DCR values belonging to the same target workspace.
+The connector UI offers a multi-select feed list. Select only feeds included in the API subscription. Test in staging first; successful deployment and data ingestion depend on the target workspace and feed entitlements.
 
 ## Analytic Rule Testing
 
@@ -95,21 +27,7 @@ The four rule source files are in `Analytic Rules/`. Before packaging or deployi
 4. Validate the source YAML and then run the repository's solution validation flow so the generated ARM package is checked before deployment. Confirm the rule exists, is enabled as intended, and has the expected frequency, period, severity, tactics, and techniques.
 5. Generate a controlled matching event in staging only if you need to test alert creation end to end. Do not create artificial production incidents just to test a rule.
 
-Example validation for all rule templates:
-
-```bash
-for file in 'Analytic Rules'/*.yaml; do
-  jq empty "$file"
-done
-```
-
-After source validation, generate and validate the packaged solution with the repository's build-and-validation entry point:
-
-```bash
-pwsh ./.script/local-validation/build-and-validate.ps1 -SolutionName "WhoisFreaks"
-```
-
-For each KQL query, use the Logs experience to validate and inspect results before deploying. The repo build-and-validation flow checks the generated ARM package, while source YAML validation checks the rule metadata and syntax.
+For each KQL query, use the Logs experience to validate and inspect results before deploying. The repository's V3 build-and-validation flow checks the generated ARM package and source rule metadata.
 
 ## Data Verification
 
