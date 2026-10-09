@@ -53,3 +53,6 @@ The currently supported Playbook Alert categories are:
 - `identity_novel_exposures`
 - `third_party_risk`
 - `cyber_vulnerability`
+- `dark_web`
+- `malicious_sites`
+- `socmed_impersonation`
