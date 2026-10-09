@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 | ----------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| 4.0.0       | 07-10-2026                     | Updated **Data Connector** to support connecting multiple Azure DevOps organizations, each as its own connection in a single workspace. Forked and published by KanenasCS. |
 | 3.0.9       | 17-04-2026                     | Updated **Polling Config** to fix parameter mismatch                                    |
 | 3.0.8       | 26-01-2026                     | Updated **Data Connector** to support dynamic Redirect URI                              |
 | 3.0.7       | 22-01-2026                     | Updated solution description by eliminating legacy streaming text                       |
