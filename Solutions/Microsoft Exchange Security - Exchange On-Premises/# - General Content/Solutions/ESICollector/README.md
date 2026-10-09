@@ -1,161 +1,141 @@
-# **Exchange Security Insight Collector Download**
+# Exchange Security Insights Collector package and upgrade guide
 
-## Description
+This README accompanies the on-premises collector package. It documents the current version, package replacement procedure, version-specific configuration changes, and legacy upgrade paths.
 
-The Exchange Security Insight Collector is a PowerShell script that collects data from Exchange Servers and Exchange Online. The script is designed to be run on a Windows machine and can be scheduled to run at regular intervals. The script collects data from Exchange Servers and Exchange Online and sends it to the Microsoft Exchange Security Insight solution for Microsoft Sentinel.
+- For server prerequisites and permissions, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md). 
+- For Azure Monitor deployment and migration, see [Configure the Exchange Security Insights On-Premises Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). 
+- For individual settings, see the [configuration parameter reference](./Parameters.md).
 
-You can refer to the Exchange Securitty Insight Collector [here](./../../Documentations/ESICollector.md)
+## Current version
 
-Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
-
-## Versioning
-
-## Actual Version : 7.6.0.1
+The current version of the Exchange Security Insights Collector is **8.0.0.0**.
 
 ## Upgrade paths
 
-### From 7.6.0.0 to 7.6.0.1
+### From 7.6.0.1 to 8.0.0.0
 
-#### **Configuration File**
+> [!IMPORTANT]
+> Version 8.0.0.0 adds native support for the Azure Monitor Log Ingestion API, based on Data Collection Endpoints (DCEs) and Data Collection Rules (DCRs). This API replaces the legacy Log Analytics HTTP Data Collector API.
+>
+> The collector continues to support both APIs. The API used is controlled by the `SentinelLogIngestionAPIActivated` setting, allowing the migration to be completed in two phases:
+>
+> 1. Upgrade the collector while continuing to use the legacy API.
+> 2. Update the Microsoft Sentinel solution, deploy the Azure Monitor data connector, and switch the collector configuration.
+>
+> For complete migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
-Nothing to change
+#### Required Azure PowerShell module
 
-#### **ESI Collector Script**
+> [!IMPORTANT]
+> Version 8.0.0.0 requires the Azure PowerShell `Az.Accounts` module on every Windows server that runs the collector. Install or update this module on the collector server **before replacing or running `CollectExchSecIns.ps1`**. The scheduled task will not be able to authenticate to Azure Monitor if the module is unavailable.
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+Open an elevated Windows PowerShell session on the collector server and verify that the module and `Connect-AzAccount` command are available:
 
-### From 7.5.2.2 to 7.6.0.0
+```powershell
+Get-Module -ListAvailable -Name Az.Accounts
+Get-Command -Name Connect-AzAccount -Module Az.Accounts
+```
 
-#### **Configuration File**
+If the module is not installed, install it for all users so that it is available to the collector's scheduled-task account:
 
-Notning to change
+```powershell
+Install-Module -Name Az.Accounts -Repository PSGallery -Scope AllUsers -Force
+```
 
-#### **ESI Collector Script**
+For all server requirements, see [Collector prerequisites and connectivity](../../Documentations/ESICollector.md).
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+#### Configuration changes
 
-### From 7.5.2.1 to 7.5.2.2
+The configuration schema remains backward compatible. Existing configurations continue to work without changes, but the collector displays a warning until migration to the Log Ingestion API is completed.
 
-#### **Configuration File**
+The following settings in the `LogCollection` section are required only when using the Log Ingestion API:
 
-Update Config File to the new version. Be carefull to keep your custom parameters.
+| Setting | Description |
+|---------|-------------|
+| `SentinelLogIngestionAPIActivated` | Set to `true` to use the Log Ingestion API. The default is `false`. |
+| `DataCollectionEndpointURI` | URI of the DCE displayed by the **Exchange Security Insights On-Premises Collector (Azure Monitor)** data connector. |
+| `DCRImmutableId` | Immutable ID displayed by the data connector. |
+| `TargetLogTenantID` | Microsoft Entra tenant ID used for certificate authentication. |
+| `TargetLogAppID` | Application ID created for collector ingestion. |
+| `TargetLogCertificateThumbprint` | Thumbprint of the collector authentication certificate. |
 
-#### **ESI Collector Script**
+Additional configuration changes:
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+- `ExportDomainsInformation` has moved from the `Global` section to the `LogCollection` section. Its default value remains `true`.
+- In the `Advanced` section:
+  - `MaximalSentinelPacketSizeMb` defaults to `0.9` when the Log Ingestion API is used because each POST request has a 1 MB payload limit.
+  - New GitHub download settings allow configuration retrieval through the GitHub API instead of a raw file download.
 
-### From 7.5.2.1 to 7.5.2.2
+After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
 
-#### **Configuration File**
+#### Collector update
 
-Nothing to change
+1. Verify or install the required [`Az.Accounts` module](#required-azure-powershell-module) on the collector server.
+2. Back up the existing `Config\CollectExchSecConfiguration.json` file.
+3. Before extracting the package, unblock the downloaded ZIP file:
 
-#### **ESI Collector Script**
+   ```powershell
+   Unblock-File -LiteralPath .\CollectExchSecIns.zip
+   ```
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+4. Extract `CollectExchSecIns.zip` into a new folder.
+5. Replace the existing `CollectExchSecIns.ps1` file with the new version.
+6. Copy the new `setup.ps1` file from the newly extracted folder to the existing collector directory, replacing the previous version.
+7. After configuring the new connector, update the configuration on the collector server by using [`setup.ps1`](../../Documentations/ReadmeSetup.PS1.md). Select the configuration-only update mode to switch the existing JSON file to the Azure Monitor Log Ingestion API without changing the environment or scheduled-task configuration.
 
-### From 7.5.2.0 to 7.5.2.1
+If the package was extracted before the ZIP file was unblocked, unblock the copied scripts in the existing collector directory:
 
-#### **Configuration File**
+```powershell
+Unblock-File -LiteralPath .\CollectExchSecIns.ps1
+Unblock-File -LiteralPath .\setup.ps1
+```
 
-Parameter "PaginationErrorThreshold": 5 is added in the Advanced part
+- **Continue using the legacy API temporarily:** No additional changes are required. The collector displays a warning during each execution until the migration is completed.
+- **Switch to the Log Ingestion API:**
+  - For complete migration instructions, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment)
 
-A new category OnlineMessageTracking could be added. The segment can be added in InstanceConfiguration part : 
-    "ExchangeOnlineMessageTracking":{
-			"All":"true",
-			"Category":"OnlineMessageTracking",
-			"Capabilities":"OL",
-			"OutputName":"ExchangeOnlineMessageTracking"
-		}
+#### Data model changes
 
-#### **ESI Collector Script**
+The new tables include the following `Identity` subproperty columns, which are extracted during ingestion by the DCR `transformKql`:
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+- `Identity_Depth_d`
+- `Identity_DistinguishedName_s`
+- `Identity_DomainId_s`
+- `Identity_IsDeleted_b`
+- `Identity_IsRelativeDn_b`
+- `Identity_Name_s`
+- `Identity_ObjectGuid_g`
+- `Identity_Parent_s`
+- `Identity_PartitionFQDN_s`
+- `Identity_PartitionGuid_g`
+- `Identity_Rdn_s`
 
-### From 7.5.1.1 to 7.5.2.0
+The original `Identity_s` string column is preserved. Existing analytic rules, hunting queries, and workbooks that use `Identity_s` remain compatible.
 
-#### **Configuration File**
+### Legacy upgrade history
 
-Nothing changed
+For every upgrade path below, replace the existing collector script with the new version. The table lists any additional configuration changes.
 
-#### **ESI Collector Script**
+| Upgrade path | Configuration changes |
+|--------------|-----------------------|
+| 7.6.0.0 to 7.6.0.1 | No configuration changes are required. |
+| 7.5.2.2 to 7.6.0.0 | No configuration changes are required. |
+| 7.5.2.1 to 7.5.2.2 | Update the configuration file to the new version and preserve all custom settings. |
+| 7.5.2.0 to 7.5.2.1 | Add `PaginationErrorThreshold` to the `Advanced` section. |
+| 7.5.1.1 to 7.5.2.0 | No configuration changes are required. |
+| 7.5.0 to 7.5.1.1 | Add `PaginationErrorThreshold` to the `Advanced` section. |
+| 7.4.2 to 7.5.0 | No configuration changes are required. |
+| 7.3.2 to 7.4.2 | Add the new parameters to the `Advanced` section. |
+| 7.3.1 to 7.3.2 | Add the new parameters to the `Advanced` section. |
+| 7.3.0 to 7.3.1 | No configuration changes are required. |
+| 7.2.0 to 7.3.0 | Add the `Beta` property to the `Advanced` section as described below. |
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+#### Beta setting
 
-### From 7.5.0 to 7.5.1.1
+Starting with version 7.3.0, the `Advanced` section includes a `Beta` property. Its default value is `false`. Set it to `true` only when using beta add-on files. Beta features may contain defects and should be used with caution.
 
-#### **Configuration File**
+## Version availability policy
 
-Parameter "PaginationErrorThreshold": 5 is added in the Advanced part
+Only the two most recent collector versions are retained in the public repository.
 
-A new category OnlineMessageTracking could be added. The segment can be added in InstanceConfiguration part : 
-    "ExchangeOnlineMessageTracking":{
-			"All":"true",
-			"Category":"OnlineMessageTracking",
-			"Capabilities":"OL",
-			"OutputName":"ExchangeOnlineMessageTracking"
-		}
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.4.2 to 7.5.0
-
-#### **Configuration File**
-
-Nothing changed
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.3.2 to 7.4.2
-
-#### **Configuration File**
-
-Parameters added in Advanced Section
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-Attention, now ManagedIdentity is used for Exchange Online instead of RunAs Account.
-Assign rights to Managed Identity following Standard Procedure : [EXO for ManagedIdentity](https://learn.microsoft.com/en-us/powershell/exchange/connect-exo-powershell-managed-identity?view=exchange-ps#step-4-grant-the-exchangemanageasapp-api-permission-for-the-managed-identity-to-call-exchange-online)
-
-### From 7.3.1 to 7.3.2
-
-#### **Configuration File**
-
-Parameters added in Advanced Section
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.3.0 to 7.3.1
-
-#### **Configuration File**
-
-No changes in Configuration file
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.2.0 to 7.3.0
-
-#### **Configuration File**
-
-The only change on the configuration file is adding a "Beta" Property in "Advanced" part. By default "Beta" is "False". If you decide to use Beta off Add-On files, you can switch this parameter to true. Attention, bugs can be present in Beta mode.
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-## Download availability/Rules
-
-Only 2 major versions are kept on the public repository.
-The zip file without versioning correspond to the latest version of the Collector.
+The unversioned ZIP package always contains the latest available version of the collector.
