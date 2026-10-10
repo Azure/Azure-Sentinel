@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.2.4       | 26-09-2026                     | Fixed the Dataverse Security Data Collector pagination flow to preserve encoded `@odata.nextLink` and `$skiptoken` values. |
 | 3.2.3       | 23-02-2026                     | Updated **Dataverse - Activity after failed logons** hunting query to use valid Enterprise technique |
 | 3.2.2       | 22-04-2025                     |<ul><li>Updated solution description.</li></ul> |
 | 3.2.1       | 11-04-2025                     |<ul><li>Move solution and content to GA.</li><li>Minor analytic rule update.</li></ul> |
