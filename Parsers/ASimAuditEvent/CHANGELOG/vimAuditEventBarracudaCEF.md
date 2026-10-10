@@ -1,5 +1,9 @@
 # Changelog for vimAuditEventBarracudaCEF.yaml
 
+## Version 0.2.3
+
+- (2026-10-10) Exclude SESSION_TIMEOUT events now normalized by the Authentication parser.
+
 ## Version 0.2.2
 
 - (2026-10-06) Normalize the ASIM schema version to 0.1.0 - [PR #15277](https://github.com/Azure/Azure-Sentinel/pull/15277)

@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication parser for Barracuda WAF
-  Version: '0.1.0'
-  LastUpdated: Jun 13 2023
+  Version: '0.1.1'
+  LastUpdated: Oct 10, 2026
 Product:
   Name: Barracuda WAF
 Normalization:
@@ -11,7 +11,7 @@ References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
@@ -65,7 +65,8 @@ ParserQuery: |
       [
       "LOGIN", "Logon", "Success",
       "UNSUCCESSFUL_LOGIN", "Logoff", "Failure",
-      "LOGOUT", "Logoff", "Success"
+      "LOGOUT", "Logoff", "Success",
+      "SESSION_TIMEOUT", "Logoff", "Success"
   ];
   let EventResultDetailsLookup = datatable (
       Reason: string,
@@ -87,10 +88,11 @@ ParserQuery: |
           barracuda_CL
       | where not(disabled)
           and (LogType_s == "AUDIT")
-          and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+          and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN", "SESSION_TIMEOUT"))
       | parse trim(@'[^\w(")]+', EventMessage_s) with * "Reason=" Reason:string
       | extend Reason = trim(@'(")', Reason)
       | lookup EventResultDetailsLookup on Reason
+      | extend EventResultDetails = iff(EventName_s == "SESSION_TIMEOUT", "Session expired", EventResultDetails)
       | lookup EventTypeLookup on EventName_s
       | extend 
           EventType = EventType_lookup,
@@ -136,10 +138,11 @@ ParserQuery: |
       CommonSecurityLog
       | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory == "AUDIT"
-          and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+          and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN", "SESSION_TIMEOUT"))
       | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason:string
       | extend Reason = trim(@'(")', Reason)
       | lookup EventResultDetailsLookup on Reason
+      | extend EventResultDetails = iff(toupper(ProcessName) == "SESSION_TIMEOUT", "Session expired", EventResultDetails)
       | extend ProcessName = toupper(ProcessName)
       | lookup EventTypeLookup on $left.ProcessName == $right.EventName_s
       | extend 

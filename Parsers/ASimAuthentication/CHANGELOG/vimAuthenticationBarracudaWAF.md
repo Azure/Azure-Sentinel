@@ -1,5 +1,10 @@
 # Changelog for vimAuthenticationBarracudaWAF.yaml
 
+## Version 0.1.3
+
+- (2026-10-10) Normalize SESSION_TIMEOUT as a successful Logoff with Session expired result details.
+- Apply the eventresult filter to CommonSecurityLog events, including session timeouts.
+
 ## Version 0.1.2
 
 - (2024-06-19) april entity mapping updates diana p3 - [PR #10342](https://github.com/Azure/Azure-Sentinel/pull/10342)
