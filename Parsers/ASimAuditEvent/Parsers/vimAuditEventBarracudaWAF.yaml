@@ -6,7 +6,7 @@ Product:
   Name: Barracuda WAF
 Normalization:
   Schema: AuditEvent
-  Version: '0.1.0'
+  Version: '1.0.0'
 References:
 - Title: ASIM Audit Event Schema
   Link: https://aka.ms/ASimAuditEventDoc
@@ -41,6 +41,12 @@ ParserParams:
     Type: dynamic
     Default: dynamic([])
   - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
     Type: dynamic
     Default: dynamic([])
 ParserQuery: |
@@ -122,7 +128,9 @@ ParserQuery: |
       eventtype_in: dynamic=dynamic([]),
       eventresult: string='*',
       newvalue_has_any: dynamic=dynamic([]),
-      operation_has_any: dynamic=dynamic([]))
+      operation_has_any: dynamic=dynamic([]),
+      actorusername_has_any: dynamic=dynamic([]),
+      object_has_any: dynamic=dynamic([]))
       {
         let BarracudaCustom = 
             union isfuzzy=true
@@ -132,6 +140,8 @@ ParserQuery: |
             | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime) 
             | where LogType_s == "AUDIT" and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN", "SESSION_TIMEOUT")
             | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(LoginIP_s, srcipaddr_has_any_prefix))
+            | where (array_length(actorusername_has_any) == 0 or AdminName_s has_any (actorusername_has_any))
+                and (array_length(object_has_any) == 0 or ObjectName_s has_any (object_has_any))
             | extend
                 Operation = CommandName_s,
                 EventResult = "Success"
@@ -151,7 +161,7 @@ ParserQuery: |
             | lookup ObjectTypeLookup on ObjectType_s
             | extend
                 EventSchema = "AuditEvent",
-                EventSchemaVersion = "0.1.0",
+                EventSchemaVersion = "1.0.0",
                 EventVendor = "Barracuda",
                 EventProduct = "WAF",
                 EventCount = toint(1)
@@ -176,21 +186,55 @@ ParserQuery: |
             | extend
                 IpAddr = SrcIpAddr,
                 ValueType = iff(isnotempty(Value),"Other","")
-            | project-away
-                *_d,
-                *_s,
-                EventType_lookup,
-                Reason,
-                _ResourceId,
-                severity,
-                RawData,
-                SourceIP,
-                Message,
-                Computer,
-                MG,
-                ManagementGroupName,
-                TenantId,
-                SourceSystem;
+            | extend
+                ActingApplicationEntityKey = "",
+                ActorUserAdditionalIds = dynamic([]),
+                ActorUserEntityKey = "",
+                AdditionalEntities = dynamic([]),
+                DvcEntityKey = "",
+                SrcSystemEntityKey = "",
+                TargetApplicationEntityKey = "",
+                TargetSystemEntityKey = ""
+            | project
+                ActingApplicationEntityKey,
+                ActorUserAdditionalIds,
+                ActorUserEntityKey,
+                ActorUserType,
+                ActorUsername,
+                ActorUsernameType,
+                AdditionalEntities,
+                Dvc,
+                DvcEntityKey,
+                DvcHostname,
+                DvcIpAddr,
+                EventCount,
+                EventEndTime,
+                EventMessage,
+                EventProduct,
+                EventResult,
+                EventResultDetails,
+                EventSchema,
+                EventSchemaVersion,
+                EventSeverity,
+                EventStartTime,
+                EventType,
+                EventVendor,
+                IpAddr,
+                NewValue,
+                Object,
+                ObjectType,
+                OldValue,
+                Operation,
+                Src,
+                SrcIpAddr,
+                SrcSystemEntityKey,
+                TargetApplicationEntityKey,
+                TargetSystemEntityKey,
+                TimeGenerated,
+                Type,
+                User,
+                Value,
+                ValueType;
         BarracudaCustom
       };
       parser(
@@ -201,5 +245,7 @@ ParserQuery: |
                 eventtype_in=eventtype_in,
                 eventresult=eventresult,
                 newvalue_has_any=newvalue_has_any,
-                operation_has_any=operation_has_any
+                operation_has_any=operation_has_any,
+                actorusername_has_any=actorusername_has_any,
+                object_has_any=object_has_any
             )

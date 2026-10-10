@@ -2,7 +2,8 @@
 
 ## Version 0.2.3
 
-- (2026-10-10) Exclude SESSION_TIMEOUT events now normalized by the Authentication parser.
+- (2026-10-10) Exclude SESSION_TIMEOUT events now normalized by the Authentication parser. - [PR #15298](https://github.com/Azure/Azure-Sentinel/pull/15298)
+- Align the declared and output schema version with 1.0.0; use an explicit normalized output projection and add the required entity placeholders.
 
 ## Version 0.2.2
 
