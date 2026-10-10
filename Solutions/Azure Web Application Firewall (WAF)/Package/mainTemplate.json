@@ -65,7 +65,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Azure Web Application Firewall (WAF)",
-    "_solutionVersion": "3.0.2",
+    "_solutionVersion": "3.0.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-azurewebapplicationfirewal",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "WAF",
@@ -77,6 +77,11 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "16a81a04-3d26-4118-8f6d-6dd3389583cc",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('16a81a04-3d26-4118-8f6d-6dd3389583cc')))]"
+    },
     "analyticRuleObject1": {
       "analyticRuleVersion1": "1.0.6",
       "_analyticRulecontentId1": "46ac55ae-47b8-414a-8f94-89ccd1962178",
@@ -184,7 +189,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Azure Web Application Firewall (WAF) data connector with template version 3.0.2",
+        "description": "Azure Web Application Firewall (WAF) data connector with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -377,13 +382,98 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Azure WAF - Bypass Via Double URL Encoded Admin Paths_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "Azure_Web_Application_Firewall_(WAF)_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Bypass Attempt via Double URL Encoding",
+                "category": "Hunting Queries",
+                "query": "let StartTime = ago(1d);\nlet EndTime = now();\nlet TargetAdminPathRegex = @\"^/?(admin|psemhub|bin|config|setup|install|login)\";\nlet ModernWAF = (AGWFirewallLogs\n| where TimeGenerated between (StartTime .. EndTime)\n| where Action in~ (\"Allowed\", \"Matched\")\n| extend RequestPath = tostring(split(RequestUri, \"?\")[0])\n| extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))\n| where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode\n| extend NormalizedPath = tolower(SecondaryDecode)\n| where NormalizedPath matches regex TargetAdminPathRegex\n| project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action);\nlet LegacyWAF = (AzureDiagnostics\n| where TimeGenerated between (StartTime .. EndTime)\n| where Category == \"ApplicationGatewayFirewallLog\"\n| where action_s in~ (\"Allowed\", \"Matched\")\n| extend RequestPath = tostring(split(requestUri_s, \"?\")[0])\n| extend PrimaryDecode = url_decode(RequestPath), SecondaryDecode = url_decode(url_decode(RequestPath))\n| where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode\n| extend NormalizedPath = tolower(SecondaryDecode)\n| where NormalizedPath matches regex TargetAdminPathRegex\n| project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s);\nunion isfuzzy=true ModernWAF, LegacyWAF\n| summarize\nFirstSeen = min(TimeGenerated),\nLastSeen = max(TimeGenerated),\nAttackCount = count(),\nSamplePayloads = make_set(requestUri, 5)\nby clientIp, hostname, action\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Identifies potential malicious bypass attempts of the Azure Web Application Firewall using Double URL Encoding techniques. Adversaries often use multi-layer encoding to obfuscate payloads targeting administrative or sensitive application directories."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "DefenseEvasion"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1027"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "Azure Web Application Firewall (WAF) Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Azure Web Application Firewall (WAF)",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Bypass Attempt via Double URL Encoding",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "MaliciousWAFSessions_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "MaliciousWAFSessions_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -425,13 +515,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -487,7 +577,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AFD-Premium-WAF-SQLiDetection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "AFD-Premium-WAF-SQLiDetection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -535,22 +625,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "URI_s",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "clientIP_s",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -606,7 +696,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AFD-Premium-WAF-XSSDetection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "AFD-Premium-WAF-XSSDetection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -651,22 +741,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "URI_s",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "clientIP_s",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -722,7 +812,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AFD-WAF-Code-Injection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "AFD-WAF-Code-Injection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -769,22 +859,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "URI_s",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "clientIP_s",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -840,7 +930,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AFD-WAF-Path-Traversal-Attack_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "AFD-WAF-Path-Traversal-Attack_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -889,22 +979,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "URI_s",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "clientIP_s",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -960,7 +1050,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "App-GW-WAF-Code-Injection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "App-GW-WAF-Code-Injection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -1007,22 +1097,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "Uri",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1078,7 +1168,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "App-GW-WAF-Path-Traversal-Attack_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "App-GW-WAF-Path-Traversal-Attack_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -1127,22 +1217,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "Uri",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1198,7 +1288,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "App-GW-WAF-Scanner-detection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "App-GW-WAF-Scanner-detection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -1248,22 +1338,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "Uri",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1319,7 +1409,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "App-GW-WAF-SQLiDetection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "App-GW-WAF-SQLiDetection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -1367,22 +1457,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "Uri",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1438,7 +1528,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "App-GW-WAF-XSSDetection_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "App-GW-WAF-XSSDetection_AnalyticalRules Analytics Rule with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -1483,22 +1573,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "Uri",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "ClientIp",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -1554,7 +1644,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "WebApplicationFirewallFirewallEvents Workbook with template version 3.0.2",
+        "description": "WebApplicationFirewallFirewallEvents Workbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -1642,7 +1732,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "WebApplicationFirewallGatewayAccessEvents Workbook with template version 3.0.2",
+        "description": "WebApplicationFirewallGatewayAccessEvents Workbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion2')]",
@@ -1730,7 +1820,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "WebApplicationFirewallOverview Workbook with template version 3.0.2",
+        "description": "WebApplicationFirewallOverview Workbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion3')]",
@@ -1818,7 +1908,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "WebApplicationFirewallWAFTypeEvents Workbook with template version 3.0.2",
+        "description": "WebApplicationFirewallWAFTypeEvents Workbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion4')]",
@@ -1902,12 +1992,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.2",
+        "version": "3.0.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Azure Web Application Firewall (WAF)",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Web%20Application%20Firewall%20%28WAF%29/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Azure Web Application Firewall (WAF) solution for Microsoft Sentinel allows you to ingest Diagnostic Metrics from Application Gateway, Front Door and CDN into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 4, <strong>Analytic Rules:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Web%20Application%20Firewall%20%28WAF%29/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Azure Web Application Firewall (WAF) solution for Microsoft Sentinel allows you to ingest Diagnostic Metrics from Application Gateway, Front Door and CDN into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 4, <strong>Analytic Rules:</strong> 10, <strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1936,6 +2026,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
             },
             {
               "kind": "AnalyticsRule",
