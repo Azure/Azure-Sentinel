@@ -1,0 +1,44 @@
+id: 4b8f6b1e-5a3c-4d7e-9c2a-1f0e8d7c6b5a
+name: Databricks - Multiple failed logins from a single IP
+description: |
+  Detects ten or more failed Databricks login attempts from one source IP address within an hour. Repeated failures from one address against one or several accounts can indicate password guessing or credential stuffing against the workspace or account console.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  DatabricksAudit_CL
+  | where ServiceName == "accounts" and ActionName has "login"
+  | where ResponseStatusCode >= 400
+  | summarize FailedAttempts = count(), TargetUsers = make_set(UserEmail, 50), Workspaces = make_set(WorkspaceId, 20),
+      StartTime = min(EventTime), EndTime = max(EventTime) by SourceIPAddress
+  | where FailedAttempts >= 10
+  | extend UserEmail = tostring(TargetUsers[0])
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+customDetails:
+  FailedAttempts: FailedAttempts
+  TargetUsers: TargetUsers
+  Workspaces: Workspaces
+alertDetailsOverride:
+  alertDisplayNameFormat: "Databricks: {{FailedAttempts}} failed logins from {{SourceIPAddress}}"
+  alertDescriptionFormat: "{{FailedAttempts}} failed Databricks login attempts from {{SourceIPAddress}} between {{StartTime}} and {{EndTime}}."
+version: 1.0.0
+kind: Scheduled

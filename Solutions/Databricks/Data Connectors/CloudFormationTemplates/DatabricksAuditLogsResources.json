@@ -1,0 +1,341 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Creates the IAM role, SQS queue, dead-letter queue and queue policy that let Microsoft Sentinel read Databricks audit logs from an S3 bucket. Optionally creates the bucket with the S3 notification.",
+  "Parameters": {
+    "AwsRoleName": {
+      "Type": "String",
+      "Description": "Name of the role Microsoft Sentinel assumes. Must start with OIDC_.",
+      "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+      "Default": "OIDC_MicrosoftSentinelDatabricksAudit"
+    },
+    "SentinelWorkspaceId": {
+      "Type": "String",
+      "Description": "Microsoft Sentinel Workspace ID (shown on the connector page)."
+    },
+    "BucketName": {
+      "Type": "String",
+      "AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
+      "Description": "Name of the S3 bucket Databricks delivers audit logs to."
+    },
+    "DeliveryPathPrefix": {
+      "Type": "String",
+      "Description": "The delivery_path_prefix configured in Databricks, without leading or trailing slash.",
+      "Default": "audit-logs"
+    },
+    "SentinelSQSQueueName": {
+      "Type": "String",
+      "Default": "MicrosoftSentinelDatabricksAuditSqs",
+      "Description": "Name for the SQS queue."
+    },
+    "KmsKeyArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "ARN of the KMS key if the bucket uses SSE-KMS; leave empty for SSE-S3."
+    },
+    "CreateNewBucket": {
+      "AllowedValues": [
+        true,
+        false
+      ],
+      "Default": false,
+      "Description": "true creates the bucket with the notification. false (the usual case) expects the bucket to exist; add the notification to it afterwards.",
+      "Type": "String"
+    }
+  },
+  "Conditions": {
+    "CreateNewBucketCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateNewBucket"
+        },
+        true
+      ]
+    },
+    "HasKmsKey": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KmsKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "SentinelDeadLetterQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "${SentinelSQSQueueName}-dlq"
+        },
+        "MessageRetentionPeriod": 1209600
+      }
+    },
+    "SentinelSQSQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Ref": "SentinelSQSQueueName"
+        },
+        "VisibilityTimeout": 600,
+        "MessageRetentionPeriod": 345600,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "SentinelDeadLetterQueue",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 5
+        },
+        "Tags": [
+          {
+            "Key": "Bucket",
+            "Value": {
+              "Ref": "BucketName"
+            }
+          }
+        ]
+      }
+    },
+    "SentinelWebIdentityBasedRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Ref": "AwsRoleName"
+        },
+        "Description": "Role that lets Microsoft Sentinel read Databricks audit logs from S3 through SQS.",
+        "Path": "/",
+        "AssumeRolePolicyDocument": {
+          "Fn::Sub": "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"},\"Action\": \"sts:AssumeRoleWithWebIdentity\",\"Condition\": {\"StringEquals\": {\"sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud\": \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\",\"sts:RoleSessionName\": \"MicrosoftSentinel_${SentinelWorkspaceId}\"}}}]}"
+        },
+        "Policies": [
+          {
+            "PolicyName": "DatabricksAuditLogsReadPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "ReadQueue",
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:ChangeMessageVisibility",
+                    "sqs:GetQueueAttributes",
+                    "sqs:GetQueueUrl"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SentinelSQSQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Sid": "ReadDatabricksAuditObjects",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/${DeliveryPathPrefix}/*"
+                  }
+                },
+                {
+                  "Sid": "ListDatabricksPrefix",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}"
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "HasKmsKey",
+                    {
+                      "Sid": "DecryptIfSseKms",
+                      "Effect": "Allow",
+                      "Action": [
+                        "kms:Decrypt"
+                      ],
+                      "Resource": {
+                        "Ref": "KmsKeyArn"
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SentinelSQSQueuePolicyForS3": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "AllowS3ToSendNotifications",
+              "Action": [
+                "SQS:SendMessage"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SentinelSQSQueue",
+                    "Arn"
+                  ]
+                }
+              ],
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Fn::Sub": "${AWS::AccountId}"
+                  }
+                },
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:*:*:${BucketName}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "AllowSentinelRoleToConsume",
+              "Action": [
+                "SQS:ChangeMessageVisibility",
+                "SQS:DeleteMessage",
+                "SQS:ReceiveMessage",
+                "SQS:GetQueueUrl"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SentinelSQSQueue",
+                    "Arn"
+                  ]
+                }
+              ],
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::GetAtt": [
+                      "SentinelWebIdentityBasedRole",
+                      "Arn"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "Queues": [
+          {
+            "Ref": "SentinelSQSQueue"
+          }
+        ]
+      }
+    },
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateNewBucketCondition",
+      "DeletionPolicy": "Retain",
+      "DependsOn": [
+        "SentinelSQSQueuePolicyForS3"
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "BucketName"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "NotificationConfiguration": {
+          "QueueConfigurations": [
+            {
+              "Queue": {
+                "Fn::GetAtt": [
+                  "SentinelSQSQueue",
+                  "Arn"
+                ]
+              },
+              "Event": "s3:ObjectCreated:*",
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "prefix",
+                      "Value": {
+                        "Fn::Sub": "${DeliveryPathPrefix}/"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SentinelRoleArn": {
+      "Description": "Role ARN to paste into the Microsoft Sentinel collector.",
+      "Value": {
+        "Fn::GetAtt": [
+          "SentinelWebIdentityBasedRole",
+          "Arn"
+        ]
+      }
+    },
+    "SentinelSQSQueueURL": {
+      "Description": "Queue URL to paste into the Microsoft Sentinel collector.",
+      "Value": {
+        "Ref": "SentinelSQSQueue"
+      }
+    },
+    "SentinelSQSQueueArn": {
+      "Description": "Queue ARN for the S3 event notification when the bucket already exists.",
+      "Value": {
+        "Fn::GetAtt": [
+          "SentinelSQSQueue",
+          "Arn"
+        ]
+      }
+    },
+    "NotificationPrefix": {
+      "Description": "Prefix filter to use on the S3 event notification.",
+      "Value": {
+        "Fn::Sub": "${DeliveryPathPrefix}/"
+      }
+    }
+  }
+}

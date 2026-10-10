@@ -1,0 +1,45 @@
+id: 7a5c3e1b-9d2f-4b6a-8c4e-0f1d7b9a3e58
+name: Databricks - Personal access token created with long or no expiry
+description: |
+  Detects a Databricks personal access token being created with a lifetime longer than 90 days or with no expiry. Long-lived tokens outlive the session controls applied to interactive logins and are a common persistence mechanism after an account compromise.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1098.001
+  - T1528
+query: |
+  DatabricksAudit_CL
+  | where ServiceName in ("accounts", "tokens") and ActionName in ("generateDbToken", "tokenCreated")
+  | where ResponseStatusCode < 400
+  | extend ExpiryMs = tolong(RequestParams.tokenExpirationTime)
+  | extend Expires = iff(isnotnull(ExpiryMs) and ExpiryMs > 0, unixtime_milliseconds_todatetime(ExpiryMs), datetime(null))
+  | extend LifetimeDays = iff(isnotnull(Expires), datetime_diff("day", Expires, EventTime), -1)
+  | where LifetimeDays < 0 or LifetimeDays > 90
+  | extend TokenComment = tostring(RequestParams.comment)
+  | project EventTime, WorkspaceId, UserEmail, SourceIPAddress, ActionName, LifetimeDays, Expires, TokenComment
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+customDetails:
+  LifetimeDays: LifetimeDays
+  Expires: Expires
+  TokenComment: TokenComment
+version: 1.0.0
+kind: Scheduled
