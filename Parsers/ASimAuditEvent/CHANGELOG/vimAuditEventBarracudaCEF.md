@@ -5,6 +5,7 @@
 - (2026-10-10) Exclude SESSION_TIMEOUT events now normalized by the Authentication parser. - [PR #15298](https://github.com/Azure/Azure-Sentinel/pull/15298)
 - Align the declared and output schema version with 1.0.0; use an explicit normalized output projection and add the required entity placeholders.
 - Support actorusername_has_any and object_has_any with early native-column filters.
+- Document accepted missing-field warnings in the YAML Exceptions section.
 
 ## Version 0.2.2
 
