@@ -1,0 +1,29 @@
+id: e9850d1c-4821-4375-bfe7-3559684c141d
+name: Delinea - Events by severity
+description: |
+  Breaks down the Delinea Platform audit stream by event severity / level (e.g. PrivilegedActivity,
+  Info, Warning, Error) over the lookback window, with no alerting threshold applied. Shows the event
+  count, distinct users, and the top event types contributing to each level so an analyst can gauge the
+  overall mix of activity and zero in on the higher-severity tiers. Use it to spot an unusual spike of
+  privileged or error-level events relative to normal volume.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1087
+query: |
+  let lookback = 24h;
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | extend Level = iif(isempty(Level), "Unknown", Level)
+  | summarize Events = count(),
+              DistinctUsers = dcount(User), Users = make_set(User, 30),
+              DistinctEventTypes = dcount(EventType), TopEventTypes = make_set(EventType, 25),
+              DistinctServices = dcount(Service),
+              FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+          by Level
+  | sort by Events desc
+version: 1.0.0

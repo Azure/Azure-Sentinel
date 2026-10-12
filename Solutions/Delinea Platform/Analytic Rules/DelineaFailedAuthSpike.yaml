@@ -1,0 +1,91 @@
+id: e6d743f2-a538-455f-899c-251926b9071e
+name: Delinea - Failed authentication spike (single account)
+description: |
+  Detects when a single account accumulates an unusually high number of failed authentication
+  events within a short window. Only authentication events - MFA, login and sign-in - are
+  considered; the service-wide view of every failure lives in the 'Delinea - Failed operations'
+  hunting query. A failure is a failed MFA result, a failed password factor, or any login fail
+  reason. A burst of failures for one account can indicate brute-force or credential-stuffing
+  activity. Tune 'threshold' to your environment.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let threshold = 10;
+  // The data collection rule sets TimeGenerated from the Delinea eventDateTime and the
+  // connector polls in 5 minute windows, so events routinely land several minutes after
+  // the time they carry. 'lookback' must stay <= queryPeriod and must be wide enough to
+  // absorb that lag, otherwise late arriving events are never evaluated by any run.
+  let lookback = 1h;
+  // Must equal queryFrequency so every event is counted by exactly one run.
+  let newSince = 15m;
+  // Authentication events only. Matched against eventType.name, falling back to
+  // internalName, the same way ASimAuditEventDelineaPlatform resolves the event name.
+  let authEventPattern = @"(?i)mfa|multifactor|\blogin\b|\blogon\b|signin|authentication";
+  let failures =
+      DelineaAuditEvents_CL
+      | where TimeGenerated > ago(lookback)
+      | extend IngestedAt = ingestion_time()
+      | extend d = parse_json(RawData)
+      | extend Attr = d.additionalAttributes
+      | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))
+      | where EventName matches regex authEventPattern
+      // The attributes bag carries either scalars or single element arrays depending on
+      // the reporting service, so both shapes are read - see ASimAuditEventDelineaPlatform.
+      | extend Actor = tostring(coalesce(d.actor.email, d.actor.name, d.actor.displayName)),
+               RawSrcIP = tostring(d.source.host.network.ipAddress),
+               MfaResult = tostring(coalesce(Attr.MfaResult[0], Attr.MfaResult)),
+               FactorPassword = tostring(coalesce(Attr.FactorPassword[0], Attr.FactorPassword)),
+               FailReason = tostring(coalesce(Attr.FailReason[0], Attr.FailReason))
+      | where MfaResult =~ "Failed" or FactorPassword =~ "Failed" or isnotempty(FailReason)
+      | where isnotempty(Actor)
+      // '0.0.0.0' is the placeholder reported for events that have no network origin.
+      | extend SrcIP = iff(RawSrcIP in ("", "0.0.0.0"), "", RawSrcIP);
+  let recentActors = failures | where IngestedAt > ago(newSince) | distinct Actor;
+  failures
+  | where Actor in (recentActors)
+  | summarize Failures = count(), DistinctSourceIPs = dcountif(SrcIP, isnotempty(SrcIP)),
+              SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),
+              FailReasons = make_set_if(FailReason, isnotempty(FailReason), 10),
+              SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),
+              StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor
+  | where Failures >= threshold
+  | project Actor, Failures, DistinctSourceIPs, SourceIPs, FailReasons, SrcIP, StartTime, EndTime
+  | sort by Failures desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+customDetails:
+  Failures: Failures
+  DistinctSourceIPs: DistinctSourceIPs
+  FailReasons: FailReasons
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.2.0
+kind: Scheduled

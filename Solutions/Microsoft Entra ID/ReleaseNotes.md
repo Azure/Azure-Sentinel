@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.19      | 05-10-2026                     | Fixed OAuth scope parsing for **Suspicious application consent for offline access** **Analytic Rule**. |
 | 3.3.18      | 28-09-2026                     | Updated the **analytical rule** configuration. |
 | 3.3.17      | 06-09-2026                     | Added **EndUserConsentMailboxOfflineAccess** Analytic Rule to detect end-user OAuth consent to an app requesting delegated mailbox scopes (Mail.Read/Mail.ReadWrite/Mail.Send/MailboxSettings.ReadWrite) together with offline_access (T1528 - illicit consent grant). |
 | 3.3.16      | 06-08-2026                     | Removed locale-dependent **ResultDescription** filtering from the **Attempts to sign in to disabled accounts Analytic Rule** while retaining ResultType 50057 matching. |

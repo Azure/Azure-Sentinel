@@ -53,6 +53,23 @@ When reviewing pull requests, follow these rules strictly.
 4. Check all required top-level fields and item structure validation
 5. Do NOT use general instructions for these files - only use the workbook custom instructions
 
+### For ASIM Changelog Files (`Parsers/ASim*/CHANGELOG/*.md`)
+1. **LOAD and USE:** `.github/instructions/asim-changelogs.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate the changelog against the corresponding parser YAML and pull request changes
+4. Do NOT use general instructions for these files - only use the ASIM changelog custom instructions
+
+### For ASIM Parser Files
+
+Apply this section before the generic parser instructions when a changed YAML file is an ASIM parser, including:
+
+- `Parsers/ASim*/Parsers/ASim*.yaml`
+- `Parsers/ASim*/Parsers/vim*.yaml`
+
+1. **LOAD and USE:** `.github/instructions/asim-parsers.instructions.md`
+2. Apply ALL guidelines from that file
+3. Do NOT apply the generic parser instructions when this ASIM-specific section applies
+
 ### For Parser Files (`Parsers/**/*.yaml`, `Parsers/**/*.yml`, `Solutions/**/Parsers/**/*.yaml`, `Solutions/**/Parsers/**/*.yml`)
 1. **LOAD and USE:** `.github/instructions/parsers.instructions.md`
 2. Apply ALL guidelines from that file
