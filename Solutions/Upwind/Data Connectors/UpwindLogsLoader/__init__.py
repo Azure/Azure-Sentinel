@@ -9,6 +9,13 @@ own stream on Azure Monitor via Data Collection Rules (DCR).
 Each dataset is fetched and uploaded independently: if one Upwind endpoint is
 unavailable (e.g. not entitled for a given organization) or fails, the others
 still run to completion. The function raises only if every dataset failed.
+
+Every dataset only looks back a fixed window (the gap between scheduled runs
+plus a small overlap), so a run that never reaches one loses that window's data
+for good. The run has a wall-clock budget below the host's functionTimeout, and
+each dataset gets at most an even share of the time left, so one oversized
+dataset can't starve the rest. Pages are uploaded as they are fetched, so
+whatever was fetched before a failure or an early stop is kept.
 """
 
 import logging
@@ -21,6 +28,7 @@ from azure.monitor.ingestion import LogsIngestionClient
 
 from .config import load_configuration
 from .upwind_catalog_client import UpwindCatalogClient
+from .upwind_client import RunTimeBudget, RunTimeBudgetExceeded
 from .upwind_configuration_findings_client import UpwindConfigurationFindingsClient
 from .upwind_threat_detections_client import UpwindThreatDetectionsClient
 from .upwind_threat_events_client import UpwindThreatEventsClient
@@ -99,14 +107,17 @@ def _make_page_uploader(config, stream_name: str):
     return upload_page, stats
 
 
-def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
+def _run_dataset(name: str, fetch_fn, config, stream_name, time_budget) -> bool:
     """
     Fetch one Upwind dataset and upload it page by page, isolating failures so
     one bad dataset doesn't block the others.
 
     :param fetch_fn: Callable taking a single ``on_page`` callback, which it
         invokes with each page of records as they are fetched.
-    :return: True if the dataset succeeded (including "no records"), False on failure.
+    :param time_budget: The run's RunTimeBudget, shared across datasets.
+    :return: True if the dataset succeeded (including "no records") or the time
+        budget ran out after some records were uploaded; False on failure or
+        when the budget ran out before anything was uploaded.
     """
 
     if not stream_name:
@@ -117,6 +128,11 @@ def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
         )
         return True
 
+    if time_budget.is_exhausted():
+        logging.warning("Skipping %s: run time budget already exhausted.", name)
+        return False
+
+    stats = {"uploaded": 0}
     try:
         upload_page, stats = _make_page_uploader(config, stream_name)
         fetched = fetch_fn(upload_page)
@@ -143,6 +159,17 @@ def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
             "All %d records uploaded successfully to %s.", stats["uploaded"], stream_name
         )
         return True
+    except RunTimeBudgetExceeded:
+        # Running out of time after uploading data is a partial result, not a
+        # failure: the uploaded pages are valid. Records this run didn't reach
+        # are only picked up by a later run if they fall inside its window.
+        logging.warning(
+            "%s: partial - stopped early because the run time budget ran out; "
+            "%d records were uploaded before the stop.",
+            name,
+            stats["uploaded"],
+        )
+        return stats["uploaded"] > 0
     except HttpResponseError as e:
         logging.error("%s: Azure Monitor upload failed: %s", name, e.message)
         if hasattr(e, "response") and e.response:
@@ -151,7 +178,13 @@ def _run_dataset(name: str, fetch_fn, config, stream_name) -> bool:
             )
         return False
     except Exception as e:
-        logging.error("%s: failed: %s", name, e, exc_info=True)
+        logging.error(
+            "%s: failed after uploading %d records (those are kept): %s",
+            name,
+            stats["uploaded"],
+            e,
+            exc_info=True,
+        )
         return False
 
 
@@ -173,46 +206,43 @@ def main(mytimer: func.TimerRequest = None) -> None:
         logging.warning("Upwind Catalog Loader: timer trigger is past due.")
 
     config = load_configuration()
-    lookback_minutes = config.get("upwind_threat_lookback_minutes")
+    lookback_minutes = config.get("upwind_lookback_minutes")
+    run_budget = RunTimeBudget(config.get("upwind_run_time_budget_seconds"))
+
+    # Ordered smallest to least predictable: configuration findings come last
+    # because a single evaluation sweep can make them the largest dataset by far.
+    datasets = [
+        ("vulnerability_findings", "azure_stream_name_vulnerability",
+         lambda budget, on_page: UpwindVulnerabilityClient(config, budget).fetch_vulnerability_findings(lookback_minutes, on_page)),
+        ("threat_detections", "azure_stream_name_threat_detections",
+         lambda budget, on_page: UpwindThreatDetectionsClient(config, budget).fetch_threat_detections(lookback_minutes, on_page)),
+        ("threat_events", "azure_stream_name_threat_events",
+         lambda budget, on_page: UpwindThreatEventsClient(config, budget).fetch_threat_events(lookback_minutes, on_page)),
+        ("threat_stories", "azure_stream_name_threat_stories",
+         lambda budget, on_page: UpwindThreatStoriesClient(config, budget).fetch_threat_stories(lookback_minutes, on_page)),
+        ("inventory_assets", "azure_stream_name_inventory",
+         lambda budget, on_page: UpwindCatalogClient(config, budget).fetch_catalog_assets(lookback_minutes, on_page)),
+        ("configuration_findings", "azure_stream_name_config_findings",
+         lambda budget, on_page: UpwindConfigurationFindingsClient(config, budget).fetch_configuration_findings(lookback_minutes, on_page)),
+    ]
+    configured = [(name, config.get(stream_key), fetch) for name, stream_key, fetch in datasets]
+    datasets_left = sum(1 for _, stream_name, _ in configured if stream_name)
 
     results = {}
-
-    results["inventory_assets"] = _run_dataset(
-        "inventory_assets",
-        lambda on_page: UpwindCatalogClient(config).fetch_catalog_assets(on_page),
-        config,
-        config.get("azure_stream_name_inventory"),
-    )
-    results["vulnerability_findings"] = _run_dataset(
-        "vulnerability_findings",
-        lambda on_page: UpwindVulnerabilityClient(config).fetch_vulnerability_findings(on_page),
-        config,
-        config.get("azure_stream_name_vulnerability"),
-    )
-    results["threat_detections"] = _run_dataset(
-        "threat_detections",
-        lambda on_page: UpwindThreatDetectionsClient(config).fetch_threat_detections(lookback_minutes, on_page),
-        config,
-        config.get("azure_stream_name_threat_detections"),
-    )
-    results["threat_events"] = _run_dataset(
-        "threat_events",
-        lambda on_page: UpwindThreatEventsClient(config).fetch_threat_events(lookback_minutes, on_page),
-        config,
-        config.get("azure_stream_name_threat_events"),
-    )
-    results["threat_stories"] = _run_dataset(
-        "threat_stories",
-        lambda on_page: UpwindThreatStoriesClient(config).fetch_threat_stories(lookback_minutes, on_page),
-        config,
-        config.get("azure_stream_name_threat_stories"),
-    )
-    results["configuration_findings"] = _run_dataset(
-        "configuration_findings",
-        lambda on_page: UpwindConfigurationFindingsClient(config).fetch_configuration_findings(lookback_minutes, on_page),
-        config,
-        config.get("azure_stream_name_config_findings"),
-    )
+    for name, stream_name, fetch in configured:
+        # Each dataset gets at most an even share of the time left, so one
+        # oversized dataset can't starve the ones after it. Time a dataset
+        # doesn't use carries over to the rest.
+        dataset_budget = run_budget.share(max(datasets_left, 1))
+        results[name] = _run_dataset(
+            name,
+            lambda on_page, fetch=fetch, budget=dataset_budget: fetch(budget, on_page),
+            config,
+            stream_name,
+            dataset_budget,
+        )
+        if stream_name:
+            datasets_left -= 1
 
     utc_timestamp_end = datetime.now(timezone.utc)
     duration = (utc_timestamp_end - utc_timestamp_start).total_seconds()

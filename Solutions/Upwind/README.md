@@ -11,14 +11,14 @@ Microsoft Sentinel data connector that ingests data from **six Upwind API endpoi
 
 | Dataset | Upwind endpoint | Sync style | Destination table |
 |---|---|---|---|
-| Inventory / catalog assets (all categories) | `POST /v2/organizations/{orgId}/inventory/catalog/assets/search` | Full current-state snapshot | `UpwindCatalogAssets_CL` |
-| Vulnerability findings | `GET /v1/organizations/{orgId}/vulnerability-findings` | Full current-state snapshot | `UpwindVulnerabilityFindings_CL` |
-| Threat detections | `GET /v1/organizations/{orgId}/threat-detections` | Time-windowed (`UpwindThreatLookbackMinutes`) | `UpwindThreatDetections_CL` |
-| Threat events | `GET /v1/organizations/{orgId}/threat-events` | Time-windowed (`UpwindThreatLookbackMinutes`) | `UpwindThreatEvents_CL` |
-| Threat stories | `POST /v2/organizations/{orgId}/threats/stories/search` | Time-windowed (`UpwindThreatLookbackMinutes`) | `UpwindThreatStories_CL` |
-| Configuration (posture) findings | `POST /v2/organizations/{orgId}/configurations/findings/search` | Time-windowed (`UpwindThreatLookbackMinutes`) | `UpwindConfigurationFindings_CL` |
+| Inventory / catalog assets (all categories) | `POST /v2/organizations/{orgId}/inventory/catalog/assets/search` | Time-windowed by last update | `UpwindCatalogAssets_CL` |
+| Vulnerability findings | `GET /v1/organizations/{orgId}/vulnerability-findings` | Time-windowed by first seen | `UpwindVulnerabilityFindings_CL` |
+| Threat detections | `GET /v1/organizations/{orgId}/threat-detections` | Time-windowed | `UpwindThreatDetections_CL` |
+| Threat events | `GET /v1/organizations/{orgId}/threat-events` | Time-windowed | `UpwindThreatEvents_CL` |
+| Threat stories | `POST /v2/organizations/{orgId}/threats/stories/search` | Time-windowed | `UpwindThreatStories_CL` |
+| Configuration (posture) findings | `POST /v2/organizations/{orgId}/configurations/findings/search` | Time-windowed | `UpwindConfigurationFindings_CL` |
 
-The two full-snapshot datasets (inventory assets, vulnerability findings) represent Upwind's *current* state and are re-pulled in full on every run. The four time-windowed datasets pull everything seen/updated in the last `UpwindThreatLookbackMinutes` (default 90) — set that comfortably larger than `UpwindCatalogSchedule`'s interval so nothing is missed between runs; overlap just produces harmless duplicate rows.
+Every dataset is time-windowed: each run pulls what was updated, seen, or first seen since the previous scheduled run, plus a 5-minute overlap. The window is derived from `UpwindCatalogSchedule` (the longest gap between runs plus 5 minutes, so 65 minutes for the hourly default), and the overlap just produces harmless duplicate rows. Because inventory assets are pulled by last update, the table holds a change history: query the current state of each asset with `UpwindCatalogAssets_CL | summarize arg_max(TimeGenerated, *) by id`. Pages are uploaded as they are fetched, so if a run hits the Upwind API rate limit or its time budget, everything fetched before that point is kept. The Upwind inventory API allows 600 catalog requests per minute per organization, shared by every API key in the org; the connector paces itself to 300 requests per minute by default (app setting `UPWIND_MAX_REQUESTS_PER_MINUTE`, `0` disables pacing) and, when rate limited, keeps retrying until the run's time budget (`UPWIND_RUN_TIME_BUDGET_SECONDS`, default 480) runs out. Each dataset gets at most an even share of the time left, so one unusually large dataset can't starve the others.
 
 > **Note:** `title` and `type` are reserved/invalid column names for Log Analytics custom tables, so the four affected datasets (threat detections, threat events, threat stories, configuration findings) rename them to `title_text` and `event_type` before upload.
 
@@ -71,8 +71,7 @@ Click the button below to deploy all required Azure resources (DCE, 6 custom tab
 | `UpwindClientId` | Upwind API Client ID (Settings → API Keys) |
 | `UpwindClientSecret` | Upwind API Client Secret |
 | `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace |
-| `UpwindCatalogSchedule` | CRON schedule for the function trigger (default: `0 0 * * * *`) |
-| `UpwindThreatLookbackMinutes` | *(optional, default 90)* Lookback window in minutes for threat detections, threat events, threat stories, and configuration findings. Should exceed `UpwindCatalogSchedule`'s interval. |
+| `UpwindCatalogSchedule` | CRON schedule for the function trigger (default: `0 0 * * * *`). Each run looks back over the longest gap between scheduled runs plus 5 minutes (65 minutes for the hourly default). |
 
 ## Table schemas
 
