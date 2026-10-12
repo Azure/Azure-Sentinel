@@ -558,12 +558,12 @@
                     {
                       "name": "S3Bucket",
                       "type": "string",
-                      "description": "Reserved; populated by the Azure Function option only."
+                      "description": "Reserved; empty with this connector."
                     },
                     {
                       "name": "S3Key",
                       "type": "string",
-                      "description": "Reserved; populated by the Azure Function option only."
+                      "description": "Reserved; empty with this connector."
                     }
                   ]
                 }
@@ -943,7 +943,7 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Detects ten or more failed Databricks login attempts from one source IP address within an hour. Repeated failures from one address against one or several accounts can indicate password guessing or credential stuffing against the workspace or account console.",
+                "description": "Identifies ten or more failed Databricks login attempts from one source IP address within an hour, which can indicate password guessing or credential stuffing against a workspace or the account console.",
                 "displayName": "Databricks - Multiple failed logins from a single IP",
                 "enabled": false,
                 "query": "DatabricksAudit_CL\n| where ServiceName == \"accounts\" and ActionName has \"login\"\n| where ResponseStatusCode >= 400\n| summarize FailedAttempts = count(), TargetUsers = make_set(UserEmail, 50), Workspaces = make_set(WorkspaceId, 20),\n    StartTime = min(EventTime), EndTime = max(EventTime) by SourceIPAddress\n| where FailedAttempts >= 10\n| extend UserEmail = tostring(TargetUsers[0])\n",
@@ -1065,7 +1065,7 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Detects a user or service principal being made a Databricks account admin or workspace admin, or being added to the admins group. Administrative access to Databricks grants control over clusters, data access and secrets and should be rare and expected.",
+                "description": "Identifies a user or service principal being made a Databricks account or workspace admin, or added to the admins group. Admin access controls clusters, data access and secrets, so grants should be rare and expected.",
                 "displayName": "Databricks - Account or workspace admin privilege granted",
                 "enabled": false,
                 "query": "DatabricksAudit_CL\n| where ServiceName in (\"accounts\", \"accountsAccessControl\", \"accountsManager\")\n| where ActionName in (\"setAdmin\", \"updateRuleSet\", \"setAccountAdmin\")\n    or (ActionName == \"addPrincipalToGroup\" and tostring(RequestParams.targetGroupName) =~ \"admins\")\n| where ResponseStatusCode < 400\n| extend TargetUser = coalesce(tostring(RequestParams.targetUserName), tostring(RequestParams.user), tostring(RequestParams.targetUserId))\n| project EventTime, WorkspaceId, AccountId, UserEmail, SourceIPAddress, ServiceName, ActionName, TargetUser, RequestParams\n",
@@ -1200,7 +1200,7 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Detects creation, modification or deletion of a Databricks IP access list, or a change to the workspace setting that enables IP access lists. Loosening these controls lets a workspace or account console be reached from addresses that were previously blocked.",
+                "description": "Identifies creation, modification or deletion of a Databricks IP access list, or a change to the setting that enables IP access lists. Loosening these controls opens the workspace to previously blocked addresses.",
                 "displayName": "Databricks - IP access list or network setting changed",
                 "enabled": false,
                 "query": "DatabricksAudit_CL\n| where (ServiceName == \"ipAccessList\" and ActionName in (\"create\", \"update\", \"delete\", \"replace\"))\n    or (ServiceName == \"workspace\" and ActionName == \"workspaceConfEdit\" and tostring(RequestParams.workspaceConfKeys) has \"enableIpAccessLists\")\n    or (ServiceName == \"accounts\" and ActionName == \"accountIpAclsValidationFailed\")\n| where ResponseStatusCode < 400\n| project EventTime, WorkspaceId, AccountId, UserEmail, SourceIPAddress, ServiceName, ActionName, RequestParams\n",
@@ -1320,7 +1320,7 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Detects a Databricks personal access token being created with a lifetime longer than 90 days or with no expiry. Long-lived tokens outlive the session controls applied to interactive logins and are a common persistence mechanism after an account compromise.",
+                "description": "Identifies a Databricks personal access token created with a lifetime over 90 days or no expiry. Long-lived tokens outlive interactive session controls and are a common persistence method after account compromise.",
                 "displayName": "Databricks - Personal access token created with long or no expiry",
                 "enabled": false,
                 "query": "DatabricksAudit_CL\n| where ServiceName in (\"accounts\", \"tokens\") and ActionName in (\"generateDbToken\", \"tokenCreated\")\n| where ResponseStatusCode < 400\n| extend ExpiryMs = tolong(RequestParams.tokenExpirationTime)\n| extend Expires = iff(isnotnull(ExpiryMs) and ExpiryMs > 0, unixtime_milliseconds_todatetime(ExpiryMs), datetime(null))\n| extend LifetimeDays = iff(isnotnull(Expires), datetime_diff(\"day\", Expires, EventTime), -1)\n| where LifetimeDays < 0 or LifetimeDays > 90\n| extend TokenComment = tostring(RequestParams.comment)\n| project EventTime, WorkspaceId, UserEmail, SourceIPAddress, ActionName, LifetimeDays, Expires, TokenComment\n",
@@ -1445,12 +1445,12 @@
                 "eTag": "*",
                 "displayName": "Databricks - Secret reads outside business hours",
                 "category": "Hunting Queries",
-                "query": "DatabricksAudit_CL\n| where TimeGenerated > ago(7d)\n| where ServiceName == \"secrets\" and ActionName == \"getSecret\"\n| where hourofday(EventTime) !between (7 .. 19)\n| extend Scope = tostring(RequestParams.scope), Key = tostring(RequestParams.key)\n| summarize Reads = count(), Scopes = make_set(Scope, 20), Keys = make_set(Key, 50), FirstSeen = min(EventTime), LastSeen = max(EventTime)\n    by UserEmail, SourceIPAddress, WorkspaceId\n| order by Reads desc\n",
+                "query": "DatabricksAudit_CL\n| where TimeGenerated > ago(7d)\n| where ServiceName == \"secrets\" and ActionName == \"getSecret\"\n| where hourofday(EventTime) < 7 or hourofday(EventTime) >= 19\n| extend Scope = tostring(RequestParams.scope), Key = tostring(RequestParams.key)\n| summarize Reads = count(), Scopes = make_set(Scope, 20), Keys = make_set(Key, 50), FirstSeen = min(EventTime), LastSeen = max(EventTime)\n    by UserEmail, SourceIPAddress, WorkspaceId\n| order by Reads desc\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "Lists reads of Databricks secrets (getSecret) between 19:00 and 07:00 UTC in the last 7 days, grouped by user and source IP. Secret reads at unusual hours from unusual addresses can indicate credential harvesting from notebooks or jobs. Adjust the hours to the customer's time zone."
+                    "value": "Lists Databricks secret reads (getSecret) from 19:00 to 07:00 UTC in the last 7 days, by user and source IP. Off-hours reads can indicate credential harvesting. Adjust the hours to your time zone."
                   },
                   {
                     "name": "tactics",
@@ -1620,7 +1620,7 @@
                 "tags": [
                   {
                     "name": "description",
-                    "value": "Lists users whose Databricks activity in the last day came from a source IP address not seen for that user in the preceding 14 days. New addresses are expected for mobile users and are worth checking when they coincide with token creation, secret reads or admin actions."
+                    "value": "Lists users whose Databricks activity in the last day came from a source IP not seen for that user in the previous 14 days. Review together with token creation, secret reads or admin actions."
                   },
                   {
                     "name": "tactics",
@@ -1685,7 +1685,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Databricks",
         "publisherDisplayName": "David Broggy, LevelBlue",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Databricks/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.databricks.com/\">Databricks</a> solution for Microsoft Sentinel ingests the account and workspace <a href=\"https://docs.databricks.com/aws/en/admin/account-settings/audit-logs\">audit logs</a> that Databricks on AWS delivers to an Amazon S3 bucket, using the Codeless Connector Framework and Microsoft Sentinel's Amazon S3 poller. No Function App is required and no AWS access keys are stored; access uses OpenID Connect federation to an IAM role.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor data collection rules</a></p>\n</li>\n</ol>\n<p><strong>Pre-requisites:</strong></p>\n<ol>\n<li><p>A Databricks account on the Premium or Enterprise tier with audit log delivery to S3 configured (log type AUDIT_LOGS, output format JSON).</p>\n</li>\n<li><p>Rights in the AWS account to deploy the two CloudFormation templates in the solution (OpenID Connect provider; IAM role, SQS queue and queue policy) and to add an S3 event notification to the delivery bucket.</p>\n</li>\n</ol>\n<p>Azure Databricks is not covered; it writes to Log Analytics through diagnostic settings.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 4, <strong>Hunting Queries:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Databricks/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.databricks.com/\">Databricks</a> solution for Microsoft Sentinel ingests the account and workspace <a href=\"https://docs.databricks.com/aws/en/admin/account-settings/audit-logs\">audit logs</a> that Databricks on AWS delivers to Amazon S3, using the Codeless Connector Framework S3 poller. No Function App or AWS access keys are needed.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n</ol>\n<p><strong>Pre-requisites:</strong></p>\n<ol>\n<li><p>Databricks Premium or Enterprise tier with audit log delivery to S3 (JSON).</p>\n</li>\n<li><p>Rights to deploy the solution's two CloudFormation templates and add an S3 event notification.</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 4, <strong>Hunting Queries:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
