@@ -1,8 +1,20 @@
 # Changelog for ASimAuthentication.yaml
 
-## Version 0.2.25
+## Version 0.2.28
 
 - (2026-09-30) Add the Okta Auth0 Authentication parser. [PR #15254](https://github.com/Azure/Azure-Sentinel/pull/15254)
+
+## Version 0.2.27
+
+- (2026-10-08) Corrected the Fortinet FortiGate, CrowdStrike Falcon Host, and Illumio SaaS Core parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
+
+## Version 0.2.26
+
+- (2026-10-07) Add the Zscaler ZPA Authentication parser. [PR #15241](https://github.com/Azure/Azure-Sentinel/pull/15241)
+
+## Version 0.2.25
+
+- (2026-10-05) Add the CyberArk Audit Authentication parser. - [PR #15262](https://github.com/Azure/Azure-Sentinel/pull/15262)
 
 ## Version 0.2.24
 
