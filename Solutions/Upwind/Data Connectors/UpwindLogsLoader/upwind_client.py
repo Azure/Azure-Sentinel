@@ -208,7 +208,9 @@ class UpwindClient:
         logging.info("Upwind API access token obtained.")
         return self._access_token
 
-    def _fetch_paginated(self, url: str, search_body: dict, on_page) -> int:
+    def _fetch_paginated(
+        self, url: str, search_body: dict, on_page, start_cursor=None, on_cursor=None
+    ) -> int:
         """
         Fetch all items from a paginated Upwind API search endpoint.
         Uses cursor-based pagination and exponential backoff for 429 rate limits.
@@ -218,6 +220,10 @@ class UpwindClient:
         :param on_page: Callback invoked with each page's items as they are
             fetched, so pages can be uploaded without buffering the whole
             dataset in memory.
+        :param start_cursor: Cursor to resume from instead of the first page.
+        :param on_cursor: Callback invoked with the next page's cursor (None
+            after the last page) once a page has been handed to ``on_page``, so
+            a caller can save its position and resume in a later run.
         :return: Total number of items fetched across all pages.
         :raises RuntimeError: If the API returns errors after exhausting retries.
         :raises RunTimeBudgetExceeded: If the run's time budget runs out first.
@@ -231,7 +237,7 @@ class UpwindClient:
         }
 
         total = 0
-        cursor = None
+        cursor = start_cursor
         page_number = 0
 
         while True:
@@ -262,6 +268,8 @@ class UpwindClient:
 
             metadata = result.get("metadata", {})
             cursor = metadata.get("next_cursor")
+            if on_cursor:
+                on_cursor(cursor)
             if not cursor:
                 break
 

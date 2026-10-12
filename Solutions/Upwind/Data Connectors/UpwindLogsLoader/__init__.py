@@ -10,16 +10,18 @@ Each dataset is fetched and uploaded independently: if one Upwind endpoint is
 unavailable (e.g. not entitled for a given organization) or fails, the others
 still run to completion. The function raises only if every dataset failed.
 
-Every dataset only looks back a fixed window (the gap between scheduled runs
-plus a small overlap), so a run that never reaches one loses that window's data
-for good. The run has a wall-clock budget below the host's functionTimeout, and
+Every dataset reads the same time window, computed once when the run starts
+(the gap between scheduled runs plus a small overlap), so a run that never
+reaches one loses that window's data for good. Inventory assets are read by
+last update, and a periodic full catalog sync, resumed across runs, re-ingests
+the assets that don't change. The run has a wall-clock budget below the host's functionTimeout, and
 each dataset gets at most an even share of the time left, so one oversized
 dataset can't starve the rest. Pages are uploaded as they are fetched, so
 whatever was fetched before a failure or an early stop is kept.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import azure.functions as func
 from azure.core.exceptions import HttpResponseError
@@ -27,6 +29,7 @@ from azure.identity import ManagedIdentityCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
 from .config import load_configuration
+from .full_sync_state import FullSyncStateStore, is_full_sync_due
 from .upwind_catalog_client import UpwindCatalogClient
 from .upwind_client import RunTimeBudget, RunTimeBudgetExceeded
 from .upwind_configuration_findings_client import UpwindConfigurationFindingsClient
@@ -188,6 +191,76 @@ def _run_dataset(name: str, fetch_fn, config, stream_name, time_budget) -> bool:
         return False
 
 
+def _load_full_sync_state_store(config):
+    """
+    Open the full catalog sync's state store, or return None when full syncs
+    are turned off or the storage account can't be reached.
+    """
+
+    if config.get("upwind_full_sync_interval_hours", 0) <= 0:
+        return None
+
+    connection_string = config.get("azure_webjobs_storage")
+    if not connection_string:
+        logging.warning(
+            "Skipping the full catalog sync: AzureWebJobsStorage is not set, so "
+            "its progress can't be saved between runs."
+        )
+        return None
+
+    try:
+        return FullSyncStateStore(connection_string)
+    except Exception as e:
+        logging.warning("Skipping the full catalog sync: can't open its state store: %s", e)
+        return None
+
+
+def _fetch_full_catalog(config, time_budget, state_store, state: dict, run_start, on_page) -> int:
+    """
+    Fetch the next part of the full catalog sync, saving the cursor after each
+    uploaded page so the next run resumes where this one stopped.
+
+    :param state: The saved state from ``state_store``; updated in place.
+    :param run_start: The run's start time, recorded when a new sync begins.
+    :return: Number of assets fetched in this run.
+    """
+
+    if not state.get("cursor"):
+        state["started_at"] = run_start.isoformat()
+
+    def on_cursor(cursor):
+        state["cursor"] = cursor
+        if cursor is None:
+            state["last_completed_at"] = state["started_at"]
+            logging.info("Full catalog sync completed (started %s).", state["started_at"])
+        state_store.save(state)
+
+    pages_fetched = 0
+
+    def count_pages(items):
+        nonlocal pages_fetched
+        pages_fetched += 1
+        on_page(items)
+
+    client = UpwindCatalogClient(config, time_budget)
+    try:
+        return client.fetch_catalog_assets_full(state.get("cursor"), count_pages, on_cursor)
+    except RuntimeError as e:
+        if not state.get("cursor") or pages_fetched:
+            raise
+
+        # Most likely the saved cursor expired between runs: start over.
+        logging.warning(
+            "Resuming the full catalog sync from its saved cursor failed (%s); "
+            "starting it over.",
+            e,
+        )
+        state["cursor"] = None
+        state["started_at"] = run_start.isoformat()
+        state_store.save(state)
+        return client.fetch_catalog_assets_full(None, count_pages, on_cursor)
+
+
 def main(mytimer: func.TimerRequest = None) -> None:
     """
     Azure Function entry point (timer-triggered).
@@ -206,30 +279,57 @@ def main(mytimer: func.TimerRequest = None) -> None:
         logging.warning("Upwind Catalog Loader: timer trigger is past due.")
 
     config = load_configuration()
-    lookback_minutes = config.get("upwind_lookback_minutes")
     run_budget = RunTimeBudget(config.get("upwind_run_time_budget_seconds"))
 
-    # Ordered smallest to least predictable: configuration findings come last
-    # because a single evaluation sweep can make them the largest dataset by far.
+    # One window for the whole run. Datasets run one after another, so a window
+    # taken from each dataset's own start time would drift later through the
+    # run, past the overlap with the previous run's window.
+    window_end = utc_timestamp_start
+    window_start = window_end - timedelta(minutes=config.get("upwind_lookback_minutes"))
+    logging.info(
+        "Time window for this run: %s to %s.", window_start.isoformat(), window_end.isoformat()
+    )
+
+    # Ordered smallest to least predictable: configuration findings come late
+    # because a single evaluation sweep can make them the largest dataset by
+    # far, and the full catalog sync last because it only needs the time left.
     datasets = [
-        ("vulnerability_findings", "azure_stream_name_vulnerability",
-         lambda budget, on_page: UpwindVulnerabilityClient(config, budget).fetch_vulnerability_findings(lookback_minutes, on_page)),
-        ("threat_detections", "azure_stream_name_threat_detections",
-         lambda budget, on_page: UpwindThreatDetectionsClient(config, budget).fetch_threat_detections(lookback_minutes, on_page)),
-        ("threat_events", "azure_stream_name_threat_events",
-         lambda budget, on_page: UpwindThreatEventsClient(config, budget).fetch_threat_events(lookback_minutes, on_page)),
-        ("threat_stories", "azure_stream_name_threat_stories",
-         lambda budget, on_page: UpwindThreatStoriesClient(config, budget).fetch_threat_stories(lookback_minutes, on_page)),
-        ("inventory_assets", "azure_stream_name_inventory",
-         lambda budget, on_page: UpwindCatalogClient(config, budget).fetch_catalog_assets(lookback_minutes, on_page)),
-        ("configuration_findings", "azure_stream_name_config_findings",
-         lambda budget, on_page: UpwindConfigurationFindingsClient(config, budget).fetch_configuration_findings(lookback_minutes, on_page)),
+        ("vulnerability_findings", config.get("azure_stream_name_vulnerability"),
+         lambda budget, on_page: UpwindVulnerabilityClient(config, budget).fetch_vulnerability_findings(window_start, window_end, on_page)),
+        ("threat_detections", config.get("azure_stream_name_threat_detections"),
+         lambda budget, on_page: UpwindThreatDetectionsClient(config, budget).fetch_threat_detections(window_start, window_end, on_page)),
+        ("threat_events", config.get("azure_stream_name_threat_events"),
+         lambda budget, on_page: UpwindThreatEventsClient(config, budget).fetch_threat_events(window_start, window_end, on_page)),
+        ("threat_stories", config.get("azure_stream_name_threat_stories"),
+         lambda budget, on_page: UpwindThreatStoriesClient(config, budget).fetch_threat_stories(window_start, window_end, on_page)),
+        ("inventory_assets", config.get("azure_stream_name_inventory"),
+         lambda budget, on_page: UpwindCatalogClient(config, budget).fetch_catalog_assets(window_start, on_page)),
+        ("configuration_findings", config.get("azure_stream_name_config_findings"),
+         lambda budget, on_page: UpwindConfigurationFindingsClient(config, budget).fetch_configuration_findings(window_start, window_end, on_page)),
     ]
-    configured = [(name, config.get(stream_key), fetch) for name, stream_key, fetch in datasets]
-    datasets_left = sum(1 for _, stream_name, _ in configured if stream_name)
+
+    inventory_stream_name = config.get("azure_stream_name_inventory")
+    state_store = _load_full_sync_state_store(config) if inventory_stream_name else None
+    if state_store:
+        try:
+            full_sync_state = state_store.load()
+        except Exception as e:
+            logging.warning("Skipping the full catalog sync: can't read its state: %s", e)
+            full_sync_state = None
+
+        if full_sync_state is not None and is_full_sync_due(
+            full_sync_state, utc_timestamp_start, config.get("upwind_full_sync_interval_hours")
+        ):
+            datasets.append(
+                ("inventory_full_sync", inventory_stream_name,
+                 lambda budget, on_page: _fetch_full_catalog(
+                     config, budget, state_store, full_sync_state, utc_timestamp_start, on_page)),
+            )
+
+    datasets_left = sum(1 for _, stream_name, _ in datasets if stream_name)
 
     results = {}
-    for name, stream_name, fetch in configured:
+    for name, stream_name, fetch in datasets:
         # Each dataset gets at most an even share of the time left, so one
         # oversized dataset can't starve the ones after it. Time a dataset
         # doesn't use carries over to the rest.

@@ -176,6 +176,11 @@ def load_configuration() -> ConfigStore:
         # functionTimeout with room for an in-flight request (60s timeout) and
         # its upload to finish after the last budget check.
         upwind_run_time_budget_seconds=_parse_int_env("UPWIND_RUN_TIME_BUDGET_SECONDS", "480"),
+        # Hours between full catalog syncs, which re-ingest assets that haven't
+        # changed so they don't age out of the table; 0 turns them off. Their
+        # progress is kept in the Function App's own storage account.
+        upwind_full_sync_interval_hours=_parse_int_env("UPWIND_FULL_SYNC_INTERVAL_HOURS", "24"),
+        azure_webjobs_storage=os.getenv("AzureWebJobsStorage"),
         upwind_min_severity_vulnerability=os.getenv(
             "UPWIND_VULNERABILITY_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
         ),
