@@ -12,11 +12,12 @@
 # 6.  Parser.Version - must be present and in X.X.X format
 # 7.  Parser.LastUpdated - must be present and in "Mon DD, YYYY" format (e.g. Jun 29, 2024)
 # 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
-# 9.  Normalization.Version - must match the expected version for the schema in SCHEMA_INFO
+# 9.  Normalization.Version - must use X.X.X format and match the expected schema version
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -81,6 +82,9 @@ GREEN = '\033[92m'
 YELLOW = '\033[93m'
 RED = '\033[91m'
 RESET = '\033[0m'  # Reset to default color
+
+OPTIONAL_VIM_PARSER_PARAMS = {'pack'}
+VIM_CONTROL_PARAMS = {'disabled'}
 
 def run():
     """Main function to execute the script logic."""
@@ -153,11 +157,12 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - Parser.Version is present and in X.X.X format
     - Parser.LastUpdated is present and in 'Mon DD, YYYY' format
     - Normalization.Schema matches a known ASIM schema name
-    - Normalization.Version matches the expected schema version
+    - Normalization.Version uses X.X.X format and matches the expected schema version
     - References include correct schema-specific and ASIM doc links
     - ParserName follows the naming convention <FileType><Schema>...
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
     - Sample data CSV file exists locally (ASim parsers only)
+    - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
         Parser_file (dict): Parsed YAML content of the parser file.
@@ -179,6 +184,9 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     schema = normalization.get('Schema')
     schemaVersion = normalization.get('Version')
     references = Parser_file.get('References', [])
+
+    if FileType == 'vim':
+        results.append(validate_vim_parser_params(Parser_file, Union_Parser__file))
 
     # ParserQuery property is the KQL query extracted from the YAML file
     parser_query = Parser_file.get('ParserQuery', '')
@@ -262,15 +270,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     else:
         results.append((f'{RED}Schema{RESET}', f'{RED}ASIM schema name {info['SchemaName']} not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
-    # Check if Schema Version exists in yaml_file's 'Normalization'->'Schema' and matches with our SchemaInfo
+    # Check if Schema Version exists, matches the X.X.X format, and matches our SchemaInfo
     if schemaVersion:
-        for info in SCHEMA_INFO:
-            if schema == info.get('SchemaName'):
-                if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
-                    results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
-                    break
-                else:
-                    results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
+        if not re.match(r'^\d+\.\d+\.\d+$', schemaVersion):
+            results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}The ASIM schema version should be in a three-digit format, e.g., 0.1.0{RESET}', f'{RED}Fail{RESET}'))
+        else:
+            for info in SCHEMA_INFO:
+                if schema == info.get('SchemaName'):
+                    if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
+                        results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
+                        break
+                    else:
+                        results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}Version{RESET}', f'{RED}ASIM schema {schema} version not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
 
@@ -326,6 +337,42 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
         else:
             results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
     return results
+
+def validate_vim_parser_params(parser_file, union_parser_file):
+    parser_params = {
+        parameter.get('Name')
+        for parameter in parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    supported_params = {
+        parameter.get('Name')
+        for parameter in union_parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    parser_params.discard(None)
+    supported_params.discard(None)
+
+    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
+
+    if not missing_params and not unsupported_params:
+        return (
+            ', '.join(sorted(parser_params)),
+            'ParserParams match the parameters supported by the schema union parser',
+            'Pass'
+        )
+
+    differences = []
+    if missing_params:
+        differences.append(f'missing: {", ".join(sorted(missing_params))}')
+    if unsupported_params:
+        differences.append(f'unsupported: {", ".join(sorted(unsupported_params))}')
+
+    return (
+        f'{RED}{", ".join(differences)}{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}Fail{RESET}'
+    )
 
 def filter_yaml_files(modified_files):
     # Take only the YAML files
