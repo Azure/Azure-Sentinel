@@ -46,10 +46,11 @@ class ConfigStore:
         return f"ConfigStore(keys={list(self._config.keys())})"
 
 
+# Stream names are deliberately not required: clearing a dataset's STREAM_NAME_*
+# app setting is how that dataset is turned off.
 _REQUIRED_CONFIG_KEYS = [
     "azure_dce_endpoint",
     "azure_dcr_immutableid",
-    "azure_stream_name_inventory",
     "upwind_org_id",
     "upwind_client_id",
     "upwind_auth_url",
