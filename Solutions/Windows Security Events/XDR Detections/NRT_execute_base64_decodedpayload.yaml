@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7ad4c32b-d0d2-411c-a0e8-b557afa12fce
+    path: Analytic Rules/NRT_execute_base64_decodedpayload.yaml
+    version: 1.0.2
+    querySha256: d1cd1e119ecfed278dcdb052dcf81289b74ee5c3b11010119795857a12bfc01b
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `SubjectAccount`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Host.FullName mismatch is informational because its original value is preserved as customDetails.HostFullName from query
+      column `Computer`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - DefenseEvasion
+    originalTechniques:
+    - T1059
+    - T1027
+    - T1140
+    reviewScope:
+      sourceDocumentSha256: 19901ada40994e29c83e4261fb31e95e83516963e30469e81ce24cccb9cbf260
+      targetQuerySha256: bc581124618c39fe03d5c8238e28e883e6e0a95c3ac2e9be55161f4295f368e1
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 19901ada40994e29c83e4261fb31e95e83516963e30469e81ce24cccb9cbf260
+      targetQuerySha256: bc581124618c39fe03d5c8238e28e883e6e0a95c3ac2e9be55161f4295f368e1
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SubjectAccount
+      column: SubjectAccount
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: available
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-7ad4c32b-d0d2-411c-a0e8-b557afa12fce
+  displayName: NRT Process executed from binary hidden in Base64 encoded file
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID==4688
+      | where isnotempty(CommandLine)
+      | project TimeGenerated, Computer, AccountName = SubjectUserName, AccountNTDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName, SubjectAccount
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | where CommandLine contains ".decode('base64')"
+              or CommandLine contains "base64 --decode"
+              or CommandLine contains ".decode64("
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: NRT Process executed from binary hidden in Base64 encoded file
+      description: |-
+        'Encoding malicious software is a technique used to obfuscate files from detection.
+        The first CommandLine component is looking for Python decoding base64.
+        The second CommandLine component is looking for Bash/sh command line base64 decoding.
+        The third one is looking for Ruby decoding base64.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          ntDomainColumn: AccountNTDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1027
+        - technique: T1140
+      customDetails:
+        AccountFullName: SubjectAccount
+        HostFullName: Computer

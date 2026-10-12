@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.2       | 12-10-2026                     |  Added seven disabled **Defender XDR Custom Detections** converted from Syslog **Analytic Rules**, with source provenance. Offline structural validation passed; runtime validation was not performed.  |
 | 3.0.7       | 04-11-2024                     |  Updated the Syslog **Data Connector** template to latest version  |
 | 3.0.6       | 01-08-2024                     |  Updated **Analytic rules** for entity mappings and parameter for parser function  |
 | 3.0.5       | 16-07-2024                     |  Added 2 new Workspace Function **Parsers** and a new **Workbook**       |

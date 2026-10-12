@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoAsaAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 79f29feb-6a9d-4cdf-baaa-2daf480a5da1
+    path: Analytic Rules/CiscoASA-AvgAttackDetectRateIncrease.yaml
+    version: 1.0.3
+    querySha256: 5bb9db1a60eb71e21009f4b1e0d049090642e0c89b8c693d50b3f66219bb1143
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=6h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `DeviceName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `DeviceName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - Impact
+    originalTechniques:
+    - T1046
+    - T1498
+    reviewScope:
+      sourceDocumentSha256: 8e3a5cd157088c224cdaf56c1505b3175865e771700c9fc14afac7b2cc042c87
+      targetQuerySha256: d97131b413ab064a6fc032c18fadc8fe78c6eaa2ee5973230904cf6528704b8e
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 8e3a5cd157088c224cdaf56c1505b3175865e771700c9fc14afac7b2cc042c87
+      targetQuerySha256: d97131b413ab064a6fc032c18fadc8fe78c6eaa2ee5973230904cf6528704b8e
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-79f29feb-6a9d-4cdf-baaa-2daf480a5da1
+  displayName: Cisco ASA - average attack detection rate increase
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let timeframe = 1h;
+      let last1h = CommonSecurityLog
+      | where TimeGenerated >= ago(timeframe)
+      | where isempty(CommunicationDirection)
+      | where DeviceEventClassID == "733100"
+      | extend SourceOfDropRateCount = tostring(split(tostring(split(Message, "]")[0]),"[ ")[1])
+      | extend splitMessage = split(Message, ".")
+      | extend DropRate = tostring(split(tostring(splitMessage[0]),"] ")[1])
+      | extend CurrentBurstRate = split(tostring(split(tostring(splitMessage[1]),"  ")[0]),"is ")
+      | extend CurrentBurstRatePerSec = toint(split(tostring(CurrentBurstRate[1])," ")[0])
+      | extend MaxConfiguredBurstRate = toint(CurrentBurstRate[2])
+      | extend CurrentAvgRate = split(tostring(split(tostring(splitMessage[1]),"  ")[1]),"is ")
+      | extend CurrentAvgRatePerSec = toint(split(tostring(CurrentAvgRate[1])," ")[0])
+      | extend MaxConfiguredAvgRate = toint(CurrentAvgRate[2])
+      | extend CumulativeTotal = toint(split(tostring(split(tostring(splitMessage[1]),"  ")[2]),"is ")[1])
+      | summarize last1hCumTotal = sum(CumulativeTotal), last1hAvgRatePerSec = avg(CurrentAvgRatePerSec), last1hAvgBurstRatePerSec = avg(CurrentBurstRatePerSec) by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
+      let prev6h = CommonSecurityLog
+      | where TimeGenerated between (ago(6h) .. ago(1h))
+      | where isempty(CommunicationDirection)
+      | where DeviceEventClassID == "733100"
+      | extend SourceOfDropRateCount = tostring(split(tostring(split(Message, "]")[0]),"[ ")[1])
+      | extend splitMessage = split(Message, ".")
+      | extend DropRate = tostring(split(tostring(splitMessage[0]),"] ")[1])
+      | extend CurrentBurstRate = split(tostring(split(tostring(splitMessage[1]),"  ")[0]),"is ")
+      | extend prevCurrentBurstRatePerSec = toint(split(tostring(CurrentBurstRate[1])," ")[0])
+      | extend prevMaxConfiguredBurstRate = toint(CurrentBurstRate[2])
+      | extend CurrentAvgRate = split(tostring(split(tostring(splitMessage[1]),"  ")[1]),"is ")
+      | extend prevCurrentAvgRatePerSec = toint(split(tostring(CurrentAvgRate[1])," ")[0])
+      | extend prevMaxConfiguredAvgRate = toint(CurrentAvgRate[2])
+      | extend prevCumulativeTotal = toint(split(tostring(split(tostring(splitMessage[1]),"  ")[2]),"is ")[1])
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), prev6hCumTotal = sum(prevCumulativeTotal), prev6hAvgRatePerSec = avg(prevCurrentAvgRatePerSec), prev6hAvgBurstRatePerSec = avg(prevCurrentBurstRatePerSec)
+      by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
+      last1h | join (
+        prev6h
+      ) on DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate
+      | project StartTimeUtc, EndTimeUtc, DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate, last1hCumTotal, prev6hCumTotal, prev6hAvgCumTotal = prev6hCumTotal/6, last1hAvgRatePerSec, prev6hAvgRatePerSec, last1hAvgBurstRatePerSec, prev6hAvgBurstRatePerSec
+      // Select only events that indicate a doubling of the expected rate in the last hour over the previous 6 hours
+      | where last1hCumTotal > 2*prev6hAvgCumTotal or last1hAvgRatePerSec > 2*prev6hAvgRatePerSec or last1hAvgBurstRatePerSec > 2*prev6hAvgBurstRatePerSec
+      | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco ASA - average attack detection rate increase
+      description: |-
+        'This will help you determine if Cisco ASA devices are under heavier attack than normal over the last hour versus the previous 6 hours based on DeviceEventClassID 733100
+        References: https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/b_syslog/syslogs9.html
+        Details on how to further troubleshoot/investigate: https://www.cisco.com/c/en/us/support/docs/security/asa-5500-x-series-next-generation-firewalls/113685-asa-threat-detection.html'
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046
+      - tactic: Impact
+        techniques:
+        - technique: T1498
+      customDetails:
+        HostFullName: DeviceName

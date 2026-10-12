@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6d7214d9-4a28-44df-aafb-0910b9e6ae3e
+    path: Analytic Rules/New-CloudShell-User.yaml
+    version: 2.0.3
+    querySha256: 2d2b06d3f8a0205ae349f76b253c7042d63c027adef51e4f75158f91a2847d12
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Caller`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Caller` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: a9cf0e240520d73cd05d519724c18a33d0758bc5555f0fd6a6bbc58380b50f27
+      targetQuerySha256: e10e4b40d9f8e9bbec6d6e249525d4179ebc9c27a7fe443495c5cd1a203913e7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-6d7214d9-4a28-44df-aafb-0910b9e6ae3e
+  displayName: New CloudShell User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let match_window = 3m;
+      AzureActivity
+      | where ResourceGroup has "cloud-shell"
+      | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/listKeys/action")
+      | where ActivityStatusValue =~ "Success"
+      | extend TimeKey = bin(TimeGenerated, match_window), AzureIP = CallerIpAddress
+      | join kind = inner
+      (AzureActivity
+      | where ResourceGroup has "cloud-shell"
+      | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/write")
+      | extend TimeKey = bin(TimeGenerated, match_window), UserIP = CallerIpAddress
+      ) on Caller, TimeKey
+      | summarize count() by TimeKey, Caller, ResourceGroup, SubscriptionId, TenantId, AzureIP, UserIP, HTTPRequest, Type, Properties, CategoryValue, OperationList = strcat(OperationNameValue, ' , ', OperationNameValue1)
+      | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New CloudShell User
+      description: |-
+        'Identifies when a user creates an Azure CloudShell for the first time.
+        Monitor this activity to ensure only the expected users are using CloudShell.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: UserIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        AccountFullName: Caller

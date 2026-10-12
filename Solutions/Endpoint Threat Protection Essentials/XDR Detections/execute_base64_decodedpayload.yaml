@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d6190dde-8fd2-456a-ac5b-0a32400b0464
+    path: Analytic Rules/execute_base64_decodedpayload.yaml
+    version: 1.1.4
+    querySha256: b6a99955528144a5970a8904c92e7569ff9b5c6adcf066b6c858496c5838f7d9
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was completed with projected column `DnsDomain`
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - DefenseEvasion
+    originalTechniques:
+    - T1059
+    - T1027
+    - T1140
+    reviewScope:
+      sourceDocumentSha256: e8c4ba6039b55522c2067f775803f79b1a35de2dc6221c2a086da7ef59557d65
+      targetQuerySha256: c85c3f30029baa14ff54e2dc4ce14c8f323754a7e801f875fe024697cdd31e28
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: e8c4ba6039b55522c2067f775803f79b1a35de2dc6221c2a086da7ef59557d65
+      targetQuerySha256: c85c3f30029baa14ff54e2dc4ce14c8f323754a7e801f875fe024697cdd31e28
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: e8c4ba6039b55522c2067f775803f79b1a35de2dc6221c2a086da7ef59557d65
+      targetQuerySha256: c85c3f30029baa14ff54e2dc4ce14c8f323754a7e801f875fe024697cdd31e28
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-d6190dde-8fd2-456a-ac5b-0a32400b0464
+  displayName: Process executed from binary hidden in Base64 encoded file
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let ProcessCreationEvents=(union isfuzzy=true
+      (SecurityEvent
+      | where EventID==4688
+      | where isnotempty(CommandLine)
+      | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName
+      ),
+      (WindowsEvent
+      | where EventID==4688
+      | where EventData has_any (".decode('base64')", "base64 --decode", ".decode64(" )
+      | extend CommandLine = tostring(EventData.CommandLine)
+      | where isnotempty(CommandLine)
+      | extend SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+      | extend NewProcessName = tostring(EventData.NewProcessName)
+      | extend FileName=tostring(split(NewProcessName, '\\')[-1])
+      | extend ParentProcessName = tostring(EventData.ParentProcessName)
+      | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, CommandLine, ParentProcessName
+      ));
+      ProcessCreationEvents
+      | where CommandLine contains ".decode('base64')"
+              or CommandLine contains "base64 --decode"
+              or CommandLine contains ".decode64("
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by Computer, Account, AccountDomain, FileName, CommandLine, ParentProcessName
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Process executed from binary hidden in Base64 encoded file
+      description: "'Encoding malicious software is a technique used to obfuscate files from detection. \nThe first CommandLine\
+        \ component is looking for Python decoding base64. \nThe second CommandLine component is looking for Bash/sh command\
+        \ line base64 decoding.\nThe third one is looking for Ruby decoding base64.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Account
+          dnsDomainColumn: DnsDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1027
+        - technique: T1140
+      customDetails:
+        HostFullName: Computer

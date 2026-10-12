@@ -1,0 +1,107 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d2e8fd50-8d66-11ec-b909-0242ac120002
+    path: Analytic Rules/PotentialRemoteDesktopTunneling.yaml
+    version: 1.0.4
+    querySha256: 10ad6b35880a79f841264ced48e18eae1b8c19ccdff67d90a7f53c5eee514ca5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Host.FullName mismatch is informational because its original value is preserved as customDetails.HostFullName from query
+      column `Computer`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1572
+    reviewScope:
+      sourceDocumentSha256: f547ca61da1023eb933b5d273b65e604e05f9212014feafe4820c19e4c999c9d
+      targetQuerySha256: ea130e4b7690472aa952388e1a60643347d699e17ad82107dec371189a23359f
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: f547ca61da1023eb933b5d273b65e604e05f9212014feafe4820c19e4c999c9d
+      targetQuerySha256: ea130e4b7690472aa952388e1a60643347d699e17ad82107dec371189a23359f
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: available
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-d2e8fd50-8d66-11ec-b909-0242ac120002
+  displayName: Potential Remote Desktop Tunneling
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+         | where EventID in (4624,4625) and LogonType in (10) and IpAddress in ("::1","127.0.0.1")
+         | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonType, IpAddress
+         | extend Name=tostring(split(TargetUserName, "@")[0]), UPNSuffix=tostring(split(TargetUserName, "@")[1])
+         | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Potential Remote Desktop Tunneling
+      description: |-
+        'This query detects remote desktop authentication attempts with a localhost source address, which can indicate a tunneled login.
+        Ref: https://www.mandiant.com/resources/bypassing-network-restrictions-through-rdp-tunneling'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1572
+      customDetails:
+        HostFullName: Computer

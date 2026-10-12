@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c3e5dbaa-a540-408c-8b36-68bdfb3df088
+    path: Analytic Rules/NRT_base64_encoded_pefile.yaml
+    version: 1.0.2
+    querySha256: 5837ccc5a17276478625b87130e7ec4f8dc695caffd47e096d32aa839fabdb7d
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `SubjectAccount`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `SubjectAccount` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - DefenseEvasion
+    originalTechniques:
+    - T1059
+    - T1027
+    - T1140
+    reviewScope:
+      sourceDocumentSha256: 7c4d62933e44e97582ace18c8b9675e542356dd65784902ece13f5c750f5e8a6
+      targetQuerySha256: 8c32ee73b40df208dc034291841b1bda04a653207e25d482c95a1b60e5ff2985
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 7c4d62933e44e97582ace18c8b9675e542356dd65784902ece13f5c750f5e8a6
+      targetQuerySha256: 8c32ee73b40df208dc034291841b1bda04a653207e25d482c95a1b60e5ff2985
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SubjectAccount
+      column: SubjectAccount
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-c3e5dbaa-a540-408c-8b36-68bdfb3df088
+  displayName: NRT Base64 Encoded Windows Process Command-lines
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+       | where EventID == 4688
+       | where isnotempty(CommandLine)
+       | where CommandLine contains "TVqQAAMAAAAEAAA"
+       | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: NRT Base64 Encoded Windows Process Command-lines
+      description: '''This detection identifies instances of a base64 encoded PE file header seen in the process command line
+        parameter.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: SubjectUserName
+          ntDomainColumn: SubjectDomainName
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1027
+        - technique: T1140
+      customDetails:
+        AccountFullName: SubjectAccount
+        HostFullName: Computer

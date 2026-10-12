@@ -1,0 +1,133 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 508cef41-2cd8-4d40-a519-b04826a9085f
+    path: Analytic Rules/NRT_SecurityEventLogCleared.yaml
+    version: 1.0.1
+    querySha256: ec40f4d8c3a9c6d43056458d5848e2cef5bbfc0d2eb14f33c09438e9ceeb4eef
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AccountName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.NTDomain mismatch is informational because its original value is preserved as customDetails.AccountNTDomain
+      from query column `AccountNTDomain`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Host.FullName mismatch is informational because its original value is preserved as customDetails.HostFullName from query
+      column `Computer`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1070
+    reviewScope:
+      sourceDocumentSha256: ff28d441ec165d2bbde06fa3bb2b36309883762951595a6257c11b415727c586
+      targetQuerySha256: 5f1b140ed6c46d00534ef391656c0b1b34cd6aca8ed49d2f83ce473d903a9311
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: ff28d441ec165d2bbde06fa3bb2b36309883762951595a6257c11b415727c586
+      targetQuerySha256: 5f1b140ed6c46d00534ef391656c0b1b34cd6aca8ed49d2f83ce473d903a9311
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountName
+      column: AccountName
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: NTDomain
+      sourceColumn: AccountNTDomain
+      column: AccountNTDomain
+      status: available
+      customDetailKey: AccountNTDomain
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: available
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-508cef41-2cd8-4d40-a519-b04826a9085f
+  displayName: NRT Security Event log cleared
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 1102 and EventSourceName == "Microsoft-Windows-Eventlog"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: NRT Security Event log cleared
+      description: |-
+        'Checks for event id 1102 which indicates the security event log was cleared.
+        It uses Event Source Name "Microsoft-Windows-Eventlog" to avoid generating false positives from other sources, like AD FS servers for instance.'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1070
+      customDetails:
+        AccountFullName: Account
+        AccountName: AccountName
+        AccountNTDomain: AccountNTDomain
+        HostFullName: Computer
