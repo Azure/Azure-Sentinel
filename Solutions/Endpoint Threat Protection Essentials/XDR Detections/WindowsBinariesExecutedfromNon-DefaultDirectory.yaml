@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 15049017-527f-4d3b-b011-b0e99e68ef45
+    path: Analytic Rules/WindowsBinariesExecutedfromNon-DefaultDirectory.yaml
+    version: 1.0.4
+    querySha256: fda4bf8db4520dfa60a3e61d96130c1e9c5e28f2a4b592ca6f7112a03b3d105b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Process.CommandLine value is retained as customDetails.ProcessCommandLine from query column `CommandLine`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.ProcessCommandLine column `CommandLine` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: 32cf49a35a7b747e229fb1509afc09283b037c8db058dd86ec0d1aeb26152051
+      targetQuerySha256: 6c8530f0f1b2c507916e7dbe6cdec8b85248d05c2ab15e8c6bafc3ced5580f8a
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 32cf49a35a7b747e229fb1509afc09283b037c8db058dd86ec0d1aeb26152051
+      targetQuerySha256: 6c8530f0f1b2c507916e7dbe6cdec8b85248d05c2ab15e8c6bafc3ced5580f8a
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 32cf49a35a7b747e229fb1509afc09283b037c8db058dd86ec0d1aeb26152051
+      targetQuerySha256: 6c8530f0f1b2c507916e7dbe6cdec8b85248d05c2ab15e8c6bafc3ced5580f8a
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: Process
+      entityIndex: 3
+      identifier: CommandLine
+      sourceColumn: CommandLine
+      column: CommandLine
+      status: runtime-binding-pending
+      customDetailKey: ProcessCommandLine
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-15049017-527f-4d3b-b011-b0e99e68ef45
+  displayName: Windows Binaries Executed from Non-Default Directory
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let procList = externaldata(Process:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Microsoft_Lolbas_Execution_Binaries.csv"] with (format="csv", ignoreFirstRecord=True);
+      SecurityEvent
+      | where EventID == 4688 and Process has_any (procList) and not (NewProcessName has ("C:\\Windows\\"))
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine
+      | extend Name=tostring(split(SubjectUserName, "@")[0]), UPNSuffix=tostring(split(SubjectUserName, "@")[1])
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Windows Binaries Executed from Non-Default Directory
+      description: "'The query detects Windows binaries, that can be executed from a non-default directory (e.g. C:\\Windows\\\
+        , C:\\Windows\\System32 etc.). \nRef: https://lolbas-project.github.io/'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        HostFullName: Computer
+        ProcessCommandLine: CommandLine

@@ -1,0 +1,181 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dcdf9bfc-c239-4764-a9f9-3612e6dff49c
+    path: Analytic Rules/ADFSDBNamedPipeConnection.yaml
+    version: 1.0.2
+    querySha256: 1daf1828fbd72115e5015ca11b9c1d34bc0f6a8af264e85eabe11214211ba01a
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserName` requires runtime output-schema binding verification
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountName`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountName` requires runtime output-schema binding verification
+    - Account.NTDomain value is retained as customDetails.AccountNTDomain from query column `AccountNTDomain`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountNTDomain column `AccountNTDomain` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1005
+    reviewScope:
+      sourceDocumentSha256: d983d3d01a637ba211a5bf42cf3cc3ac554a782010d923a7d5265ecad97584d0
+      targetQuerySha256: 9e2c84c717790b8ca2bbc9856d11bcd812af572e690fd41f3842f6174a23a21c
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: d983d3d01a637ba211a5bf42cf3cc3ac554a782010d923a7d5265ecad97584d0
+      targetQuerySha256: 9e2c84c717790b8ca2bbc9856d11bcd812af572e690fd41f3842f6174a23a21c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserName
+      column: UserName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountName
+      column: AccountName
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: NTDomain
+      sourceColumn: AccountNTDomain
+      column: AccountNTDomain
+      status: runtime-binding-pending
+      customDetailKey: AccountNTDomain
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-dcdf9bfc-c239-4764-a9f9-3612e6dff49c
+  displayName: ADFS Database Named Pipe Connection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Adjust this to use a longer timeframe to identify ADFS servers
+      //let lookback = 6d;
+      // Adjust this to adjust the key export detection  timeframe
+      //let timeframe = 1d;
+      // Start be identifying ADFS servers to reduce FP chance
+      let ADFS_Servers = (
+      Event
+      //| where TimeGenerated > ago(timeframe+lookback)
+      | where Source == "Microsoft-Windows-Sysmon"
+      | where EventID == 18
+      | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+      | mv-expand bagexpansion=array EventData
+      | evaluate bag_unpack(EventData)
+      | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+      | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, MG, ManagementGroupName, _ResourceId)
+      | extend Image = column_ifexists("Image", "")
+      | extend process = split(Image, '\\', -1)[-1]
+      | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
+      | summarize by Computer);
+      // Look for ADFS servers where Named Pipes event are present
+      Event
+      //| where TimeGenerated > ago(timeframe)
+      | where Source == "Microsoft-Windows-Sysmon"
+      | where EventID == 18
+      | where Computer in~ (ADFS_Servers)
+      | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+      | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+      | mv-expand bagexpansion=array EventData
+      | evaluate bag_unpack(EventData)
+      | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+      | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+      | extend RuleName = column_ifexists("RuleName", ""),
+          TechniqueId = column_ifexists("TechniqueId", ""),
+          TechniqueName = column_ifexists("TechniqueName", ""),
+          Image = column_ifexists("Image", ""),
+          PipeName = column_ifexists("PipeName", ""),
+          EventType = column_ifexists("EventType", "")
+      | parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+      // Look for Pipe related to querying the WID
+      | where PipeName == "\\MICROSOFT##WID\\tsql\\query"
+      | extend process = split(Image, '\\', -1)[-1]
+      // Exclude expected processes
+      | where process !in ("Microsoft.IdentityServer.ServiceHost.exe", "Microsoft.Identity.Health.Adfs.PshSurrogate.exe", "AzureADConnect.exe", "Microsoft.Tri.Sensor.exe", "wsmprovhost.exe","mmc.exe", "sqlservr.exe")
+      | extend Operation = RenderedDescription
+      | project-reorder TimeGenerated, EventType, Operation, process, Image, Computer, UserName
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | extend AccountName = tostring(split(UserName, @'\')[1]), AccountNTDomain = tostring(split(UserName, @'\')[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: ADFS Database Named Pipe Connection
+      description: |-
+        'This detection uses Sysmon telemetry to detect suspicious local connections via a named pipe to the AD FS configuration database (Windows Internal Database).
+        In order to use this query you need to be collecting Sysmon EventIdD 18 (Pipe Connected).
+        If you do not have Sysmon data in your workspace this query will raise an error stating:
+        Failed to resolve scalar expression named "[@Name]"'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1005
+      customDetails:
+        AccountFullName: UserName
+        AccountName: AccountName
+        AccountNTDomain: AccountNTDomain
+        HostFullName: Computer

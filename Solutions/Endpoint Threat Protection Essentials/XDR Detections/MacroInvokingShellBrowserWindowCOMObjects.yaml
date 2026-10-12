@@ -1,0 +1,120 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e7470b35-0128-4508-bfc9-e01cfb3c2eb7
+    path: Analytic Rules/MacroInvokingShellBrowserWindowCOMObjects.yaml
+    version: 1.0.4
+    querySha256: d2032ada6f462b2b6c555bee806cf4ec608e290baffa849197d43e172d53da07
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account mapping was completed with projected column `DnsDomain`
+    - Process.CommandLine value is retained as customDetails.ProcessCommandLine from query column `CommandLine`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.ProcessCommandLine column `CommandLine` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1021.003
+    reviewScope:
+      sourceDocumentSha256: 51f7073d47aa79bc70b40ffdb03abe576d4458582aa6e9f87bcbd859589aa2c5
+      targetQuerySha256: e199e737c5ba8bd76790a6f9b936e74cfa5c8d03ce1c116c3f9e97c8484534d4
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 51f7073d47aa79bc70b40ffdb03abe576d4458582aa6e9f87bcbd859589aa2c5
+      targetQuerySha256: e199e737c5ba8bd76790a6f9b936e74cfa5c8d03ce1c116c3f9e97c8484534d4
+    supplementalEntityDetails:
+    - entityType: Process
+      entityIndex: 1
+      identifier: CommandLine
+      sourceColumn: CommandLine
+      column: CommandLine
+      status: runtime-binding-pending
+      customDetailKey: ProcessCommandLine
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-e7470b35-0128-4508-bfc9-e01cfb3c2eb7
+  displayName: Detecting Macro Invoking ShellBrowserWindow COM Objects
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+       | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==1
+       | parse EventData with * 'Image">' Image "<" * 'CommandLine">' CommandLine "<" * 'ParentImage">' ParentImage "<" *
+       | where ParentImage has "svchost.exe" and Image has "rundll32.exe" and CommandLine has "{c08afd90-f2a1-11d1-8455-00a0c91f3880}"
+       | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Description">' Description "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
+       | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description
+       | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detecting Macro Invoking ShellBrowserWindow COM Objects
+      description: '''This query detects a macro invoking ShellBrowserWindow COM Objects evade naive parent/child Office detection
+        rules.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        accounts:
+        - id: account1
+          nameColumn: User
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+          subTechniques:
+          - T1021.003
+      customDetails:
+        ProcessCommandLine: CommandLine
+        HostFullName: Computer
