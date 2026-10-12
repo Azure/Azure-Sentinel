@@ -37,7 +37,7 @@ Rows appear within 5 to 15 minutes of the next Databricks file landing in S3. Ob
 
 ## Validation
 
-The table schema, transform and the AWS trust pattern were verified against a live Microsoft Sentinel workspace and AWS account with Databricks-shaped data (410 events, historical and live) on 7 October 2026, using the companion package at the author's repository, which also contains an Azure Function alternative, pre-flight and diagnostics scripts, and an automated test harness.
+The table schema and the AWS trust pattern were verified against a live Microsoft Sentinel workspace and AWS account with Databricks-shaped data (410 events, historical and live) on 7 October 2026. The table, the data collection rule with this transform and the connector definition were deployed to a live workspace on 10 October 2026.
 
 ## Support
 

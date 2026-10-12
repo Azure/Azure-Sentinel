@@ -1,45 +1,103 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Creates the IAM role, SQS queue, dead-letter queue and queue policy that let Microsoft Sentinel read Databricks audit logs from an S3 bucket. Optionally creates the bucket with the S3 notification.",
+  "Description": "Microsoft Sentinel Databricks connector, template 2 of 2 (DatabricksAuditLogsResources.json): the IAM role Microsoft Sentinel assumes, the SQS queue and dead-letter queue, and the queue policy. Deploy after OIDCWebIdProvider.json.",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Enter your values"
+          },
+          "Parameters": [
+            "SentinelWorkspaceId",
+            "BucketName",
+            "DeliveryPathPrefix",
+            "KmsKeyArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Keep the defaults"
+          },
+          "Parameters": [
+            "AwsRoleName",
+            "SentinelSQSQueueName",
+            "CreateNewBucket"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "SentinelWorkspaceId": {
+          "default": "Microsoft Sentinel Workspace ID"
+        },
+        "BucketName": {
+          "default": "Databricks S3 bucket name"
+        },
+        "DeliveryPathPrefix": {
+          "default": "Databricks delivery path prefix"
+        },
+        "KmsKeyArn": {
+          "default": "KMS key ARN (SSE-KMS buckets only)"
+        },
+        "AwsRoleName": {
+          "default": "IAM role name"
+        },
+        "SentinelSQSQueueName": {
+          "default": "SQS queue name"
+        },
+        "CreateNewBucket": {
+          "default": "Create a new bucket"
+        }
+      }
+    }
+  },
   "Parameters": {
-    "AwsRoleName": {
-      "Type": "String",
-      "Description": "Name of the role Microsoft Sentinel assumes. Must start with OIDC_.",
-      "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
-      "Default": "OIDC_MicrosoftSentinelDatabricksAudit"
-    },
     "SentinelWorkspaceId": {
       "Type": "String",
-      "Description": "Microsoft Sentinel Workspace ID (shown on the connector page)."
+      "Description": "Workspace ID of the Microsoft Sentinel workspace, from the Databricks connector page in Microsoft Sentinel. A GUID. Not the tenant ID or subscription ID.",
+      "AllowedPattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "ConstraintDescription": "Must be a GUID such as 1a2b3c4d-1234-5678-9abc-def012345678."
     },
     "BucketName": {
       "Type": "String",
       "AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
-      "Description": "Name of the S3 bucket Databricks delivers audit logs to."
+      "Description": "Name of the S3 bucket Databricks delivers audit logs to. The name only, without s3:// or an ARN.",
+      "ConstraintDescription": "Must be an S3 bucket name only: lower case letters, numbers, dots and hyphens."
     },
     "DeliveryPathPrefix": {
       "Type": "String",
-      "Description": "The delivery_path_prefix configured in Databricks, without leading or trailing slash.",
-      "Default": "audit-logs"
-    },
-    "SentinelSQSQueueName": {
-      "Type": "String",
-      "Default": "MicrosoftSentinelDatabricksAuditSqs",
-      "Description": "Name for the SQS queue."
+      "Description": "The delivery_path_prefix from the Databricks log delivery configuration, the folder that holds the workspaceId= folders. No leading or trailing slash.",
+      "Default": "audit-logs",
+      "AllowedPattern": "^[^/](.*[^/])?$",
+      "ConstraintDescription": "Must not start or end with a slash. Enter audit-logs, not /audit-logs/."
     },
     "KmsKeyArn": {
       "Type": "String",
       "Default": "",
-      "Description": "ARN of the KMS key if the bucket uses SSE-KMS; leave empty for SSE-S3."
+      "Description": "Only if the bucket is encrypted with SSE-KMS: the KMS key ARN. Leave empty for the default S3 encryption.",
+      "AllowedPattern": "^$|^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/.+$",
+      "ConstraintDescription": "Leave empty, or enter a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+    },
+    "AwsRoleName": {
+      "Type": "String",
+      "Description": "Name of the IAM role Microsoft Sentinel assumes. Keep the default. Must start with OIDC_.",
+      "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+      "Default": "OIDC_MicrosoftSentinelDatabricksAudit",
+      "ConstraintDescription": "Must start with OIDC_ and contain only letters, numbers, hyphens and underscores."
+    },
+    "SentinelSQSQueueName": {
+      "Type": "String",
+      "Default": "MicrosoftSentinelDatabricksAuditSqs",
+      "Description": "Name of the SQS queue. Keep the default. The dead-letter queue gets the same name with -dlq."
     },
     "CreateNewBucket": {
+      "Type": "String",
       "AllowedValues": [
-        true,
-        false
+        "false",
+        "true"
       ],
-      "Default": false,
-      "Description": "true creates the bucket with the notification. false (the usual case) expects the bucket to exist; add the notification to it afterwards.",
-      "Type": "String"
+      "Default": "false",
+      "Description": "Keep false: the Databricks bucket already exists and you add the S3 event notification afterwards (Data Connectors/README.md). true creates a new bucket with the notification (test use only)."
     }
   },
   "Conditions": {
@@ -48,7 +106,7 @@
         {
           "Ref": "CreateNewBucket"
         },
-        true
+        "true"
       ]
     },
     "HasKmsKey": {
@@ -303,7 +361,8 @@
             }
           ]
         }
-      }
+      },
+      "UpdateReplacePolicy": "Retain"
     }
   },
   "Outputs": {
