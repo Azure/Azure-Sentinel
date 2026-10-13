@@ -140,6 +140,6 @@ Building the package does not complete release validation. Maintainers should:
 RedRays scheduler -> Microsoft Entra token endpoint -> Azure Monitor Logs Ingestion API -> DCR -> Log Analytics.
 The sender runs in the customer-controlled RedRays backend. There is no Azure Function or
 CCF polling component. Any CCF migration requires an agreed design for this push-based model.
-The connector embeds its SVG for portal rendering; the source is also included as
+The connector references the raw SVG URL under the repository's `Logos/` folder for portal rendering; a copy is also included as
 `Data Connectors/RedRays.svg`. Light and dark previews are included inside
 `Workbooks/Images/Preview/` as well as the repository workbook gallery.
