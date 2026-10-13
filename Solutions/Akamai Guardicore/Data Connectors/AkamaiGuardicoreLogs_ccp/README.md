@@ -30,7 +30,7 @@ Azure Functions-based implementation to the Microsoft Sentinel
   - `POST /api/v3.0/authenticate`
   - `GET  /api/v3.0/agents`
   - `GET  /api/v3.0/assets`
-  - `GET  /api/v3.0/workflow/projects`
+  - `GET  /api/v4.0/workflow/projects`
   - `GET  /api/v3.0/visibility/policy/rules`
 - Azure CLI 2.61.0 or newer with the `log-analytics` extension installed (for the
   table migration step below).
@@ -91,8 +91,9 @@ Azure Functions-based implementation to the Microsoft Sentinel
    - **Username**
    - **Password**
 
-   Click *Connect*. The CCF runtime will begin polling the five endpoints listed
-   in [Prerequisites](#prerequisites).
+   Click *Connect*. The CCF runtime will begin polling the four data endpoints
+   listed in [Prerequisites](#prerequisites) (`/agents`, `/assets`,
+   `/workflow/projects`, `/visibility/policy/rules`).
 
 7. **Verify ingestion** approximately 15 minutes after connecting. For each table:
 
