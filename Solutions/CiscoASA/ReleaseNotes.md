@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.1.3 | 13-10-2026 | Added workload, data-type, and connector prerequisite records to all three disabled XDR Custom Detections. Updated XDR content versions to 3.1.3 and V3.1 packaging to include resolved package/content provenance in installation and Content Hub registration records. |
 | 3.1.2 | 12-10-2026 | Refreshed the V3.1 hybrid package for three disabled Defender XDR Custom Detections with reviewed Host mappings and source-rule provenance. |
 | 3.1.1       | 11-10-2026                     | Added a reviewed Host mapping to the threat-message Custom Detection and recorded accepted Host-mapping assumptions while preserving original host values in alert details. |
 | 3.1.0       | 11-10-2026                     | Added three disabled Defender XDR Custom Detections with source-rule provenance and V3.1 hybrid packaging support. |
