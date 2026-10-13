@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 05b4bccd-dd12-423d-8de4-5a6fb526bb4f
+    path: Analytic Rules/NewEXEdeployedviaDefaultDomainorDefaultDomainControllerPolicies.yaml
+    version: 1.0.2
+    querySha256: d7636b33d4a545b02c3bf662b4d8e4df8ca08aced50e6ef136f02fc7798a7153
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - LateralMovement
+    originalTechniques:
+    - T1072
+    - T1570
+    reviewScope:
+      sourceDocumentSha256: 290318ce4d5d282e05c8b3ed091664efcf2543a76b0e682b13588eb373be862d
+      targetQuerySha256: 5b2526f4077aff4631f290370b646e34cecb7cf065d441f355da224c4d264f18
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 290318ce4d5d282e05c8b3ed091664efcf2543a76b0e682b13588eb373be862d
+      targetQuerySha256: 5b2526f4077aff4631f290370b646e34cecb7cf065d441f355da224c4d264f18
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-05b4bccd-dd12-423d-8de4-5a6fb526bb4f
+  displayName: New EXE deployed via Default Domain or Default Domain Controller Policies
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let known_processes = (
+        SecurityEvent
+        // If adjusting Query Period or Frequency update these
+        | where TimeGenerated between(ago(14d)..ago(1d))
+        | where EventID == 4688
+        | where NewProcessName has_any ("Policies\\{6AC1786C-016F-11D2-945F-00C04fB984F9}", "Policies\\{31B2F340-016D-11D2-945F-00C04FB984F9}")
+        | summarize by Process);
+        SecurityEvent
+        // If adjusting Query Period or Frequency update these
+        | where TimeGenerated > ago(1d)
+        | where EventID == 4688
+        | where NewProcessName has_any ("Policies\\{6AC1786C-016F-11D2-945F-00C04fB984F9}", "Policies\\{31B2F340-016D-11D2-945F-00C04FB984F9}")
+        | where Process !in (known_processes)
+        // This will likely apply to multiple hosts so summarize these data
+        | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Process, NewProcessName, CommandLine, Computer
+        | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New EXE deployed via Default Domain or Default Domain Controller Policies
+      description: |-
+        'This detection highlights executables deployed to hosts via either the Default Domain or Default Domain Controller Policies. These policies apply to all hosts or Domain Controllers and best practice is that these policies should not be used for deployment of files.
+        A threat actor may use these policies to deploy files or scripts to all hosts in a domain.'
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1072
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1072
+        - technique: T1570
+      customDetails:
+        HostFullName: Computer

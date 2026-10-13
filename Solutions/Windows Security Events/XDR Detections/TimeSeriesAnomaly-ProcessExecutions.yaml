@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2c55fe7a-b06f-4029-a5b9-c54a2320d7b8
+    path: Analytic Rules/TimeSeriesAnomaly-ProcessExecutions.yaml
+    version: 1.0.6
+    querySha256: 95f38cf051193e54415451342cbe7ca9c3ccaba85316271c1480a29ff049ca3a
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Account`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Account` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: a8b96af40ebf026f9d3f0b1d7853de036309c4688ee3a0da2b64426665b2d87d
+      targetQuerySha256: d6d5ca79cc1c4c9f6d978f92c405e7899e955fb5d08c54a7c1a283a53d67a2ad
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: a8b96af40ebf026f9d3f0b1d7853de036309c4688ee3a0da2b64426665b2d87d
+      targetQuerySha256: d6d5ca79cc1c4c9f6d978f92c405e7899e955fb5d08c54a7c1a283a53d67a2ad
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-2c55fe7a-b06f-4029-a5b9-c54a2320d7b8
+  displayName: Process Execution Frequency Anomaly
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let starttime = 14d;
+      let endtime = 1d;
+      let timeframe = 1h;
+      let TotalEventsThreshold = 5;
+      // Configure the list with sensitive process names
+      let ExeList = dynamic(["powershell.exe","cmd.exe","wmic.exe","psexec.exe","cacls.exe","rundll32.exe"]);
+      let TimeSeriesData =
+      SecurityEvent
+      | where EventID == 4688 | extend Process = tolower(Process)
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+      | where Process in~ (ExeList)
+      | project TimeGenerated, Computer, AccountType, Account, Process
+      | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Process;
+      let TimeSeriesAlerts = materialize(TimeSeriesData
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 1.5, -1, 'linefit')
+      | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+      | where anomalies > 0
+      | project Process, TimeGenerated, Total, baseline, anomalies, score
+      | where Total > TotalEventsThreshold);
+      let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
+      TimeSeriesAlerts
+      | where TimeGenerated > ago(2d)
+      | join (
+      SecurityEvent
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+      | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+      | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
+      | where EventID == 4688 | extend Process = tolower(Process)
+      | summarize CommandlineCount = count() by bin(TimeGenerated, 1h), Process, CommandLine, Computer, Account
+      ) on Process, TimeGenerated
+      | project AnomalyHour = TimeGenerated, Computer, Account, Process, CommandLine, CommandlineCount, Total, baseline, anomalies, score
+      | extend timestamp = AnomalyHour, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Process Execution Frequency Anomaly
+      description: |-
+        'This detection identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors.
+        The query leverages KQL's built-in anomaly detection algorithms to find large deviations from baseline patterns.
+        Sudden increases in execution frequency of sensitive processes should be further investigated for malicious activity.
+        Tune the values from 1.5 to 3 in series_decompose_anomalies for further outliers or based on custom threshold values for score.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          ntDomainColumn: NTDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        AccountFullName: Account
+        HostFullName: Computer

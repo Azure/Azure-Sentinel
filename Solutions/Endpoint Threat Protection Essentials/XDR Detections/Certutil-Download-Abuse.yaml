@@ -1,0 +1,176 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4a9d3c2e-7f1b-4e58-9a0c-2d5b8e3f1a7c
+    path: Analytic Rules/Certutil-Download-Abuse.yaml
+    version: 1.0.0
+    querySha256: 2f456bffe591a084ad3c4409bce544fce261fa043c7d9236623d645a5dc646bc
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - query mixes native Defender and Sentinel workload tables; time columns were preserved and require runtime validation
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostName` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `HostName`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostName` requires runtime output-schema binding verification
+    - Process.CommandLine value is retained as customDetails.ProcessCommandLine from query column `ProcessCommandLine`, but
+      its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.ProcessCommandLine column `ProcessCommandLine` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    - DefenseEvasion
+    originalTechniques:
+    - T1105
+    - T1218
+    - T1140
+    reviewScope:
+      sourceDocumentSha256: e260d599fd7336743433a81e3d8bfebaf266e5045b227673fa4959e96b5617f7
+      targetQuerySha256: 133cd5d3e24d02d6bf86df62c17fa9fade6b77eed26a4d961e1110a11bfa0a19
+    reviewDecisions:
+    - reason: query mixes native Defender and Sentinel workload tables; time columns were preserved and require runtime validation
+      decision: accepted
+      sourceDocumentSha256: e260d599fd7336743433a81e3d8bfebaf266e5045b227673fa4959e96b5617f7
+      targetQuerySha256: 133cd5d3e24d02d6bf86df62c17fa9fade6b77eed26a4d961e1110a11bfa0a19
+    - reason: Original Sentinel lookback is shorter than the native XDR service window, but source and target table inputs
+        cannot be proven equivalent
+      decision: accepted
+      sourceDocumentSha256: e260d599fd7336743433a81e3d8bfebaf266e5045b227673fa4959e96b5617f7
+      targetQuerySha256: 133cd5d3e24d02d6bf86df62c17fa9fade6b77eed26a4d961e1110a11bfa0a19
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `HostName` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: e260d599fd7336743433a81e3d8bfebaf266e5045b227673fa4959e96b5617f7
+      targetQuerySha256: 133cd5d3e24d02d6bf86df62c17fa9fade6b77eed26a4d961e1110a11bfa0a19
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostName
+      column: HostName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: Process
+      entityIndex: 3
+      identifier: CommandLine
+      sourceColumn: ProcessCommandLine
+      column: ProcessCommandLine
+      status: runtime-binding-pending
+      customDetailKey: ProcessCommandLine
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostName` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Original Sentinel lookback is shorter than the native XDR service window, but source and target table inputs cannot
+      be proven equivalent
+    - query mixes native Defender and Sentinel workload tables; time columns were preserved and require runtime validation
+properties:
+  id: xdr-4a9d3c2e-7f1b-4e58-9a0c-2d5b8e3f1a7c
+  displayName: CertUtil Used for File Download (Living off the Land)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Lookback = 1h;
+      let AllowlistedDomains = dynamic([
+        "windowsupdate.microsoft.com",
+        "download.microsoft.com",
+        "dl.delivery.mp.microsoft.com",
+        "ctldl.windowsupdate.com"
+      ]);
+      let MDE_Results =
+        DeviceProcessEvents
+        | where Timestamp >= ago(Lookback)
+        | where FileName =~ "certutil.exe"
+        | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+        | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
+        | where not(ProcessCommandLine has_any (AllowlistedDomains))
+        | extend
+            AccountName   = InitiatingProcessAccountName,
+            AccountDomain = InitiatingProcessAccountDomain,
+            HostName      = DeviceName,
+            EventTime     = Timestamp
+        | project EventTime, HostName, AccountName, AccountDomain,
+            ProcessCommandLine, InitiatingProcessFileName;
+      let SecEvent_Results =
+        SecurityEvent
+        | where TimeGenerated >= ago(Lookback)
+        | where EventID == 4688
+        | where NewProcessName endswith "\\certutil.exe"
+        | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+        | where CommandLine has_any ("http://", "https://", "ftp://")
+        | where not(CommandLine has_any (AllowlistedDomains))
+        | extend
+            AccountName   = SubjectUserName,
+            AccountDomain = SubjectDomainName,
+            HostName      = Computer,
+            EventTime     = TimeGenerated,
+            ProcessCommandLine = CommandLine,
+            InitiatingProcessFileName = ParentProcessName
+        | project EventTime, HostName, AccountName, AccountDomain,
+            ProcessCommandLine, InitiatingProcessFileName;
+      union MDE_Results, SecEvent_Results
+      | sort by EventTime desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: CertUtil Used for File Download (Living off the Land)
+      description: |-
+        Detects certutil.exe being used to download files from remote URLs via the
+        -urlcache or -verifyctl flags. CertUtil is a signed Windows binary (LOLBin)
+        that attackers abuse to download payloads while bypassing application
+        whitelisting and network controls.
+        Tune AllowlistedDomains to match your PKI/CA infrastructure.
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          ntDomainColumn: AccountDomain
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1105
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1218
+        - technique: T1140
+      customDetails:
+        HostFullName: HostName
+        ProcessCommandLine: ProcessCommandLine

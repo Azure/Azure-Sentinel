@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Syslog
+  dataTypes:
+  - Syslog
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
+    path: Analytic Rules/FailedLogonAttempts_UnknownUser.yaml
+    version: 3.1.2
+    querySha256: f05d75464d053f17049485947f0c87326885c6790cd9072e2cfd7e313491f9ce
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `Computer`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 2ec9441a73e7053c366bdd7703dba86e72e3c3402c9e6f98cc0ed2df3d90b17e
+      targetQuerySha256: 4121065aed1cd830a0ee9c6af2c1a2e2142cb0d6ab7451c0a55722f22295898d
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `Computer`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 2ec9441a73e7053c366bdd7703dba86e72e3c3402c9e6f98cc0ed2df3d90b17e
+      targetQuerySha256: 4121065aed1cd830a0ee9c6af2c1a2e2142cb0d6ab7451c0a55722f22295898d
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `Computer`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
+  displayName: Failed logon attempts in authpriv
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 15;
+      // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
+      // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
+      // are aggregated.
+      Syslog
+      | where Facility =~ "authpriv"
+      | where SyslogMessage has "authentication failure" and SyslogMessage has " uid=0"
+      | extend RemoteIP = extract(@".*?rhost=([\d.]+).*?", 1,SyslogMessage)
+      | project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID
+      | join kind=innerunique (
+          // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon.
+          Syslog
+          | where Facility =~ "authpriv"
+          | where SyslogMessage has "user unknown"
+          | project Computer, HostIP, ProcessID
+          ) on Computer, HostIP, ProcessID
+      // Count the number of failed logon attempts by External IP and internal machine
+      | summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP
+      // Calculate the time between first and last logon attempt (AttemptPeriodLength)
+      | extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt
+      | where TotalLogonAttempts >= threshold
+      | project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, Computer,  HostIP
+      | sort by Computer asc nulls last
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Failed logon attempts in authpriv
+      description: "'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the\
+        \ account that tried to log in isn't provisioned on the machine. A few hits could indicate someone attempting to access\
+        \ a machine they aren't authorized to access. \nIf there are many of hits, especially from outside your network, it\
+        \ could indicate a brute force attack. \nDefault threshold for logon attempts is 15.'"
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        HostFullName: Computer

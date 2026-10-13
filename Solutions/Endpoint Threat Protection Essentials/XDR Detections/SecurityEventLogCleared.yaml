@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 80da0a8f-cfe1-4cd0-a895-8bc1771a720e
+    path: Analytic Rules/SecurityEventLogCleared.yaml
+    version: 1.1.5
+    querySha256: a065228957b93a418ba8c93be4f2c1dab5e7909e50bd3e2d206c6c4e12eb1435
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1070
+    reviewScope:
+      sourceDocumentSha256: 04f8109f07a289752210c71afed8d24077281ca3f47acff8e1b8545c85b712ef
+      targetQuerySha256: 8f707b8609f79b1d11f1f231d8f2870822182965fe17da3666f967fdbbee3bcc
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 04f8109f07a289752210c71afed8d24077281ca3f47acff8e1b8545c85b712ef
+      targetQuerySha256: 8f707b8609f79b1d11f1f231d8f2870822182965fe17da3666f967fdbbee3bcc
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 04f8109f07a289752210c71afed8d24077281ca3f47acff8e1b8545c85b712ef
+      targetQuerySha256: 8f707b8609f79b1d11f1f231d8f2870822182965fe17da3666f967fdbbee3bcc
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-80da0a8f-cfe1-4cd0-a895-8bc1771a720e
+  displayName: Security Event log cleared
+  status: disabled
+  queryCondition:
+    queryText: |-
+      (union isfuzzy=true
+      (
+      SecurityEvent
+      | where EventID == 1102 and EventSourceName =~ "Microsoft-Windows-Eventlog"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+      ),
+      (
+      WindowsEvent
+      | where EventID == 1102 and Provider =~ "Microsoft-Windows-Eventlog"
+      | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend Activity= "1102 - The audit log was cleared."
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+      )
+      )
+      | extend Name=tostring(split(Account, "@")[0]), UPNSuffix=tostring(split(Account, "@")[1])
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Security Event log cleared
+      description: |-
+        'Checks for event id 1102 which indicates the security event log was cleared.
+        It uses Event Source Name "Microsoft-Windows-Eventlog" to avoid generating false positives from other sources, like AD FS servers for instance.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1070
+      customDetails:
+        HostFullName: Computer

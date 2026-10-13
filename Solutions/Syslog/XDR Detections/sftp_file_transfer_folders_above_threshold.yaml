@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Syslog
+  dataTypes:
+  - Syslog
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7355434e-09d5-4401-b56d-e03e9379dfb1
+    path: Analytic Rules/sftp_file_transfer_folders_above_threshold.yaml
+    version: 3.1.2
+    querySha256: 8daccb633fccaa9d478b094eb88b2f48eb8f55378a903c7a7b1633bbf36dea5c
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - entity mappings were resolved by the configured per-rule override
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - customDetails 'TransferCount' column `count_distinct_dirpath` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'FilesList' column `dirlist` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'DirSample' column `DirSample` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Account.Name output column `username` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - File.Name output column `DirSample` cannot be proven after a destructive projection; no supplemental customDetails binding
+      was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: 4cc539df512c9e6d4dee2a3658d0c319b34a15663db30c09d627ef941e34cc3a
+      targetQuerySha256: 78f79a95695ace45b69c1f4abd358b1c837d9460cf61167ba0341249381a1324
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: username
+      column: username
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: File
+      entityIndex: 4
+      identifier: Name
+      sourceColumn: DirSample
+      column: DirSample
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-7355434e-09d5-4401-b56d-e03e9379dfb1
+  displayName: SFTP File transfer folder count above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      Syslog
+      | where ProcessName has "sftp"
+          and SyslogMessage has "close "
+          and SyslogMessage has " bytes read "
+      | parse SyslogMessage with "close \"" filepath "\" bytes read " readbytes: int " written " writtenbytes: int
+      | parse kind=regex filepath with dirpath:string "/" filename:string
+      | join kind=leftouter (
+          Syslog
+          | where ProcessName has "sftp" and SyslogMessage has "session opened for"
+          | parse SyslogMessage with "session opened for local user " username: string " from [" src_ip "]"
+          | project username, src_ip, ProcessID
+          )
+          on ProcessID
+      | project-away ProcessID1
+      | summarize count_distinct_dirpath=dcount(dirpath), dirlist=make_set(dirpath) by Computer, username, src_ip, bin(TimeGenerated, 15m)
+      | where count_distinct_dirpath >= threshold
+      | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SFTP File transfer folder count above threshold
+      description: |-
+        'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.
+         It requires SFTP VERBOSE loglevel to be enabled.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: src_ip
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        TransferCount: count_distinct_dirpath
+        FilesList: dirlist
+        DirSample: DirSample

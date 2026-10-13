@@ -1,0 +1,118 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9367dff0-941d-44e2-8875-cb48570c7add
+    path: Analytic Rules/RegistryPersistenceViaAppInt_DLLsModification.yaml
+    version: 1.0.3
+    querySha256: f01dbb6839f999a51d0cb48ca58dee3f4d63c83498ab8d3ec81cd5ab0ad06e20
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - RegistryKey.Key value is retained as customDetails.RegistryKeyKey from query column `TargetObject`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.RegistryKeyKey column `TargetObject` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1546.010
+    reviewScope:
+      sourceDocumentSha256: 607545768ad26fb2466eb905ed75cbd7a9b04b63b05dc2a2fe61f4a573da8156
+      targetQuerySha256: 7a19f1259798ab059f6d56ce50ef77f801dc3014cc2a95718ac1ccab43acf091
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 607545768ad26fb2466eb905ed75cbd7a9b04b63b05dc2a2fe61f4a573da8156
+      targetQuerySha256: 7a19f1259798ab059f6d56ce50ef77f801dc3014cc2a95718ac1ccab43acf091
+    supplementalEntityDetails:
+    - entityType: RegistryKey
+      entityIndex: 1
+      identifier: Key
+      sourceColumn: TargetObject
+      column: TargetObject
+      status: runtime-binding-pending
+      customDetailKey: RegistryKeyKey
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-9367dff0-941d-44e2-8875-cb48570c7add
+  displayName: Registry Persistence via AppInit DLLs Modification
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+      | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" *
+      | where TargetObject has "\\Windows NT\\CurrentVersion\\Windows\\AppInit_DLLs"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer, TargetObject, Details
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Registry Persistence via AppInit DLLs Modification
+      description: "'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered\
+        \ by AppInit DLLs loaded into processes. \nDynamic-link libraries (DLLs) that are specified in the AppInit_DLLs value\
+        \ in the Registry keys HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows or HKEY_LOCAL_MACHINE\\\
+        Software\\Wow6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows are loaded by user32.dll into every process\
+        \ that loads user32.dll. In practice this is nearly every program, since user32.dll is a very common library.\nRef:\
+        \ https://attack.mitre.org/techniques/T1546/"
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1546
+          subTechniques:
+          - T1546.010
+      customDetails:
+        RegistryKeyKey: TargetObject
+        HostFullName: Computer
