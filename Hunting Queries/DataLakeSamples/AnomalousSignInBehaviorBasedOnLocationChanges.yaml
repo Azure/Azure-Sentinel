@@ -1,0 +1,49 @@
+id: 4f4b5316-2225-4bc5-8cc7-d77369476e8b
+name: Anomalous sign-in behavior based on location changes
+description: |
+  Identify anomalous sign-in behavior based on location changes for Microsoft Entra ID users and apps to detect sudden changes in behavior.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  SigninLogs
+  | where TimeGenerated > ago(1d)
+  // Forces Log Analytics to recognize that the query should be run over full time range
+  | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";")
+  | project TimeGenerated, AppDisplayName, UserPrincipalName, locationString
+  // Create time series
+  | make-series dLocationCount = dcount(locationString) on TimeGenerated step 1d by UserPrincipalName, AppDisplayName
+  // Compute best fit line for each entry
+  | extend (RSquare, Slope, Variance, RVariance, Interception, LineFit) = series_fit_line(dLocationCount)
+  // Chart the 3 most interesting lines
+  // A 0-value slope corresponds to an account being completely stable over time for a given Azure Active Directory application
+  | top 3 by Slope desc
+  // Extract the set of locations for each top user:
+  | join kind=inner (
+      SigninLogs
+      | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";")
+      | summarize locationList = makeset(locationString), threeDayWindowLocationCount = dcount(locationString) by AppDisplayName, UserPrincipalName, timerange = bin(TimeGenerated, 21d)
+  ) on AppDisplayName, UserPrincipalName
+  | order by UserPrincipalName, timerange asc
+  | project timerange, AppDisplayName, UserPrincipalName, threeDayWindowLocationCount, locationList
+  | order by AppDisplayName, UserPrincipalName, timerange asc
+  | extend timestamp = timerange, AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+metadata:
+  source:
+    kind: Microsoft
+  support:
+    tier: Microsoft
+  categories:
+    domains:
+      - Identity
