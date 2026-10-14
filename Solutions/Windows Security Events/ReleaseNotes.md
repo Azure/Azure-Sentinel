@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.1       | 14-10-2026                     | Added 2 **Defender XDR Workbooks** (`EventAnalyzer.json` and `IdentityAndAccess.json`) alongside the 21 disabled **Defender XDR Custom Detections** and existing Microsoft Sentinel content in hybrid V3.1 packaging. |
 | 3.1.2       | 12-10-2026                     | Added 21 disabled **Defender XDR Custom Detections** with reviewed entity mappings and hybrid V3.1 packaging alongside existing Microsoft Sentinel content. Validation was offline; runtime execution and alert parity were not run. |
 | 3.0.13      | 20-07-2026                     | Added **Analytic Rule** WMI Spawning Suspicious Child Process |
 | 3.0.12      | 18-02-2026                     | Removed external blog reference text from "Remote Scheduled Task Creation or Update using ATSVC Named Pipe" and " Scheduled Task Creation or Update from User Writable Directory" **hunting query** description | 
