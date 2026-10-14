@@ -18,7 +18,7 @@ By default this playbook first queries the Censys Host Enrichment API (`v3/globa
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
    * PlaybookName: Enter the playbook name here (default: CensysEntityEnrichmentHost).
-   * UseHostEnrichment: Set to true (default) to use the Censys Host Enrichment API for additional GreyNoise, IPinfo and Mallory data, or false to always use the standard host API.
+   * UseHostEnrichment: Enter True (default) to use the Censys Host Enrichment API for additional GreyNoise, IPinfo and Mallory data. Any other value, such as False, uses the standard host API only.
    * OrganizationID: Your Censys Organization ID from the Censys platform account settings.
    * IncidentEnrichmentPlaybookName: Name of the deployed CensysAddIncidentComment playbook.
    * KeyVaultName: Name of the Azure Key Vault where the Censys API token is stored.
