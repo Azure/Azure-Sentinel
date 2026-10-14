@@ -1,8 +1,8 @@
-# Akamai Guardicore Connector - v3.0.0 Migration Guide
+# Akamai Guardicore Connector - v3.0.1 Migration Guide
 
 ## Overview
 
-Version 3.0.0 of the Akamai Guardicore solution migrates the data connector from an
+Version 3.0.1 of the Akamai Guardicore solution migrates the data connector from an
 Azure Functions-based implementation to the Microsoft Sentinel
 [Codeless Connector Framework (CCF/CCP)](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector).
 
@@ -30,7 +30,7 @@ Azure Functions-based implementation to the Microsoft Sentinel
   - `POST /api/v3.0/authenticate`
   - `GET  /api/v3.0/agents`
   - `GET  /api/v3.0/assets`
-  - `GET  /api/v4.0/workflow/projects`
+  - `GET  /api/v3.0/workflow/projects`
   - `GET  /api/v3.0/visibility/policy/rules`
 - Azure CLI 2.61.0 or newer with the `log-analytics` extension installed (for the
   table migration step below).
@@ -82,7 +82,7 @@ Azure Functions-based implementation to the Microsoft Sentinel
 
    Expected output: `DataCollectionRuleBased`.
 
-5. **Deploy the v3.0.0 solution** from the Microsoft Sentinel Content Hub
+5. **Deploy the v3.0.1 solution** from the Microsoft Sentinel Content Hub
    ("Akamai Guardicore"). Accept the deployment into the same workspace.
 
 6. **Configure CCF credentials on the connector tile.** Open the

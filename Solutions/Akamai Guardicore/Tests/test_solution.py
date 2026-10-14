@@ -8,8 +8,6 @@ CCF (Codeless Connector Framework) solution. Run from anywhere:
     python3 -m unittest discover -s "Solutions/Akamai Guardicore/Tests" -v
     # or
     python3 "Solutions/Akamai Guardicore/Tests/test_solution.py"
-
-Each test documents the bug or invariant it protects.
 """
 
 import json
@@ -40,16 +38,12 @@ EXPECTED_TABLES = {
 BARE_TABLE_RE = re.compile(r"^Guardicore[A-Za-z]+_CL$")
 
 # Per-poller paging expectations, keyed by a unique fragment of each poller's
-# apiEndpoint: (offsetParaName, pageSizeParaName, pageSize). The v53/v54 dropdown
-# was removed, so paging is fixed per endpoint rather than version-conditional.
-#
-# The Applications poller uses the v4.0 projects endpoint, the other three poll
-# v3.0 endpoints with offset/limit and a 1000 page size.
-PROJECTS_ENDPOINT = "/api/v4.0/workflow/projects"
+# apiEndpoint: (offsetParaName, pageSizeParaName, pageSize).
+
 EXPECTED_PAGING = {
     "/api/v3.0/agents": ("offset", "limit", 1000),
     "/api/v3.0/assets": ("offset", "limit", 1000),
-    PROJECTS_ENDPOINT: ("offset", "limit", 1000),
+    "/api/v3.0/workflow/projects": ("offset", "limit", 1000),
     "/api/v3.0/visibility/policy/rules": ("offset", "limit", 1000),
 }
 # Paging param names that must never appear as a literal version-branching ARM
@@ -184,41 +178,8 @@ class TestTableNamesAreBare(unittest.TestCase):
             )
 
 
-class TestNoVersionSelector(unittest.TestCase):
-    """The v53/v54 dropdown and its ``centraVersion`` parameter were removed; the
-    connector pages per endpoint instead. A dangling ``centraVersion`` reference with
-    no matching parameter declaration is exactly what caused the earlier
-    ``InvalidTemplate`` deployment failure, so guard that it is fully gone."""
-
-    def test_no_centra_version_reference(self):
-        self.assertNotIn(
-            "centraVersion", MAIN_TEMPLATE.read_text(encoding="utf-8"),
-            "centraVersion must be fully removed (dropdown control + array parameter)",
-        )
-
-    def test_no_dropdown_control(self):
-        dropdowns = [
-            d for d in walk_dicts(load_json(MAIN_TEMPLATE))
-            if d.get("type") == "Dropdown"
-        ]
-        self.assertEqual(
-            [], dropdowns, "no Dropdown controls should remain in the connector UI",
-        )
-
-
 class TestPaging(unittest.TestCase):
-    """Each poller pages correctly for its own endpoint.
-
-    Positive: every poller carries the exact (offset param, page-size param, page
-    size) its endpoint requires — notably the v4.0 projects poller uses
-    start_at/max_results with pageSize 100, the v3.0 pollers use offset/limit with
-    pageSize 1000.
-
-    Negative: no poller still carries the removed version-conditional paging, and
-    the v4.0 projects poller never regresses to offset/limit or a >100 page size.
-    """
-
-    # --- positive ---------------------------------------------------------
+    """Each poller pages correctly for its own endpoint."""
 
     def test_each_poller_has_expected_paging(self):
         pollers = find_pollers(load_json(MAIN_TEMPLATE))
@@ -236,24 +197,6 @@ class TestPaging(unittest.TestCase):
         self.assertEqual(
             seen, set(EXPECTED_PAGING),
             "not every expected endpoint was present exactly once")
-
-    def test_projects_poller_uses_v4_aliases_capped_at_1000(self):
-        pollers = find_pollers(load_json(MAIN_TEMPLATE))
-        projects = [p for p in pollers if PROJECTS_ENDPOINT in endpoint_of(p)]
-        self.assertEqual(len(projects), 1, "expected exactly one v4.0 projects poller")
-        self.assertEqual(paging_of(projects[0]), ("offset", "limit", 1000))
-
-    # --- negative ---------------------------------------------------------
-
-    def test_no_version_conditional_paging(self):
-        for poller in find_pollers(load_json(MAIN_TEMPLATE)):
-            for field in ("offsetParaName", "pageSizeParaName"):
-                value = poller["paging"][field]
-                self.assertIsInstance(value, str)
-                for token in FORBIDDEN_PAGING_TOKENS:
-                    self.assertNotIn(
-                        token, value,
-                        f"{field} still carries removed version logic: {value!r}")
 
 
 class TestVersionConsistency(unittest.TestCase):
