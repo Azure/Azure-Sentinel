@@ -1,0 +1,51 @@
+id: 9b4306d2-af4a-4d68-8db3-8ff15f56b4a3
+name: PIM Privileged Role Activation Without MFA From Unusual Location
+description: |
+  'Detects Privileged Identity Management (PIM) role activations that occur
+  without a strong MFA claim, or from a country/region not previously seen
+  for that user, indicating potential compromised credential use to escalate
+  privileges via PIM self-activation.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+queryFrequency: 30m
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+  - T1098.003
+query: |
+  let KnownLocations = SigninLogs
+  | where TimeGenerated > ago(14d)
+  | summarize UsualCountries = make_set(LocationDetails.countryOrRegion) by UserPrincipalName;
+  let PIMActivations = AuditLogs
+  | where OperationName == "Add member to role completed (PIM activation)"
+  | extend Actor = tostring(InitiatedBy.user.userPrincipalName)
+  | extend Role = tostring(TargetResources[0].displayName)
+  | project TimeGenerated, Actor, Role;
+  PIMActivations
+  | join kind=leftouter (
+      SigninLogs
+      | project SigninTime = TimeGenerated, UserPrincipalName, AuthenticationRequirement, Country = tostring(LocationDetails.countryOrRegion), IPAddress
+  ) on $left.Actor == $right.UserPrincipalName
+  | join kind=leftouter KnownLocations on $left.Actor == $right.UserPrincipalName
+  | where AuthenticationRequirement != "multiFactorAuthentication" or Country !in (UsualCountries)
+  | project TimeGenerated, Actor, Role, Country, IPAddress, AuthenticationRequirement
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled
