@@ -1,5 +1,9 @@
 # Changelog for imAuditEvent.yaml
 
+## Version 0.1.12
+
+- (2026-10-10) Forward actorusername_has_any and object_has_any to both Barracuda AuditEvent filtering parsers. - [PR #15298](https://github.com/Azure/Azure-Sentinel/pull/15298)
+
 ## Version 0.1.11
 
 - (2026-10-08) Corrected the Microsoft Event parser disable watchlist key - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
