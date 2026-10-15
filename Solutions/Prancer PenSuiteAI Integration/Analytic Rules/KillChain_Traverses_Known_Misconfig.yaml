@@ -1,0 +1,86 @@
+id: 09c9d46d-d87e-4e3e-81cc-9f225c7e487b
+name: SwarmHack kill chain traverses a CSPM-flagged resource
+description: |
+  'Weaker companion to the direct CSPM/SwarmHack exploited-resource correlation: flags SwarmHack findings
+  whose free-text KillChain path merely traverses a CSPM-flagged resource as a pivot point along the way
+  (lateral-movement corroboration), rather than the misconfigured resource being the final compromised
+  target. Matches CSPM Snapshots.path tokens against the KillChain text. VALIDATION NOTE (2026-08-11):
+  live production KillChain values observed so far are a flat scan-level execution-mode string (e.g. "full"),
+  not the per-finding multi-stage path text this rule is designed to text-match against. The query is
+  syntax-valid and executes safely with zero false positives against current data (confirmed live), but will
+  stay dormant until SwarmHack populates a genuinely descriptive per-finding KillChain value - track this
+  against real data before relying on this rule.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Discovery
+  - LateralMovement
+relevantTechniques:
+  - T1580
+  - T1210
+query: |
+  // CSPM posture data uses a long lookback (standing backlog); SwarmHack kill chains use a short one
+  // (near-real-time confirmation). has_any pre-filters cheaply on the full misconfig token list before
+  // the per-token mv-expand+contains+join, so the expensive per-token matching only runs on rows that
+  // already contain at least one candidate token somewhere in KillChain.
+  let MisconfigLookback = 14d;
+  let SwarmHackLookback = 1h;
+  let MisconfigResources = PrancerFindings
+      | where TimeGenerated > ago(MisconfigLookback)
+      | where DeviceProduct == 'cspm'
+      | where isnotempty(Snapshots)
+      | mv-expand Snapshots
+      | extend MisconfigResourceKey = tostring(Snapshots.path), MisconfigResourceType = tostring(Snapshots.type)
+      | where isnotempty(MisconfigResourceKey)
+      | summarize CspmFindingIds = make_set(FindingId, 20) by CustomerId, MisconfigResourceKey, MisconfigResourceType;
+  let MisconfigTokenList = toscalar(MisconfigResources | summarize make_set(MisconfigResourceKey, 10000));
+  PrancerFindings
+  | where TimeGenerated > ago(SwarmHackLookback)
+  | where DeviceProduct == 'swarmhack'
+  | where isnotempty(KillChain)
+  | where KillChain has_any (MisconfigTokenList)
+  | mv-expand PotentialToken = MisconfigTokenList to typeof(string)
+  | where KillChain contains PotentialToken
+  | join kind=inner (MisconfigResources) on CustomerId, $left.PotentialToken == $right.MisconfigResourceKey
+  | summarize
+      TraversedMisconfigResources = make_set(MisconfigResourceKey, 20),
+      TraversedResourceTypes = make_set(MisconfigResourceType, 20),
+      CorroboratingCspmFindingIds = make_set(CspmFindingIds, 20)
+    by FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, RiskScore, Confidence, KillChain, ResourceID, TimeGenerated
+  | extend PivotSummary = strcat('KillChain traverses ', array_length(TraversedMisconfigResources), ' CSPM-flagged resource(s) as pivot point(s)')
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+customDetails:
+  UniqueFindingId: FindingId
+  RiskScore: RiskScore
+  Confidence: Confidence
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 14d
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Kill chain pivots through known misconfig: {{Title}}"
+  alertDescriptionFormat: "{{PivotSummary}} - {{KillChain}}"
+  alertSeverityColumnName: Severity
+version: 1.0.0
+kind: Scheduled
