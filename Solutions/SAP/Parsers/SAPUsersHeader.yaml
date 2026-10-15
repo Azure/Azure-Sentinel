@@ -1,0 +1,107 @@
+Contentkind: Function
+Description: SAPUsersHeader
+Function:
+  Title: SAPUsersHeader
+  Version: 3.3.18
+  LastUpdated: '2025-09-24'
+Category: SAPFunctions
+FunctionName: SAPUsersHeader
+FunctionParams:
+  - Name: SelectedSystemRoles
+    Type: dynamic
+    Default: dynamic(["All System Roles"])
+  - Name: SelectedSystems
+    Type: dynamic
+    Default: dynamic(["All Systems"])
+  - Name: SelectedUsers
+    Type: dynamic
+    Default: dynamic(["All Users"])
+  - Name: SelectedUser
+    Type: string
+    Default: '"All Users"'
+  - Name: AccountNames
+    Type: dynamic
+    Default: dynamic(["All account names"])
+FunctionQuery: "// // optional parameters can look like this\n// let SelectedSystems\
+  \ =  dynamic([\"All Systems\"]);\n// let SelectedSystemRoles =  dynamic([\"All System\
+  \ Roles\"]);\n// let SelectedUsers = dynamic([\"All Users\"]);\n// let SelectedUser\
+  \ = \"All Users\";\n// let AccountNames= dynamic([\"All account names\"]);\n// //\
+  \ let AccountNames= dynamic([\"All account names\"]);\n// // let SelectedSystems\
+  \ =  dynamic([\"S4P\", \"B4X\", \"ODT\"]);\n// // let SelectedSystemRoles =  dynamic([\"\
+  Production\", \"UAT\"]);\n// // let SelectedUsers = dynamic([\"DEVELOPER\",\"DDIC\"\
+  ]);\n// // let SelectedUser = \"DDIC\";\nlet UserMDLookBack = totimespan(toscalar(SAPGetParameters('UserMDLookBack')|\
+  \ project-keep ValueLow));\nlet UserHeaderAuditLookBack = totimespan(toscalar(SAPGetParameters('UserHeaderAuditLookBack')|\
+  \ project-keep ValueLow));\nlet Now = now();\nlet Statuses= dynamic({\"0\": \"Not\
+  \ Locked\", \"32\": \"Locked Globally By Administrator\", \"64\": \"Locked Locally\
+  \ By Administrator\", \"128\":\t\"Locked Due To Incorrect Logons (Limited Term)\"\
+  });\nlet UserTypes = dynamic({\"A\": \"Dialog\", \"B\": \"System\", \"C\": \"Communications\
+  \ Data\", \"L\": \"Reference (Logon not possible)\", \"S\": \"Service\"});\nlet\
+  \ Systems = materialize (SAPSystems(SelectedSystemRoles= SelectedSystemRoles, SelectedSystems=SelectedSystems)\n\
+  \    | project-keep SystemID, SystemRole, SystemUsage);\nlet AuditEvents= materialize(SAPAuditLog()\n\
+  | where TimeGenerated > ago(UserHeaderAuditLookBack)\n| where SystemID in ((Systems\
+  \ | distinct SystemID))\n| where isnotempty( User)\n| where Email has_any(AccountNames)\
+  \ or tostring(AccountNames) contains \"All account names\"\n| summarize  TimeGenerated=\
+  \ arg_max(TimeGenerated, ClientID, SystemID, Email) by User, ClientID, SystemID,\
+  \ TerminalIPv6, TERM_IPV6, Email\n| lookup kind=inner Systems on SystemID\n| project-rename\
+  \ Client= ClientID);\nlet UserLockUnlockFromAudit= SAPAuditLog\n| where TimeGenerated\
+  \ > ago(UserHeaderAuditLookBack)\n| where SystemID in ((Systems | distinct SystemID))\n\
+  // look for changes in agent dataconnector data. Agentless data connector sends\
+  \ this information using ABAPUserDetails continuously\n| where Type == \"ABAPAuditLog_CL\"\
+  \n| where MessageID == \"AU9\" or MessageID == \"AUA\"\n| where Email has_any(AccountNames)\
+  \ or tostring(AccountNames) contains \"All account names\"\n| extend Action= iff(MessageID\
+  \ == \"AUA\", \"unlocked\", \"locked\")\n| summarize ChangedOn= arg_max(UpdatedOn_t,\
+  \ User, Action) by Variable1, SystemID, Client= ClientID\n| project-rename User=Variable1,\
+  \ ActingUser=User\n| extend Details= strcat(\"SAP user \", User, \" was \", Action,\
+  \ \" in system \", SystemID, \" - \", Client, \" by user \", ActingUser);\nlet LastKnownIPs\
+  \ = AuditEvents | where isnotempty(TerminalIPv6) or isnotempty( TERM_IPV6)| summarize\
+  \ LastUsedOn= arg_max(TimeGenerated, *) by User, Client, SystemID | project LastKnownIP=\
+  \ coalesce(TerminalIPv6, TERM_IPV6), User, Client, SystemID;\nlet KnownIPsAndEmails\
+  \ = AuditEvents\n| summarize Count= count() by User, Client, SystemID, TerminalIPv6,\
+  \ TERM_IPV6, Email| order by Count desc\n| summarize KnownEmails= make_set_if(Email,isnotempty(\
+  \ Email), 10), KnownIPs = make_set_if(TerminalIPv6, isnotempty(TerminalIPv6), 10),\
+  \ KnownIPs2 = make_set_if(TERM_IPV6, isnotempty(TERM_IPV6), 10)\nby User, SystemID,\
+  \ Client\n| extend KnownIPs= set_union(KnownIPs, KnownIPs2)\n| extend PrimaryEmail\
+  \ = KnownEmails[0], PrimaryIP= KnownIPs[0];\nlet UserDetailsFromAgent= Systems |\
+  \ join kind= inner\n// get logon Data (Kernel-Side Use)\n(SAP_USR02\n| where TimeGenerated\
+  \ > ago(UserMDLookBack)\n| where (BNAME in (SelectedUsers) or tostring( SelectedUsers)\
+  \ == '[\"All Users\"]') and (BNAME == SelectedUser or SelectedUser contains \"All\
+  \ Users\")\n| summarize StatusDateTime= arg_max(TimeGenerated, *) by BNAME, MANDT,\
+  \ SystemID )\non SystemID\n// get User Name/Address Key Assignment\n| join kind=leftouter\
+  \ hint.strategy=shuffle\n(SAP_USR21 | where TimeGenerated > ago(UserMDLookBack)\
+  \ | summarize arg_max(TimeGenerated, *) by BNAME, MANDT, SystemID)\non BNAME, MANDT,\
+  \ SystemID\n| project-rename CLIENT= MANDT\n// get E-Mail Addresses\n| join kind=\
+  \ leftouter hint.strategy=shuffle\n(SAP_ADR6 | where TimeGenerated > ago(UserMDLookBack)\n\
+  | summarize LastSynched= arg_max(TimeGenerated, CONSNUMBER ) by CLIENT, DATE_FROM,\
+  \ ADDRNUMBER, PERSNUMBER, SystemID, SMTP_ADDR)\n on ADDRNUMBER, PERSNUMBER, SystemID,\
+  \ CLIENT\n| project-rename User= BNAME, Client= CLIENT\n| extend LastSeen= todatetime(strcat(TRDAT,\
+  \ LTIME)), CreatedOn = todatetime(ERDAT), ValidFrom= todatetime(GLTGV), Priority=\
+  \ 1\n, ValidityDate= todatetime(iff(isempty(GLTGB) or GLTGB == \"00000000\", \"\
+  99991231\",GLTGB))\n| project-rename UserGroup= CLASS, UserType = USTYP, Timezone\
+  \ = TZONE, LockedStatus = UFLAG, Email= SMTP_ADDR;\nlet UserDetailsFromAgentless=\
+  \ Systems | join kind= inner ABAPUserDetails on $left.SystemID == $right.SystemId\n\
+  | where TimeGenerated > ago(UserMDLookBack)\n| where (User in (SelectedUsers) or\
+  \ tostring( SelectedUsers) == '[\"All Users\"]') and (User == SelectedUser or SelectedUser\
+  \ contains \"All Users\")\n| where Email has_any(AccountNames) or tostring(AccountNames)\
+  \ contains \"All account names\"\n| summarize LastSynched=arg_max(TimeGenerated,\
+  \ Email, UserType, Timezone, LockedStatus, LastSeen, CreatedOn, ChangedOn, LastChangedBy,\
+  \ UserGroupAuth= UserGroup, ValidityDate, SystemRole, SystemUsage)\nby User, Client=\
+  \ ClientId, SystemID= SystemId\n| extend Priority= 1, StatusDateTime= LastSynched,\
+  \ ValidFrom= CreatedOn;\nunion UserDetailsFromAgentless, UserDetailsFromAgent\n\
+  // fill user per system for clients that only send audit but not user MD\n, (AuditEvents\
+  \ | summarize LastSeenOnAudit=max(TimeGenerated) by User, SystemID, Client | extend\
+  \ Priority= 2)\n| order by User, SystemID, Client\n| summarize arg_min(Priority,\
+  \ *) by User, SystemID, Client\n| lookup KnownIPsAndEmails on User, SystemID, Client\n\
+  | lookup LastKnownIPs on User, SystemID, Client\n| extend LastSeen = max_of(LastSeen,\
+  \ column_ifexists(\"LastUsedOn\", datetime(null)), column_ifexists(\"LastSeenOnAudit\"\
+  , datetime(null)))\n| extend LastSeenDaysAgo = datetime_diff('Day', Now, LastSeen)\n\
+  | extend CreatedDaysAgo = datetime_diff('Day', Now, CreatedOn)\n| project LastSynched=max_of(LastSynched,\
+  \ StatusDateTime, LastSeen, ChangedOn), User, Email = coalesce(Email, PrimaryEmail),\
+  \ LastSeen, LastSeenDaysAgo, PrimaryIP, LastKnownIP,\nPrimaryEmail, KnownIPs, KnownEmails,\
+  \ Client, SystemID, SystemRole, SystemUsage, CreatedOn, CreatedDaysAgo, ValidFrom,\
+  \ ValidityDate, LockedStatus, UserType, UserGroup\n| lookup UserLockUnlockFromAudit\
+  \ on User, SystemID, Client\n| extend LockedStatus= case(LockedStatus contains \"\
+  Locked\", LockedStatus, isempty(Action),trim_start(\" \", LockedStatus),Action==\"\
+  unlocked\",\"0\",\"64\")\n| extend LockedStatusDescription= coalesce(tostring(Statuses[LockedStatus]),\
+  \ LockedStatus)\n| extend UserTypeDescription= tostring(UserTypes[UserType])\n|\
+  \ extend LastSynched= max_of(LastSynched, ChangedOn)\n| where PrimaryEmail has_any(AccountNames)\
+  \ or tostring(AccountNames) contains \"All account names\"\n"
