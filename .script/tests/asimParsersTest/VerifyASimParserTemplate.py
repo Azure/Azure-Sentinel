@@ -14,7 +14,7 @@
 # 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
 # 9.  Normalization.Version - must use X.X.X format and match the expected schema version
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
-# 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
+# 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
 # 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
@@ -159,7 +159,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - Normalization.Schema matches a known ASIM schema name
     - Normalization.Version uses X.X.X format and matches the expected schema version
     - References include correct schema-specific and ASIM doc links
-    - ParserName follows the naming convention <FileType><Schema>...
+    - ParserName matches ^[a-zA-Z][a-zA-Z0-9_]+$ and starts with <FileType><Schema>
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
     - Sample data CSV file exists locally (ASim parsers only)
     - vim ParserParams match the parameters supported by the schema union parser
@@ -306,12 +306,12 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     else:
         results.append((f'{RED}References{RESET}', f'{RED}References{RESET}', f'{RED}Fail{RESET}'))
 
-    # Check if ParserName exists in yaml_file and matches the format ASIMAuditEvent<ProductName>
+    # Check ParserName characters and the schema-specific prefix.
     if parser_name:
-        if re.match(rf'{FileType}{schema}', parser_name):
+        if re.fullmatch(r'^[a-zA-Z][a-zA-Z0-9_]+$', parser_name) and re.match(rf'{FileType}{schema}', parser_name):
             results.append((parser_name, 'ParserName is in correct format', 'Pass'))
         else:
-            results.append((f'{RED}' + str(parser_name) + f'{RESET}', f'{RED}ParserName is not in correct format{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(parser_name) + f'{RESET}', f'{RED}ParserName must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with {FileType}{schema}{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}ParserName{RESET}', f'{RED}ParserName not found{RESET}', f'{RED}Fail{RESET}'))
 
