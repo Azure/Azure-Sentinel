@@ -12,7 +12,7 @@ requiredDataConnectors:
     dataTypes:
       - AuditLogs
       - SigninLogs
-queryFrequency: 30m
+queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
@@ -22,22 +22,39 @@ relevantTechniques:
   - T1078.004
   - T1098.003
 query: |
-  let KnownLocations = SigninLogs
-  | where TimeGenerated > ago(14d)
-  | summarize UsualCountries = make_set(LocationDetails.countryOrRegion) by UserPrincipalName;
+  let detectionWindow = 1h;
+  let signinLookback = 1h;
+  let baselineEnd = detectionWindow + signinLookback;
+  // Baseline stops before any sign-in that could be correlated with a new activation
+  let UserBaseline = SigninLogs
+  | where TimeGenerated between (ago(14d) .. ago(baselineEnd))
+  | where ResultType == 0
+  | extend Country = tostring(LocationDetails.countryOrRegion)
+  | where isnotempty(Country)
+  | summarize UsualCountries = make_set(Country) by UserPrincipalName;
+  // Only activations inside the current detection window
   let PIMActivations = AuditLogs
+  | where TimeGenerated > ago(detectionWindow)
   | where OperationName == "Add member to role completed (PIM activation)"
   | extend Actor = tostring(InitiatedBy.user.userPrincipalName)
+  | where isnotempty(Actor)
   | extend Role = tostring(TargetResources[0].displayName)
-  | project TimeGenerated, Actor, Role;
+  | project ActivationTime = TimeGenerated, Actor, Role;
+  let CandidateSignins = SigninLogs
+  | where TimeGenerated > ago(baselineEnd)
+  | where ResultType == 0
+  | project SigninTime = TimeGenerated, UserPrincipalName, AuthenticationRequirement,
+      Country = tostring(LocationDetails.countryOrRegion), IPAddress;
   PIMActivations
-  | join kind=leftouter (
-      SigninLogs
-      | project SigninTime = TimeGenerated, UserPrincipalName, AuthenticationRequirement, Country = tostring(LocationDetails.countryOrRegion), IPAddress
-  ) on $left.Actor == $right.UserPrincipalName
-  | join kind=leftouter KnownLocations on $left.Actor == $right.UserPrincipalName
-  | where AuthenticationRequirement != "multiFactorAuthentication" or Country !in (UsualCountries)
-  | project TimeGenerated, Actor, Role, Country, IPAddress, AuthenticationRequirement
+  | join kind=inner CandidateSignins on $left.Actor == $right.UserPrincipalName
+  // Successful sign-ins in the hour before the activation only
+  | where SigninTime between ((ActivationTime - signinLookback) .. ActivationTime)
+  // Resolve multiple candidates: keep the most recent one per activation
+  | summarize arg_max(SigninTime, AuthenticationRequirement, Country, IPAddress) by ActivationTime, Actor, Role
+  | join kind=leftouter UserBaseline on $left.Actor == $right.UserPrincipalName
+  | where AuthenticationRequirement != "multiFactorAuthentication"
+      or (array_length(UsualCountries) > 0 and not(set_has_element(UsualCountries, Country)))
+  | project ActivationTime, Actor, Role, SigninTime, Country, IPAddress, AuthenticationRequirement, UsualCountries
 entityMappings:
   - entityType: Account
     fieldMappings:
