@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
-| 3.2.0       | 14-10-2026                     | Added an **XDR Workbook** alongside the existing Sentinel workbook, preserving the connector and playbooks. |
+| 3.2.0       | 15-10-2026                     | Added the investigation **XDR Workbook** and native Defender **Detections and Insights XDR Workbook**, preserving the existing Sentinel workbook, connector and playbooks. |
 | 3.0.3       | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.2       | 24-04-2024                     | Updated link for **Custom Connector** redirection in playbooks           |
 | 3.0.1       | 29-09-2023                     | 1 new **Playbook** added to the solution                                 |
