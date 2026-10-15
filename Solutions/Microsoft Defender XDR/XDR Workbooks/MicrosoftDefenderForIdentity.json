@@ -218,7 +218,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityLogonEvents\r\n| summarize count() by Protocol",
+              "query": "IdentityLogonEvents\r\n| summarize count() by Protocol = coalesce(Protocol, \"Unknown\")",
               "size": 0,
               "title": "Log On Protocol",
               "timeContextFromParameter": "TimeRange",
@@ -246,9 +246,10 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityQueryEvents\r\n| summarize count() by DestinationPort",
+              "query": "IdentityQueryEvents\r\n| summarize count() by DestinationPort = coalesce(tostring(DestinationPort), \"Unknown\")",
               "size": 0,
               "title": "Query Destination Port",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "piechart"
             },
@@ -283,7 +284,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityDirectoryEvents\r\n| summarize count() by Protocol",
+              "query": "IdentityDirectoryEvents\r\n| summarize count() by Protocol = coalesce(Protocol, \"Unknown\")",
               "size": 0,
               "title": "Directory Events Protocol",
               "timeContextFromParameter": "TimeRange",
@@ -297,9 +298,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityDirectoryEvents\r\n| summarize count() by AccountDomain",
+              "query": "IdentityDirectoryEvents\r\n| summarize count() by AccountDomain = coalesce(AccountDomain, \"Unknown\")",
               "size": 0,
-              "title": "Directory Events Protocol",
+              "title": "Directory Events Account Domain",
               "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "piechart"
@@ -311,9 +312,11 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityDirectoryEvents\r\n| where isnotempty(AccountUpn)\r\n| summarize count() by AccountUpn\r\n| order by count_ desc \r\n| take 10",
+              "query": "IdentityDirectoryEvents\r\n| extend Account = coalesce(AccountUpn, iff(isnotempty(AccountName) and isnotempty(AccountDomain), strcat(AccountDomain, \"\\\\\", AccountName), AccountName), tostring(AdditionalFields[\"ACTOR.ACCOUNT\"]), AccountSid)\r\n| where isnotempty(Account)\r\n| summarize count() by Account\r\n| order by count_ desc \r\n| take 10",
               "size": 0,
               "title": "Top 10 Accounts Activity",
+              "subtitle": "Account UPN, domain/name, actor account, or SID, in that order.",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "table",
               "gridSettings": {
@@ -386,6 +389,7 @@
               "query": "IdentityLogonEvents\r\n| extend AdditionalFields = todynamic(tostring(AdditionalFields)) \r\n| where LogonType == \"Resource access\"\r\n| extend TargetComputerOperatingSystem_ = tostring(AdditionalFields.TargetComputerOperatingSystem)\r\n| extend DestinationComputerOperatingSystem_ = tostring(AdditionalFields.DestinationComputerOperatingSystem)\r\n| extend Count_ = toint(AdditionalFields.Count)\r\n| summarize sum(Count_) by TargetComputerOperatingSystem_, DestinationComputerOperatingSystem_\r\n| order by sum_Count_ desc",
               "size": 0,
               "title": "Resource Access Summary in OS",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
                 "formatters": [
@@ -416,6 +420,7 @@
               "query": "IdentityLogonEvents\r\n| extend AdditionalFields = todynamic(tostring(AdditionalFields)) \r\n| where LogonType == \"Credentials validation\"\r\n| extend FROM_DEVICE = tostring(AdditionalFields.[\"FROM.DEVICE\"])\r\n| extend TO_DEVICE = tostring(AdditionalFields.[\"TO.DEVICE\"])\r\n| extend Count = toint(AdditionalFields.Count)\r\n| summarize sum(Count) by FROM_DEVICE, TO_DEVICE\r\n| order by sum_Count desc",
               "size": 0,
               "title": "Credentials validation Summary in Devices",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
                 "formatters": [
@@ -489,7 +494,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let data = IdentityLogonEvents;\r\ndata\r\n| extend Count = toint(AdditionalFields.Count)\r\n| summarize LogonSuccess = sumif(Count,ActionType == \"LogonSuccess\"),LogonFailed= sumif(Count,ActionType == \"LogonFailed\") by AccountUpn\r\n| join kind = inner\r\n(\r\ndata\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AccountUpn\r\n) on $left.AccountUpn == $right.AccountUpn",
+              "query": "let data = IdentityLogonEvents\r\n| extend Count = coalesce(toint(AdditionalFields.Count), 1);\r\ndata\r\n| summarize LogonSuccess = sumif(Count,ActionType == \"LogonSuccess\"),LogonFailed= sumif(Count,ActionType == \"LogonFailed\") by AccountUpn\r\n| join kind = inner\r\n(\r\ndata\r\n| make-series Trend = sum(Count) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AccountUpn\r\n) on $left.AccountUpn == $right.AccountUpn",
               "size": 0,
               "title": "Logon Summary by Users",
               "timeContextFromParameter": "TimeRange",
@@ -609,6 +614,7 @@
               "query": "let data = IdentityQueryEvents;\r\ndata\r\n| summarize count() by DeviceName\r\n| join kind =inner \r\n(\r\ndata\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceName\r\n) on $left.DeviceName == $right.DeviceName",
               "size": 0,
               "title": "Query Summary from Source Devices",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
                 "formatters": [
@@ -666,7 +672,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityDirectoryEvents\r\n| summarize count() by ActionType \r\n| order by count_ desc",
+              "query": "IdentityDirectoryEvents\r\n| summarize count() by ActionType \r\n| order by count_ desc\r\n| take 10",
               "size": 0,
               "title": "Top 10 Actions",
               "timeContextFromParameter": "TimeRange",
@@ -715,9 +721,10 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "IdentityDirectoryEvents\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AccountUpn",
+              "query": "IdentityDirectoryEvents\r\n| extend Account = coalesce(AccountUpn, iff(isnotempty(AccountName) and isnotempty(AccountDomain), strcat(AccountDomain, \"\\\\\", AccountName), AccountName), tostring(AdditionalFields[\"ACTOR.ACCOUNT\"]), AccountSid)\r\n| where isnotempty(Account)\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Account",
               "size": 0,
               "title": "Account Trend on Directory Events",
+              "subtitle": "Account UPN, domain/name, actor account, or SID, in that order.",
               "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "table",
@@ -783,7 +790,8 @@
               "version": "KqlItem/1.0",
               "query": "let data = SecurityAlert\r\n| where ProductName == \"Azure Advanced Threat Protection\"\r\n| summarize arg_max(TimeGenerated,*) by SystemAlertId;\r\ndata\r\n| summarize count() by AlertName\r\n| join kind=inner \r\n(\r\ndata\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AlertName\r\n) on AlertName",
               "size": 0,
-              "noDataMessage": "Alerts",
+              "title": "Alerts",
+              "noDataMessage": "No identity alerts found in the selected time range.",
               "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
@@ -868,7 +876,7 @@
   "xdrMetadata": {
     "contentId": "200c5dd2-9786-5619-8425-4508a238d76a",
     "instanceId": "baa399d3-2174-5938-b0b8-b91aed73090a",
-    "version": "3.2.1",
+    "version": "3.2.2",
     "schemaVersion": "1.0.0",
     "displayName": "MicrosoftDefenderForIdentity"
   },
@@ -5438,6 +5446,504 @@
         ]
       }
     ],
-    "dependencyReviewRequired": false
+    "dependencyReviewRequired": false,
+    "authoredReview": {
+      "schemaVersion": "1.0.0",
+      "baseline": {
+        "reference": "baseline-MicrosoftDefenderForIdentity.json",
+        "sha256": "5e6211494b27484f28ee23505129edafd704af3d7fe3ea3c4b55ba22b94b6829",
+        "canonicalDocumentSha256": "3560920f1a241b88fbd06111e608447002fecd085c866747f88b2f749eefa787"
+      },
+      "baselineMetadata": {
+        "contentId": "200c5dd2-9786-5619-8425-4508a238d76a",
+        "instanceId": "baa399d3-2174-5938-b0b8-b91aed73090a",
+        "version": "3.2.1",
+        "schemaVersion": "1.0.0",
+        "displayName": "MicrosoftDefenderForIdentity"
+      },
+      "reversePayloadChanges": [
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            2,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityLogonEvents\r\n| summarize count() by Protocol"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            4,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            4,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityQueryEvents\r\n| summarize count() by DestinationPort"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            6,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityDirectoryEvents\r\n| summarize count() by Protocol"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            7,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityDirectoryEvents\r\n| summarize count() by AccountDomain"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            7,
+            "content",
+            "title"
+          ],
+          "op": "replace",
+          "value": "Directory Events Protocol"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            8,
+            "content",
+            "subtitle"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            8,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            8,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityDirectoryEvents\r\n| where isnotempty(AccountUpn)\r\n| summarize count() by AccountUpn\r\n| order by count_ desc \r\n| take 10"
+        },
+        {
+          "path": [
+            "items",
+            5,
+            "content",
+            "items",
+            1,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            5,
+            "content",
+            "items",
+            2,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            5,
+            "content",
+            "items",
+            4,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "let data = IdentityLogonEvents;\r\ndata\r\n| extend Count = toint(AdditionalFields.Count)\r\n| summarize LogonSuccess = sumif(Count,ActionType == \"LogonSuccess\"),LogonFailed= sumif(Count,ActionType == \"LogonFailed\") by AccountUpn\r\n| join kind = inner\r\n(\r\ndata\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AccountUpn\r\n) on $left.AccountUpn == $right.AccountUpn"
+        },
+        {
+          "path": [
+            "items",
+            6,
+            "content",
+            "items",
+            1,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            7,
+            "content",
+            "items",
+            1,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityDirectoryEvents\r\n| summarize count() by ActionType \r\n| order by count_ desc"
+        },
+        {
+          "path": [
+            "items",
+            7,
+            "content",
+            "items",
+            2,
+            "content",
+            "subtitle"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            7,
+            "content",
+            "items",
+            2,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "IdentityDirectoryEvents\r\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AccountUpn"
+        },
+        {
+          "path": [
+            "items",
+            8,
+            "content",
+            "items",
+            0,
+            "content",
+            "title"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            8,
+            "content",
+            "items",
+            0,
+            "content",
+            "noDataMessage"
+          ],
+          "op": "replace",
+          "value": "Alerts"
+        }
+      ],
+      "canonicalPayloadSha256": "7b84b6a0e41e5a5c8fe788b2b524826dd7946894b1a3b0a981c9d543ad369900",
+      "canonicalDocumentSha256": "16967d52ca2f9972893e1ec278cfac7357117c5ce690ca98494894d1bb65f083",
+      "queries": [
+        {
+          "path": "/items/4/content/items/0/content/query",
+          "querySha256": "55a24358602dc66ce19b7782a2471bb4683aaf0ba29be08d45b6bb880ff431c5",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/1/content/query",
+          "querySha256": "067b2c84ac76d39cb98d782766a2333ad321ddacc62067c5df38887181e45e4d",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/2/content/query",
+          "querySha256": "3c2ba4a87da2a280586629ba44d36ffba3e2e105f84f5238824ddaa0035cd793",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/3/content/query",
+          "querySha256": "1befee06de450f1c956c230d76282dfcd8bcc7ad5aeee4572ee7be4e00e6b446",
+          "tables": [
+            "IdentityQueryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/4/content/query",
+          "querySha256": "b1b0e30ebf708ff12ccd86d9c8cb9930b42497f25d84e914549e0c8905286185",
+          "tables": [
+            "IdentityQueryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/5/content/query",
+          "querySha256": "0bf43ca58f71de576ba70f30204105613730ef6cd702cc81907a2c1e6b5cd59a",
+          "tables": [
+            "IdentityQueryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/6/content/query",
+          "querySha256": "749a5776b530e7214b79d4734c126ec71b5053e99989f71f51bcb71caa5c3f3d",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/7/content/query",
+          "querySha256": "a154759b5b282931966afcb5385cb5d0866f5aca82479b3c29e2ec1260d7e279",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/8/content/query",
+          "querySha256": "3724f6c29cfcbf1ee831a855a5a4d091d50e7f06481c83934b0cabb2bf03bb8f",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/0/content/query",
+          "querySha256": "c38504885307007f07519caf94ce7aaa1441dacd4846f25ca0560e8f74294922",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/1/content/query",
+          "querySha256": "722edffddc2c2ecdba4c445ee7bc3dcca7a45681dbae2a4e12d132ec818815cd",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/2/content/query",
+          "querySha256": "731034da096ef9aa77e61b7b88398d990171271e063bde690c25485b7c9bd630",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/3/content/query",
+          "querySha256": "88594929c3dcf1ae71e28826629dc327f865b84d18b0cb0e109282efe00ce1e1",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/4/content/query",
+          "querySha256": "934c0438a70b0f4d75959eff59a726a7278518618682399722bf454d57dc4249",
+          "tables": [
+            "IdentityLogonEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/0/content/query",
+          "querySha256": "3e17d55a70ce3cd304a47fd8785547f8446c7b115405e059c535d74209fb2b84",
+          "tables": [
+            "IdentityQueryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/1/content/query",
+          "querySha256": "95283f26751ec86c6de1459cfe97ee649f8481a6d6418fc78507f088d94f2de9",
+          "tables": [
+            "IdentityQueryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/7/content/items/0/content/query",
+          "querySha256": "4f8e6bd76cd92a3db0fd896f091c319f1f0b942ce7dbbbaa6472f1f04c13a5f2",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/7/content/items/1/content/query",
+          "querySha256": "85a6ea57622462f21665243798062d01e28d5a056fe44bf82d7a00d2565081e7",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/7/content/items/2/content/query",
+          "querySha256": "491bc018528bc279f3032a62a2a55ee3a41f36844c52a85c7cf2c541a024a2ec",
+          "tables": [
+            "IdentityDirectoryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/8/content/items/0/content/query",
+          "querySha256": "37f8548ab5ffd9ba6937928d97cdecd6c65534cbb1b0d114712f74133de4673a",
+          "tables": [
+            "SecurityAlert"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/8/content/items/1/content/query",
+          "querySha256": "5f33bbfe47586c729e16cc1bf5de5b4a28ecf8fb6b6c2337e357a6bfbbe7c778",
+          "tables": [
+            "SecurityAlert"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        }
+      ],
+      "changedQueries": [
+        {
+          "path": "/items/4/content/items/2/content/query",
+          "baselineQuerySha256": "7c73b3f858780b841d5fba68530dbbb26f27d300f7361a9a061778d92fb9c233",
+          "querySha256": "3c2ba4a87da2a280586629ba44d36ffba3e2e105f84f5238824ddaa0035cd793",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/4/content/query",
+          "baselineQuerySha256": "9b7fb90da715b52749eacc4717c0c990df3c4e0e0f2ad5b4fac65ad03d11c060",
+          "querySha256": "b1b0e30ebf708ff12ccd86d9c8cb9930b42497f25d84e914549e0c8905286185",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/6/content/query",
+          "baselineQuerySha256": "da0561e7b7b85a5ffc136ef633eaf6f028048926a86d01dfcdccc6891e1000df",
+          "querySha256": "749a5776b530e7214b79d4734c126ec71b5053e99989f71f51bcb71caa5c3f3d",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/7/content/query",
+          "baselineQuerySha256": "48f1ecdc776d5c0bdfcd89c5a335be3400a2c18039c376121e09e25d4910f77e",
+          "querySha256": "a154759b5b282931966afcb5385cb5d0866f5aca82479b3c29e2ec1260d7e279",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/8/content/query",
+          "baselineQuerySha256": "039424d4269139394a41c8dcbe93cb5fa865c0e3e89d43d42fb643efd99e9204",
+          "querySha256": "3724f6c29cfcbf1ee831a855a5a4d091d50e7f06481c83934b0cabb2bf03bb8f",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/5/content/items/4/content/query",
+          "baselineQuerySha256": "5cfa1f00c5592101c3949fb5c9a4c844ca075b1967d5a978cf33e245e73f8570",
+          "querySha256": "934c0438a70b0f4d75959eff59a726a7278518618682399722bf454d57dc4249",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/7/content/items/1/content/query",
+          "baselineQuerySha256": "3f319e748402bcf0ba8649c89a5383c670424c4cc5a63a5ed81106203cebc26c",
+          "querySha256": "85a6ea57622462f21665243798062d01e28d5a056fe44bf82d7a00d2565081e7",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/7/content/items/2/content/query",
+          "baselineQuerySha256": "afc2fa77334567ca35b171baeda269dde85f980999bdd6be7054bd7767516154",
+          "querySha256": "491bc018528bc279f3032a62a2a55ee3a41f36844c52a85c7cf2c541a024a2ec",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        }
+      ],
+      "actor": "kingwil",
+      "reference": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved",
+      "decision": "accept",
+      "reviewSha256": "cab139de2fdbbb76ac73ca62094b3fd9369c102796fef991c24eb1d1d8df62be"
+    }
   }
 }

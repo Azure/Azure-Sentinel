@@ -194,14 +194,20 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let AllDeviceNames = DeviceInfo | distinct DeviceId, DeviceName;\nlet DeviceEventSummary = DeviceEvents | extend Type = \"DeviceEvents\" | summarize count() by DeviceId, Type, bin(TimeGenerated,1d);\nlet DeviceNetworkEventsSummary = DeviceNetworkEvents | extend Type = \"DeviceNetworkEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceNetworkInfoSummary = DeviceNetworkInfo | extend Type = \"DeviceNetworkInfo\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceLogonEventsSummary = DeviceLogonEvents | extend Type = \"DeviceLogonEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceRegistryEventsSummary = DeviceRegistryEvents | extend Type = \"DeviceRegistryEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceProcessEventsSummary = DeviceProcessEvents | extend Type = \"DeviceProcessEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\n(DeviceEventSummary\n| union DeviceNetworkEventsSummary,\nDeviceNetworkEventsSummary,\nDeviceNetworkInfoSummary,\nDeviceLogonEventsSummary,\nDeviceRegistryEventsSummary,\nDeviceProcessEventsSummary)\n| join kind=inner ( \nAllDeviceNames\n)\non $left.DeviceId == $right.DeviceId\n| project-reorder Type, TimeGenerated, count_\n//| project-away DeviceId, DeviceId1",
+              "query": "let AllDeviceNames = DeviceInfo | distinct DeviceId, DeviceName;\nlet DeviceEventSummary = DeviceEvents | extend Type = \"DeviceEvents\" | summarize count() by DeviceId, Type, bin(TimeGenerated,1d);\nlet DeviceNetworkEventsSummary = DeviceNetworkEvents | extend Type = \"DeviceNetworkEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceNetworkInfoSummary = DeviceNetworkInfo | extend Type = \"DeviceNetworkInfo\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceLogonEventsSummary = DeviceLogonEvents | extend Type = \"DeviceLogonEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceRegistryEventsSummary = DeviceRegistryEvents | extend Type = \"DeviceRegistryEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceProcessEventsSummary = DeviceProcessEvents | extend Type = \"DeviceProcessEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\n(DeviceEventSummary\n| union DeviceNetworkEventsSummary,\nDeviceNetworkInfoSummary,\nDeviceLogonEventsSummary,\nDeviceRegistryEventsSummary,\nDeviceProcessEventsSummary)\n| join kind=inner ( \nAllDeviceNames\n)\non $left.DeviceId == $right.DeviceId\n| project-reorder Type, TimeGenerated, count_\n//| project-away DeviceId, DeviceId1",
               "size": 1,
               "title": "Daily Data Flow on MDE Tables over {TimeRange}",
               "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "timechart",
               "chartSettings": {
-                "xAxis": "count_"
+                "xAxis": "TimeGenerated",
+                "yAxis": [
+                  "count_"
+                ],
+                "splitBy": [
+                  "Type"
+                ]
               }
             },
             "name": "query - 2"
@@ -228,6 +234,7 @@
               "query": "let UsbDriveMount = DeviceEvents\r\n| where ActionType==\"UsbDriveMounted\"\r\n| extend ParsedFields=parse_json(AdditionalFields)\r\n| project DeviceId, DeviceName, DriveLetter=ParsedFields.DriveLetter, MountTime=Timestamp,\r\nProductName=ParsedFields.ProductName,SerialNumber=ParsedFields.SerialNumber,Manufacturer=ParsedFields.Manufacturer\r\n| order by DeviceId asc, MountTime desc;\r\nlet FileCreation = DeviceFileEvents\r\n| where InitiatingProcessAccountName != \"system\"\r\n| where ActionType == \"FileCreated\"\r\n| where FolderPath !startswith \"C:\\\\\"\r\n| where FolderPath !startswith \"\\\\\"\r\n| project ReportId,DeviceId,InitiatingProcessAccountDomain,\r\nInitiatingProcessAccountName,InitiatingProcessAccountUpn,\r\nFileName, FolderPath, SHA256, Timestamp, SensitivityLabel, IsAzureInfoProtectionApplied\r\n| order by DeviceId asc, Timestamp desc;\r\nFileCreation | lookup kind=inner (UsbDriveMount) on DeviceId\r\n| where FolderPath startswith DriveLetter\r\n| where Timestamp >= MountTime\r\n| partition by ReportId ( top 1 by MountTime )\r\n| order by DeviceId asc, Timestamp desc\r\n| summarize FileCount = count() by DeviceName\r\n| order by FileCount desc",
               "size": 1,
               "title": "Device where files are copied to USB Drive from TimeTange {TimeRange}",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
                 "formatters": [
@@ -249,7 +256,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "DeviceNetworkInfo\r\n| extend ConnectedNetworks = todynamic(tostring(ConnectedNetworks)) \r\n| summarize arg_max(TimeGenerated,*) by DeviceId\r\n| mvexpand ConnectedNetworks\r\n| summarize count() by tostring(ConnectedNetworks.IsConnectedToInternet)",
+              "query": "DeviceNetworkInfo\r\n| extend ConnectedNetworks = todynamic(tostring(ConnectedNetworks)) \r\n| summarize arg_max(TimeGenerated,*) by DeviceId\r\n| mvexpand ConnectedNetworks\r\n| summarize count() by InternetConnectivity = coalesce(tostring(ConnectedNetworks.IsConnectedToInternet), \"Unknown\")",
               "size": 1,
               "title": "Device Internet Connectivity Status from TimeTange {TimeRange}",
               "timeContextFromParameter": "TimeRange",
@@ -275,7 +282,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(Timestamp, DeviceName) by DeviceId\r\n| extend DeviceMachineName = split(DeviceName, '.')[0]\r\n| extend DeviceDomain = substring(DeviceName, strlen(DeviceMachineName) + 1, strlen(DeviceName) - strlen(DeviceMachineName) - 1)\r\n| summarize count() by DeviceDomain",
+              "query": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(Timestamp, DeviceName) by DeviceId\r\n| extend DeviceMachineName = split(DeviceName, '.')[0]\r\n| extend DeviceDomain = substring(DeviceName, strlen(DeviceMachineName) + 1, strlen(DeviceName) - strlen(DeviceMachineName) - 1)\r\n| summarize count() by DeviceDomain = coalesce(DeviceDomain, \"No DNS suffix\")",
               "size": 1,
               "title": "Device Count by DNS Suffix",
               "timeContextFromParameter": "TimeRange",
@@ -296,9 +303,10 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(TimeGenerated, *) by DeviceId\r\n| summarize count() by tostring(IsAzureADJoined)",
+              "query": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(TimeGenerated, *) by DeviceId\r\n| summarize count() by EntraIDJoinStatus = coalesce(tostring(IsAzureADJoined), \"Unknown\")",
               "size": 1,
               "title": "Device EntraID Join status",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "piechart",
               "gridSettings": {
@@ -382,6 +390,7 @@
               "query": "DeviceEvents\r\n| where ActionType startswith \"Asr\" and ActionType endswith \"Blocked\"\r\n// Count total stats - count events and machines per rule\r\n| summarize EventCount=count(), MachinesCount=dcount(DeviceId) by ActionType",
               "size": 0,
               "title": "Get stats on ASR blocks - count events and machines per rule for {TimeRange}",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting"
             },
             "name": "query - 1 - Copy"
@@ -444,6 +453,7 @@
               "query": "DeviceNetworkInfo\r\n| summarize arg_max(TimeGenerated,*) by DeviceId\r\n| summarize count() by MachineGroup",
               "size": 0,
               "title": "Count By Machine Group for {TimeRange}",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "gridSettings": {
                 "filter": true
@@ -496,7 +506,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "// This query looks for Tor client, or for a common Tor plugin called Meek.\r\n// We query for active Tor connections, but could have alternatively looked for active Tor runs (ProcessCreateEvents) or Tor downloads (DeviceFileEvents)\r\n// To read more about this technique, see:\r\n// Tor: https://attack.mitre.org/wiki/Software/S0183#Techniques_Used\r\n// Meek plugin: https://attack.mitre.org/wiki/Software/S0175\r\n// Multi-hop proxy technique: https://attack.mitre.org/wiki/Technique/T1188\r\n// Tags: #Tor, #MultiHopProxy, #CnC\r\nDeviceNetworkEvents  \r\n| where Timestamp < ago(3d) and InitiatingProcessFileName in~ (\"tor.exe\", \"meek-client.exe\")\r\n// Returns MD5 hashes of files used by Tor, to enable you to block them.\r\n// We count how prevalent each file is (by machines) and show examples for some of them (up to 5 machine names per hash).\r\n| summarize MachineCount=dcount(DeviceName), MachineNames=makeset(DeviceName, 5) by InitiatingProcessMD5\r\n| order by MachineCount desc",
+              "query": "// This query looks for Tor client, or for a common Tor plugin called Meek.\r\n// We query for active Tor connections, but could have alternatively looked for active Tor runs (ProcessCreateEvents) or Tor downloads (DeviceFileEvents)\r\n// To read more about this technique, see:\r\n// Tor: https://attack.mitre.org/wiki/Software/S0183#Techniques_Used\r\n// Meek plugin: https://attack.mitre.org/wiki/Software/S0175\r\n// Multi-hop proxy technique: https://attack.mitre.org/wiki/Technique/T1188\r\n// Tags: #Tor, #MultiHopProxy, #CnC\r\nDeviceNetworkEvents  \r\n| where InitiatingProcessFileName in~ (\"tor.exe\", \"meek-client.exe\")\r\n// Returns MD5 hashes of files used by Tor, to enable you to block them.\r\n// We count how prevalent each file is (by machines) and show examples for some of them (up to 5 machine names per hash).\r\n| summarize MachineCount=dcount(DeviceName), MachineNames=makeset(DeviceName, 5) by InitiatingProcessMD5\r\n| order by MachineCount desc",
               "size": 0,
               "title": "Tor Clients for {TimeRange}",
               "timeContextFromParameter": "TimeRange",
@@ -536,9 +546,10 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "DeviceFileEvents\r\n| summarize count() by InitiatingProcessAccountUpn",
+              "query": "DeviceFileEvents\r\n| summarize count() by InitiatingProcessAccountUpn = coalesce(InitiatingProcessAccountUpn, \"No UPN\")",
               "size": 0,
               "title": "Count by InitiatingProcessAccountUpn for {TimeRange}",
+              "timeContextFromParameter": "TimeRange",
               "queryType": "advancedHunting",
               "visualization": "unstackedbar"
             },
@@ -559,7 +570,7 @@
   "xdrMetadata": {
     "contentId": "05a7425a-fcda-5e24-823d-f8c9dd7a6215",
     "instanceId": "4fffade5-9b6b-51af-a33d-97641e240595",
-    "version": "3.2.1",
+    "version": "3.2.2",
     "schemaVersion": "1.0.0",
     "displayName": "MicrosoftDefenderForEndPoint"
   },
@@ -3884,6 +3895,460 @@
       }
     ],
     "requiredDataConnectors": [],
-    "dependencyReviewRequired": false
+    "dependencyReviewRequired": false,
+    "authoredReview": {
+      "schemaVersion": "1.0.0",
+      "baseline": {
+        "reference": "baseline-MicrosoftDefenderForEndPoint.json",
+        "sha256": "e18e0dcb940cf1fee811c9ae04f557dc711f402011d5b851174736034d6f77a1",
+        "canonicalDocumentSha256": "1105dff370e3fd38e2ed69e0c33fc706545c3d999ec1acf45acb172fe7deb9fe"
+      },
+      "baselineMetadata": {
+        "contentId": "05a7425a-fcda-5e24-823d-f8c9dd7a6215",
+        "instanceId": "4fffade5-9b6b-51af-a33d-97641e240595",
+        "version": "3.2.1",
+        "schemaVersion": "1.0.0",
+        "displayName": "MicrosoftDefenderForEndPoint"
+      },
+      "reversePayloadChanges": [
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            1,
+            "content",
+            "chartSettings",
+            "splitBy"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            1,
+            "content",
+            "chartSettings",
+            "yAxis"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            1,
+            "content",
+            "chartSettings",
+            "xAxis"
+          ],
+          "op": "replace",
+          "value": "count_"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            1,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "let AllDeviceNames = DeviceInfo | distinct DeviceId, DeviceName;\nlet DeviceEventSummary = DeviceEvents | extend Type = \"DeviceEvents\" | summarize count() by DeviceId, Type, bin(TimeGenerated,1d);\nlet DeviceNetworkEventsSummary = DeviceNetworkEvents | extend Type = \"DeviceNetworkEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceNetworkInfoSummary = DeviceNetworkInfo | extend Type = \"DeviceNetworkInfo\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceLogonEventsSummary = DeviceLogonEvents | extend Type = \"DeviceLogonEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceRegistryEventsSummary = DeviceRegistryEvents | extend Type = \"DeviceRegistryEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\nlet DeviceProcessEventsSummary = DeviceProcessEvents | extend Type = \"DeviceProcessEvents\" | summarize count() by DeviceId,Type, bin(TimeGenerated,1d);\n(DeviceEventSummary\n| union DeviceNetworkEventsSummary,\nDeviceNetworkEventsSummary,\nDeviceNetworkInfoSummary,\nDeviceLogonEventsSummary,\nDeviceRegistryEventsSummary,\nDeviceProcessEventsSummary)\n| join kind=inner ( \nAllDeviceNames\n)\non $left.DeviceId == $right.DeviceId\n| project-reorder Type, TimeGenerated, count_\n//| project-away DeviceId, DeviceId1"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            3,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            4,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "DeviceNetworkInfo\r\n| extend ConnectedNetworks = todynamic(tostring(ConnectedNetworks)) \r\n| summarize arg_max(TimeGenerated,*) by DeviceId\r\n| mvexpand ConnectedNetworks\r\n| summarize count() by tostring(ConnectedNetworks.IsConnectedToInternet)"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            5,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(Timestamp, DeviceName) by DeviceId\r\n| extend DeviceMachineName = split(DeviceName, '.')[0]\r\n| extend DeviceDomain = substring(DeviceName, strlen(DeviceMachineName) + 1, strlen(DeviceName) - strlen(DeviceMachineName) - 1)\r\n| summarize count() by DeviceDomain"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            6,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            4,
+            "content",
+            "items",
+            6,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "DeviceInfo\r\n| where isnotempty(OSPlatform)\r\n| summarize arg_max(TimeGenerated, *) by DeviceId\r\n| summarize count() by tostring(IsAzureADJoined)"
+        },
+        {
+          "path": [
+            "items",
+            5,
+            "content",
+            "items",
+            2,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            6,
+            "content",
+            "items",
+            1,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            6,
+            "content",
+            "items",
+            5,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "// This query looks for Tor client, or for a common Tor plugin called Meek.\r\n// We query for active Tor connections, but could have alternatively looked for active Tor runs (ProcessCreateEvents) or Tor downloads (DeviceFileEvents)\r\n// To read more about this technique, see:\r\n// Tor: https://attack.mitre.org/wiki/Software/S0183#Techniques_Used\r\n// Meek plugin: https://attack.mitre.org/wiki/Software/S0175\r\n// Multi-hop proxy technique: https://attack.mitre.org/wiki/Technique/T1188\r\n// Tags: #Tor, #MultiHopProxy, #CnC\r\nDeviceNetworkEvents  \r\n| where Timestamp < ago(3d) and InitiatingProcessFileName in~ (\"tor.exe\", \"meek-client.exe\")\r\n// Returns MD5 hashes of files used by Tor, to enable you to block them.\r\n// We count how prevalent each file is (by machines) and show examples for some of them (up to 5 machine names per hash).\r\n| summarize MachineCount=dcount(DeviceName), MachineNames=makeset(DeviceName, 5) by InitiatingProcessMD5\r\n| order by MachineCount desc"
+        },
+        {
+          "path": [
+            "items",
+            7,
+            "content",
+            "items",
+            1,
+            "content",
+            "timeContextFromParameter"
+          ],
+          "op": "remove"
+        },
+        {
+          "path": [
+            "items",
+            7,
+            "content",
+            "items",
+            1,
+            "content",
+            "query"
+          ],
+          "op": "replace",
+          "value": "DeviceFileEvents\r\n| summarize count() by InitiatingProcessAccountUpn"
+        }
+      ],
+      "canonicalPayloadSha256": "95a2423c39c740122d15e27099ccc742f0ff83f01161ce92620a412ee2382740",
+      "canonicalDocumentSha256": "7a242cb3d82136db76376eb2e5d76708e8b71dad0c85bc26b3e06e98c3f21aab",
+      "queries": [
+        {
+          "path": "/items/4/content/items/0/content/query",
+          "querySha256": "cb071c1659672fa84632cfaacb3165d49765a22282541afece8c51bba08f4b54",
+          "tables": [
+            "DeviceEvents",
+            "DeviceFileCertificateInfo",
+            "DeviceFileEvents",
+            "DeviceImageLoadEvents",
+            "DeviceInfo",
+            "DeviceLogonEvents",
+            "DeviceNetworkEvents",
+            "DeviceNetworkInfo",
+            "DeviceProcessEvents",
+            "DeviceRegistryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/1/content/query",
+          "querySha256": "cc3da98f85fe7f23e390a2a93d0f60b0d440c48272511cb30f5d62664c38be94",
+          "tables": [
+            "DeviceEvents",
+            "DeviceInfo",
+            "DeviceLogonEvents",
+            "DeviceNetworkEvents",
+            "DeviceNetworkInfo",
+            "DeviceProcessEvents",
+            "DeviceRegistryEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/2/content/query",
+          "querySha256": "dec86c7d5ffe294904662836a11ecc397064af1d9a9199ad42876901a2eab07d",
+          "tables": [
+            "DeviceInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/3/content/query",
+          "querySha256": "cba61d36521eb072066130d1cbab27278c9861ed65d909e2a9c502181e38a901",
+          "tables": [
+            "DeviceEvents",
+            "DeviceFileEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/4/content/query",
+          "querySha256": "2b828d6db6937a005667ffc692e8e7cdead3849c0d3602fb4559b832b3e60632",
+          "tables": [
+            "DeviceNetworkInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/5/content/query",
+          "querySha256": "8e344d6232d542d7603dd5c7cefef2ca902b6f36442f9ff3931ec5f406eb2ce8",
+          "tables": [
+            "DeviceInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/6/content/query",
+          "querySha256": "304502ce14c3b0d980aeb945a72272b72d3e6099de0bef722ca71dafad06a288",
+          "tables": [
+            "DeviceInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/4/content/items/7/content/query",
+          "querySha256": "7a37ccf7aa76480b785bdac593d936c36ed796379e4bf977c7b7dcf705e897e8",
+          "tables": [
+            "DeviceInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/0/content/query",
+          "querySha256": "6b320fcd4664c4fc0b85ff9b5228b9b2ef070cd26d61f7c926f40a1692bc91c1",
+          "tables": [
+            "DeviceEvents",
+            "DeviceFileEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/1/content/query",
+          "querySha256": "54a5903992c02e06d5661fa8b75928719789d9bf7bd22d33703ddbecfaea6a5b",
+          "tables": [
+            "DeviceEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/2/content/query",
+          "querySha256": "e899e87ad3b910c7f0902b224d463322a896feacc37c4154f0f7acb5d6348fa2",
+          "tables": [
+            "DeviceEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/3/content/query",
+          "querySha256": "580fe67b33189f9c01eb8cb2bebf84e340292ab2b8a103996c6f02b3f717ba50",
+          "tables": [
+            "DeviceEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/5/content/items/4/content/query",
+          "querySha256": "8c15e02b4b3be1407b61906ddae6bb9d6429c336dbd0b5027b5a0c35ea44b62b",
+          "tables": [
+            "DeviceEvents",
+            "DeviceFileEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/0/content/query",
+          "querySha256": "3a5afcba5624d5c6401700184df39429dbd655db6c5a2a89ebd7f8b9eaa0d746",
+          "tables": [
+            "DeviceNetworkInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/1/content/query",
+          "querySha256": "555e81a53301f1436689be365393c0717603321a3a02713b352688cd6870a5a3",
+          "tables": [
+            "DeviceNetworkInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/2/content/query",
+          "querySha256": "294004b280db138149291a40c8f2b78c1f74ba4f777c17615dd3bab7ff7ee1ea",
+          "tables": [
+            "DeviceNetworkInfo"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/3/content/query",
+          "querySha256": "4ef3cca1b95083fc63a7cfb368e3643b91981f5872c0d95a3210368f25a90e52",
+          "tables": [
+            "DeviceNetworkEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/4/content/query",
+          "querySha256": "8dc392ae6633cd2ba0a9af11c23ff3a89577b60d158bd3088ab543673d6a8e0e",
+          "tables": [
+            "DeviceNetworkEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/6/content/items/5/content/query",
+          "querySha256": "13253e02793b4b3c574c5b2e23c3b9696a3784b5175f6cb73fe2e063cbf1031c",
+          "tables": [
+            "DeviceNetworkEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/7/content/items/0/content/query",
+          "querySha256": "ca8c7d543e78b0b3c17cf5f2cd4e3d459290279886383482e7e154b5baa63e69",
+          "tables": [
+            "DeviceFileEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        },
+        {
+          "path": "/items/7/content/items/1/content/query",
+          "querySha256": "267d8857347f914a1980767f909cbde1d17e9bee887cba876d8278bf5373345c",
+          "tables": [
+            "DeviceFileEvents"
+          ],
+          "builtinAsimParsers": [],
+          "workspaceFunctions": []
+        }
+      ],
+      "changedQueries": [
+        {
+          "path": "/items/4/content/items/1/content/query",
+          "baselineQuerySha256": "50094cc183cf03326fb949dc42895a44a6520bd5f4b7b6db4711c4962a66fcdc",
+          "querySha256": "cc3da98f85fe7f23e390a2a93d0f60b0d440c48272511cb30f5d62664c38be94",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/4/content/query",
+          "baselineQuerySha256": "f5fe20ba4db33ddaf9c052f9645f90125dbc1374705c2d21fbe91fc9df6b1666",
+          "querySha256": "2b828d6db6937a005667ffc692e8e7cdead3849c0d3602fb4559b832b3e60632",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/5/content/query",
+          "baselineQuerySha256": "f03a1744e0f501490a81b97857c3aa74b69548ffe25982c7c77267dd005c03d1",
+          "querySha256": "8e344d6232d542d7603dd5c7cefef2ca902b6f36442f9ff3931ec5f406eb2ce8",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/4/content/items/6/content/query",
+          "baselineQuerySha256": "8a4120b5b6750a3b83db7afbe9a189cf46d4f62b4223e74b9e2b6dbe9494741d",
+          "querySha256": "304502ce14c3b0d980aeb945a72272b72d3e6099de0bef722ca71dafad06a288",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/6/content/items/5/content/query",
+          "baselineQuerySha256": "16f00d253ed14ae4b7d545d8eee5ac6f5c1efe63d726dd2f252d67c444c8b801",
+          "querySha256": "13253e02793b4b3c574c5b2e23c3b9696a3784b5175f6cb73fe2e063cbf1031c",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        },
+        {
+          "path": "/items/7/content/items/1/content/query",
+          "baselineQuerySha256": "0eb0f818ef22a8c48bd3b16196cbab8d64a694c7a4f96632ef9b69ecdd96afd7",
+          "querySha256": "267d8857347f914a1980767f909cbde1d17e9bee887cba876d8278bf5373345c",
+          "decision": "accept",
+          "evidence": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved"
+        }
+      ],
+      "actor": "kingwil",
+      "reference": "User-requested workbook corrections in changelog.md and accepted visual inspection 2026-10-15; historical migration receipts preserved",
+      "decision": "accept",
+      "reviewSha256": "03082f009c10ce5ffffe89e72745e60b695cbdc3a8fb9e5edcbcb98e4c70ae8f"
+    }
   }
 }
