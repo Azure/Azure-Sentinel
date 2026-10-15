@@ -1,0 +1,105 @@
+id: 7c07194a-8eda-4cb7-9bc4-cd4700eb4c4d
+name: Delinea - Platform configuration change
+description: |
+  Detects state-changing modifications (add / update / delete / enable / disable) to critical
+  Delinea platform settings - authentication profiles and policies, SSO or identity-provider
+  (SAML / OIDC / OAuth / federation) configuration, IP range / restriction rules and webhooks -
+  that the acting user has not performed in the prior 14 days. Configuration tampering is
+  frequently a precursor to defense evasion or persistence; routine changes an administrator
+  makes regularly are baselined out, while a first-ever change still alerts.
+  Matching uses the event name only, not the free-text display message, and produces one alert
+  per actor per run. Tune 'configPattern' to your tenant's event taxonomy, and use
+  'excludedEventNames', 'excludedServiceTypes' and 'excludedActors' to silence known-benign
+  events, services (for example directory synchronization) and service accounts.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1556
+  - T1484
+  - T1098
+query: |
+  let detectionWindow = 1h;   // must equal queryFrequency
+  let baseline = 14d;         // must stay <= queryPeriod
+  // TUNING 1 of 2: configuration objects worth alerting on, matched against the event name.
+  // Generic terms such as 'setting', 'profile', 'configuration', 'connector' and 'integration'
+  // are deliberately absent - they match routine directory and user-profile activity.
+  let configPattern = @"(?i)authenticationprofile|authprofile|authentication\.profile|polic(y|ies)|(^|[^a-z])sso|saml|oidc|oauth|federation|identityprovider|(^|[^a-z])idp|iprange|iprestriction|ipallowlist|webhook|config";
+  // Event names end in the verb (Delinea.Vault.Secret.Viewed, or PascalCase), so read-only
+  // events never match this.
+  let changeVerbs = @"(?i)(Added|Created|Updated|Modified|Changed|Set|Deleted|Removed|Enabled|Disabled|Configured|Update|Change)$";
+  // TUNING 2 of 2: tenant specific exclusions, filled in at deployment time. Exact match,
+  // case insensitive. Leave empty if unused.
+  let excludedEventNames = dynamic(["Delinea.Cloud.Core.Data.ProxyState.Changed"]);
+  //   e.g. dynamic(["Delinea.Vault.Group.Updated"]);
+  let excludedServiceTypes = dynamic([]);
+  //   e.g. dynamic(["Identity"]);
+  let excludedActors = dynamic([]);
+  //   e.g. dynamic(["svc-directory-sync"]);
+  let changes =
+      DelineaAuditEvents_CL
+      | where TimeGenerated > ago(baseline)
+      | extend IngestedAt = ingestion_time()
+      | extend d = parse_json(RawData)
+      | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))
+      | where EventName matches regex configPattern and EventName matches regex changeVerbs
+      | extend Actor = tostring(coalesce(d.actor.name, d.actor.email, d.actor.displayName)),
+               ServiceType = tostring(d.service.type),
+               Target = tostring(coalesce(d.target.displayName, d.target.name)),
+               FieldChanges = tostring(d.fieldChanges),
+               RawSrcIP = tostring(d.source.host.network.ipAddress)
+      | where isnotempty(Actor)
+      | where not(EventName in~ (excludedEventNames))
+          and not(ServiceType in~ (excludedServiceTypes))
+          and not(Actor in~ (excludedActors))
+      // '0.0.0.0' is the placeholder reported for events that have no network origin.
+      | extend SrcIP = iff(RawSrcIP in ("", "0.0.0.0"), "", RawSrcIP);
+  // Batch by ingestion time so a late arriving event is still evaluated exactly once.
+  let priorChanges = changes | where IngestedAt <= ago(detectionWindow) | distinct Actor, EventName;
+  changes
+  | where IngestedAt > ago(detectionWindow)
+  | join kind=leftanti priorChanges on Actor, EventName
+  | summarize Changes = count(), EventNames = make_set(EventName, 20),
+              Targets = make_set_if(Target, isnotempty(Target), 20),
+              FieldChanges = make_list_if(FieldChanges, isnotempty(FieldChanges), 10),
+              SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),
+              SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),
+              StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor
+  | project StartTime, EndTime, Actor, Changes, EventNames, Targets, FieldChanges, SourceIPs, SrcIP
+  | sort by StartTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+customDetails:
+  Changes: Changes
+  EventNames: EventNames
+  Targets: Targets
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.2.0
+kind: Scheduled

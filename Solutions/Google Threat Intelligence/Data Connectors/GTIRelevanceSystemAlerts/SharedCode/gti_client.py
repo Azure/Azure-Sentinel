@@ -49,6 +49,7 @@ class GTIClient:
             "x-goog-user-project": consts.GTI_PROJECT_ID,
             "Content-Type": "application/json",
             "User-Agent": "Azure-Sentinel-GTIRelevanceSystemAlerts/1.0.0",
+            "x-tool": "ms-sentinel-gti",
         }
 
     def _load_token_from_keyvault(self):
@@ -249,6 +250,7 @@ class GTIClient:
                     headers={
                         "Content-Type": "application/json",
                         "User-Agent": "Azure-Sentinel-GTIRelevanceSystemAlerts/1.0.0",
+                        "x-tool": "ms-sentinel-gti",
                     },
                     timeout=consts.MAX_TIMEOUT_SENTINEL,
                 )

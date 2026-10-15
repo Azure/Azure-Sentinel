@@ -1,0 +1,473 @@
+Parser:
+  Title: AuditEvent ASIM filtering parser for Salesforce Audit Trail
+  Version: '0.1.0'
+  LastUpdated: Oct 02, 2026
+Product:
+  Name: Salesforce Audit Trail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SalesforceAuditTrail table documentation
+  Link: https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/salesforceaudittrail
+Description: |
+  This ASIM filtering parser normalizes Salesforce setup audit trail events stored in the SalesforceAuditTrail table and supports the standard AuditEvent filter parameters.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: vimAuditEventSalesforceAuditTrail
+EquivalentBuiltInParser: _Im_AuditEvent_SalesforceAuditTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      actorusername_has_any: dynamic = dynamic([]),
+      operation_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresult: string = "*",
+      object_has_any: dynamic = dynamic([]),
+      newvalue_has_any: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      let SectionObjectTypeLookup = datatable(
+          Section: string,
+          ObjectTypeFromSection: string
+      )[
+          // Directory service objects
+          "Customize Service Resources", "Directory Service Object",
+          "Customize Users", "Directory Service Object",
+          "Department to Roles", "Directory Service Object",
+          "Experiences network Member Group", "Directory Service Object",
+          "Groupe d'ensembles d'autorisations", "Directory Service Object",
+          "Groupes", "Directory Service Object",
+          "Groups", "Directory Service Object",
+          "G\u00e9rer les utilisateurs", "Directory Service Object",
+          "Manage Users", "Directory Service Object",
+          "OAuth Client Credentials User", "Directory Service Object",
+          "Permission Set Group", "Directory Service Object",
+          "Personnaliser les utilisateurs", "Directory Service Object",
+          "Profiles", "Directory Service Object",
+          "Teams", "Directory Service Object",
+          "User Permission Mappings", "Directory Service Object",
+          // Policy rules
+          "Approval Process", "Policy Rule",
+          "Bypass Rules Configurations", "Policy Rule",
+          "Cancellation Approval Rules", "Policy Rule",
+          "Case Allocation To Queues", "Policy Rule",
+          "Case Closure Email Rules", "Policy Rule",
+          "Connected App Session Policy", "Policy Rule",
+          "Custom Permissions", "Policy Rule",
+          "Data Integration Rule", "Policy Rule",
+          "Duplicate Rule", "Policy Rule",
+          "eHS Naming and SSID Rules", "Policy Rule",
+          "Field Dependencies", "Policy Rule",
+          "Key Attachment Document Rules", "Policy Rule",
+          "Keyword Routing Rules", "Policy Rule",
+          "Matching Rule", "Policy Rule",
+          "Password Policies", "Policy Rule",
+          "Portal Case Visibility", "Policy Rule",
+          "Routing Exclusions", "Policy Rule",
+          "R\u00e8gles de partage", "Policy Rule",
+          "Security Controls", "Policy Rule",
+          "Session Settings", "Policy Rule",
+          "Sharing Defaults", "Policy Rule",
+          "Sharing Rules", "Policy Rule",
+          "Sharing Sets", "Policy Rule",
+          "Transaction Security", "Policy Rule",
+          "User Access Configurations", "Policy Rule",
+          "Validation Rules", "Policy Rule",
+          "Workflow Rule", "Policy Rule",
+          // Event logs
+          "Customize Historical Entity Trending", "Event Log",
+          "Customize Historical Field Trending", "Event Log",
+          "Entity History", "Event Log",
+          "Feed Tracking", "Event Log",
+          "Suivre l'historique des champs", "Event Log",
+          "Track Field History", "Event Log",
+          // Scheduled tasks
+          "Customer Journey Tasks", "Scheduled Task",
+          "Data Export", "Scheduled Task",
+          "Duplicate Jobs", "Scheduled Task",
+          // Services
+          "Application", "Service",
+          "Application cliente externe", "Service",
+          "Applications Inbox mobiles et pour le bureau h\u00e9rit\u00e9es", "Service",
+          "Applications personnalis\u00e9es", "Service",
+          "Auth Providers", "Service",
+          "Call Centers", "Service",
+          "Change Data Capture", "Service",
+          "Connected Apps", "Service",
+          "Custom Apps", "Service",
+          "Customer Portal", "Service",
+          "Event Bus Relay", "Service",
+          "Event Manager", "Service",
+          "External Client Application", "Service",
+          "Identity Provider", "Service",
+          "Inbox mobile and legacy desktop apps", "Service",
+          "Omni-Channel", "Service",
+          "Partner Relationship Management", "Service",
+          "Portail client", "Service",
+          "Remote Access", "Service",
+          "Salesforce Voice", "Service",
+          "SIS SF Teacher Integrations", "Service",
+          "Third Party Check Service Messages", "Service",
+          // Cloud resources
+          "Certificate and Key Management", "Cloud Resource",
+          "Custom Objects", "Cloud Resource",
+          "Encription Keys", "Cloud Resource",
+          "External Objects", "Cloud Resource",
+          "My Domain", "Cloud Resource",
+          "Objets personnalis\u00e9s", "Cloud Resource",
+          "PowerBI Reports", "Cloud Resource",
+          "Private Connections", "Cloud Resource",
+          "Ressources statiques", "Cloud Resource",
+          "Sandbox", "Cloud Resource",
+          "Sandboxes", "Cloud Resource",
+          "Second Generation Package Version", "Cloud Resource",
+          "Sites", "Cloud Resource",
+          "Static Resource", "Cloud Resource"
+      ];
+      SalesforceAuditTrail
+      | where not(disabled)
+      | where isnull(starttime)
+          or CreatedDate >= starttime
+          or (isnull(CreatedDate) and TimeGenerated >= starttime)
+      | where isnull(endtime)
+          or CreatedDate <= endtime
+          or (isnull(CreatedDate) and TimeGenerated <= endtime)
+      | extend ActorUsername = coalesce(
+          CreatedByUsername,
+          CreatedByEmail,
+          CreatedByName)
+      | where array_length(actorusername_has_any) == 0
+          or ActorUsername has_any (actorusername_has_any)
+      | extend
+          Operation = coalesce(Action, Display),
+          Object = coalesce(Section, Action)
+      | where array_length(operation_has_any) == 0
+          or Operation has_any (operation_has_any)
+      | where array_length(object_has_any) == 0
+          or Object has_any (object_has_any)
+      | lookup SectionObjectTypeLookup on Section
+      | extend ActionKey = tolower(Action)
+      | extend ObjectType = case(
+          isnotempty(ObjectTypeFromSection), ObjectTypeFromSection,
+          isnotempty(Section), "Configuration Atom",
+          ActionKey startswith_cs "permset"
+              or ActionKey contains_cs "permissionsetgroup"
+              or ActionKey contains_cs "setupentityaccessaudit_permissionset"
+              or ActionKey contains_cs "setupentityaccessaudit_profile"
+              or ActionKey startswith_cs "profile"
+              or ActionKey startswith_cs "createduser"
+              or ActionKey startswith_cs "deleteduser"
+              or ActionKey startswith_cs "activateduser"
+              or ActionKey startswith_cs "deactivateduser"
+              or ActionKey startswith_cs "frozeuser"
+              or ActionKey startswith_cs "unfrozeuser"
+              or ActionKey startswith_cs "unlockeduser"
+              or ActionKey startswith_cs "changedusername"
+              or ActionKey startswith_cs "changedemail"
+              or ActionKey startswith_cs "changedpassword"
+              or ActionKey startswith_cs "changedprofile"
+              or ActionKey startswith_cs "changedrole"
+              or ActionKey == "resetpassword"
+              or ActionKey startswith_cs "groupmember"
+              or ActionKey startswith_cs "groupmembership"
+              or ActionKey startswith_cs "queuemember"
+              or ActionKey startswith_cs "queuemembership"
+              or ActionKey startswith_cs "team_"
+              or ActionKey startswith_cs "tm2_user",
+              "Directory Service Object",
+          ActionKey contains_cs "rule"
+              or ActionKey contains_cs "policy"
+              or ActionKey contains_cs "sharing"
+              or ActionKey startswith_cs "changedvalidation"
+              or ActionKey startswith_cs "newvalidation"
+              or ActionKey startswith_cs "removedvalidation"
+              or ActionKey startswith_cs "passwordcomplexity"
+              or ActionKey startswith_cs "passwordexpiry"
+              or ActionKey startswith_cs "passwordlockout"
+              or ActionKey startswith_cs "passwordmaxinvalid"
+              or ActionKey startswith_cs "sessiontimeout"
+              or ActionKey startswith_cs "locksessiondomain"
+              or ActionKey startswith_cs "updatesessionsecuritylevel"
+              or ActionKey startswith_cs "loginiprange",
+              "Policy Rule",
+          ActionKey contains_cs "historytrack"
+              or ActionKey contains_cs "historytracking"
+              or ActionKey contains_cs "entity_history"
+              or ActionKey contains_cs "historicaltrending"
+              or ActionKey contains_cs "feed_field_tracked",
+              "Event Log",
+          ActionKey in (
+              "bulkjobactions",
+              "createbulkjobdefinition",
+              "datacategorybatchcomplete"
+          ),
+              "Scheduled Task",
+          ActionKey in (
+              "deletesandbox",
+              "discardsandbox",
+              "sandboxlicensematch",
+              "sandboxlicensematchsuccess",
+              "archivedmasterencryptionkey",
+              "changedstaticresource",
+              "createnewsalesforcesite",
+              "createdstaticresource",
+              "deletescratchorg",
+              "deletedstaticresource",
+              "insertcertificate"
+          ),
+              "Cloud Resource",
+          ActionKey contains_cs "application"
+              or ActionKey contains_cs "connectedapp"
+              or ActionKey contains_cs "ecapp"
+              or ActionKey contains_cs "authprovider"
+              or ActionKey contains_cs "callcenter"
+              or ActionKey contains_cs "credential"
+              or ActionKey contains_cs "oauth"
+              or ActionKey contains_cs "saml"
+              or ActionKey contains_cs "idp"
+              or ActionKey contains_cs "servicechannel"
+              or ActionKey contains_cs "presenceuserconfig"
+              or ActionKey contains_cs "queuerouting"
+              or ActionKey contains_cs "privateconnection"
+              or ActionKey contains_cs "remoteproxy"
+              or ActionKey contains_cs "packagingapp"
+              or ActionKey contains_cs "loginflow",
+              "Service",
+          "Configuration Atom")
+      // This parser does not support srcipaddr_has_any_prefix filtering.
+      // Intentionally fail closed: any non-empty srcipaddr_has_any_prefix input returns 0 rows.
+      | where array_length(srcipaddr_has_any_prefix) == 0
+      | where eventresult == "*"
+          or eventresult =~ "Success"
+      | extend EventType = case(
+          Action has_any ("created", "added", "inserted", "provisioned")
+              or Display has_any ("created", "added", "inserted", "provisioned"), "Create",
+          Action has_any ("deleted", "removed", "deprovisioned")
+              or Display has_any ("deleted", "removed", "deprovisioned"), "Delete",
+          Action has_any ("enabled", "activated", "unfrozen")
+              or Display has_any ("enabled", "activated", "unfrozen"), "Enable",
+          Action has_any ("disabled", "deactivated", "frozen")
+              or Display has_any ("disabled", "deactivated", "frozen"), "Disable",
+          Action has_any ("installed", "upgraded")
+              or Display has_any ("installed", "upgraded"), "Install",
+          Action has_any ("initialized", "initialised")
+              or Display has_any ("initialized", "initialised"), "Initialize",
+          Action has_any ("started", "launched")
+              or Display has_any ("started", "launched"), "Start",
+          Action has_any ("stopped", "paused")
+              or Display has_any ("stopped", "paused"), "Stop",
+          Action has_any ("terminated", "killed")
+              or Display has_any ("terminated", "killed"), "Terminate",
+          Action has_any ("cleared", "reset", "purged")
+              or Display has_any ("cleared", "reset", "purged"), "Clear",
+          Action has_any ("executed", "invoked", "ran")
+              or Display has_any ("executed", "invoked", "ran"), "Execute",
+          Action has_any ("viewed", "read", "downloaded", "exported")
+              or Display has_any ("viewed", "read", "downloaded", "exported"), "Read",
+          "Set")
+      | where array_length(eventtype_in) == 0
+          or EventType in~ (eventtype_in)
+      | parse Display with * " from " ParsedOldValue: string " to " ParsedNewValue: string
+      | parse Display with CreatedValue: string " was created"
+      | parse Display with DeletedValue: string " was deleted"
+      | parse Display with * " assigned to " AssignedValue: string
+      | parse Display with * " removed from " RemovedValue: string
+      | extend
+          OldValue = case(
+              isnotempty(ParsedOldValue),
+                  trim(@"\s+", ParsedOldValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Active",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Inactive",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Enabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Disabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Frozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Unfrozen",
+              isnotempty(DeletedValue),
+                  trim(@"\s+", DeletedValue),
+              isnotempty(RemovedValue),
+                  trim(@"\s+", RemovedValue),
+              ""),
+          NewValue = case(
+              isnotempty(ParsedNewValue),
+                  trim(@"\s+", ParsedNewValue),
+              Action startswith "deactivated"
+                  or Display contains " was deactivated",
+                  "Inactive",
+              Action startswith "activated"
+                  or Display contains " was activated",
+                  "Active",
+              Action startswith "disable"
+                  or Action endswith "Disabled"
+                  or Display contains " was disabled",
+                  "Disabled",
+              Action startswith "enable"
+                  or Action endswith "Enabled"
+                  or Display contains " was enabled",
+                  "Enabled",
+              Action startswith "unfroze"
+                  or Action contains "Unfreeze"
+                  or Display contains " was unfrozen",
+                  "Unfrozen",
+              Action startswith "froze"
+                  or Action contains "Freeze"
+                  or Display contains " was frozen",
+                  "Frozen",
+              isnotempty(CreatedValue),
+                  trim(@"\s+", CreatedValue),
+              isnotempty(AssignedValue),
+                  trim(@"\s+", AssignedValue),
+              "")
+      | where array_length(newvalue_has_any) == 0
+          or NewValue has_any (newvalue_has_any)
+      | extend EventTime = coalesce(CreatedDate, TimeGenerated)
+      | invoke _ASIM_ResolveFQDN('SalesforceDomain')
+      | extend
+          EventUid = coalesce(
+              Id,
+              hash_sha256(strcat(
+                  TenantId, "|",
+                  tostring(EventTime), "|",
+                  CreatedById, "|",
+                  Action, "|",
+                  Section, "|",
+                  Display))),
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = case(
+              CreatedByContext =~ "User", "Regular",
+              isempty(CreatedByContext), "",
+              "Other"),
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "CreatedByIssuer", CreatedByIssuer,
+                  "CreatedByName", CreatedByName,
+                  "DelegateUser", DelegateUser,
+                  "SourceSystem", SourceSystem,
+                  "CreatedDate", CreatedDate,
+                  "TenantId", TenantId
+              ),
+              dynamic({}))
+      | project-rename
+          ActorOriginalUserType = CreatedByContext,
+          ActorUserId = CreatedById,
+          ActorUserUpn = CreatedByEmail,
+          EventOriginalUid = Id
+      | project
+          TimeGenerated,
+          Type = "SalesforceAuditTrail",
+          EventCount = toint(1),
+          EventEndTime = EventTime,
+          EventMessage = Display,
+          EventOriginalSubType = Section,
+          EventOriginalType = Action,
+          EventOriginalUid,
+          EventProduct = "Salesforce Audit Trail",
+          EventResult = "Success",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "1.0.0",
+          EventStartTime = EventTime,
+          EventSubType = Section,
+          EventType,
+          EventUid,
+          EventVendor = "Salesforce",
+          ActorOriginalUserType,
+          ActorUserId,
+          ActorUserIdType = iff(
+              isnotempty(ActorUserId),
+              "SalesforceId",
+              ""),
+          ActorUsername,
+          ActorUsernameType,
+          ActorUserType,
+          ActorUserUpn,
+          AdditionalFields,
+          Dst = coalesce(FQDN, tostring(ExtractedHostname)),
+          Dvc = "Salesforce Audit Trail",
+          NewValue,
+          Object,
+          ObjectType,
+          OldValue,
+          Operation,
+          OriginalObjectType = Section,
+          TargetDescription = Display,
+          TargetDomain = tostring(Domain),
+          TargetDomainType = DomainType,
+          TargetFQDN = FQDN,
+          TargetHostname = tostring(ExtractedHostname),
+          TargetUrl = iff(
+              isnotempty(SalesforceDomain),
+              strcat("https://", SalesforceDomain),
+              ""),
+          User = ActorUsername,
+          Value = NewValue
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      operation_has_any=operation_has_any,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      object_has_any=object_has_any,
+      newvalue_has_any=newvalue_has_any,
+      disabled=disabled,
+      pack=pack
+  )

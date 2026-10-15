@@ -106,9 +106,9 @@ ParserQuery: |
           "Other")
       | where array_length(eventresultdetails_in) == 0
           or EventResultDetails in~ (eventresultdetails_in)
+      // This parser does not support targetappname_has_any filtering.
+      // Intentionally fail closed: any non-empty targetappname_has_any input returns 0 rows.
       | where array_length(targetappname_has_any) == 0
-          or isempty(SalesforceDomain)
-          or SalesforceDomain has_any (targetappname_has_any)
       | extend TargetUrl = iff(
           isempty(LoginUrl),
           "",
@@ -122,9 +122,6 @@ ParserQuery: |
           isnotempty(LoginUrlFQDN), LoginUrlFQDN,
           LoginUrl)
       | invoke _ASIM_ResolveFQDN('TargetFQDN')
-      | extend TargetAppName = iff(isnotempty(TargetFQDN), TargetFQDN, "Salesforce")
-      | where array_length(targetappname_has_any) == 0
-          or TargetAppName has_any (targetappname_has_any)
       | extend EventTime = coalesce(LoginTime, TimeGenerated)
       | extend NormalizedSourceIp = iff(
           isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)),
@@ -225,9 +222,7 @@ ParserQuery: |
                   "SourceSystem", SourceSystem,
                   "LoginTime", LoginTime,
                   "TenantId", TenantId,
-                  "TlsProtocol", TlsProtocol,
-                  "_BilledSize", _BilledSize,
-                  "_IsBillable", _IsBillable
+                  "TlsProtocol", TlsProtocol
               ),
               dynamic({}))
       | project-rename
@@ -255,7 +250,6 @@ ParserQuery: |
           EventResultDetails,
           EventSchema = "Authentication",
           EventSchemaVersion = "1.0.0",
-          EventSeverity = "Informational",
           EventStartTime = EventTime,
           EventSubType,
           EventType = "Logon",
@@ -265,21 +259,10 @@ ParserQuery: |
           ActingAppName,
           ActingAppType,
           ActingOriginalAppType,
-          ActingApplicationEntityKey = "",
-          ActorUserAdditionalIds = dynamic([]),
-          ActorUserEntityKey = "",
-          AdditionalEntities = dynamic([]),
           AdditionalFields,
-          Application = TargetAppName,
           Dst = coalesce(FQDN, tostring(ExtractedHostname)),
           Dvc = "Salesforce Login History",
           DvcAction,
-          DvcDescription = "Salesforce authentication service",
-          DvcDomain = "",
-          DvcDomainType = "",
-          DvcEntityKey = "",
-          DvcFQDN = "",
-          DvcHostname = "",
           HttpUserAgent,
           IpAddr = NormalizedSourceIp,
           LogonMethod,
@@ -289,21 +272,13 @@ ParserQuery: |
           SrcDeviceType,
           SrcDvcOs,
           SrcGeoCountry,
-          SrcHostname = "",
           SrcIpAddr = NormalizedSourceIp,
-          SrcSystemEntityKey = "",
           TargetAppId,
-          TargetApplicationEntityKey = "",
-          TargetAppName,
-          TargetAppType = "SaaS application",
           TargetDomain = tostring(Domain),
           TargetDomainType = DomainType,
           TargetFQDN = FQDN,
           TargetHostname = tostring(ExtractedHostname),
-          TargetSystemEntityKey = "",
           TargetUrl,
-          TargetUserAdditionalIds = dynamic([]),
-          TargetUserEntityKey = "",
           TargetUserId = UserId,
           TargetUserIdType = iff(isnotempty(UserId), "SalesforceId", ""),
           User = UserId

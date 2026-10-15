@@ -2,7 +2,7 @@
 
 ## Version 0.2.28
 
-- (2026-09-30) Add the Okta Auth0 Authentication parser. [PR #15254](https://github.com/Azure/Azure-Sentinel/pull/15254)
+- (2026-10-13) Add the Okta Auth0 Authentication parser. [PR #15254](https://github.com/Azure/Azure-Sentinel/pull/15254)
 
 ## Version 0.2.27
 
@@ -22,15 +22,15 @@
 
 ## Version 0.2.23
 
-- (2026-09-25) Add the Aruba Networks ClearPass Authentication parser. [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
+- (2026-09-25) Add the Aruba Networks ClearPass Authentication parser. - [PR #15192](https://github.com/Azure/Azure-Sentinel/pull/15192)
 
 ## Version 0.2.22
 
-- (2026-09-24) Add the Oracle OCI Authentication parser. [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
+- (2026-09-24) Add the Oracle OCI Authentication parser. - [PR #15122](https://github.com/Azure/Azure-Sentinel/pull/15122)
 
 ## Version 0.2.21
 
-- (2026-09-17) Add the Wiz Cloud Authentication parser. [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
+- (2026-09-17) Add the Wiz Cloud Authentication parser. - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
 
 ## Version 0.2.20
 
