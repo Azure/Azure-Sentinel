@@ -31,6 +31,7 @@ This playbook fetches the object mapped with incident and starts turbo threat hu
     * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted
     * Polling Interval: Time Interval in minutes for checking hunt status (Ex: 5)
     * Polling Timeout: Time limit in minutes for checking hunt status (Ex: 720)
+    
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikTurboThreatHunt%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikTurboThreatHunt%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
