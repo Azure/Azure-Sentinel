@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 23de46ea-c425-4a77-b456-511ae4855d69
+    path: Analytic Rules/RareOperations.yaml
+    version: 2.0.3
+    querySha256: fbdc4b2b9b10d279bb0f8e054a64043f1364db84c3867061df7149e246059c12
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Caller`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Caller` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Persistence
+    originalTechniques:
+    - T1003
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 1b97fb6f44bbcdcc65e68b2c00ae3808de843861a671a979f76642867d8d979a
+      targetQuerySha256: ef80c4f2e55d5f57687b266e6209f4d563ca349902aa15211821549bbe21becb
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-23de46ea-c425-4a77-b456-511ae4855d69
+  displayName: Rare subscription-level operations in Azure
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let starttime = 14d;
+      let endtime = 1d;
+      // The number of operations above which an IP address is considered an unusual source of role assignment operations
+      let alertOperationThreshold = 5;
+      // Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all
+      let SensitiveOperationList =  dynamic(["microsoft.compute/snapshots/write", "microsoft.network/networksecuritygroups/write", "microsoft.storage/storageaccounts/listkeys/action"]);
+      let SensitiveActivity = AzureActivity
+      | where OperationNameValue in~ (SensitiveOperationList) or OperationNameValue hassuffix "listkeys/action"
+      | where ActivityStatusValue =~ "Success";
+      SensitiveActivity
+      | where TimeGenerated between (ago(starttime) .. ago(endtime))
+      | summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)
+      | where count_ >= alertOperationThreshold
+      // Returns all the records from the right side that don't have matches from the left
+      | join kind = rightanti (
+      SensitiveActivity
+      | where TimeGenerated >= ago(endtime)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_list(TimeGenerated), ActivityStatusValue = make_list(ActivityStatusValue), CorrelationIds = make_list(CorrelationId), ResourceGroups = make_list(ResourceGroup), ResourceIds = make_list(_ResourceId), ActivityCountByCallerIPAddress = count()
+      by CallerIpAddress, Caller, OperationNameValue
+      | where ActivityCountByCallerIPAddress >= alertOperationThreshold
+      ) on CallerIpAddress, Caller, OperationNameValue
+      | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Rare subscription-level operations in Azure
+      description: '''This query looks for a few sensitive subscription-level events based on Azure Activity Logs. For example,
+        this monitors for the operation name ''Create or Update Snapshot'', which is used for creating backups but could be
+        misused by attackers to dump hashes or extract sensitive information from the disk.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1003
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: Caller

@@ -1,0 +1,150 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c61ad0ac-ad68-4ebb-b41a-74296d3e0044
+    path: Analytic Rules/RegistryPersistenceViaAppCertDLLModification.yaml
+    version: 1.0.3
+    querySha256: f573dd39fa955c5882e2c2958b46170bae4e40a9abf83b5535c0ceced44c7ab4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - RegistryKey.Key value is retained as customDetails.RegistryKeyKey from query column `TargetObject`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.RegistryKeyKey column `TargetObject` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1546.009
+    reviewScope:
+      sourceDocumentSha256: 223302baded61b819f0a09477d75aebae160016f461589741286bb6a5cb90083
+      targetQuerySha256: af3f0a2ee13bb8fdb2dedfc9aa0e405337a7089e4e443fd2ba54a4b7dc7519ab
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 223302baded61b819f0a09477d75aebae160016f461589741286bb6a5cb90083
+      targetQuerySha256: af3f0a2ee13bb8fdb2dedfc9aa0e405337a7089e4e443fd2ba54a4b7dc7519ab
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 223302baded61b819f0a09477d75aebae160016f461589741286bb6a5cb90083
+      targetQuerySha256: af3f0a2ee13bb8fdb2dedfc9aa0e405337a7089e4e443fd2ba54a4b7dc7519ab
+    supplementalEntityDetails:
+    - entityType: RegistryKey
+      entityIndex: 1
+      identifier: Key
+      sourceColumn: TargetObject
+      column: TargetObject
+      status: runtime-binding-pending
+      customDetailKey: RegistryKeyKey
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-c61ad0ac-ad68-4ebb-b41a-74296d3e0044
+  displayName: Registry Persistence via AppCert DLL Modification
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+      | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" *
+      | where TargetObject has ("\\Control\\Session Manager\\AppCertDLLs\\")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Registry Persistence via AppCert DLL Modification
+      description: "'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered\
+        \ by AppCert DLLs loaded into processes. \nDynamic-link libraries (DLLs) that are specified in the AppCertDLLs Registry\
+        \ key under HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\Session Manager\\ are loaded into every process\
+        \ that calls the ubiquitously used application programming interface (API) functions CreateProcess, CreateProcessAsUser,\
+        \ CreateProcessWithLoginW, CreateProcessWithTokenW, or WinExec.\nRef: https://attack.mitre.org/techniques/T1546/009/'"
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1546
+          subTechniques:
+          - T1546.009
+      customDetails:
+        RegistryKeyKey: TargetObject
+        HostFullName: Computer
