@@ -27,7 +27,8 @@ relevantTechniques:
   - T1027
 query: |
   let Lookback = 1h;
-  let EncodedFlagRegex = @'(?i)(^|\s)-(encodedcommand|enc|ec|enco)\b';
+  let EncodedFlagRegex = @'(?i)(^|\s)-(encodedcommand|enco|enc|ec|e)\b';
+  let EncodedValueRegex = @'(?i)(^|\s)-(encodedcommand|enco|enc|ec|e)\b\s?([^\s]+)';
   let AllowlistedParents = dynamic([
     "SqlServer.exe", "ManagementStudio.exe", "devenv.exe",
     "ccmexec.exe", "SMSAgent.exe"
@@ -42,14 +43,19 @@ query: |
     | where FileName in~ ("powershell.exe", "pwsh.exe")
     | where ProcessCommandLine matches regex EncodedFlagRegex
     | where not(InitiatingProcessFileName has_any (AllowlistedParents))
+    | extend EncodedCommand = extract(EncodedValueRegex, 3, ProcessCommandLine)
+    | extend DecodedCommand = replace_string(
+        base64_decode_tostring(EncodedCommand), '\0', ''
+      )
     | extend
-        HasDownloadCradle = ProcessCommandLine has_any (DownloadCradlePatterns),
-        AccountName       = InitiatingProcessAccountName,
-        AccountDomain     = InitiatingProcessAccountDomain,
-        HostName          = DeviceName,
-        EventTime         = Timestamp
+        HasDownloadCradle = DecodedCommand has_any (DownloadCradlePatterns),
+        AccountName = InitiatingProcessAccountName,
+        AccountDomain = InitiatingProcessAccountDomain,
+        HostName = DeviceName,
+        EventTime = Timestamp
     | project EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;
+        ProcessCommandLine, DecodedCommand, InitiatingProcessFileName,
+        HasDownloadCradle;
   let SecEvent_Results =
     SecurityEvent
     | where TimeGenerated >= ago(Lookback)
@@ -58,16 +64,21 @@ query: |
         or NewProcessName endswith "\\pwsh.exe"
     | where CommandLine matches regex EncodedFlagRegex
     | where not(ParentProcessName has_any (AllowlistedParents))
+    | extend EncodedCommand = extract(EncodedValueRegex, 3, CommandLine)
+    | extend DecodedCommand = replace_string(
+        base64_decode_tostring(EncodedCommand), '\0', ''
+      )
     | extend
-        HasDownloadCradle     = CommandLine has_any (DownloadCradlePatterns),
-        AccountName           = SubjectUserName,
-        AccountDomain         = SubjectDomainName,
-        HostName              = Computer,
-        EventTime             = TimeGenerated,
-        ProcessCommandLine    = CommandLine,
+        HasDownloadCradle = DecodedCommand has_any (DownloadCradlePatterns),
+        AccountName = SubjectUserName,
+        AccountDomain = SubjectDomainName,
+        HostName = Computer,
+        EventTime = TimeGenerated,
+        ProcessCommandLine = CommandLine,
         InitiatingProcessFileName = ParentProcessName
     | project EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;
+        ProcessCommandLine, DecodedCommand, InitiatingProcessFileName,
+        HasDownloadCradle;
   union MDE_Results, SecEvent_Results
   | extend RiskScore = iif(HasDownloadCradle, 2, 1)
   | sort by RiskScore desc, EventTime desc
@@ -86,5 +97,5 @@ entityMappings:
     fieldMappings:
       - identifier: CommandLine
         columnName: ProcessCommandLine
-version: 1.0.4
+version: 1.0.5
 kind: Scheduled

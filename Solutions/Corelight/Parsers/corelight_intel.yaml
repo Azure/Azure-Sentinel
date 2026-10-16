@@ -1,39 +1,21 @@
 id: 7ab21b8c-00f3-4312-bce8-abec2c13866b
 Function:
   Title: Corelight Intel Events
-  Version: '1.1.0'
-  LastUpdated: '2024-12-09'
+  Version: '2.0.0'
+  LastUpdated: '2026-08-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_intel
 FunctionAlias: corelight_intel
 FunctionQuery: |
-    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
     let corelight_intel = view () {
-        union isfuzzy=true Corelight_v2_intel_CL, dummy_table
-        | summarize arg_max(TimeGenerated, *) by uid_s
+        union isfuzzy=true Corelight_v3_intel_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
         | join kind=leftouter 
         ( corelight_conn
         | project uid, local_orig, local_resp    
-        ) on $left.uid_s == $right.uid
-        | project-away uid
-        | extend
-            path = column_ifexists("_path_s", ""),
-            system_name = column_ifexists("_system_name_s", ""),
-            write_ts = column_ifexists("_write_ts_t", ""),
-            file_mime_type = column_ifexists("file_mime_type_s", ""),
-            file_desc = column_ifexists("file_desc_s", ""),
-            fuid = column_ifexists("fuid_s", ""),
-            seen_indicator = column_ifexists("seen_indicator_s", ""),
-            seen_indicator_type = column_ifexists("seen_indicator_type_s", ""),
-            seen_where = column_ifexists("seen_where_s", ""),
-            sources = column_ifexists("sources_s", ""),
-            id_orig_h = column_ifexists("id_orig_h_s", ""),
-            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
-            id_resp_h = column_ifexists("id_resp_h_s", ""),
-            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
-            uid = column_ifexists("uid_s", ""),
-            matched = column_ifexists("matched_s", ""),
-            filename = column_ifexists("filename_s", "")
+        ) on $left.uid == $right.uid
+        | project-away uid1
         | extend
             EventVendor = "Corelight",
             EventProduct = "CorelightSensor",
@@ -56,7 +38,7 @@ FunctionQuery: |
             is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
             is_dest_internal_ip = iff(local_resp == true, "true", "false"),
             is_src_internal_ip = iff(local_orig == true, "true", "false"),
-            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+            direction=case(local_orig==true and local_resp==true, "internal", local_orig==true and local_resp==false, "outbound", local_orig==false and local_resp==false, "external", local_orig==false and local_resp==true, "inbound", "unknown")
         | project
             TimeGenerated,
             path,

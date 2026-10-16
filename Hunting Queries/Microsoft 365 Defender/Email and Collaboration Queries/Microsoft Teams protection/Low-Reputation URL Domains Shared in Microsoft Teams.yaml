@@ -1,0 +1,31 @@
+id: 8ed7068a-0b5f-43a0-87c5-1d99bef03531
+name: Low-Reputation URL Domains Shared in Microsoft Teams
+description: |
+  This query lists URL domains shared in Microsoft Teams that use top level domains commonly abused for phishing and malware, ranked by message reach.
+description-detailed: |
+  This query lists URL domains shared in Microsoft Teams messages over the last 30 days whose top level domain is one commonly abused for phishing and malware delivery, using Advanced hunting in Microsoft Defender XDR. Domains are ranked by the number of distinct Teams messages they appeared in, with the top level domain and first and last seen. Treat the output as a review list of candidate indicators rather than a blocklist, since legitimate services do use these top level domains. Two deserve particular attention: .zip and .mov read like file names, so a link to one can be mistaken for an attachment by users who have been trained to distrust attachments but not links.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query lists URL domains shared in Microsoft Teams over the last 30 days that use top level domains commonly
+  //abused for phishing and malware, ranked by how many distinct Teams messages they reached.
+  //Treat this as a review list of candidate indicators, not a blocklist: legitimate services use these TLDs too.
+  //.zip and .mov are worth extra attention because a link reads like a file name.
+  let suspTlds = dynamic(["top","xyz","click","link","shop","online","site","live","icu","cyou","sbs","rest","quest","cfd","bond","buzz","fun","space","monster","work","tk","ml","ga","cf","gq","dev","app","zip","mov","info","win","loan","men","stream","country"]);
+  MessageUrlInfo
+  | where Timestamp > ago(30d)
+  | where isnotempty(UrlDomain)
+  | extend Tld = tostring(split(UrlDomain, ".")[-1])
+  | where Tld in (suspTlds)
+  | summarize TeamsMessages = dcount(TeamsMessageId), FirstSeen = min(Timestamp), LastSeen = max(Timestamp)
+      by UrlDomain, Tld
+  | top 20 by TeamsMessages desc
+  | project ['URL Domain']=UrlDomain, ['Top Level Domain']=Tld, ['Teams Messages']=TeamsMessages,
+            ['First Seen']=FirstSeen, ['Last Seen']=LastSeen
+version: 1.0.0

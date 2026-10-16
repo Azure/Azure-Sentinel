@@ -1,0 +1,64 @@
+id: 3a5a21fd-5a82-45dc-ad37-3fb95f475e11
+name: PowerShell Encoded Command Execution
+description: |
+  Looks for variations of the PowerShell -EncodedCommand parameter, commonly used to obfuscate commands. Not all occurrences are malicious, so base64 decode the command for analysis. Tune noisy results by grouping on parent process or rare commands.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+tactics:
+  - DefenseEvasion
+  - Execution
+relevantTechniques:
+  - T1027
+  - T1059.001
+query: |
+  union 
+  (
+      SecurityEvent
+      | project 
+          TimeGenerated,
+          DeviceName=Computer,
+          EventID=tostring(EventID),
+          ParentProcessName,
+          ProcessName=NewProcessName,
+          CommandLine,
+          SubjectUserName,
+          SourceComputerId,
+          processID=tolong(NewProcessId),
+          parentProcessID=tolong(ProcessId)
+  ),
+  (
+      DeviceEvents
+      | project
+          TimeGenerated,
+          DeviceName,
+          ProcessName=InitiatingProcessFolderPath,
+          CommandLine=ProcessCommandLine,
+          SubjectUserName=InitiatingProcessAccountName,
+          SourceComputerId=DeviceId,
+          processID=InitiatingProcessId,
+          parentProcessID=InitiatingProcessParentId,
+          ParentProcessName=InitiatingProcessParentFileName,
+          AdditionalFields,
+          EventID=ActionType
+  )
+  | where 
+      ProcessName has_any (
+        "powershell.exe",
+        "powershell_ise.exe", 
+        "pwsh.exe"
+        )
+  | extend CommandLine_ = tostring(AdditionalFields.Command)
+  | extend AllCommandLine=coalesce(CommandLine_,CommandLine)
+  | where AllCommandLine matches regex "-([Ee\\^]{1,2}[NnCcOoDdEeMmAaPpHh\\^` ]+|[Ee])\\s+\"?[a-zA-Z0-9+/=]{10,}"
+  | where not (ParentProcessName has "Plugins\\Microsoft.GuestConfiguration.ConfigurationforWindows" and ParentProcessName endswith "gc_worker.exe")
+  | order by TimeGenerated
+  | project TimeGenerated,DeviceName,EventID,ParentProcessName,ProcessName,AllCommandLine,SubjectUserName,processID,parentProcessID,SourceComputerId
+version: 1.0.0

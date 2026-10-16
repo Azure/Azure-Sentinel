@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.2.0       | 28-09-2026                     | Added SAP BTP AVL connector for SAP Application Vulnerability Report Service findings (`SAPBTPAVL_CL`). Added an analytic rule for critical vulnerability findings in custom apps, with incident grouping per app and subaccount. Added an "Application Vulnerabilities" workbook tab and a vulnerability posture KPI on the Overview tab. |
 | 3.1.1       | 22-07-2026                     |New analytic rule: detect unaudited custom apps with login-only activity. Renamed analytic rules with `SAP BTP` prefix for improved discoverability.|
 | 3.1.0       | 08-06-2026                     |Reworked BTP Cloud Integration artifact deployment rule to use audit.configuration events with richer artifact, actor, and tenant context|
 | 3.0.12      | 29-12-2025                     |Updated grid view UI with new subaccount onboarding properties|

@@ -1,0 +1,145 @@
+{
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "apiVersion": "2022-09-01-preview",
+    "name": "NetskopeClientStatus",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "NetskopeClientStatus",
+            "title": "Netskope Client Status",
+            "publisher": "Netskope",
+            "descriptionMarkdown": "The Netskope Client Status connector ingests Netskope client device status records (installation, connectivity, health, and last-seen posture events) into Microsoft Sentinel via the Codeless Connector Framework (CCF) REST API poller. Data is delivered by the Netskope API as CSV and stored in the `NetskopeClientStatus_CL` table. Enumeration codes are retained in their original columns and translated during ingestion into adjacent human-readable `*_name` columns.",
+            "graphQueriesTableName": "NetskopeClientStatus_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Total Netskope Client Status records",
+                    "legend": "Netskope Client Status",
+                    "baseQuery": "NetskopeClientStatus_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "Get sample of Netskope Client Status records",
+                    "query": "NetskopeClientStatus_CL\n| take 10"
+                },
+                {
+                    "description": "View client status codes and their human-readable names",
+                    "query": "NetskopeClientStatus_CL\n| project TimeGenerated, host_info_hostname, host_info_os, host_info_os_name, last_seen_device_event_status_v2, last_seen_device_event_status_v2_name, last_seen_device_event_npa_status, last_seen_device_event_npa_status_name\n| take 10"
+                },
+                {
+                    "description": "Latest status for each Netskope device",
+                    "query": "NetskopeClientStatus_CL\n| extend DeviceKey = case(isnotempty(device_hash), device_hash, isnotempty(guid), guid, isnotempty(device_id), device_id, host_info_hostname)\n| summarize arg_max(TimeGenerated, *) by DeviceKey\n| project TimeGenerated, host_info_hostname, user_info_username, client_version, host_info_os_name, last_seen_device_event_status_v2_name, last_seen_device_event_npa_status_name, last_seen_device_event_event_name\n| order by TimeGenerated desc"
+                },
+                {
+                    "description": "Devices whose client is disabled, uninstalled or dormant",
+                    "query": "NetskopeClientStatus_CL\n| extend DeviceKey = case(isnotempty(device_hash), device_hash, isnotempty(guid), guid, isnotempty(device_id), device_id, host_info_hostname)\n| summarize arg_max(TimeGenerated, *) by DeviceKey\n| where last_seen_device_event_status_v2_name in (\"DISABLED\", \"UNINSTALLED\", \"DORMANT\")\n| project TimeGenerated, host_info_hostname, user_info_username, last_seen_device_event_status_v2_name, last_seen_device_event_actor_name, last_seen_device_event_service_name, last_seen_device_event_event_name"
+                },
+                {
+                    "description": "Client-version distribution",
+                    "query": "NetskopeClientStatus_CL\n| extend DeviceKey = case(isnotempty(device_hash), device_hash, isnotempty(guid), guid, isnotempty(device_id), device_id, host_info_hostname)\n| summarize arg_max(TimeGenerated, *) by DeviceKey\n| summarize Devices = count() by client_version\n| order by Devices desc"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "NetskopeClientStatus_CL",
+                    "lastDataReceivedQuery": "NetskopeClientStatus_CL \n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "availability": {
+                "isPreview": false
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Netskope organisation url",
+                        "description": "The Netskope data connector requires you to provide your organisation url. You can find your organisation url by signing into the Netskope portal."
+                    },
+                    {
+                        "name": "Netskope API key",
+                        "description": "The Netskope data connector requires you to provide a valid API key. You can create one by following the [Netskope documentation](https://docs.netskope.com/en/rest-api-v2-overview-312207/)."
+                    },
+                    {
+                        "name": "Netskope Client Status iterator",
+                        "description": "Unlike the other Netskope Alerts and Events data types, Client Status is only exposed through Netskope's REST API v2 Management-API iterator endpoints. There is no default or auto-created index for this data type \u2014 you must create the iterator yourself before connecting; see the [Netskope iterator endpoints documentation](https://docs.netskope.com/en/using-the-rest-api-v2-dataexport-iterator-endpoints/)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "STEP 1 - Create a Netskope API key.",
+                    "description": "Follow the [Netskope documentation](https://docs.netskope.com/en/rest-api-v2-overview-312207/) for guidance on this step."
+                },
+                {
+                    "title": "STEP 2 - Create a Client Status iterator",
+                    "description": "Client Status does not support the shared `index=` convention used by the other Netskope event types \u2014 you must create a dedicated iterator for this data type before Microsoft Sentinel can poll it. Using the [Netskope REST API v2 iterator endpoints](https://docs.netskope.com/en/using-the-rest-api-v2-dataexport-iterator-endpoints/), call the Create Iterator API once (for example `POST https://<your-org>/api/v2/dataexport/iterator/<a-name-you-choose>?eventtype=clientstatus` with your API token) and record the iterator name/ID you used \u2014 you will enter it below. Confirm the exact request shape against the linked Netskope documentation, as iterator management is a separate API surface from the events you are polling."
+                },
+                {
+                    "title": "STEP 3 - Enter your Netskope product Details",
+                    "description": "Enter your Netskope organisation url, API Token, and the Client Status iterator ID you created in Step 2:",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Organisation Url",
+                                "placeholder": "Enter your organisation url",
+                                "type": "text",
+                                "name": "OrganisationURL"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "API Key",
+                                "placeholder": "Enter your API Key",
+                                "type": "password",
+                                "name": "apikey"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Client Status Iterator ID",
+                                "placeholder": "Enter the iterator name/ID you created in Step 2",
+                                "type": "text",
+                                "name": "IteratorId",
+                                "required": true
+                            }
+                        }
+                    ]
+                },
+                {
+                    "title": "STEP 4 - Click Connect",
+                    "description": "Verify all fields above were filled in correctly. Press the Connect to connect Netskope to Microsoft Sentinel.",
+                    "instructions": [
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "connectLabel": "connect",
+                                "name": "connect"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

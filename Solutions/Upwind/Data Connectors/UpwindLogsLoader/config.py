@@ -8,6 +8,12 @@ from azure.keyvault.secrets import SecretClient
 from dotenv import load_dotenv
 
 
+# Datasets that support severity filtering default to this minimum. Setting the
+# corresponding UPWIND_*_MIN_SEVERITY app setting to an empty value disables
+# filtering for that dataset and ingests every severity.
+DEFAULT_MIN_SEVERITY = "high"
+
+
 class ConfigStore:
     """External parameters required by the function application."""
 
@@ -102,6 +108,21 @@ def load_configuration() -> ConfigStore:
         upwind_initial_backoff_seconds=_parse_int_env("UPWIND_INITIAL_BACKOFF_SECONDS", "1"),
         upwind_max_backoff_seconds=_parse_int_env("UPWIND_MAX_BACKOFF_SECONDS", "60"),
         upwind_threat_lookback_minutes=_parse_int_env("UPWIND_THREAT_LOOKBACK_MINUTES", "90"),
+        upwind_min_severity_vulnerability=os.getenv(
+            "UPWIND_VULNERABILITY_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
+        ),
+        upwind_min_severity_threat_detections=os.getenv(
+            "UPWIND_THREAT_DETECTIONS_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
+        ),
+        upwind_min_severity_threat_events=os.getenv(
+            "UPWIND_THREAT_EVENTS_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
+        ),
+        upwind_min_severity_threat_stories=os.getenv(
+            "UPWIND_THREAT_STORIES_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
+        ),
+        upwind_min_severity_config_findings=os.getenv(
+            "UPWIND_CONFIG_FINDINGS_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
+        ),
     )
 
     # Validate required config
@@ -115,10 +136,16 @@ def load_configuration() -> ConfigStore:
         raise ValueError(f"Missing required configuration: {', '.join(missing)}")
 
     logging.info(
-        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s",
+        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s, "
+        "min_severity(vuln=%s, detections=%s, events=%s, stories=%s, config=%s)",
         config.get("azure_dce_endpoint"),
         config.get("upwind_org_id"),
         config.get("upwind_page_size"),
+        config.get("upwind_min_severity_vulnerability") or "all",
+        config.get("upwind_min_severity_threat_detections") or "all",
+        config.get("upwind_min_severity_threat_events") or "all",
+        config.get("upwind_min_severity_threat_stories") or "all",
+        config.get("upwind_min_severity_config_findings") or "all",
     )
 
     return config

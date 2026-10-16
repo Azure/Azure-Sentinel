@@ -12,14 +12,16 @@
 # 6.  Parser.Version - must be present and in X.X.X format
 # 7.  Parser.LastUpdated - must be present and in "Mon DD, YYYY" format (e.g. Jun 29, 2024)
 # 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
-# 9.  Normalization.Version - must match the expected version for the schema in SCHEMA_INFO
+# 9.  Normalization.Version - must use X.X.X format and match the expected schema version
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
+import importlib.util
 import sys
 import os
 
@@ -29,6 +31,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Remove the script's directory from sys.path to avoid importing local malicious modules
 if script_dir in sys.path:
     sys.path.remove(script_dir)
+
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
 
 import yaml
 import re
@@ -45,22 +56,22 @@ parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASim
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
-    {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
-    {"SchemaName": "AgentEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
+    {"SchemaName": "AlertEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
+    {"SchemaName": "AgentEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
     {"SchemaName": "AssetEntity", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Asset Entity Schema", "SchemaLink": "https://aka.ms/ASimAssetEntityDoc"},
-    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
-    {"SchemaName": "Authentication", "SchemaVersion": "0.1.4","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
-    {"SchemaName": "Dns", "SchemaVersion": "0.1.7", "SchemaTitle":"ASIM Dns Schema","SchemaLink": "https://aka.ms/ASimDnsDoc"},
-    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
-    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.2", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
-    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
-    {"SchemaName": "ProcessEvent", "SchemaVersion": "0.1.4", "SchemaTitle":"ASIM Process Schema","SchemaLink": "https://aka.ms/ASimProcessEventDoc"},
-    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.3", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
-    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
-    {"SchemaName": "WebSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
+    {"SchemaName": "AuditEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
+    {"SchemaName": "Authentication", "SchemaVersion": "1.0.0","SchemaTitle":"ASIM Authentication Schema","SchemaLink":"https://aka.ms/ASimAuthenticationDoc"},
+    {"SchemaName": "Dns", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dns Schema","SchemaLink":"https://aka.ms/ASimDnsDoc"},
+    {"SchemaName": "DhcpEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink":"https://aka.ms/ASimDhcpEventDoc"},
+    {"SchemaName": "EmailEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Email Event Schema", "SchemaLink": "https://aka.ms/ASimEmailEventDoc"},
+    {"SchemaName": "FileEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM File Schema","SchemaLink":"https://aka.ms/ASimFileEventDoc"},
+    {"SchemaName": "NetworkSession", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Network Session Schema","SchemaLink":"https://aka.ms/ASimNetworkSessionDoc"},
+    {"SchemaName": "ProcessEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Process Schema","SchemaLink":"https://aka.ms/ASimProcessEventDoc"},
+    {"SchemaName": "RegistryEvent", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Registry Schema","SchemaLink":"https://aka.ms/ASimRegistryEventDoc"},
+    {"SchemaName": "UserManagement", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM User Management Schema","SchemaLink":"https://aka.ms/ASimUserManagementDoc"},
+    {"SchemaName": "WebSession", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Web Session Schema","SchemaLink":"https://aka.ms/ASimWebSessionDoc"}
     # Add more schemas as needed
 ]
-
 # Global array to store results
 results = []
 # Global variable to store if test failed
@@ -71,6 +82,9 @@ GREEN = '\033[92m'
 YELLOW = '\033[93m'
 RED = '\033[91m'
 RESET = '\033[0m'  # Reset to default color
+
+OPTIONAL_VIM_PARSER_PARAMS = {'pack'}
+VIM_CONTROL_PARAMS = {'disabled'}
 
 def run():
     """Main function to execute the script logic."""
@@ -87,8 +101,8 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        is_empty_parser = os.path.basename(parser).startswith('vim') and parser.endswith('Empty.yaml')
-        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml')) or is_empty_parser:
+        parser_filename = os.path.basename(parser)
+        if is_union_parser(parser_filename, schema_name) or is_empty_parser(parser_filename):
             print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
@@ -143,11 +157,12 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - Parser.Version is present and in X.X.X format
     - Parser.LastUpdated is present and in 'Mon DD, YYYY' format
     - Normalization.Schema matches a known ASIM schema name
-    - Normalization.Version matches the expected schema version
+    - Normalization.Version uses X.X.X format and matches the expected schema version
     - References include correct schema-specific and ASIM doc links
     - ParserName follows the naming convention <FileType><Schema>...
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
     - Sample data CSV file exists locally (ASim parsers only)
+    - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
         Parser_file (dict): Parsed YAML content of the parser file.
@@ -169,6 +184,9 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     schema = normalization.get('Schema')
     schemaVersion = normalization.get('Version')
     references = Parser_file.get('References', [])
+
+    if FileType == 'vim':
+        results.append(validate_vim_parser_params(Parser_file, Union_Parser__file))
 
     # ParserQuery property is the KQL query extracted from the YAML file
     parser_query = Parser_file.get('ParserQuery', '')
@@ -252,15 +270,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     else:
         results.append((f'{RED}Schema{RESET}', f'{RED}ASIM schema name {info['SchemaName']} not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
-    # Check if Schema Version exists in yaml_file's 'Normalization'->'Schema' and matches with our SchemaInfo
+    # Check if Schema Version exists, matches the X.X.X format, and matches our SchemaInfo
     if schemaVersion:
-        for info in SCHEMA_INFO:
-            if schema == info.get('SchemaName'):
-                if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
-                    results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
-                    break
-                else:
-                    results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
+        if not re.match(r'^\d+\.\d+\.\d+$', schemaVersion):
+            results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}The ASIM schema version should be in a three-digit format, e.g., 0.1.0{RESET}', f'{RED}Fail{RESET}'))
+        else:
+            for info in SCHEMA_INFO:
+                if schema == info.get('SchemaName'):
+                    if info['SchemaVersion'] == schemaVersion and info['SchemaName'] == schema:
+                        results.append((schemaVersion, f'ASIM schema {info.get('SchemaName')} version is correct', 'Pass'))
+                        break
+                    else:
+                        results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}Version{RESET}', f'{RED}ASIM schema {schema} version not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
 
@@ -317,6 +338,42 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
             results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
     return results
 
+def validate_vim_parser_params(parser_file, union_parser_file):
+    parser_params = {
+        parameter.get('Name')
+        for parameter in parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    supported_params = {
+        parameter.get('Name')
+        for parameter in union_parser_file.get('ParserParams', [])
+        if isinstance(parameter, dict)
+    }
+    parser_params.discard(None)
+    supported_params.discard(None)
+
+    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
+
+    if not missing_params and not unsupported_params:
+        return (
+            ', '.join(sorted(parser_params)),
+            'ParserParams match the parameters supported by the schema union parser',
+            'Pass'
+        )
+
+    differences = []
+    if missing_params:
+        differences.append(f'missing: {", ".join(sorted(missing_params))}')
+    if unsupported_params:
+        differences.append(f'unsupported: {", ".join(sorted(unsupported_params))}')
+
+    return (
+        f'{RED}{", ".join(differences)}{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}Fail{RESET}'
+    )
+
 def filter_yaml_files(modified_files):
     # Take only the YAML files
     return [line for line in modified_files if line.endswith('.yaml')]
@@ -346,10 +403,6 @@ def get_current_commit_number():
     except subprocess.CalledProcessError as e:
         print(f"::error::Error occurred while executing the command: {e}")
         return None
-
-def extract_schema_name(parser):
-    match = re.search(r'ASim(\w+)/', parser)
-    return match.group(1) if match else None
 
 def read_local_yaml(filepath):
     try:

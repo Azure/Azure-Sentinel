@@ -1,6 +1,12 @@
 id: a25eba0e-ff42-4c97-a379-d76bdb2aa1e3
 name: SpyCloud plaintext credential exposure detected
+# The '#DONT_CORR#' prefix on the description below is functional, not documentation.
+# Microsoft Sentinel reads it to disable Microsoft Defender XDR incident correlation for
+# incidents raised by this rule. Without it, each hourly alert is merged into the previously
+# created incident instead of creating a new one; automation rules only fire on incident
+# creation, so remediation would run once and then silently stop. Do not remove it.
 description: |
+  #DONT_CORR#
   'Identifies user accounts exposed with a plaintext password in a third-party data breach.
   Unremediated exposures of this kind can lead directly to account takeover.'
 severity: High
@@ -9,7 +15,7 @@ requiredDataConnectors:
     dataTypes:
       - SpyCloudBreachWatchlistV2_CL
 queryFrequency: 1h
-queryPeriod: 2d
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -21,17 +27,25 @@ query: |
   let severityThreshold = 20;
   SpyCloudBreachWatchlistV2_CL
   | where Severity == severityThreshold
-  | mv-expand IPAddress = IPAddresses to typeof(string)
-  | extend AccountName = Username, AccountEmail = Email
+  // Severity alone determines this detection. mv-expand emits no rows for an empty
+  // array, which would silently drop exposures carrying no IP data, so substitute a
+  // single empty placeholder before expanding.
+  | extend IPList = iff(isnull(IPAddresses) or array_length(IPAddresses) == 0, dynamic([""]), IPAddresses)
+  | mv-expand IPAddress = IPList to typeof(string)
+  | extend AccountName = Username, AccountEmail = Email,
+      AccountUpn = iff(isnotempty(Email), Email, Username)
   | project TimeGenerated, DocumentId, SourceId, SpyCloudPublishDate, AccountEmail,
-      TargetDomain, PasswordPlaintext, AccountName, IPAddress
+      TargetDomain, PasswordPlaintext, AccountName, AccountUpn, IPAddress
 eventGroupingSettings:
   aggregationKind: SingleAlert
+customDetails:
+  DocumentID: DocumentId
+  SpyCloudPublishDate: SpyCloudPublishDate
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
+      - identifier: FullName
+        columnName: AccountUpn
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -41,4 +55,4 @@ entityMappings:
       - identifier: MailboxPrimaryAddress
         columnName: AccountEmail
 version: 1.0.0
-kind: scheduled
+kind: Scheduled

@@ -1,4 +1,4 @@
-# AWS WAF ASIM WebSession Filtering Parser
+# AWS WAF ASIM WebSession Normalization Parser
 
 ARM template for ASIM WebSession schema parser for AWS WAF.
 

@@ -1,6 +1,6 @@
-﻿using Octokit;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -79,17 +79,10 @@ namespace Kqlvalidations.Tests
             {
                 try
                 {
-                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-                    var prFilesListModified = new List<string>();
                     var basePath = GetRootPath();
-                    foreach (var file in prFiles)
-                    {
-                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
-                        prFilesListModified.Add(modifiedFile);
-                    }
+                    var prFilesListModified = GetPullRequestModifiedFiles(basePath);
 
-                    files = files.Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)));
+                    files = files.Where(file => prFilesListModified.Contains(Path.GetFullPath(file)));
                 }
                 catch (Exception ex)
                 {
@@ -105,6 +98,34 @@ namespace Kqlvalidations.Tests
             }
 
             return fileList;
+        }
+
+        private static HashSet<string> GetPullRequestModifiedFiles(string basePath)
+        {
+            var processStartInfo = new ProcessStartInfo("git", "diff --name-only HEAD^1 HEAD")
+            {
+                WorkingDirectory = basePath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using (var process = Process.Start(processStartInfo))
+            {
+                var output = process.StandardOutput.ReadToEnd();
+                var error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"git diff failed with exit code {process.ExitCode}: {error}");
+                }
+
+                return output
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(fileName => Path.GetFullPath(Path.Join(basePath, fileName.Replace('/', Path.DirectorySeparatorChar))))
+                    .ToHashSet();
+            }
         }
 
     }

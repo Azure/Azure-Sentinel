@@ -2,9 +2,9 @@
 
 ## Summary
 
-Deploys a Microsoft Sentinel automation rule that triggers the **Check_Point_EM_Exporter** playbook when an incident is updated. The playbook itself handles filtering (only processes status changes) and loop prevention (skips if `argos-importer-synced` tag is present).
+Deploys a Microsoft Sentinel automation rule that runs the **Check_Point_EM_Exporter** playbook whenever an incident's status changes.
 
-**Rule:** When any incident is updated → run Check_Point_EM_Exporter.
+**Rule:** When an incident's status changes to New, Active or Closed → run Check_Point_EM_Exporter.
 
 ## Prerequisites
 
@@ -13,15 +13,16 @@ Deploys a Microsoft Sentinel automation rule that triggers the **Check_Point_EM_
 
 ## Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FCheck_Point_EM_AutomationRules%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2520Cyberint%2520Alerts%2FPlaybooks%2FSync%2FCPEM_AutomationRules%2Fazuredeploy.json)
 
 ### Parameters
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| **SentinelWorkspaceResourceId** | Yes | Full resource ID of the Log Analytics workspace with Sentinel enabled |
-| **ExporterPlaybookName** | No | Name of the Exporter Logic App (default: `Check_Point_EM_Exporter`) |
-| **AutomationRuleOrder** | No | Execution priority (default: `100`, lower = higher priority) |
+| **PlaybookName** | No | Name identifying this deployment; seeds the rule's resource name (default: `Check_Point_EM_AutomationRules`) |
+| **Sentinel_Workspace_Resource_Id** | Yes | Full resource ID of the Log Analytics workspace with Sentinel enabled |
+| **Exporter_PlaybookName** | No | Name of the Exporter Logic App (default: `Check_Point_EM_Exporter`) |
+| **Automation_Rule_Order** | No | Execution priority (default: `100`, lower = higher priority) |
 
 ### Finding your workspace resource ID
 
@@ -34,10 +35,9 @@ az monitor log-analytics workspace show \
 
 ## Loop Prevention
 
-The automation rule triggers on **all** incident updates. Loop prevention is handled by the Exporter playbook:
+Status changes flow both ways: the **Check_Point_EM_InboundStatusSync** playbook applies Argos changes to incidents, and this rule sends incident changes to Argos. The two directions do not echo each other because:
 
-1. Playbook checks if `argos-importer-synced` tag is present → skips sync if so.
-2. Playbook checks if the `Status` field changed → skips if not.
-3. Only when both checks pass does it push the status to Argos.
+1. The Exporter reads each Argos alert before writing and skips it when Argos already has the target status (and closure reason, when closing).
+2. InboundStatusSync only updates an incident whose status differs from Argos and whose last status change is older than the Argos change.
 
-This design keeps the automation rule simple and centralizes the filtering logic in the playbook.
+A status change applied by InboundStatusSync still fires this rule, but the Exporter then finds Argos already in that state and sends nothing.
