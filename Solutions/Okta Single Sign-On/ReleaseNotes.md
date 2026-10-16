@@ -1,1 +1,26 @@
-15-10-2026
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
+|-------------|--------------------------------|---------------------------------------------------------------|
+| 3.2.1 | 15-10-2026 | Added 9 disabled **Defender XDR Custom Detections** and 1 **Defender XDR Workbook** (`OktaSingleSignOn.json`) alongside the existing Sentinel content, updated the reference link in `azuredeploy_Okta_native_poller_connector_v2.json`, and updated the solution package to 3.2.1. |
+| 3.1.11       | 28-09-2026                     | Removed the deprecated Okta Single Sign-On Azure Function data connector from the solution package |
+| 3.1.10      | 09-09-2026                     | Updated the Okta **Data Connector** to retrieve up to 1000 events per page, throttle initial and paginated requests, and handle HTTP 429 responses using rate-limit-aware retries. |
+| 3.1.9       | 30-07-2026                     | Update KQL queries of Okta **Analytics rules** <br> Updated Azure Gov button image link. |
+| 3.1.8       | 10-07-2026                     | Update **Analytic rule** and **Hunting Queries** for Okta SSO.|
+| 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |
+| 3.1.6       | 14-04-2026                     | Deprecate Okta Single Sign-On (using Azure Function) |
+| 3.1.5       | 02-04-2026                     | Rename CCF solution to Okta Single Sign-On (via Codeless Connector Framework).<br> Add SessionId variable and reference in template. |
+| 3.1.4       | 13-01-2026                     | Updated non-functional link from MFA Fatigue (OKTA) **Analytic rule** |
+| 3.1.3       | 05-02-2025                     | Version Update |
+| 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
+| 3.1.1       | 08-11-2024                     | Fixed CCP **Data Connector** connection bug                          |
+| 3.1.0       | 27-11-2024                     | Fixed Solution version in Maintemplate and resolved ARM template error                           |
+| 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
+| 3.0.9       | 17-10-2024                     | Updated package to fix connectivity of CCP connector |
+| 3.0.8       | 14-08-2024                     | Data Connector Globally Available         |
+| 3.0.7       | 25-04-2024                     | Repackaged for parser issue with old names       |
+| 3.0.6       | 17-04-2024                     | Repackaged solution for parser fix   |
+| 3.0.5       | 08-04-2024                     | Added Azure Deploy button for government portal deployments   |
+| 3.0.4       | 18-03-2024                     | Updated description in data file, data connector and added logo for ccp data connector                    |
+| 3.0.3       | 08-03-2024                     | Updated ccp with domainname in dcr, tables, name change in definition and poller                     |
+| 3.0.2       | 20-02-2024                     | Updated _solutionVersion to resource specific version and repackage                    |
+| 3.0.1       | 24-01-2024                     | New **Analytic Rule** added (UserSessionImpersonation.yaml)  |
+| 3.0.0       | 10-10-2023                     | Manual deployment instructions updated for **Data Connector** |
