@@ -1,0 +1,1473 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "KELA Cyber",
+    "comments": "Solution template for KELAMonitor"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "KELAMonitor",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "kelacyber.kelamonitor",
+    "_solutionId": "[variables('solutionId')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "f160411a-0351-41d5-bc44-53fc6b0ffc13",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'f160411a-0351-41d5-bc44-53fc6b0ffc13')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('f160411a-0351-41d5-bc44-53fc6b0ffc13')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','f160411a-0351-41d5-bc44-53fc6b0ffc13','-', '1.0.0')))]"
+    },
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "KELAMonitorCCFConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "KELAMonitorCCFConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "KELAMonitor_Unresolved_Detection_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Identifies unresolved incidents ingested from the KELA Monitor API, regardless of their original severity.",
+                "displayName": "KELA Monitor Unresolved Incident",
+                "enabled": false,
+                "query": "KELA_Monitor_Incidents_CL\n| summarize arg_max(TimeGenerated, *) by id\n| where severity => 1\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "KELAMonitorCCFConnector",
+                    "dataTypes": [
+                      "KELA_Monitor_Incidents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "ResourceDevelopment",
+                  "InitialAccess",
+                  "CredentialAccess"
+                ],
+                "techniques": [
+                  "T1566",
+                  "T1586",
+                  "T1078"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "email",
+                        "identifier": "FullName"
+                      },
+                      {
+                        "columnName": "username",
+                        "identifier": "Name"
+                      }
+                    ],
+                    "entityType": "Account"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "ip",
+                        "identifier": "Address"
+                      }
+                    ],
+                    "entityType": "IP"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "domain",
+                        "identifier": "DomainName"
+                      }
+                    ],
+                    "entityType": "DNS"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "source_url",
+                        "identifier": "Url"
+                      }
+                    ],
+                    "entityType": "URL"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "file_hash",
+                        "identifier": "Value"
+                      }
+                    ],
+                    "entityType": "FileHash"
+                  }
+                ],
+                "customDetails": {
+                  "Service": "service",
+                  "SubType": "sub_type_description",
+                  "Actor": "author",
+                  "BotID": "bot_id",
+                  "IncidentType": "incidentType"
+                },
+                "alertDetailsOverride": {
+                  "alertDescriptionFormat": "Incident ID {{id}} detected for category '{{incidentType}}'.",
+                  "alertDisplayNameFormat": "KELA Monitor: {{sub_type_description}} (Severity {{severity}})"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "KELAMonitor Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "KELAMonitor",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "KELA Monitor Unresolved Incident",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "KELA - Monitor Connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "KELAMonitorCCFConnector",
+                  "title": "KELA - Monitor Connector",
+                  "publisher": "KELA Cyber",
+                  "descriptionMarkdown": "This connector ingests incidents from KELA Monitor using Microsoft Sentinel's Codeless Connector Framework (CCF).",
+                  "graphQueriesTableName": "KELA_Monitor_Incidents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Actionable Alerts collected",
+                      "legend": "All Actionable Alerts",
+                      "baseQuery": "KELA_Monitor_Incidents_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of 20 recent Actionable Alerts",
+                      "query": "KELA_Monitor_Incidents_CL\n| take 20"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "KELA_Monitor_Incidents_CL",
+                      "lastDataReceivedQuery": "KELA_Monitor_Incidents_CL \n | summarize Time = max(TimeGenerated)\n"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions required in the Workspace.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "KELA Credentials",
+                        "description": "You'll need your API key and the source workspace ID."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Configure the API connection",
+                      "description": "Please enter the required parameters to authenticate yourself and specify the time period from which to retrieve the data.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Monitor ID",
+                            "name": "MonitorId",
+                            "type": "text",
+                            "placeholder": "E.g. 0001...",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Key (Token)",
+                            "name": "Password",
+                            "type": "password",
+                            "placeholder": "Enter your KELA API Key",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Enable Botnets Incidents",
+                            "name": "enableBotnets",
+                            "options": [
+                              {
+                                "key": "true",
+                                "text": "Yes"
+                              },
+                              {
+                                "key": "false",
+                                "text": "No"
+                              }
+                            ],
+                            "placeholder": "Select Yes or No",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Enable Hacking Discussions Incidents",
+                            "name": "enableHackingDiscussions",
+                            "options": [
+                              {
+                                "key": "true",
+                                "text": "Yes"
+                              },
+                              {
+                                "key": "false",
+                                "text": "No"
+                              }
+                            ],
+                            "placeholder": "Select Yes or No",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Enable Instant Messaging Incidents",
+                            "name": "enableInstantMessaging",
+                            "options": [
+                              {
+                                "key": "true",
+                                "text": "Yes"
+                              },
+                              {
+                                "key": "false",
+                                "text": "No"
+                              }
+                            ],
+                            "placeholder": "Select Yes or No",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Enable Leaked Credentials Incidents",
+                            "name": "enableLeakedCredentials",
+                            "options": [
+                              {
+                                "key": "true",
+                                "text": "Yes"
+                              },
+                              {
+                                "key": "false",
+                                "text": "No"
+                              }
+                            ],
+                            "placeholder": "Select Yes or No",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Enable Network Vulnerabilities Incidents",
+                            "name": "enableNetworkVulnerabilities",
+                            "options": [
+                              {
+                                "key": "true",
+                                "text": "Yes"
+                              },
+                              {
+                                "key": "false",
+                                "text": "No"
+                              }
+                            ],
+                            "placeholder": "Select Yes or No",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "KELAMonitor_DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-KELA_Monitor_Incidents_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sub_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sub_type_description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "int"
+                      },
+                      {
+                        "name": "text",
+                        "type": "string"
+                      },
+                      {
+                        "name": "author",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source_url",
+                        "type": "string"
+                      },
+                      {
+                        "name": "email",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "password",
+                        "type": "string"
+                      },
+                      {
+                        "name": "password_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "service",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip",
+                        "type": "string"
+                      },
+                      {
+                        "name": "port",
+                        "type": "int"
+                      },
+                      {
+                        "name": "bot_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "username",
+                        "type": "string"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "string"
+                      },
+                      {
+                        "name": "infection_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "isp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "country",
+                        "type": "string"
+                      },
+                      {
+                        "name": "feed_property_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "data_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "incident_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "publish_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "posted_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "relevant_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "assets",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "tags",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "categories",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "user_actions",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "media",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "available_data",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "LogAnalyticsDestination_KELA"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-KELA_Monitor_Incidents_CL"
+                    ],
+                    "destinations": [
+                      "LogAnalyticsDestination_KELA"
+                    ],
+                    "transformKql": "source | extend incidentType = tostring(type)| extend incident_date = datetime(1970-01-01) + tolong(incident_date) * 1ms, publish_date = datetime(1970-01-01) + tolong(publish_date) * 1ms, posted_date = datetime(1970-01-01) + tolong(posted_date) * 1ms, relevant_date = datetime(1970-01-01) + tolong(relevant_date) * 1ms | extend TimeGenerated = now()",
+                    "outputStream": "Custom-KELA_Monitor_Incidents_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "KELA_Monitor_Incidents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "KELA_Monitor_Incidents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "incidentType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sub_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sub_type_description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "int"
+                    },
+                    {
+                      "name": "text",
+                      "type": "string"
+                    },
+                    {
+                      "name": "author",
+                      "type": "string"
+                    },
+                    {
+                      "name": "source",
+                      "type": "string"
+                    },
+                    {
+                      "name": "source_url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "email",
+                      "type": "string"
+                    },
+                    {
+                      "name": "domain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "password",
+                      "type": "string"
+                    },
+                    {
+                      "name": "password_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "service",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ip",
+                      "type": "string"
+                    },
+                    {
+                      "name": "port",
+                      "type": "int"
+                    },
+                    {
+                      "name": "bot_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "username",
+                      "type": "string"
+                    },
+                    {
+                      "name": "resource",
+                      "type": "string"
+                    },
+                    {
+                      "name": "infection_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "isp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "country",
+                      "type": "string"
+                    },
+                    {
+                      "name": "feed_property_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "data_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "assets",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "tags",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "categories",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "user_actions",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "media",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "available_data",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "KELAMonitorCCFConnector",
+          "title": "KELA - Monitor Connector",
+          "publisher": "KELA Cyber",
+          "descriptionMarkdown": "This connector ingests incidents from KELA Monitor using Microsoft Sentinel's Codeless Connector Framework (CCF).",
+          "graphQueriesTableName": "KELA_Monitor_Incidents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Actionable Alerts collected",
+              "legend": "All Actionable Alerts",
+              "baseQuery": "KELA_Monitor_Incidents_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of 20 recent Actionable Alerts",
+              "query": "KELA_Monitor_Incidents_CL\n| take 20"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "KELA_Monitor_Incidents_CL",
+              "lastDataReceivedQuery": "KELA_Monitor_Incidents_CL \n | summarize Time = max(TimeGenerated)\n"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions required in the Workspace.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "KELA Credentials",
+                "description": "You'll need your API key and the source workspace ID."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Configure the API connection",
+              "description": "Please enter the required parameters to authenticate yourself and specify the time period from which to retrieve the data.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Monitor ID",
+                    "name": "MonitorId",
+                    "type": "text",
+                    "placeholder": "E.g. 0001...",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key (Token)",
+                    "name": "Password",
+                    "type": "password",
+                    "placeholder": "Enter your KELA API Key",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Enable Botnets Incidents",
+                    "name": "enableBotnets",
+                    "options": [
+                      {
+                        "key": "true",
+                        "text": "Yes"
+                      },
+                      {
+                        "key": "false",
+                        "text": "No"
+                      }
+                    ],
+                    "placeholder": "Select Yes or No",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Enable Hacking Discussions Incidents",
+                    "name": "enableHackingDiscussions",
+                    "options": [
+                      {
+                        "key": "true",
+                        "text": "Yes"
+                      },
+                      {
+                        "key": "false",
+                        "text": "No"
+                      }
+                    ],
+                    "placeholder": "Select Yes or No",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Enable Instant Messaging Incidents",
+                    "name": "enableInstantMessaging",
+                    "options": [
+                      {
+                        "key": "true",
+                        "text": "Yes"
+                      },
+                      {
+                        "key": "false",
+                        "text": "No"
+                      }
+                    ],
+                    "placeholder": "Select Yes or No",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Enable Leaked Credentials Incidents",
+                    "name": "enableLeakedCredentials",
+                    "options": [
+                      {
+                        "key": "true",
+                        "text": "Yes"
+                      },
+                      {
+                        "key": "false",
+                        "text": "No"
+                      }
+                    ],
+                    "placeholder": "Select Yes or No",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Enable Network Vulnerabilities Incidents",
+                    "name": "enableNetworkVulnerabilities",
+                    "options": [
+                      {
+                        "key": "true",
+                        "text": "Yes"
+                      },
+                      {
+                        "key": "false",
+                        "text": "No"
+                      }
+                    ],
+                    "placeholder": "Select Yes or No",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "KELA Cyber"
+        },
+        "support": {
+          "name": "KELA Cyber",
+          "email": "support@ke-la.com",
+          "tier": "Partner",
+          "link": "https://www.kelacyber.com/contact-us/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "KELA - Monitor Connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "KELA - Monitor Connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "MonitorId": {
+              "defaultValue": "MonitorId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "Password": {
+              "defaultValue": "Password",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "enableBotnets": {
+              "defaultValue": "enableBotnets",
+              "type": "array"
+            },
+            "enableHackingDiscussions": {
+              "defaultValue": "enableHackingDiscussions",
+              "type": "array"
+            },
+            "enableInstantMessaging": {
+              "defaultValue": "enableInstantMessaging",
+              "type": "array"
+            },
+            "enableLeakedCredentials": {
+              "defaultValue": "enableLeakedCredentials",
+              "type": "array"
+            },
+            "enableNetworkVulnerabilities": {
+              "defaultValue": "enableNetworkVulnerabilities",
+              "type": "array"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAMonitorBotnetsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://platform.ke-la.com/api/monitor/monitor_id/', parameters('MonitorId'), '/incidents')]",
+                  "queryParameters": {
+                    "incident_type": "botnets"
+                  },
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "from_date",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.incidents"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "scrollId",
+                  "nextPageTokenJsonPath": "$.data.scrollId",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAMonitorCCFConnector",
+                "dataType": "KELA_Monitor_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_Monitor_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enableBotnets'), 'true')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAMonitorHackingDiscussionsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://platform.ke-la.com/api/monitor/monitor_id/', parameters('MonitorId'), '/incidents')]",
+                  "queryParameters": {
+                    "incident_type": "hacking_discussions"
+                  },
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "from_date",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.incidents"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.data.scrollId",
+                  "nextPageParaName": "scrollId",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAMonitorCCFConnector",
+                "dataType": "KELA_Monitor_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_Monitor_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enableHackingDiscussions'), 'true')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAMonitorInstantMessagingPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://platform.ke-la.com/api/monitor/monitor_id/', parameters('MonitorId'), '/incidents')]",
+                  "queryParameters": {
+                    "incident_type": "instant_messaging"
+                  },
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "from_date",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.incidents"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.data.scrollId",
+                  "nextPageParaName": "scrollId",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAMonitorCCFConnector",
+                "dataType": "KELA_Monitor_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_Monitor_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enableInstantMessaging'), 'true')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAMonitorLeakedCredentialsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://platform.ke-la.com/api/monitor/monitor_id/', parameters('MonitorId'), '/incidents')]",
+                  "queryParameters": {
+                    "incident_type": "leaked_credentials"
+                  },
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "from_date",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.incidents"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.data.scrollId",
+                  "nextPageParaName": "scrollId",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAMonitorCCFConnector",
+                "dataType": "KELA_Monitor_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_Monitor_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enableLeakedCredentials'), 'true')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAMonitorNetworkVulnerabilitiesPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://platform.ke-la.com/api/monitor/monitor_id/', parameters('MonitorId'), '/incidents')]",
+                  "queryParameters": {
+                    "incident_type": "network_vulnerabilities"
+                  },
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "from_date",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.incidents"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.data.scrollId",
+                  "nextPageParaName": "scrollId",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAMonitorCCFConnector",
+                "dataType": "KELA_Monitor_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_Monitor_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enableNetworkVulnerabilities'),'true')]"
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "KELAMonitor",
+        "publisherDisplayName": "KELA Cyber",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/KELAMonitor/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>This solution integrates KELA Monitor incidents directly into Microsoft Sentinel, enabling correlation, analytics, and automated response.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/miguelr-dotcom/KELA-PublicImages/refs/heads/main/kela-logo-72px.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "KELAMonitor",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "KELA Cyber"
+        },
+        "support": {
+          "name": "KELA Cyber",
+          "email": "support@ke-la.com",
+          "tier": "Partner",
+          "link": "https://www.kelacyber.com/contact-us/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-06",
+        "lastPublishDate": "2026-08-06",
+        "providers": [
+          "KELA Cyber"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Other"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
