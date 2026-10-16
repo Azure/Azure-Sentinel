@@ -1,0 +1,27 @@
+id: 6d3f1a02-9c4b-4e8d-a1f7-3b2c5d8e9f01
+name: Truvizy active indicator overview
+description: |
+  'Summarizes currently active scam and phishing indicators from the Truvizy detection network by threat type and confidence band. Use this to understand the current shape of the feed and to pivot into matches against your own telemetry.'
+requiredDataConnectors:
+  - connectorId: TruvizyThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  ThreatIntelligenceIndicator
+  | where SourceSystem == "Truvizy"
+  | where ExpirationDateTime > now() and Active == true
+  | summarize arg_max(TimeGenerated, *) by IndicatorId
+  | extend IndicatorValue = coalesce(Url, DomainName)
+  | extend ConfidenceBand = case(ConfidenceScore >= 90, "90+", ConfidenceScore >= 80, "80-89", "70-79")
+  | summarize Indicators = count(), Sample = any(IndicatorValue) by ThreatType, ConfidenceBand
+  | order by Indicators desc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Sample
+version: 1.0.0
