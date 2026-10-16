@@ -6,6 +6,37 @@ applyTo: "Solutions/**/SolutionMetadata.json"
 
 ## Advanced Solution Metadata Validation
 
+### Optional Customer Usage Attribution (V3.1 packaging)
+
+- `trackingId` is optional and packaging-only; do not require it or propagate
+  it to SecurityInsights RP metadata.
+- When set, store the **complete customer usage attribution tracking ID**
+  copied unchanged from Partner Center **offer > plan > Technical configuration**,
+  for example `pid-399fb80b-c914-4257-b61e-91ab73733888-partnercenter`.
+  This is an illustrative ID, not a value to populate in solutions.
+- Never synthesize an ID or substitute a bare GUID, Partner ID, or plan ID.
+  Complete non-GUID `pid-` identifiers are valid; validation checks the literal
+  ARM deployment-name characters and 64-character maximum, not GUID-only syntax.
+- Local and pipeline V3.1 read this field from authoritative SolutionMetadata.json,
+  even if the Data input already contains consolidated metadata.
+- When absent, null, or blank, V3.1 attempts anonymous public Marketplace catalog
+  discovery using exact `publisherId` + `offerId`, one applicable plan and one
+  `Template` / `DefaultTemplate` artifact. A single valid root `pid-` deployment
+  with an empty inline template supplies the full ID; no catalog IDs are used.
+  The packager persists the exact discovered `trackingId` in this same metadata
+  file before emitting the marker. Existing nonblank values always win; invalid
+  explicit values fail without lookup or overwrite.
+- No `planId` metadata field is introduced: ambiguous offers/plans/markers require
+  manual review and an explicit `trackingId`, not inferred plan selection.
+- `-SkipAttributionLookup` or `SENTINEL_SKIP_ATTRIBUTION_LOOKUP=1` disables only
+  attribution discovery. Missing/ambiguous/unavailable published data warns and
+  leaves metadata unchanged. Local persistence failures are hard errors.
+  Nested XDR packages still warn that Partner Center cannot auto-add tracking for
+  functional nested deployments. Obtain the ID, add `trackingId`, and rebuild.
+  Missing attribution is not proof that Marketplace upload will be rejected.
+- See [official attribution guidance](https://learn.microsoft.com/partner-center/marketplace-offers/azure-partner-customer-usage-attribution#microsoft-marketplace-azure-apps)
+  and the [V3.1 packager guide](../../Tools/Create-Azure-Sentinel-Solution/V3/README-V3_1.md).
+
 ### Required Structure Validation
 All SolutionMetadata.json files must contain these mandatory fields:
 - `publisherId`: Must match approved publisher identifiers (see validation rules)

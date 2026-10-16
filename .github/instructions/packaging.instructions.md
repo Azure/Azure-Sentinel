@@ -29,7 +29,7 @@ Only proceed once you have a clear answer (or the user explicitly says to use th
 
 **Always tell the user what's about to happen BEFORE you run the script:**
 
-> 🔄 Running full build & validation suite for **{SolutionName}** with a **{VersionBump}** version bump. This typically takes **3-5 minutes** — it runs 21 validators including .NET tests (34K+ files for Non-ASCII), ARM-TTK (30 template checks), and hyperlink validation. I'll present the complete report when it finishes.
+> 🔄 Running full build & validation suite for **{SolutionName}** with a **{VersionBump}** version bump. This typically takes **3-5 minutes** — it compiles the validation runtime, runs scoped .NET tests, ARM-TTK (30 template checks), and hyperlink validation. I'll present the complete report when it finishes.
 
 This message MUST appear in your chat response BEFORE you execute the script. The user needs to know the agent is working, not frozen.
 
@@ -91,6 +91,40 @@ The `-SolutionName` parameter supports **partial/fuzzy matching** — the user d
 | `SkipValidation` | No | `$false` | Skip the validation step (packaging only) |
 | `SkipPackaging` | No | `$false` | Skip the packaging step (validation only) |
 | `ValidationSkip` | No | `kql,detection-schema,non-ascii,arm-ttk` | Comma-separated validators to skip |
+| `ContentRoot` | No | Toolkit checkout | Repository checkout containing the selected solution content; use with `-SkipPackaging` for cross-worktree validation |
+| `EvidenceDirectory` | No | `.script/local-validation/Logs` | Ignored evidence parent under the toolkit checkout; each run writes a unique folder |
+
+### Validate Content From Another Checkout
+
+The script and all validators/dependencies are loaded from the checkout containing
+`build-and-validate.ps1`. To validate current (including uncommitted and untracked)
+content from a separate checkout, pass its canonical Git root explicitly and require
+validation-only mode:
+
+```powershell
+pwsh /path/to/toolkit/.script/local-validation/build-and-validate.ps1 `
+  -SolutionName "CiscoASA" `
+  -ContentRoot /path/to/content-checkout `
+  -SkipPackaging `
+  -VersionBump none `
+  -ValidationSkip "" `
+  -EvidenceDirectory ".script/local-validation/Logs/cisco-validation"
+```
+
+`-ContentRoot` must be a Git worktree root containing `Solutions/`; the selected
+solution must be a real, direct child of that checkout's `Solutions/`. A separate
+content checkout is rejected unless `-SkipPackaging` is supplied. TypeScript
+compilation, validator scripts, .NET projects, validation configuration, and ARM-TTK
+helpers remain rooted in the toolkit checkout; solution-specific file discovery and
+the scoped PowerShell validators use the selected content checkout. Repository-wide
+secret scanning remains skipped because it cannot be scoped to one solution.
+
+The ignored evidence run folder contains complete TypeScript JSON results,
+TypeScript stdout/stderr and compile output, combined captured child output for .NET,
+PowerShell, and ARM-TTK validators, and the complete build report. A missing or
+malformed structured TypeScript report is a validation failure, not an empty success.
+Skipped validators remain reported as skipped. No package, solution-data, or release
+notes are written in cross-checkout validation-only mode.
 
 ## What Happens During Build
 
@@ -130,7 +164,7 @@ Bad examples:
 
 ### Step 2: Local Validation
 
-The script runs `node .script/local-validation/validate.js --path Solutions/{Name}` which checks:
+The script first runs `npm run tsc` to regenerate the ignored JavaScript runtime from the current TypeScript sources, then runs `node .script/local-validation/validate.js --path Solutions/{Name}` which checks. If compilation fails, it reports the error and does not run potentially stale JavaScript.
 
 #### ✅ Runs Locally (13 validators — same code as GitHub CI)
 
@@ -157,11 +191,15 @@ After the TypeScript validators, the script runs 3 additional .NET test projects
 | Validator | Runtime Required | Scope | What It Checks |
 |-----------|----------------------|-------|---------------|
 | **Detection Schema** | .NET Core 3.1 | **Solution only** — runs tests matching the solution's Analytic Rules files | Detection/analytics rule schema compliance — required fields, string lengths, entity mappings, connector IDs, no duplicate template IDs |
-| **Non-ASCII** | .NET Core 3.1 | **Entire repo** — scans all YAML files | Scans all YAML files for non-ASCII characters (outside `U+0000`–`U+007F`) |
+| **Non-ASCII** | .NET Core 3.1 | **Solution only** — runs tests matching the solution's content files | Scans scoped solution YAML/JSON files for non-ASCII characters (outside `U+0000`–`U+007F`) |
 | **KQL** | .NET 8.0 | **Solution only** — runs tests matching the solution's Analytic Rules, Hunting Queries, Parsers, and Data Connectors | KQL query syntax validation using the Sentinel KQL analyzer |
 | **ARM-TTK** | PowerShell | **Solution only** — validates Package/mainTemplate.json and Package/createUiDefinition.json | ARM template best-practice testing using the [Azure ARM-TTK](https://github.com/Azure/arm-ttk) module. Runs `Test-AzTemplate` with the same skips and error filters as `.github/actions/entrypoint.ps1`. Module auto-clones from GitHub on first run (to `.arm-ttk/`, gitignored). |
 
-**How solution scoping works:** The .NET test projects scan the entire repo during test discovery (this is unavoidable — it's built into the test data providers). However, `dotnet test --filter` restricts which tests actually **execute** to only those matching files in the target solution. This turns a 30+ minute full-repo validation into a fast, focused check.
+**How solution scoping works:** The .NET test projects may enumerate repository paths during test discovery, but filters restrict which tests execute to the selected solution's files. File discovery is separate from validation scope.
+
+Detection Schema test cases expose only file basenames. If a selected rule has a duplicate or filter-sensitive basename, that validator is reported as skipped with the reason instead of risking validation of another solution's rule.
+
+The selected solution folder is the scope for all solution-specific checks. The TypeScript runner and PowerShell children inspect current files in that folder (including uncommitted and untracked files; deleted files are absent), rather than selecting a solution from the latest commit. The folder must be an existing direct child of `Solutions/`. TruffleHog scans repository history and is explicitly skipped because it cannot be scoped to one solution. When the PowerShell scripts are invoked without a solution folder, their existing CI commit-diff behavior is preserved.
 
 ### Step 4: CI PowerShell Validators & Secret Scanning
 
@@ -169,21 +207,27 @@ After the .NET validators, the script runs 4 additional checks that mirror GitHu
 
 | Validator | CI Workflow | What It Checks | Requirements |
 |-----------|-------------|----------------|--------------|
-| **Field Types** | `validateFieldTypes.yaml` | Validates parameter field types in mainTemplate.json for changed files | `powershell-yaml` module, git |
-| **Classic App Insights** | `validateClassicAppInsights.yaml` | Detects deprecated classic App Insights resources (Microsoft.Insights/components without WorkspaceResourceId) in newly added files | `powershell-yaml` module, git |
-| **Hyperlink Validation** | `hyperlinkValidator.yaml` | Validates URLs in solution files — checks for 404s, 500s, broken links | `powershell-yaml` module, git, **network access** |
-| **TruffleHog (Secrets)** | `ScanSecrets.yaml` | Scans for hardcoded secrets/credentials using verified-only detection | `trufflehog` CLI (external tool) |
+| **Field Types** | `validateFieldTypes.yaml` | Validates the selected solution's current `Package/mainTemplate.json` | `powershell-yaml` module |
+| **Classic App Insights** | `validateClassicAppInsights.yaml` | Detects deprecated classic App Insights resources in current `azuredeploy` files under the selected solution | `powershell-yaml` module |
+| **Hyperlink Validation** | `hyperlinkValidator.yaml` | Validates URLs in current files under the selected solution — checks for 404s, 500s, broken links | `powershell-yaml` module, **network access** |
+| **TruffleHog (Secrets)** | `ScanSecrets.yaml` | Repo-history secret scan; skipped for folder-scoped validation because it cannot be limited to one solution | `trufflehog` CLI (external tool) |
+
+For folder-scoped validation, the Classic App Insights check for standalone `DataConnectors/` is also explicitly reported as skipped because it is outside the selected solution folder.
 
 **Important notes:**
-- These validators check **committed changes** (`git diff HEAD^ HEAD`). Commit your changes before running for full coverage.
+- Folder-scoped validation inspects current solution files instead of inferring a solution from the latest commit. With no explicit folder scope, the PowerShell scripts preserve their CI commit-diff behavior.
 - **Hyperlink Validation** is slow — it makes HTTP requests with a 20-second timeout per URL. It requires network connectivity and will be skipped if the network is unavailable.
 - **TruffleHog** is optional — it requires the `trufflehog` CLI to be installed ([install guide](https://github.com/trufflesecurity/trufflehog#installation)). If not installed, it is skipped with a message.
 - The 3 PowerShell validators require the `powershell-yaml` module; the script auto-installs it if missing.
 
-**Runtime detection:** The script checks which runtimes are installed:
-- If **.NET Core 3.1** is available → runs Detection Schema (scoped) and Non-ASCII (full repo)
+**Runtime detection:** The script checks whether the .NET SDK command is executable,
+then independently checks the exact target runtimes required by the test projects:
+- If **.NET Core 3.1** is available → runs Detection Schema and Non-ASCII (both scoped)
 - If **.NET 8.0** is available → runs KQL validator (scoped to solution)
-- If a required .NET runtime is **missing** → skips that validator with a message:
+- If the `dotnet` SDK command is unavailable, all three .NET validators are skipped
+  with an SDK-unavailable message. An installed SDK does not imply that its target
+  runtime is installed.
+- If a required target runtime is **missing** → only that validator is skipped with a message:
   ```
   ⏭  Detection Schema validation skipped — .NET Core 3.1 runtime not installed.
      Install it from: https://dotnet.microsoft.com/download/dotnet/3.1
@@ -284,10 +328,11 @@ After all steps complete, the script emits a **structured report** to stdout bet
 The report includes:
 - **Header** — solution name, version change, date, total duration
 - **Step 1** — packaging result, package file path, version sync status, release notes status
-- **Step 2** — per-validator pass/fail/skip counts with error details for failures
+- **Step 2** — TypeScript compilation and per-validator pass/fail/skip counts with error details for failures
 - **Step 3** — .NET validator results with test counts, durations, and scoping info
 - **Step 4** — CI PowerShell validator results (field types, classic App Insights, hyperlinks, TruffleHog)
 - **Summary** — overall pass/fail status with totals across all validators
+- **Evidence paths** — full structured results and captured child output under the ignored run folder
 
 ## Exit Codes
 
@@ -303,5 +348,3 @@ The report includes:
 - **Do not modify files** in `.script/utils/`, `.script/tests/`, or `.github/workflows/` — they are production code visible to external customers.
 - **The `Package/` folder is auto-generated.** Its contents are created by the packaging script. Do not hand-edit `mainTemplate.json` or `createUiDefinition.json`.
 - **Version bumping**: Use `patch` for bug fixes, `minor` for new features, `major` for breaking changes.
-
-

@@ -1097,13 +1097,13 @@ try
     Write-Host "Updating data input file $dataFolderFile"
     Set-Content -Path $dataFilePath -Value $jsonDataFile
 
-    Write-Host "Now going to execute createSolutionV4 file"
+    Write-Host "Now going to execute createSolutionV3_1 file"
 
     if ($null -eq $isWatchListInsideOfWorkbooksFolder -or $isWatchListInsideOfWorkbooksFolder -eq '') {
         $isWatchListInsideOfWorkbooksFolder = $false
     }
 
-    ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3_1.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     Write-Host "packageCreationPath $packageCreationPath"

@@ -437,6 +437,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
+    Assert-V31ReleaseVersion -Version $global:baseMainTemplate.variables.dataConnectorCCPVersion -ContentKind 'CCF DataConnector/Connections' -ContentPath "$solutionName/$dcFolderName (DataConnectorCCFVersion)"
 
     try {
         foreach ($ccpItem in $ccpDict) {
