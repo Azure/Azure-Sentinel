@@ -1,0 +1,110 @@
+id: 8a52011e-eb8a-42ea-85a4-7bfc354db2a3
+name: Tenant device registration policy changed
+description: |
+  Identifies changes to the tenant device registration and join policy, who made them and when, and shows
+  whether the same person also changed the authentication methods policy or the default user permissions in
+  the same hour.
+description-detailed: |
+  The device registration policy decides who can register or join devices to the tenant and how many devices a
+  user may have. An attacker with a foothold can loosen it so that a device they control can be registered
+  or joined, which can later satisfy device-based Conditional Access controls and yield a primary refresh
+  token.
+  Important limit: the audit log records this change as a "Set device registration policies" event written by
+  the "Device Registration Service", and in the events observed in a lab tenant it carries no modified
+  properties: there is no old or new value and the target is "Unknown". This query can therefore say who changed
+  the policy and when, but not what was changed, and it must be read together with the portal. It is a
+  low-fidelity signal on its own, which is why it adds some context.
+  It counts the changes the same person made in the same clock hour (fixed one-hour buckets, so a burst that
+  crosses the hour boundary is split) to the authentication methods policy ("Authentication Methods Policy
+  Update") and to the default user permissions ("Update authorization policy"), the other two events of this
+  pack, and lists which of them occurred. One tenant-policy change is often a planned
+  task; several different ones in an hour by the same account are much less likely to be routine.
+  The person is compared by a normalized account name, because the same external (guest) account is written
+  with its mail address by some services and with the form "name_domain#EXT#@tenant.onmicrosoft.com" by others,
+  and a plain comparison would never join them.
+  This query applies no allow-list, so a planned change must be ruled out against the change calendar.
+  References:
+  - https://learn.microsoft.com/entra/identity/devices/manage-device-identities
+  - https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1098/005/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.005
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let TenantPolicyOperations = dynamic([
+      "Authentication Methods Policy Update",
+      "Update authorization policy",
+      "Set device registration policies"
+  ]);
+  let TenantPolicyChanges = AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where OperationName in~ (TenantPolicyOperations)
+      | where Result =~ "success"
+      | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+      | extend ActorApp = tostring(InitiatedBy.app.displayName)
+      | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      // External accounts are written as "name_domain#EXT#@tenant.onmicrosoft.com" by some services
+      // and as "name@domain" by others, so both forms are brought to "name@domain"
+      | extend ActorKey = tolower(replace_regex(Actor, @"^(.+)_([^_#]+)#EXT#@.*$", @"\1@\2"))
+      | extend Hour = bin(TimeGenerated, 1h);
+  let ChangesPerActorHour = TenantPolicyChanges
+      | summarize
+          PolicyChangesInHour = count(),
+          PolicyOperationsInHour = make_set(OperationName)
+          by ActorKey, Hour;
+  TenantPolicyChanges
+  | where OperationName =~ "Set device registration policies"
+  | join kind=leftouter ChangesPerActorHour on ActorKey, Hour
+  | extend OtherPolicyOperationsInHour = set_difference(PolicyOperationsInHour, dynamic(["Set device registration policies"]))
+  | extend ActorIp = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = tostring(split(ActorUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(ActorUpn, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      Actor,
+      ActorUpn,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      PolicyChangesInHour,
+      OtherPolicyOperationsInHour,
+      CorrelationId
+  | sort by array_length(OtherPolicyOperationsInHour) desc, TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+customDetails:
+  PolicyChangesInHour: PolicyChangesInHour
+  OtherPolicyOperationsInHour: OtherPolicyOperationsInHour
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

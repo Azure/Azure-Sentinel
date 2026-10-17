@@ -1,0 +1,130 @@
+id: 9d54d86c-a3ad-462f-b0fe-7bdf6ff5e0df
+name: Tenant default user permissions (authorization policy) changed
+description: |
+  Identifies changes to the tenant authorization policy, which sets what ordinary users can do by default (create apps, groups or tenants, invite guests, consent to applications), with the old and new value of each setting that changed.
+description-detailed: |
+  The authorization policy is the tenant-wide switchboard for default user permissions. Each setting is a
+  persistence or privilege path for anyone who controls a single ordinary account once it is loosened: letting
+  users register applications gives them a place to hold credentials, widening the permission grant policies
+  assigned to the default user role lets users consent to applications, and relaxing who may invite guests
+  opens the tenant to external accounts. The audit log records each save as an "Update authorization policy"
+  event, with the old and new value of the changed setting in the modified properties, for example
+  "DefaultUserRolePermissions.AllowedToCreateApps" going from true to false.
+  Two behaviors seen in a lab tenant shape the query. First, the first save after a long time can return a full
+  snapshot, with settings whose old value is empty and whose new value is their current value, next to the one
+  that actually changed; those rows are labeled "First recorded value" so that they are not read as changes,
+  and a change from a previous value is labeled "Changed". Second, saving the user settings page in the portal
+  rewrote the permission grant policies assigned to the default user role as a side effect: in the lab the
+  list gained the two policies that manage permission grants for owned Teams and chats, which the administrator
+  had not touched. For settings whose value is a list, the added and removed elements are therefore shown
+  separately, so that a harmless side effect can be told from a policy that lets users consent to any
+  application. The meta property "Included Updated Properties" only lists names and is left out. A save is
+  also written next to "Add role from template" and "Update role" events by the same actor in the same second;
+  they are different operations and are deliberately not matched, but they are useful context when reading
+  the result.
+  Rows for settings that control what ordinary users or guests can do are marked as sensitive. The match uses the names of
+  the properties of the Microsoft Graph authorizationPolicy resource (created apps, security groups and
+  tenants, permission grant policies, guest role, who can invite, email sign-up, Msol PowerShell). Only some of
+  those names were observed in the log (AllowedToCreateApps, PermissionGrantPolicyIdsAssignedToDefaultUserRole,
+  GuestUserRole, BlockMsolPowerShell); the others are taken from the documentation, so a sensitive setting may
+  be listed without the mark if the audit log spells it differently. Every returned row is still a change.
+  This query applies no allow-list, so a planned change must be ruled out against the change calendar. Treat a
+  change made outside a change window, by an actor who does not normally administer the tenant, or close to a
+  change in the two companion hunting queries of this pack (authentication methods policy and device
+  registration policy), as high priority. The same operation can also be observed in CloudAppEvents; see the
+  existing hunting query on policy configuration changes in that table.
+  References:
+  - https://learn.microsoft.com/entra/identity/enterprise-apps/configure-user-consent
+  - https://learn.microsoft.com/graph/api/resources/authorizationpolicy
+  - https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1098/
+  - https://attack.mitre.org/techniques/T1528/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - CredentialAccess
+relevantTechniques:
+  - T1098
+  - T1528
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  // Property names of the Microsoft Graph authorizationPolicy resource that widen what ordinary users can do
+  let SensitiveSettings = @"AllowedToCreate|PermissionGrant|GuestUserRole|AllowInvitesFrom|AllowedToSignUpEmailBasedSubscriptions|AllowEmailVerifiedUsersToJoinOrganization|BlockMsolPowerShell";
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Update authorization policy"
+  | where Result =~ "success"
+  // Every TargetResources entry and every modified property is expanded instead of reading a fixed index
+  | mv-apply TargetResource = TargetResources on (
+        mv-expand Property = TargetResource.modifiedProperties
+        | extend PropertyName = tostring(Property.displayName)
+        | extend OldValue = trim('"', tostring(Property.oldValue))
+        | extend NewValue = trim('"', tostring(Property.newValue))
+    )
+  | where PropertyName !~ "Included Updated Properties"
+  | where OldValue != NewValue
+  | extend ChangeKind = iff(OldValue in ("", "[]"), "First recorded value", "Changed")
+  // For list values (permission grant policies, roles) show what was added and removed
+  | extend OldItems = iff(OldValue startswith "[", todynamic(OldValue), dynamic([]))
+  | extend NewItems = iff(NewValue startswith "[", todynamic(NewValue), dynamic([]))
+  | extend AddedItems = set_difference(NewItems, OldItems)
+  | extend RemovedItems = set_difference(OldItems, NewItems)
+  | extend SensitiveSetting = PropertyName matches regex strcat("(?i)", SensitiveSettings)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = tostring(split(ActorUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(ActorUpn, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      PropertyName,
+      ChangeKind,
+      SensitiveSetting,
+      OldValue,
+      NewValue,
+      AddedItems,
+      RemovedItems,
+      Actor,
+      ActorUpn,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by SensitiveSetting desc, ChangeKind asc, TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+customDetails:
+  PropertyName: PropertyName
+  ChangeKind: ChangeKind
+  SensitiveSetting: SensitiveSetting
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
