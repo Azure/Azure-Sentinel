@@ -72,8 +72,36 @@ themselves establish a toolkit fix is required.
   (`duplicate_executor_blocked` lease protection), and
   `workflow-forward-approval` (hash-bound `(runId, operation, approvedBy,
   forwardedToOwnerId, exactScope, approvalSha256)` forwarding).
+- **Enforce clean workbook publication (`public-workbook-v1`) and Marketplace
+  customer usage attribution discovery (`trackingId`).** Added
+  `workbook-publication-plan` and `workbook-publication-clean` so published
+  `XDR Workbooks/*.json` strip authoring review metadata while preserving
+  dependency provenance, added anonymous Marketplace catalog discovery and
+  persistence of `SolutionMetadata.json` `trackingId` in V3.1 packaging, and
+  preserved `Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1`
+  unchanged from `upstream/master` (with optional legacy V3 compatibility
+  routing in `.script/package-automation/package-generator.ps1`).
+- **Default all workflow entry points and agent adapters to `authoring`.**
+  Aligned CLI (`workflow-init`), canonical workflow instructions, and agent
+  adapters (`AGENTS.md`, `CLAUDE.md`, `.github`, `.claude`, `.cursor`, and
+  `.windsurf`) to default to the `authoring` profile and route packaging through
+  `package-v3-1` (V3.1).
 
 ## Candidate follow-ups
+
+- **Add catalog-specific validation routing for `Sample Data/Tables/` in
+  `.script/sampleDataValidator.ts`.** `.script/sampleDataValidator.ts` currently
+  validates modified JSON files under `Sample Data/` as connector log arrays
+  and rejects email literals other than `sanitized@sanitized.com`. Because
+  `Sample Data/Tables/<TableName>/base-event.json` and `metadata.json` are
+  single JSON objects required by `_load_table_base`, add catalog-specific
+  schema and sanitation validation in `.script/sampleDataValidator.ts` for
+  `Sample Data/Tables/` rather than wrapping catalog objects in arrays.
+- **Promote `qualification` to the default workflow profile once end-to-end
+  qualification flow runs fluently.** All tools and agent adapters currently
+  default to `authoring` and ask before optional lab `qualification`; switch
+  the default profile to `qualification` once live workspace provisioning,
+  synthetic ingestion, and parity orchestration are fluent end-to-end.
 
 - **Deliver review-gate notifications reliably.** Add immediate coordinator-owned
   alerts when a solution needs review or release approval, with one consolidated

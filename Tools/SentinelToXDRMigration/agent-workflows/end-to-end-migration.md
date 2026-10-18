@@ -636,10 +636,10 @@ commands; reusable user approval is not permission to bypass those checks.
 
 `Discovery -> Conversion -> Validation -> Packaging -> Deployment -> Mock ingestion -> Alert parity -> Report`
 
-This is optional internal or ISV lab testing. Before initialization, require
-the user to explicitly choose **Authoring**, **Qualification**, or **Cancel**.
-There is no default and no workflow state may be created while the choice is
-missing or declined. A configured tenant or workspace does not imply consent.
+This is optional internal or ISV lab testing. Tools and adapters default to
+**Authoring** and ask before optional **Qualification** (or **Cancel**). No
+Qualification workflow state may be created while Qualification is declined or
+cancelled. A configured tenant or workspace does not imply consent.
 
 Qualification requires an approved non-production tenant and workspace plus
 one early, plan-bound request for the anticipated conditional validation and
@@ -716,9 +716,9 @@ Install the CLI when necessary:
 python -m pip install -e Tools\SentinelToXDRMigration
 ```
 
-Run `workflow-status` first. If state does not exist, or
-`context.profileSelectionConfirmed` is not `true`, obtain the explicit profile
-selection before initializing:
+Run `workflow-status` first. If state does not exist, default to `authoring`
+(or confirm whether the user wants optional `qualification`) before
+initializing:
 
 ```powershell
 sentinel-xdr-migration workflow-init `

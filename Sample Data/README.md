@@ -26,6 +26,14 @@ The catalog is generated or refreshed by the one-time CAT.Tools maintenance
 utility. Runtime Azure-Sentinel Agents consume these checked-in files and do
 not need CAT.Tools.
 
+> **Known limitation (to be fixed):** `.script/sampleDataValidator.ts` currently
+> assumes every modified JSON file under `Sample Data/` is a connector raw-log
+> array and enforces `sanitized@sanitized.com` on email-shaped strings, whereas
+> `Sample Data/Tables/<TableName>/base-event.json` and `metadata.json` are
+> single JSON objects consumed by `_load_table_base`. Adding catalog-specific
+> validation routing in `.script/sampleDataValidator.ts` for `Sample Data/Tables/`
+> is tracked in `Tools/SentinelToXDRMigration/FOLLOW_UPS.md`.
+
 ## Sample Data Contribution Guidance
 
 Sample data is extremely useful when troubleshooting issues, supporting and/or enhancing the Data Connectors with more Security-focused content (such as Analytics, Hunting Queries, Workbooks, etc.). So, for every data connector committed, authors must also upload the following three (3) files:

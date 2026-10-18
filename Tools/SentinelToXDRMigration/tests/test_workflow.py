@@ -404,7 +404,10 @@ class WorkflowTests(unittest.TestCase):
 
     def test_profile_selection_is_required(self) -> None:
         with self.assertRaisesRegex(ValueError, "profile selection is required"):
-            initialize_workflow(self.solution)
+            initialize_workflow(self.solution, workflow_profile=None)
+        defaulted = initialize_workflow(self.solution)
+        self.assertEqual("authoring", defaulted["context"]["workflowProfile"])
+        self.assertTrue(defaulted["context"]["profileSelectionConfirmed"])
 
     def test_initialize_creates_resumable_state(self) -> None:
         created = initialize_workflow(
@@ -3436,7 +3439,7 @@ class WorkflowTests(unittest.TestCase):
     def test_yolo_freezes_complete_nested_inventory_and_keeps_authoring_opt_in(self) -> None:
         paths = self._create_source_rules(2)
         with self.assertRaisesRegex(ValueError, "profile selection is required"):
-            initialize_workflow(self.solution, yolo=True)
+            initialize_workflow(self.solution, workflow_profile=None, yolo=True)
         initialized = initialize_workflow(
             self.solution,
             workflow_profile="authoring",

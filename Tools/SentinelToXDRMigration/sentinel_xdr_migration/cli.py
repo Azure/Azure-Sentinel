@@ -835,9 +835,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     workflow_init.add_argument(
         "--workflow-profile",
-        required=True,
+        default="authoring",
         choices=WORKFLOW_PROFILES,
-        help="Explicitly select authoring or qualification before initialization.",
+        help="Select authoring (default) or qualification before initialization.",
     )
     workflow_init.add_argument(
         "--yolo",

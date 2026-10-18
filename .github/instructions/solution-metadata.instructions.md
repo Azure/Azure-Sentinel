@@ -28,12 +28,19 @@ applyTo: "Solutions/**/SolutionMetadata.json"
   explicit values fail without lookup or overwrite.
 - No `planId` metadata field is introduced: ambiguous offers/plans/markers require
   manual review and an explicit `trackingId`, not inferred plan selection.
-- `-SkipAttributionLookup` or `SENTINEL_SKIP_ATTRIBUTION_LOOKUP=1` disables only
-  attribution discovery. Missing/ambiguous/unavailable published data warns and
-  leaves metadata unchanged. Local persistence failures are hard errors.
-  Nested XDR packages still warn that Partner Center cannot auto-add tracking for
-  functional nested deployments. Obtain the ID, add `trackingId`, and rebuild.
-  Missing attribution is not proof that Marketplace upload will be rejected.
+- For Sentinel-only packages, `-SkipAttributionLookup` or
+  `SENTINEL_SKIP_ATTRIBUTION_LOOKUP=1` disables attribution discovery, and
+  missing/ambiguous/unavailable published catalog data warns and leaves metadata
+  unchanged. Local persistence failures remain hard errors.
+- For hybrid packages containing XDR detections or Defender workbooks, customer
+  usage attribution (`trackingId`) is mandatory because Partner Center cannot
+  auto-inject root tracking into functional nested deployments
+  (`commonFunctions.ps1` / `customerUsageAttribution.ps1`). Skip controls
+  (`-SkipAttributionLookup` and `SENTINEL_SKIP_ATTRIBUTION_LOOKUP=1`) are
+  ignored when XDR or Defender workbook content is present, and lookup failure or
+  a missing `trackingId` throws a hard packaging error. Obtain the complete
+  `pid-...` tracking ID from Partner Center, add `trackingId` to
+  `SolutionMetadata.json`, and rebuild.
 - See [official attribution guidance](https://learn.microsoft.com/partner-center/marketplace-offers/azure-partner-customer-usage-attribution#microsoft-marketplace-azure-apps)
   and the [V3.1 packager guide](../../Tools/Create-Azure-Sentinel-Solution/V3/README-V3_1.md).
 

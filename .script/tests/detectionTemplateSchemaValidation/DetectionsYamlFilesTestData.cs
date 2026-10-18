@@ -21,7 +21,7 @@ namespace Kqlvalidations.Tests
             var rootPath = GetContentRoot();
             if (rootPath != null)
             {
-                return new List<string>() { Path.Combine(rootPath, "Detections"), Path.Combine(rootPath, "Solutions") };
+                return new List<string>() { Path.Join(rootPath, "Detections"), Path.Join(rootPath, "Solutions") };
             }
 
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
@@ -35,7 +35,7 @@ namespace Kqlvalidations.Tests
 
             foreach (var dirName in dirPaths)
             {
-                detectionPaths.Add(Path.Combine(rootDir.FullName, dirName));
+                detectionPaths.Add(Path.Join(rootDir.FullName, dirName));
             }
 
             return detectionPaths;
@@ -85,7 +85,7 @@ namespace Kqlvalidations.Tests
                 return null;
             }
             var rootPath = Path.GetFullPath(configuredRoot);
-            if (!Directory.Exists(rootPath) || !Directory.Exists(Path.Combine(rootPath, "Solutions")))
+            if (!Directory.Exists(rootPath) || !Directory.Exists(Path.Join(rootPath, "Solutions")))
             {
                 throw new DirectoryNotFoundException($"SENTINEL_VALIDATION_CONTENT_ROOT is not a repository root containing Solutions/: {configuredRoot}");
             }
@@ -94,7 +94,7 @@ namespace Kqlvalidations.Tests
 
         public static bool IsPrivateSolutionContentPath(string filePath)
         {
-            var solutionsRoot = Path.GetFullPath(Path.Combine(GetRootPath(), "Solutions"));
+            var solutionsRoot = Path.GetFullPath(Path.Join(GetRootPath(), "Solutions"));
             var relativePath = Path.GetRelativePath(solutionsRoot, Path.GetFullPath(filePath));
             if (relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             {

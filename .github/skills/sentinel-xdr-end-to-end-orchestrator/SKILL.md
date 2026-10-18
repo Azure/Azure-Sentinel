@@ -49,11 +49,10 @@ the ARM ID again. Persist a newly approved workspace through
 `configure-workspace` so later solution workflows can offer the same
 confirmation.
 
-Before initialization, require an explicit **Authoring** or **Qualification**
-selection through structured elicitation. There is no default. If selection is
-declined or cancelled, do not create workflow state. A test tenant or workspace
-does not imply qualification consent. Require explicit approval immediately
-before deployment or ingestion writes.
+Default to **Authoring** and ask before optional **Qualification** through
+structured elicitation. If selection is cancelled, do not create workflow state.
+A test tenant or workspace does not imply qualification consent. Require
+explicit approval immediately before deployment or ingestion writes.
 
 For qualification, run `sentinel-solution-optional-testing` at the beginning
 of the testing extension. It owns permission preflight, existing-scenario-first

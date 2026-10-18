@@ -10,7 +10,17 @@ import yaml
 
 from .contract import Column, Contract, load_contract
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+def _default_package_root() -> Path:
+    repo_root = Path(__file__).resolve().parents[1]
+    if (repo_root / "registry.yaml").is_file():
+        return repo_root
+    bundled_root = Path(__file__).resolve().parent / "data"
+    if (bundled_root / "registry.yaml").is_file():
+        return bundled_root
+    return Path(__file__).resolve().parent
+
+
+PACKAGE_ROOT = _default_package_root()
 DEFAULT_REGISTRY = PACKAGE_ROOT / "registry.yaml"
 SUPPORTED_ROUTES = {"logs-ingestion-api"}
 TYPE_ALIASES = {"bool": "boolean", "double": "real"}

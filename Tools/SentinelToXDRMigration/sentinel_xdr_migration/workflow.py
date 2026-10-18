@@ -2595,7 +2595,7 @@ def initialize_workflow(
     workspace_customer_id: str | None = None,
     version_bump: str | None = None,
     target_version: str | None = None,
-    workflow_profile: str | None = None,
+    workflow_profile: str | None = "authoring",
     yolo: bool | None = None,
     campaign_id: str | None = None,
     new_run: bool = False,

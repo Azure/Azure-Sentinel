@@ -18,7 +18,7 @@ namespace Kqlvalidations.Tests
             if (!string.IsNullOrWhiteSpace(contentRoot))
             {
                 var resolvedRoot = Path.GetFullPath(contentRoot);
-                if (!Directory.Exists(resolvedRoot) || !Directory.Exists(Path.Combine(resolvedRoot, "Solutions")))
+                if (!Directory.Exists(resolvedRoot) || !Directory.Exists(Path.Join(resolvedRoot, "Solutions")))
                 {
                     throw new DirectoryNotFoundException($"SENTINEL_VALIDATION_CONTENT_ROOT is not a repository root containing Solutions/: {contentRoot}");
                 }
@@ -41,7 +41,7 @@ namespace Kqlvalidations.Tests
         public static bool IsPrivateSolutionContentPath(string filePath)
         {
             var contentRoot = GetTestDirectory(6);
-            var solutionsRoot = Path.GetFullPath(Path.Combine(contentRoot, "Solutions"));
+            var solutionsRoot = Path.GetFullPath(Path.Join(contentRoot, "Solutions"));
             var resolvedFile = Path.GetFullPath(filePath);
             var relativePath = Path.GetRelativePath(solutionsRoot, resolvedFile);
             if (relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))

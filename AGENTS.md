@@ -37,8 +37,7 @@ hybrid solution packaging, or AR/CD qualification:
 2. Treat that file as the canonical workflow; do not redefine its stages or
    gates in this adapter.
 3. Keep deterministic work in the repository Python and PowerShell tools.
-4. Require the user to explicitly select `authoring` or `qualification`. There
-   is no default.
+4. Default to `authoring`; ask before optional lab `qualification`.
 5. Deployment, mock ingestion, and alert parity are Qualification-only actions
    and require explicit exact-scope approval.
 6. Use the V3.1 `package-v3-1` route for Sentinel and XDR solution content;

@@ -8,6 +8,6 @@ hybrid packaging, or AR/CD qualification, read and follow:
 Treat it as the canonical process. Use repository CLI and PowerShell tools,
 not prompt-only implementations. Default to authoring and ask before optional
 qualification. Deployment, mock ingestion, and parity are not required for
-ISV publishing. Use packaging V4 for XDR Detections, preserve disabled
-lifecycle state, resume `workflow-state.json`, and obtain explicit approval
-before environment writes.
+ISV publishing. Use V3.1 through `package-v3-1` for Sentinel and XDR solution
+packages, preserve disabled lifecycle state, resume `workflow-state.json`, and
+obtain explicit approval before environment writes.

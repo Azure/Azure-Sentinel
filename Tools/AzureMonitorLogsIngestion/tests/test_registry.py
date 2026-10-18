@@ -386,6 +386,20 @@ def test_existing_registered_templates_remain_loadable():
         assert result["status"] == "provisioning-plan"
 
 
+def test_bundled_package_data_matches_repository_registry_and_resolves_offline():
+    bundled_root = ROOT / "azure_monitor_logs_ingestion" / "data"
+    bundled_registry = bundled_root / "registry.yaml"
+    assert bundled_registry.is_file()
+    assert bundled_registry.read_text(encoding="utf-8") == (ROOT / "registry.yaml").read_text(encoding="utf-8")
+    for contract_file in (ROOT / "contracts").glob("*.yaml"):
+        bundled_contract = bundled_root / "contracts" / contract_file.name
+        assert bundled_contract.is_file()
+        assert bundled_contract.read_text(encoding="utf-8") == contract_file.read_text(encoding="utf-8")
+    for table in ("CommonSecurityLog", "Event", "Syslog"):
+        result = resolve_contract(table, registry_path=bundled_registry)
+        assert result["status"] == "provisioning-plan"
+
+
 def test_cli_resolve_prints_offline_plan_without_azure_access(capsys):
     result = main(
         [

@@ -131,13 +131,11 @@ review, runtime/schema, packaging, authentication, or write gates.
 
 ## Migration workflow
 
-1. Run `workflow-status` first. If no state exists, or
-   `context.profileSelectionConfirmed` is not `true`, stop and ask the user to
-   choose **Authoring**, **Qualification**, or **Cancel** with structured
-   elicitation. Explain that Authoring stops after packaging/reporting while
-   Qualification adds deployment, mock ingestion, and alert parity. There is
-   no default; do not initialize until the user explicitly chooses.
-2. Initialize or resume with the selected profile:
+1. Run `workflow-status` first. If no state exists, default to **Authoring**
+   and ask before optional **Qualification** (or **Cancel**). Explain that
+   Authoring stops after packaging/reporting while Qualification adds
+   deployment, mock ingestion, and alert parity.
+2. Initialize or resume with the selected profile (defaults to `authoring`):
 
    ```powershell
    sentinel-xdr-migration workflow-init `
