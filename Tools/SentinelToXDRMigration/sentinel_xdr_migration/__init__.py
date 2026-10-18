@@ -20,9 +20,7 @@ __all__ = [
     "__version__",
     "SUBPACKAGE_MODULES",
     "MODULE_TO_SUBPACKAGE",
-    *SUBPACKAGE_MODULES.keys(),
-    *MODULE_TO_SUBPACKAGE.keys(),
-    "cli",
+    "resolve_module_attribute",
 ]
 
 

@@ -1315,7 +1315,7 @@ This preservation is not the final authoring outcome: follow
 schema-clear errors in source and draft, or obtain a decision for ambiguous
 conflicts, then report the repaired and outstanding findings.
 
-1. [`build_xdr_document`](sentinel_xdr_migration/converter.py)
+1. [`build_xdr_document`](solution_manager/migration/converter.py)
    validates source dependency metadata against the output field schema and
    deep-copies it into optional **top-level** `requiredDataConnectors`, parallel
    to the Sentinel authoring field. Source identity, provenance, independent
@@ -1326,7 +1326,7 @@ conflicts, then report the repaired and outstanding findings.
    provenance members and now explicitly validates optional top-level
    `requiredDataConnectors`. This does not make it a deployment API field.
    Existing documents without the field remain backward compatible.
-3. [`graph_detection_payload`](sentinel_xdr_migration/deployment.py#L184)
+3. [`graph_detection_payload`](solution_manager/qualification/deployment.py#L184)
    copies only `document["properties"]` into the Graph request. The
    [Graph detectionRule contract](https://learn.microsoft.com/en-us/graph/api/resources/security-detectionrule?view=graph-rest-beta)
    does not document `requiredDataConnectors`; its absence from that payload is
