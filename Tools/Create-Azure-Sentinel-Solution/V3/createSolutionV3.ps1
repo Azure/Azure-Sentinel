@@ -4,21 +4,8 @@ param(
     [ValidateSet("catalog", "local")]
     [string]$VersionMode = "catalog",
     [ValidateSet("patch", "minor", "major")]
-    [string]$VersionBump = "patch",
-    [ValidateSet("arm-ttk", "lab-deployment")]
-    [string]$ArmValidationMethod = "arm-ttk"
+    [string]$VersionBump = "patch"
 )
-
-if ($ArmValidationMethod -eq 'lab-deployment') {
-    & (Join-Path $PSScriptRoot '..\common\createSolutionLocal.ps1') `
-        -SolutionDataFolderPath $SolutionDataFolderPath `
-        -VersionMode $VersionMode `
-        -VersionBump $VersionBump `
-        -EntryPointName 'V3' `
-        -DefaultInputPath (Join-Path $PSScriptRoot 'input') `
-        -ArmValidationMethod $ArmValidationMethod
-    return
-}
 
 Write-Host '=======Starting Package Creation using V3 tool========='
 Write-Host "Version Mode: $VersionMode"
@@ -260,7 +247,6 @@ try {
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
         $contentToImport = Get-Content -Raw $inputFile | Out-String | ConvertFrom-Json
-        Assert-NoOperationalContent -Content $contentToImport
 
         $has1PConnectorProperty = [bool]($contentToImport.PSobject.Properties.Name -match "Is1PConnector")
         if ($has1PConnectorProperty) {

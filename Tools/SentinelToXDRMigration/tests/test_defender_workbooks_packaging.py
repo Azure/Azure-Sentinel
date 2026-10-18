@@ -1220,8 +1220,7 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
             "xdr=$IncludeXdrDetections} | ConvertTo-Json -Compress\n",
             encoding="utf-8",
         )
-        for entry, method in (("createSolutionV3_1.ps1", None), ("createSolutionV3_1.ps1", "lab-deployment"),
-                              ("createSolutionV3.ps1", "lab-deployment")):
+        for entry, method in (("createSolutionV3_1.ps1", None), ("createSolutionV3_1.ps1", "lab-deployment")):
             with self.subTest(entry=entry, method=method):
                 destination = toolkit / "V3" / entry
                 shutil.copy2(ROOT / "Tools/Create-Azure-Sentinel-Solution/V3" / entry, destination)

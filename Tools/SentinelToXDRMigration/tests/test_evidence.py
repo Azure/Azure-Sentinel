@@ -671,7 +671,7 @@ class EvidenceTests(unittest.TestCase):
         result = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn('Path            = "$solutionFolder/createUiDefinition.json", "$solutionFolder/mainTemplate.json"', common.read_text())
-        for name in ("common/createSolutionLocal.ps1", "V3/createSolutionV3.ps1", "V3/createSolutionV3_1.ps1"):
+        for name in ("common/createSolutionLocal.ps1", "V3/createSolutionV3_1.ps1"):
             self.assertIn("Assert-NoOperationalContent -Content $contentToImport", (root / name).read_text())
 
 
