@@ -42,9 +42,11 @@ COUNTS = (
 )
 CONTENT_FOLDERS = {"Analytic Rules", "Analytics Rules", "XDR Detections", "Package", "Data"}
 SENSITIVE = re.compile(
-    r"(?i)(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"^Users/|^home/|/Users/|/home/"
+    r"|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r"|password|passwd|secret|token|credential|bearer|tenant|subscription|workspace"
-    r"|[A-Za-z0-9_-]{48,}|(?:^|/)Users/|(?:^|/)home/)"
+    r"|[A-Za-z0-9_-]{48,}",
+    re.IGNORECASE,
 )
 
 

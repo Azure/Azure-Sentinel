@@ -1180,6 +1180,8 @@ def register_delegated_app(
         raise ValueError("the exact delegated app registration plan has changed")
     if plan["status"] == "already-configured":
         return {"status": "already-configured", "plan": plan}
+    application_id: str | None = None
+    object_id: str | None = None
     if plan["status"] == "reconciliation-required":
         persisted = read_delegated_app_registration(_state_dir(state_dir)) or {}
         application_id = persisted.get("applicationId")

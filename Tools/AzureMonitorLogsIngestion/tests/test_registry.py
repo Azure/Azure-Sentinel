@@ -233,6 +233,7 @@ def test_ingest_resource_lookup_rejects_incompatible_dcr_before_any_write():
 
     class ReadOnlyClient(AzureClient):
         def __init__(self):
+            super().__init__(credential=object())
             self.table = {
                 "properties": {
                     "schema": {

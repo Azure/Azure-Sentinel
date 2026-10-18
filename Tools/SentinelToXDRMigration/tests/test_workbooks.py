@@ -208,8 +208,8 @@ def test_endpoint_type_labels_and_summary_groupings_are_deterministic():
     'DeviceEvents | where Type == "ProcessCreated" | project Type',
     "DeviceEvents | summarize count() by DeviceId, Type",
     'let Labelled = DeviceEvents | project Type = "label"; '
-    "let Raw = DeviceEvents | project Type; "
-    "union Labelled, Raw | project Type",
+    + "let Raw = DeviceEvents | project Type; "
+    + "union Labelled, Raw | project Type",
 ])
 def test_ambiguous_type_column_references_remain_review_findings(query):
     result = rewrite.rewrite(query, ["DeviceEvents"])

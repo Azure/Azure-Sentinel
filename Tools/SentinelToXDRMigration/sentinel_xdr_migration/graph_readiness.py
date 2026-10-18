@@ -643,6 +643,8 @@ def preflight_deployment(
             report["status"] = "action-required"
             report["deploymentReadiness"] = "action-required"
             return report
+        write_request_scope: str | None = None
+        read_request_scope: str | None = None
         try:
             write_request_scope = credential_token_scope(auth_method, WRITE_SCOPE)
             with azure_cli_profile(

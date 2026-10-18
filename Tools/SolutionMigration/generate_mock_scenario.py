@@ -1085,7 +1085,6 @@ def generate_scenario(
             "Sample data root",
             required=True,
         )
-        table_root = sample_data_root / "Tables"
     else:
         sample_data_root = _resolved_directory(
             default_sample_data_root,

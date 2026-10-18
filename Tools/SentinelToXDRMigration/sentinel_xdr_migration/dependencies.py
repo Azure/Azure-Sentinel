@@ -265,7 +265,7 @@ def live_dependency_check(
         if source_errors:
             return {**plan, "status": "failed", "errors": errors + source_errors}
     declared_connectors = {record["connectorId"] for record in connector_records}
-    for record in source_connectors if source_connectors is not None else []:
+    for record in (source_connectors if isinstance(source_connectors, list) else []):
         if record["connectorId"] not in declared_connectors:
             errors.append(f"YAML does not declare connector {record['connectorId']}")
         for table in record["dataTypes"]:

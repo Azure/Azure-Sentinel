@@ -2289,10 +2289,10 @@ def run_yolo_authoring(solution: str | Path) -> dict[str, Any]:
                         dimension="conversionPass",
                     ):
                         conversion_dispatched = True
-                        conversion = (
+                        if workbook_workflow.enabled(state):
                             workbook_workflow.convert_content(root)
-                            if workbook_workflow.enabled(state) else convert_solution(root)
-                        )
+                        else:
+                            convert_solution(root)
                     _verify_source_inventory(root, record)
                     manifest = _read_full_conversion_manifest(
                         root, state_path.parent, inventory

@@ -463,7 +463,7 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         install = next(r for r in resources if r["type"] == "Microsoft.Resources/deployments")
         self.assertEqual([
             "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), "
-            "'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+            + "'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
             "[variables('parserObject1')._parserId1]",
             "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', 'lab/arm-name-not-alias')]",
         ], install["dependsOn"])
@@ -518,7 +518,7 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
                 install = next(r for r in template["resources"] if r["type"] == "Microsoft.Resources/deployments")
                 self.assertEqual([
                     "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), "
-                    "'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+                    + "'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
                     "[variables('parserObject1')._parserId1]",
                     "[variables('parserObject2')._parserId2]",
                 ], install["dependsOn"])

@@ -851,19 +851,19 @@ def _runtime_family(
                             )
                         else:
                             result["schemaSha256"] = _canonical_sha256(columns)
-            result.update({
-                "provider": provider,
-                "querySurface": expected_surface,
-                "runId": run_directory.name,
-                "targetFingerprintSha256": target_fingerprint,
-                "providerBindingStatus": binding_reason,
-                "reportPath": _relative_artifact(root, report_path),
-                "reportSha256": _sha256(raw),
-                "evidencePath": (
-                    f"{_relative_artifact(root, report_path)}#results:{name}"
-                ),
-            })
-            evidence[name] = result
+        result.update({
+            "provider": provider,
+            "querySurface": expected_surface,
+            "runId": run_directory.name,
+            "targetFingerprintSha256": target_fingerprint,
+            "providerBindingStatus": binding_reason,
+            "reportPath": _relative_artifact(root, report_path),
+            "reportSha256": _sha256(raw),
+            "evidencePath": (
+                f"{_relative_artifact(root, report_path)}#results:{name}"
+            ),
+        })
+        evidence[name] = result
     return (
         evidence,
         {

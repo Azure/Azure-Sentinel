@@ -692,7 +692,6 @@ def rewrite(kql: str, tables: Optional[List[str]],
                       "Type is not a recognized query-defined label or a direct-table "
                       "summarize key; review its source semantics."})
 
-    overall = "1to1"
     if tables:
         overall = max((tiers[t] for t in tables), key=lambda x: _TIER_RANK.get(x, 2))
     else:

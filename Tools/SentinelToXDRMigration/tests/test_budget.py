@@ -118,7 +118,8 @@ class CampaignBudgetTests(unittest.TestCase):
     def test_failed_cancelled_and_provider_retry_attempts_are_consumed(self) -> None:
         failed = self._begin("providerHttpAttempt")
         self._finish(failed, status="failed", elapsed=0.4)
-        with self.assertRaisesRegex(RuntimeError, "cancel"):
+
+        def _cancelled_attempt() -> None:
             with measured_operation(
                 self.solution,
                 self.campaign_id,
@@ -127,6 +128,8 @@ class CampaignBudgetTests(unittest.TestCase):
                 dimension="providerHttpAttempt",
             ):
                 raise RuntimeError("cancel")
+
+        self.assertRaisesRegex(RuntimeError, "cancel", _cancelled_attempt)
         summary = budget_summary(self.solution, self.campaign_id)
         self.assertEqual(summary["usage"]["providerHttpAttempts"], 2)
         self.assertGreater(summary["usage"]["activeExecutionSeconds"], 0.4)

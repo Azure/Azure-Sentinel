@@ -938,7 +938,6 @@ def _flow_stage(stage: Any, *, freshness: Any = None) -> dict[str, Any]:
         "notRequired": ("not-required", "Not required"),
         "stale": ("stale", "Stale"),
     }.get(raw, ("unknown", "Evidence unavailable" if raw is None else "Unknown status"))
-    display = normalized[1]
     artifacts = stage.get("artifacts") if isinstance(stage.get("artifacts"), dict) else {}
     freshness_status = None
     if isinstance(freshness, dict):
@@ -1215,6 +1214,9 @@ def _flow_stage_detail(stage_name: str, report: dict[str, Any]) -> str:
     stages = workflow.get("stages") if isinstance(workflow.get("stages"), dict) else {}
     stage = stages.get(stage_name)
     preflight = report.get("qualificationPreflight") if isinstance(report.get("qualificationPreflight"), dict) else {}
+    preflight_value: dict[str, Any] = {}
+    suite_value: dict[str, Any] = {}
+    package_value: dict[str, Any] = {}
     if stage_name == "setup":
         setup_value = _setup_station_value(report)
         stage = {"status": "unknown", "message": setup_value["message"]}
@@ -1249,11 +1251,11 @@ def _flow_stage_detail(stage_name: str, report: dict[str, Any]) -> str:
     if stage_name == "preflight":
         value = {**value, **preflight_value}
     elif stage_name == "validationSuite":
-        value = {**value, **_validation_suite_value(report)}
+        value = {**value, **suite_value}
     elif stage_name == "queryValidation":
         value = {**value, **_query_validation_value(report)}
     elif stage_name == "packageAcceptance":
-        value = {**value, **_package_acceptance_value(report)}
+        value = {**value, **package_value}
     label = {
         "validationSuite": "Official full-suite validation rerun",
         "deployment": "Direct AR/CD testing-pair deployment",

@@ -200,14 +200,14 @@ def build(source_bytes: bytes, config: dict) -> dict[str, bytes]:
         "limitations": [
             "Only exact reviewed query hashes and registered table adapters are supported.",
             "Time context is modeled as inclusive TimeGenerated bounds on the input table; "
-            "this is not a verification of the portal provider's boundary behavior.",
+            + "this is not a verification of the portal provider's boundary behavior.",
             "Computer picker has no time binding and intentionally sees the complete fixture.",
             "Computer:lable is an upstream typo retained unchanged. Its fixture substitution "
-            "is explicit, not proof that the portal resolves this token.",
+            + "is explicit, not proof that the portal resolves this token.",
             "Expanded-all and literal All/* are separate contracts. Events has no wildcard "
-            "clause and returns zero for literal All/*; no source query is silently fixed.",
+            + "clause and returns zero for literal All/*; no source query is silently fixed.",
             "Severity tiles ignore Computer. Emergency timecharts include emerg, not panic; "
-            "timecharts group exact timestamps, not hourly bins.",
+            + "timecharts group exact timestamps, not hourly bins.",
             "Synthetic severity levels are operational test coverage, not attack evidence.",
         ],
     }

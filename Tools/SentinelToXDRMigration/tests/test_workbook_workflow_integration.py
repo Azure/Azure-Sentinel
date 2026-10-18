@@ -346,7 +346,7 @@ def test_workspace_function_fingerprint_and_stale_parser_block_workflow(solution
     document = json.loads(source.read_bytes())
     document["items"][0]["content"]["query"] = "ReviewedSource() | count"
     source.write_text(json.dumps(document))
-    state = initialize(solution)
+    initialize(solution)
     record = {key: candidates(solution)[0][key] for key in ("functionAlias", "sourcePath", "sourceSha256")}
     settings = {"workbookResolutions": {"Workbooks/nested/source.json": {
         "/items/0/content/query": {"querySha256": workbook.query_hash("ReviewedSource() | count"),

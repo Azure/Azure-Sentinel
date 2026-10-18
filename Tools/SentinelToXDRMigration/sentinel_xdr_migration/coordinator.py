@@ -1496,6 +1496,7 @@ def record_event(
                         current_claim["outcome"] = "authoritative-completion-observed"
                         current_claim["completedAt"] = _timestamp()
             entry.setdefault("events", []).append(event_id)
+        result = None
         if kind == "shared-dependency-completed":
             # Re-evaluate every registered consumer in this exact purpose and target scope.
             for consumer in registry["solutions"].values():
@@ -1521,7 +1522,7 @@ def record_event(
             "consumed": bool(event.get("consumedAt")),
             "targetSha256": current_target,
             "evidenceSha256": evidence_sha256,
-            "reconciliation": result if kind != "shared-dependency-completed" else None,
+            "reconciliation": result,
             "dispatchMode": "shadow",
             "approvalGranted": False,
         }
