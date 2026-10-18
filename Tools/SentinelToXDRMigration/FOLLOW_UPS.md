@@ -94,6 +94,19 @@ themselves establish a toolkit fix is required.
 
 ## Candidate follow-ups
 
+- **Preserve non-Log-Analytics query types and Azure resource-protection pickers
+  in Defender workbooks by default.** Defender workbooks should convert Sentinel
+  Log Analytics KQL queries to Advanced Hunting while leaving other query types
+  (such as Azure Resource Graph `microsoft.resourcegraph/resources`) unchanged.
+  When a resource/subscription picker scopes protected Azure resources (such as
+  AKS clusters or Azure subscriptions being protected) rather than selecting
+  Sentinel workspaces, keep that picker working unchanged after migration by
+  default.
+- **Extend conversion logic to migrate `SecurityAlert` and `SecurityIncident`
+  queries to `AlertInfo` and `AlertEvidence` (`AlertEntities`) tables.** Add
+  deterministic table and column conversion rules for `SecurityAlert` and
+  `SecurityIncident` queries into Defender XDR `AlertInfo` and `AlertEvidence`
+  (`AlertEntities`) tables across rules and workbooks.
 - **Safely capture user decisions into the submitted work for all flows under
   Solution Manager.** Project sanitized, hash-bound reviewer decisions,
   waivers, exclusions, and rationale across authoring, migration, qualification,

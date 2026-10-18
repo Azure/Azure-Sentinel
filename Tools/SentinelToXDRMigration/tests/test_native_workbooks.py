@@ -357,12 +357,18 @@ def test_cli_roundtrip_and_duplicate_json_keys(solution, capsys, query):
     "EmailEvents | take 1", "_Im_Authentication | take 1", "_ASim_NetworkSession() | count",
 ])
 def test_native_only_v31_package_requires_no_sentinel_parent(solution, monkeypatch, query):
+    from sentinel_xdr_migration import workbook_publication as public
     monkeypatch.setenv("SENTINEL_XDR_PYTHON", sys.executable)
-    write_source_query(solution, query)
-    imported(solution)
-    (solution / SOURCE).unlink()
     content_root = solution.parent.parent
     subprocess.run(["git", "init", "--quiet", str(content_root)], check=True)
+    (content_root / ".gitignore").write_text("Solutions/**/Logs/\n", encoding="utf-8")
+    write_source_query(solution, query)
+    imported(solution)
+    rel = candidate(solution).relative_to(solution).as_posix()
+    review = public.plan_publication(solution, rel)
+    review.update(actor="fixture reviewer", reference="offline fixture publication", decision="accept")
+    public.clean_publication(solution, rel, review["inputSha256"], review)
+    (solution / SOURCE).unlink()
     result = subprocess.run([
         "pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
         str(ROOT / "Tools" / "Create-Azure-Sentinel-Solution" / "V3" / "createSolutionV3_1.ps1"),
@@ -386,7 +392,10 @@ def test_native_only_v31_package_requires_no_sentinel_parent(solution, monkeypat
 @pytest.mark.skipif(not shutil.which("pwsh"), reason="PowerShell 7 required")
 @pytest.mark.parametrize("reviewed_updates", [False, True])
 def test_real_v31_mixed_package_and_static_validator(solution, monkeypatch, reviewed_updates):
+    from sentinel_xdr_migration import workbook_publication as public
     monkeypatch.setenv("SENTINEL_XDR_PYTHON", sys.executable)
+    subprocess.run(["git", "init", "--quiet", str(solution.parent.parent)], check=True)
+    (solution.parent.parent / ".gitignore").write_text("Solutions/**/Logs/\n", encoding="utf-8")
     sentinel = solution / "Workbooks" / "sentinel.json"
     sentinel.parent.mkdir()
     source = {"version": "Notebook/1.0", "fromTemplateId": str(uuid4()), "items": [
@@ -417,7 +426,6 @@ def test_real_v31_mixed_package_and_static_validator(solution, monkeypatch, revi
     data_file.write_text(json.dumps(data), encoding="utf-8")
     migrated = (solution / "XDR Workbooks" / "sentinel.json").read_bytes()
     imported(solution)
-    (solution / SOURCE).unlink()
     assert (solution / "XDR Workbooks" / "sentinel.json").read_bytes() == migrated
     if reviewed_updates:
         from sentinel_xdr_migration.workbook_updates import plan_workbook_update, apply_workbook_update
@@ -437,8 +445,14 @@ def test_real_v31_mixed_package_and_static_validator(solution, monkeypatch, revi
                 query.update(decision="accept", evidence="Read exact fixture correction and lineage.")
             apply_workbook_update(solution, relative, baseline, review)
             baseline.unlink()
+    else:
+        for path in workbooks.selected_workbook_files(solution):
+            relative = path.relative_to(solution).as_posix()
+            review = public.plan_publication(solution, relative)
+            review.update(actor="fixture reviewer", reference="offline fixture publication", decision="accept")
+            public.clean_publication(solution, relative, review["inputSha256"], review)
+    (solution / SOURCE).unlink()
     assert workbooks.validate_workbooks(solution)["invalid"] == 0
-    subprocess.run(["git", "init", "--quiet", str(solution.parent.parent)], check=True)
     arguments = [
                str(ROOT / "Tools" / "Create-Azure-Sentinel-Solution" / "V3" / "createSolutionV3_1.ps1"),
                "-SolutionDataFolderPath", str(solution / "Data"), "-ToolkitRootPath", str(ROOT),

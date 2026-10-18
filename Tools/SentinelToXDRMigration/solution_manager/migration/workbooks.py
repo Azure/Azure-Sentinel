@@ -618,17 +618,27 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                     errors.append("Query conversion remains blocked or review-required.")
                 output_query = output_queries.get(output_pointer)
                 source_query = original_surfaces.get(source_pointer)
+                preserved_provider = (
+                    isinstance(query.get("preservedProvider"), dict)
+                    and source_query is not None
+                    and output_query is not None
+                    and workbook.is_preserved_provider_surface(source_query)
+                    and workbook.is_preserved_provider_surface(output_query)
+                )
                 try:
                     raw_source = workbook._raw_query(
                         source_query["node"]["query"], source_query["queryType"]) if source_query else ""
                     raw_target = workbook._raw_query(
                         output_query["node"]["query"], output_query["queryType"]) if output_query else ""
-                    source_aliases = workbook.opaque_functions(raw_source) if source_query else set()
-                    target_aliases = workbook.opaque_functions(raw_target) if output_query else set()
-                    explicit_calls = (
-                        (workbook.opaque_functions(raw_source, include_bare=False) if source_query else set())
-                        | (workbook.opaque_functions(raw_target, include_bare=False) if output_query else set())
-                    )
+                    if preserved_provider:
+                        source_aliases, target_aliases, explicit_calls = set(), set(), set()
+                    else:
+                        source_aliases = workbook.opaque_functions(raw_source) if source_query else set()
+                        target_aliases = workbook.opaque_functions(raw_target) if output_query else set()
+                        explicit_calls = (
+                            (workbook.opaque_functions(raw_source, include_bare=False) if source_query else set())
+                            | (workbook.opaque_functions(raw_target, include_bare=False) if output_query else set())
+                        )
                 except ValueError as exc:
                     errors.append(str(exc))
                     source_aliases, target_aliases, explicit_calls = set(), set(), set()
@@ -638,8 +648,9 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                     contract = {}
                 resolved_tables = (set(contract.get("resolvedTables", []))
                                    if isinstance(contract.get("resolvedTables"), list) else set())
-                if (not resolved_tables and
-                        not workbook.rewrite.is_source_free_literal_query(raw_source)):
+                if (not resolved_tables
+                        and not preserved_provider
+                        and not workbook.rewrite.is_source_free_literal_query(raw_source)):
                     errors.append("Empty source-table lineage is allowed only for a verified literal datatable or numeric range query.")
                 aliases = query.get("workspaceFunctions", [])
                 alias_set = (set(aliases) if isinstance(aliases, list)
@@ -655,14 +666,20 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                 used_aliases.update(source_aliases)
                 if output_pointer in recorded_output or not output_query or query.get("targetSha256") != workbook.query_hash(output_query["node"]["query"]):
                     errors.append("Output query provenance is missing, duplicate or stale.")
-                if output_query and output_query["queryType"] != workbook.AH:
+                if output_query and not preserved_provider and output_query["queryType"] != workbook.AH:
                     errors.append("Converted query must use Advanced Hunting.")
+                if preserved_provider and (
+                    output_query["queryType"] != source_query["queryType"]
+                    or (output_query.get("resourceType") or "").lower() != (source_query.get("resourceType") or "").lower()
+                    or output_query["node"]["query"] != source_query["node"]["query"]
+                ):
+                    errors.append("Preserved provider query must retain its original queryType, resourceType, and query.")
                 if (not query.get("resolutionEvidence") or contract.get("status") != "converted"
                         or contract.get("sourceId") != source_pointer
                         or not output_query
                         or contract.get("convertedKql") != output_query["node"]["query"]):
                     errors.append("Current reviewed shared-converter query evidence is required.")
-                if source_query:
+                if source_query and not preserved_provider:
                     try:
                         replay = workbook.migrator.convert(
                             workbook._raw_query(source_query["node"]["query"], source_query["queryType"]),

@@ -819,8 +819,12 @@ def _verify_workbook_package(
         instance_id = metadata["instanceId"]
         if _content_release(metadata["version"]) is None:
             raise ValueError("Defender workbook content version must be >=3.1.0 and <4.0.0")
+        actual_solution_name = next(
+            (entry.name for entry in solution.parent.iterdir() if entry.name.lower() == solution.name.lower()),
+            solution.name,
+        )
         deployment_name = "DefenderWorkbook-" + hashlib.sha256(
-            f"{solution.name}/{content_id}".encode("utf-8")
+            f"{actual_solution_name}/{content_id}".encode("utf-8")
         ).hexdigest()[:32]
         install_rows = [row for row in installs if row.get("name") == deployment_name]
         registration_rows = [row for row in registrations if row.get("properties", {}).get("contentId") == content_id]

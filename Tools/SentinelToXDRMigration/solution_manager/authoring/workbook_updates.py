@@ -108,8 +108,11 @@ def _queries(document, provenance, baseline):
             # never invent dependencies or extend the exception to new queries.
             candidates = {row["table"] for row in query_table_references(
                 previous["node"]["query"], known_tables=known)} & known
-            inherited = set(_query(previous, allowed_tables=declared | candidates,
-                                   allowed_functions=aliases, allow_sentinel=True))
+            try:
+                inherited = set(_query(previous, allowed_tables=declared | candidates,
+                                       allowed_functions=aliases, allow_sentinel=True))
+            except ValueError:
+                inherited = set()
         lineage = _query(surface, allowed_tables=declared | inherited if not native else (),
                          allowed_functions=aliases, allow_sentinel=not native,
                          include_lineage=True)

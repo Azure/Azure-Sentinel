@@ -13,6 +13,7 @@ from . import migrator, rewrite
 
 AH = "advancedHunting"
 LA = "microsoft.operationalinsights/workspaces"
+ARG_RESOURCE_TYPE = "microsoft.resourcegraph/resources"
 SCOPE_KEYS = {
     "crossComponentResources", "fallbackResourceIds", "resourceIds",
     "workspaceId", "workspaceResourceId", "selectedWorkspaceIds",
@@ -84,6 +85,22 @@ def query_surfaces(doc: dict) -> list[dict]:
 
     visit(doc)
     return result
+
+
+def is_preserved_provider_surface(surface: dict | None) -> bool:
+    """Return True when a query surface uses a preserved non-Log-Analytics provider."""
+    if not isinstance(surface, dict):
+        return False
+    qt = surface.get("queryType")
+    rt = (surface.get("resourceType") or "").strip().lower()
+    node = surface.get("node")
+    raw = node.get("query") if isinstance(node, dict) else None
+    return (
+        qt == 1
+        and rt == ARG_RESOURCE_TYPE
+        and isinstance(raw, str)
+        and LA not in raw.lower()
+    )
 
 
 def _scope_parameters(doc, protected=()):
@@ -581,13 +598,8 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
     def issue(path, code, message):
         issues.append({"path": path, "code": code, "message": message})
 
-    for path, p in entries:
-        if p["name"] in retained_scope:
-            issue(path, "scope-used-by-content",
-                  f"{p['name']} is used by retained business content or a drilldown. "
-                  "Retained; manually replace its Azure scope semantics.")
-
     converted_nodes = set()
+    preserved_nodes = set()
     for surface, original in zip(surfaces, originals):
         path, node, qt = surface["path"], surface["node"], surface["queryType"]
         if any(path.startswith(prefix) for prefix in removed_prefixes):
@@ -595,6 +607,44 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
             continue
         entry = {"sourcePath": path, "parameter": surface["parameter"]}
         reports.append(entry)
+        if is_preserved_provider_surface(surface):
+            evidence = (resolutions or {}).get(path)
+            resolution_note = f"preserved non-Log-Analytics query type ({surface['resourceType']})"
+            if evidence is not None:
+                if (not isinstance(evidence, dict)
+                        or evidence.get("querySha256") != query_hash(original["node"]["query"])
+                        or not isinstance(evidence.get("tables"), list)
+                        or evidence.get("tables") != []
+                        or not evidence.get("evidence")):
+                    entry["status"] = "blocked"
+                    issue(path, "stale-resolution",
+                          "Supply empty tables, evidence and matching SHA256 of the raw preserved-provider query at this path.")
+                    continue
+                resolution_note = evidence["evidence"]
+            raw = node["query"]
+            entry["status"] = "converted"
+            entry["preservedProvider"] = {"queryType": qt, "resourceType": surface["resourceType"]}
+            entry["resolutionEvidence"] = resolution_note
+            entry["workspaceFunctions"] = []
+            entry["conversion"] = {
+                "sourceId": path,
+                "artifactType": "workbook",
+                "status": "converted",
+                "convertedKql": raw,
+                "resolvedTables": [],
+                "mappingTier": "1to1",
+                "renamedTables": {},
+                "renamedAsimTables": {},
+                "diff": [],
+                "schemaMap": {},
+                "recommendations": [],
+                "confidence": 0.7,
+                "unsupported": [],
+                "validation": None,
+                "blockedReason": None,
+            }
+            preserved_nodes.add(id(node))
+            continue
         if qt not in (0, None, AH) or (
             qt != AH and (surface["resourceType"] or "").lower() not in ("", LA)
         ):
@@ -699,7 +749,7 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
     # Blocked panels keep the scope inputs they still need. Revisit the graph
     # before removing any helper; an unsupported sibling is not disposable.
     blocked = [s for s, r in zip(surfaces, reports) if r["status"] == "blocked"
-               or (id(s["node"]) not in converted_nodes
+               or (id(s["node"]) not in (converted_nodes | preserved_nodes)
                    and r["status"] != "removed-scope-helper")]
     if blocked:
         protected = set()
@@ -725,18 +775,48 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
                 issue(surface["path"], "blocked-panel-scope",
                       "Helper retained because an unsupported panel still needs its scope.")
 
+    retained_scope_nodes = {id(p) for _, p in entries if p["name"] in retained_scope}
+
+    def _non_preserved_references(value, cur_path="") -> set[str]:
+        found = set()
+        if any(cur_path == prefix[:-1] or cur_path.startswith(prefix) for prefix in removed_prefixes):
+            return found
+        if isinstance(value, dict):
+            if id(value) in preserved_nodes or id(value) in retained_scope_nodes:
+                return found
+            for key, child in value.items():
+                if key in SCOPE_KEYS | {"resourceContextFromParameter"}:
+                    continue
+                if key in PARAMETER_KEYS and isinstance(child, str):
+                    found.add(child)
+                if key == "linkTarget" and child == "parameter":
+                    found.add(value.get("cellValue", ""))
+                escaped = key.replace("~", "~0").replace("/", "~1")
+                found |= _non_preserved_references(child, f"{cur_path}/{escaped}")
+        elif isinstance(value, list):
+            for idx, child in enumerate(value):
+                found |= _non_preserved_references(child, f"{cur_path}/{idx}")
+        elif isinstance(value, str):
+            found |= set(TOKEN.findall(value))
+        return {x for x in found if x}
+
+    non_preserved_refs = _non_preserved_references(doc)
+    for path, p in entries:
+        if p["name"] in retained_scope and p["name"] in non_preserved_refs:
+            issue(path, "scope-used-by-content",
+                  f"{p['name']} is used by retained business content or a drilldown. "
+                  "Retained; manually replace its Azure scope semantics.")
+
     # Keep item arrays and layout untouched, including now-empty parameter groups.
     for _, node in walk(doc):
         if isinstance(node.get("parameters"), list):
             node["parameters"] = [p for p in node["parameters"]
                                   if p.get("name") not in removed]
 
-    retained_scope_nodes = {id(p) for _, p in entries if p["name"] in retained_scope}
-
     def clean(value, path=""):
         if isinstance(value, dict):
             descendants = query_surfaces(value)
-            safe = all(id(s["node"]) in converted_nodes for s in descendants)
+            safe = all(id(s["node"]) in (converted_nodes | preserved_nodes) for s in descendants)
             binding_container = (
                 bool(descendants) or not path
                 or "parameters" in value or "items" in value
@@ -745,7 +825,9 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
                                                             "NotebookGroup/"))
             )
             if id(value) in converted_nodes or (
-                safe and binding_container and id(value) not in retained_scope_nodes
+                safe and binding_container
+                and id(value) not in retained_scope_nodes
+                and id(value) not in preserved_nodes
             ):
                 for key in SCOPE_KEYS | {"resourceContextFromParameter"}:
                     value.pop(key, None)

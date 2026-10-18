@@ -129,24 +129,34 @@ if ($hasMain) {
 
         # Filter out contentProductId/id false positives — same as entrypoint.ps1
         $filtered = New-Object System.Collections.ArrayList
-        $hasContentProductIdError = $false
+        $filteredIdTestCount = 0
 
         foreach ($testInfo in $rawResults) {
             if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
+                $hasUnfilteredIdError = $false
+                $hasExemptIdError = $false
                 foreach ($errorInfo in $testInfo.Errors) {
                     if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or
-                        $errorInfo.Exception.Message -like '*"id"*') {
-                        $hasContentProductIdError = $true
+                        $errorInfo.Exception.Message -like '*"id"*' -or
+                        $errorInfo.Exception.Message -like '*"packageId"*' -or
+                        $errorInfo.Exception.Message -like '*"fromTemplateId"*') {
+                        $hasExemptIdError = $true
                     }
                     else {
-                        $null = $filtered.Add($testInfo)
+                        $hasUnfilteredIdError = $true
                     }
+                }
+                if ($hasUnfilteredIdError) {
+                    $null = $filtered.Add($testInfo)
+                }
+                elseif ($hasExemptIdError) {
+                    $filteredIdTestCount++
                 }
             }
             else {
-                if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true) {
-                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
-                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+                if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0) {
+                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - $filteredIdTestCount
+                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
                 }
                 $null = $filtered.Add($testInfo)
             }

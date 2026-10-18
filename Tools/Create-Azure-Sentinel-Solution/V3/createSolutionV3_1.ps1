@@ -98,10 +98,14 @@ try {
 
     $path = Join-Path -Path $pipelineBasePath -ChildPath "Solutions/$pipelineSolutionName/$dataFolderActualName/$dataFileName"
     $solutionFolderBasePath = Join-Path -Path $pipelineBasePath -ChildPath "Solutions/$pipelineSolutionName"
+    Assert-NoSolutionContentSymlinks -SolutionRoot $solutionFolderBasePath
 
     foreach ($inputFile in Get-ChildItem $path) {
         $contentToImport = $pipelineDataFileRawContent
         Assert-NoOperationalContent -Content $contentToImport
+        Assert-SolutionName `
+            -SolutionName ([string]$contentToImport.Name) `
+            -SelectedSolutionName $pipelineSolutionName
         $basePath = Join-Path -Path $pipelineBasePath -ChildPath "Solutions/$pipelineSolutionName/"
         $solutionName = $pipelineSolutionName
         $baseMetadata = $pipelineDataFileRawContent
@@ -150,8 +154,13 @@ try {
                 }
 
                 $solutionBasePath = (Join-Path $pipelineBasePath 'Solutions/')
-                $solutionMetadataPath = Join-Path $solutionBasePath "$($pipelineDataFileRawContent.Name)/$($pipelineDataFileRawContent.Metadata)"
-                $solutionBaseMetadata = Get-Content -Raw $solutionMetadataPath | Out-String | ConvertFrom-Json
+                $resolvedMetadata = Resolve-SolutionContentPath `
+                    -SolutionRoot $solutionFolderBasePath `
+                    -SolutionName $pipelineSolutionName `
+                    -ContentPath ([string]$pipelineDataFileRawContent.Metadata) `
+                    -RequireFile
+                $solutionMetadataPath = $resolvedMetadata.FullPath
+                $solutionBaseMetadata = Get-Content -LiteralPath $solutionMetadataPath -Raw | Out-String | ConvertFrom-Json
 
                 if ($null -eq $solutionBaseMetadata) {
                     Write-Error "Please verify if the given path $solutionMetadataPath is correct and/or Solution folder name and Data file Name attribute value is correct!"
@@ -170,6 +179,10 @@ try {
                 Write-Host "isCCPConnector $isCCPConnector"
                 $ccpConnectorCodeExecutionCounter = 1
                 foreach ($file in $filesList) {
+                    $null = Resolve-SolutionContentPath `
+                        -SolutionRoot $solutionFolderBasePath `
+                        -SolutionName $pipelineSolutionName `
+                        -ContentPath ([string]$file)
                     $fileExtension = $file -split '\.' | Select-Object -Last 1
                     Write-Host "Current file is $file, File extension is $fileExtension"
                     switch ($objectKeyLowercase) {
@@ -236,8 +249,13 @@ try {
                         $fileName = [System.IO.Path]::GetFileName($finalPath)
                         $actualFile = Get-ChildItem -Path $parentDir -Filter "*" | Where-Object { $_.Name -ieq $fileName }
                         if ($null -ne $actualFile) {
-                            Write-Host "Found file: $($actualFile.FullName)"
-                            $rawData = Get-Content -Raw $actualFile.FullName
+                            $resolvedActual = Resolve-SolutionContentPath `
+                                -SolutionRoot $solutionFolderBasePath `
+                                -SolutionName $pipelineSolutionName `
+                                -ContentPath ([System.IO.Path]::GetRelativePath($solutionFolderBasePath, $actualFile.FullName)) `
+                                -RequireFile
+                            Write-Host "Found file: $($resolvedActual.FullPath)"
+                            $rawData = Get-Content -LiteralPath $resolvedActual.FullPath -Raw
                         } else {
                             Write-Error "File not found (case-insensitive) for $finalPath"
                             exit 1

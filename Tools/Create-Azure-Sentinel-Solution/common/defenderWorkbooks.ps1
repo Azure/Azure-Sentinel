@@ -460,6 +460,8 @@ function Get-DefenderWorkbookImplicitFunctions {
             $childPath = "$Path/$key"
             if ($property.Name -ceq 'query' -and $property.Value -is [string]) {
                 if ($null -ne $ExcludedQueryPaths -and $ExcludedQueryPaths.Contains($childPath)) { continue }
+                if ($Value.queryType -eq 1 -and $Value.resourceType -ieq 'microsoft.resourcegraph/resources' -and
+                    $property.Value -inotmatch 'microsoft\.operationalinsights/workspaces') { continue }
                 $queryText = $property.Value
                 if ($Value.queryType -eq 18 -and $queryText.TrimStart().StartsWith('{')) {
                     try { $settings = $queryText | ConvertFrom-Json -ErrorAction Stop }
@@ -1150,6 +1152,11 @@ function Add-XdrDefenderWorkbooksToSolution {
         }
     }
     Assert-SolutionName -SolutionName $SolutionName -SelectedSolutionName $SolutionName
+    $solutionsDir = Join-Path $RepositoryRoot 'Solutions'
+    $realDir = Get-ChildItem -LiteralPath $solutionsDir -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $SolutionName } | Select-Object -First 1
+    if ($null -ne $realDir) {
+        $SolutionName = $realDir.Name
+    }
     $solutionRoot = Join-Path $RepositoryRoot "Solutions/$SolutionName"
     $selected = @(Get-DefenderWorkbookSelection -ContentToImport $ContentToImport `
         -SolutionRoot $solutionRoot -SolutionName $SolutionName)

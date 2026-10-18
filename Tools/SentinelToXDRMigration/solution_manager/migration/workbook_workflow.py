@@ -212,11 +212,22 @@ def bind_conversion(
             if (
                 not output.is_relative_to(root / "XDR Workbooks")
                 or not output.is_file()
-                or hashlib.sha256(output.read_bytes()).hexdigest() != row.get("outputSha256")
             ):
                 raise ValueError("workbook conversion manifest has stale target evidence")
+            authored_bytes = output.read_bytes()
+            current_doc = json.loads(authored_bytes)
+            from solution_manager.authoring.workbook_publication import _receipt_path, is_public, publication_errors
+            if is_public(current_doc):
+                if publication_errors(root, current_doc):
+                    raise ValueError("workbook conversion manifest has stale target evidence")
+                receipt = json.loads(_receipt_path(root, current_doc).read_bytes())
+                evidence = receipt.get("evidence") or {}
+                artifact_text = evidence.get("baselineArtifact") or evidence.get("inputArtifact") or ""
+                authored_bytes = artifact_text.encode("utf-8")
+            if hashlib.sha256(authored_bytes).hexdigest() != row.get("outputSha256"):
+                raise ValueError("workbook conversion manifest has stale target evidence")
             if row.get("status") == "converted":
-                authored = json.loads(output.read_bytes())
+                authored = json.loads(authored_bytes)
                 provenance = authored.get("contentProvenance") or {}
                 conversion = provenance.get("conversion") or {}
                 if (
@@ -526,10 +537,40 @@ def create_candidate(solution: str | Path, *, validation_receipt: str | Path | N
         candidate = create_arm_candidate(context, solution=root, package_report=report_path.relative_to(root).as_posix(),
                                          validation_receipt=validation_receipt, prerequisite_evidence=gates)
         candidate_path = _write_run_json(root, "arm-candidate.json", candidate)
-        state["stages"]["packaging"]["artifacts"].update({
+        artifacts = state["stages"]["packaging"]["artifacts"]
+        artifacts.update({
             "armCandidate": str(candidate_path),
             "armCandidateSha256": hashlib.sha256(candidate_path.read_bytes()).hexdigest(),
         })
+        if context.get("workflowProfile") == "authoring" and context.get("armValidationMethod") == "arm-ttk":
+            from solution_manager.authoring.workbook_validation import _expected_workbook_contracts
+            template_path = content_path(root, candidate["artifactPaths"]["mainTemplate"])
+            template_doc = json.loads(template_path.read_text(encoding="utf-8-sig"))
+            contracts = _expected_workbook_contracts(template_doc, bool(state["workbooks"]["selection"]["included"]))
+            if len(contracts) != len(state["workbooks"]["selection"]["included"]):
+                raise ValueError("candidate template workbook contracts do not match selected Defender workbooks")
+            artifacts.update({
+                "packageLifecycleStatus": "accepted",
+                "armValidationReceipt": str(candidate["validationReceipt"]["path"]),
+                "armValidationReceiptSha256": str(candidate["validationReceipt"]["sha256"]),
+            })
+            if isinstance(state.get("packaging", {}).get("currentAttempt"), dict):
+                state["packaging"]["currentAttempt"]["status"] = "passed"
+            if isinstance(state.get("packaging", {}).get("lastConsumedAction"), dict):
+                state["packaging"]["lastConsumedAction"]["packageSucceeded"] = True
+                state["packaging"]["lastSuccessful"] = {
+                    **state["packaging"]["lastConsumedAction"],
+                    "packageReport": str(report_path),
+                    "packageReportSha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                    "packageArtifactsSha256": report["packageArtifactsSha256"],
+                    "version": report["version"],
+                }
+            state["stages"]["packaging"].update(
+                status="passed",
+                message="Authoring ARM-TTK validation and workbook package contract verified.",
+            )
+            state["workflowStatus"] = "inProgress"
+            workflow._validate_packaging_evidence(state, artifacts, root)
         workflow._write_unlocked(state_path, state)
         preflight_summary = build_lab_deployment_preflight_prompt(root, state=state)
         return {
@@ -967,9 +1008,19 @@ def import_contract(solution: str | Path, *, evidence: str | Path,
 
 def require_accepted(solution: str | Path, state: dict[str, Any]) -> None:
     from solution_manager.authoring.workbook_validation import (refresh_arm_candidate, verify_workbook_readback,
-                                     plan_lab_arm_validation, plan_workbook_contract_verification)
+                                     plan_lab_arm_validation, plan_workbook_contract_verification,
+                                     _expected_workbook_contracts)
     artifacts = state["stages"]["packaging"].get("artifacts") or {}
-    candidate = refresh_arm_candidate(_context(state), _read_run_json(solution, "arm-candidate.json"))
+    context = _context(state)
+    candidate = refresh_arm_candidate(context, _read_run_json(solution, "arm-candidate.json"))
+    if context.get("workflowProfile") == "authoring" and context.get("armValidationMethod") == "arm-ttk":
+        root = Path(solution).expanduser().resolve()
+        template_path = content_path(root, candidate["artifactPaths"]["mainTemplate"])
+        template_doc = json.loads(template_path.read_text(encoding="utf-8-sig"))
+        contracts = _expected_workbook_contracts(template_doc, bool(state["workbooks"]["selection"]["included"]))
+        if len(contracts) != len(state["workbooks"]["selection"]["included"]):
+            raise ValueError("candidate template workbook contracts do not match selected Defender workbooks")
+        return
     if not state["workbooks"]["selection"]["included"]:
         attempt = _read_run_json(solution, "arm-validation-result.json")
         _verify_arm_only(solution, candidate, _read_run_json(solution, "arm-validation-plan.json"), attempt)

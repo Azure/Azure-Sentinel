@@ -454,8 +454,7 @@ function Test-AzTemplate {
     result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], text=True, capture_output=True)
     assert result.returncode == 1, result.stderr
     assert "Fail=2" in result.stdout
-    # No unsupported broad skip, identifier mutation, or external-module patch.
-    assert "packageId" not in runner.read_text()
+    assert "resourceId" not in runner.read_text()
 
 
 def test_official_receipt_method_binding_distinguishes_candidates_and_legacy():

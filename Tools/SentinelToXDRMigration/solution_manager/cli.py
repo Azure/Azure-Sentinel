@@ -1674,17 +1674,16 @@ def main(argv: list[str] | None = None) -> int:
             from solution_manager.migration.workbook_workflow import validate_content
             result = validate_content(args.solution)
         elif args.command == "validate-advanced-hunting":
-            try:
-                state = workflow_status(args.solution)
-            except ValueError as exc:
-                if "workflow state does not exist" not in str(exc):
-                    raise
-                state = None
+            state = workflow_status(args.solution)
             profile = (
                 (state.get("context") or {}).get("workflowProfile")
                 if isinstance(state, dict)
                 else None
             )
+            if profile not in {"authoring", "qualification"}:
+                raise ValueError(
+                    "Advanced Hunting requires an active authoring or qualification workflow run"
+                )
             if profile == "authoring" and not args.run_id:
                 raise ValueError(
                     "Authoring Advanced Hunting requires an explicit --run-id; "
@@ -1709,7 +1708,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.solution,
                 family="defenderXdrQueryFamily",
                 provider="graph",
-                allow_legacy=True,
             )
             result = validate_advanced_hunting(
                 args.solution,
@@ -1725,7 +1723,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.solution,
                 family="sentinelSourceQueryFamily",
                 provider="azure-monitor-sdk",
-                allow_legacy=True,
             )
             target = require_locked_target(args.solution)
             result = validate_sentinel_sdk(

@@ -729,6 +729,32 @@ class RuntimeQueryConsentTests(unittest.TestCase):
         graph_executor.assert_not_called()
         sentinel_executor.assert_not_called()
 
+        uninitialized = self.base / "Solutions" / "NoWorkflowState"
+        uninitialized.mkdir(parents=True)
+        with mock.patch.object(cli, "configure_logging"), mock.patch(
+            "sentinel_xdr_migration.runtime.validate_advanced_hunting"
+        ) as graph_executor, mock.patch(
+            "sentinel_xdr_migration.runtime.validate_sentinel_sdk"
+        ) as sentinel_executor:
+            missing_ah = cli.main(
+                [
+                    "validate-advanced-hunting",
+                    "--solution",
+                    str(uninitialized),
+                ]
+            )
+            missing_sdk = cli.main(
+                [
+                    "validate-sentinel-sdk",
+                    "--solution",
+                    str(uninitialized),
+                ]
+            )
+        self.assertEqual(2, missing_ah)
+        self.assertEqual(2, missing_sdk)
+        graph_executor.assert_not_called()
+        sentinel_executor.assert_not_called()
+
     def _authoring_solution(self) -> Path:
         solution = self.base / "Solutions" / "AuthoringQueries"
         (solution / "XDR Detections").mkdir(parents=True)

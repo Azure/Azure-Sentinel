@@ -66,6 +66,10 @@ def identities(root, relative):
 def _query(surface, *, allowed_tables=(), allowed_functions=(), allow_sentinel=False,
            include_lineage=False):
     raw = surface["node"]["query"]
+    if allow_sentinel and workbook.is_preserved_provider_surface(surface):
+        if include_lineage:
+            return {"tables": [], "builtinAsimParsers": [], "workspaceFunctions": []}
+        return []
     if not isinstance(raw, str) or surface["queryType"] != workbook.AH:
         raise ValueError("Every native query must be a string using advancedHunting.")
     code = workbook._stripped_code(raw)

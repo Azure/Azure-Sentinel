@@ -531,6 +531,7 @@ class SentinelSdkProviderTests(unittest.TestCase):
             mock.patch("sentinel_xdr_migration.logs_query.azure_cli_credential", return_value=object()),
             mock.patch("sentinel_xdr_migration.logs_query.logs_query_client", side_effect=self._factory(client)),
             mock.patch("sentinel_xdr_migration.cli.require_locked_target", return_value=self.target),
+            mock.patch("solution_manager.qualification.runtime_consent.require_runtime_query_consent", return_value=None),
             contextlib.redirect_stdout(output),
         ):
             code = cli.main([

@@ -1095,8 +1095,12 @@ def _validate_packaged_defender_workbooks(
 
         # Cross-check matching registration resource
         if isinstance(content_id, str) and GUID_RE.fullmatch(content_id):
+            actual_solution_name = next(
+                (entry.name for entry in solution_root.parent.iterdir() if entry.name.lower() == solution_root.name.lower()),
+                solution_root.name,
+            )
             expected_dep_name = "DefenderWorkbook-" + hashlib.sha256(
-                f"{solution_root.name}/{content_id}".encode("utf-8")
+                f"{actual_solution_name}/{content_id}".encode("utf-8")
             ).hexdigest()[:32]
             if dep_name != expected_dep_name:
                 errors.append(
