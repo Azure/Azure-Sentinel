@@ -426,7 +426,10 @@ function Assert-DefenderWorkbookRemovedScopeQueries {
 function Get-DefenderWorkbookKnownCatalogTables {
     if ($null -eq $script:DefenderWorkbookKnownCatalogTables) {
         $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-        $catalogDir = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/sentinel_xdr_migration/_workbook_core/data'
+        $catalogDir = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/solution_manager/migration/_workbook_core/data'
+        if (-not (Test-Path -LiteralPath $catalogDir -PathType Container)) {
+            $catalogDir = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/sentinel_xdr_migration/_workbook_core/data'
+        }
         foreach ($file in @('mapping_catalog.json')) {
             $full = Join-Path $catalogDir $file
             if (Test-Path -LiteralPath $full -PathType Leaf) {
@@ -892,7 +895,10 @@ function Get-DefenderWorkbookParserDependencies {
         }
     }
     foreach ($item in $allowedBareTables) { [void]$sourceAllowedBareTables.Add($item) }
-    $catalogPath = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/sentinel_xdr_migration/_workbook_core/data/mapping_catalog.json'
+    $catalogPath = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/solution_manager/migration/_workbook_core/data/mapping_catalog.json'
+    if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
+        $catalogPath = Join-Path $PSScriptRoot '../../SentinelToXDRMigration/sentinel_xdr_migration/_workbook_core/data/mapping_catalog.json'
+    }
     if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
         $catalogJson = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
         if ($null -ne $catalogJson.tables) {

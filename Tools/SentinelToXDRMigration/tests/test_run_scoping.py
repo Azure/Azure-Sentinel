@@ -100,8 +100,9 @@ class RunScopingTests(unittest.TestCase):
         self.assertEqual([], list_runs(self.solution))
 
     def test_invalid_profile_does_not_allocate_a_run(self):
-        with self.assertRaises(ValueError):
-            initialize_workflow(self.solution, new_run=True)
+        for invalid in (None, "", "invalid"):
+            with self.assertRaises(ValueError):
+                initialize_workflow(self.solution, workflow_profile=invalid, new_run=True)
         self.assertEqual([], list_runs(self.solution))
 
     def test_missing_marker_cannot_fall_back_to_stale_flat_state(self):

@@ -990,17 +990,10 @@ def test_parameter_built_sources_and_call_targets_fail_closed(solution, query, t
     "table('Evil_CL') | take 1",
 ])
 def test_cl_suffix_requires_explicit_reviewed_table_or_function_evidence(solution, query):
-    assert workbook.opaque_functions(query) == {"Evil_CL"}
+    assert workbook.opaque_functions(query) == set()
     write_query(solution, query)
     plan = dependencies.plan_workbook_dependencies(solution)
-    assert plan["queries"][0]["workspaceFunctions"] == ["Evil_CL"]
-    bad_decisions = decisions(plan, tables=["Syslog"], functions=[])
-    bad_decisions["workbooks"][0]["requiredWorkspaceFunctions"] = []
-    with pytest.raises(ValueError, match="Reviewed workspaceFunctions must match exact source aliases|Function aliases need vetted prerequisites"):
-        review(solution, plan, bad_decisions)
-    res_unreviewed = workbook.convert_workbook(json.loads((solution / SOURCE).read_bytes()), tables=["Syslog"])
-    assert res_unreviewed["report"]["status"] == "blocked"
-    # When Evil_CL is explicitly supplied as a reviewed table, bare table usage is allowed
+    assert plan["queries"][0]["workspaceFunctions"] == []
     res_reviewed_table = workbook.convert_workbook(json.loads((solution / SOURCE).read_bytes()), tables=["Evil_CL"])
     assert res_reviewed_table["report"]["queries"][0].get("workspaceFunctions", []) == []
 

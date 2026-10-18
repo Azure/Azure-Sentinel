@@ -864,7 +864,8 @@ class SolutionReportTests(unittest.TestCase):
     def test_report_renderer_parses_as_python_311(self) -> None:
         source_path = (
             Path(__file__).parents[1]
-            / "sentinel_xdr_migration"
+            / "solution_manager"
+            / "reporting"
             / "solution_report.py"
         )
         ast.parse(

@@ -7,6 +7,21 @@ candidate V3.1 Defender Workbook packaging.
 See [tracked follow-up areas](FOLLOW_UPS.md) for curated capability and
 operator-experience work that may be considered separately.
 
+## Package architecture (`solution_manager`)
+
+Implementation modules live under `Tools/SentinelToXDRMigration/solution_manager/`
+organized by Solution Manager capability, with `sentinel_xdr_migration` retained
+as a backwards-compatible package alias:
+
+- `solution_manager/cli.py` — Unified CLI router (`solution-manager` / `sentinel-xdr-migration`)
+- `solution_manager/core/` — Shared workflow state, coordination, onboarding, preflight, target context, budgets, and artifact paths
+- `solution_manager/authoring/` — Offline content authoring contracts, schema validation, and dependency/workbook publication rules
+- `solution_manager/migration/` — Sentinel-to-Defender-XDR analytic rule and workbook translation engine (including `_workbook_core/`)
+- `solution_manager/qualification/` — Live lab deployment, runtime query validation, DCR readiness, Graph/ARM acceptance, and alert parity
+- `solution_manager/packaging/` — V3.1 hybrid solution packaging, content selection, and release notes helpers
+- `solution_manager/reporting/` — Public evidence projection, HTML dashboards, and reviewer exports
+- `solution_manager/research/` — Scaffold for threat-, vulnerability-, and coverage-gap-driven content creation
+
 ## Product goal and operator flow
 
 **Product goal:** Allow autonomous migration of Sentinel solutions to Defender

@@ -84,7 +84,7 @@ class Structure(HTMLParser):
 
 class ReportDashboardTests(unittest.TestCase):
     def test_python_311_syntax(self) -> None:
-        path = Path(__file__).parents[1] / "sentinel_xdr_migration" / "report_dashboard.py"
+        path = Path(__file__).parents[1] / "solution_manager" / "reporting" / "report_dashboard.py"
         ast.parse(path.read_text(), feature_version=(3, 11))
 
     def test_current_run_counts_do_not_claim_25_ready(self) -> None:

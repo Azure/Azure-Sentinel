@@ -86,9 +86,19 @@ themselves establish a toolkit fix is required.
   adapters (`AGENTS.md`, `CLAUDE.md`, `.github`, `.claude`, `.cursor`, and
   `.windsurf`) to default to the `authoring` profile and route packaging through
   `package-v3-1` (V3.1).
+- **Organize Python implementation into `solution_manager` capability subfolders.**
+  Moved the 53 implementation modules into `solution_manager/` grouped by
+  capability (`core/`, `authoring/`, `migration/`, `qualification/`,
+  `packaging/`, `reporting/`, and `research/` scaffold) with `cli.py` at the
+  package root and backwards-compatible `sentinel_xdr_migration` module aliases.
 
 ## Candidate follow-ups
 
+- **Safely capture user decisions into the submitted work for all flows under
+  Solution Manager.** Project sanitized, hash-bound reviewer decisions,
+  waivers, exclusions, and rationale across authoring, migration, qualification,
+  and future Solution Manager flows into the submitted solution PR artifacts
+  (without exposing private tenant, workspace, or environment identifiers).
 - **Add catalog-specific validation routing for `Sample Data/Tables/` in
   `.script/sampleDataValidator.ts`.** `.script/sampleDataValidator.ts` currently
   validates modified JSON files under `Sample Data/` as connector log arrays

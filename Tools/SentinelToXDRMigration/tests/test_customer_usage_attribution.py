@@ -36,7 +36,7 @@ class AttributionTests(unittest.TestCase):
     def run_ps(self, command: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
-             "$ErrorActionPreference = 'Stop'; $env:SENTINEL_SKIP_ATTRIBUTION_LOOKUP = '1'; "
+             "$ErrorActionPreference = 'Stop'; $ErrorView = 'NormalView'; $env:SENTINEL_SKIP_ATTRIBUTION_LOOKUP = '1'; "
              + getattr(self, "ps_prelude", "") + command],
             cwd=self.repository, capture_output=True, text=True,
         )

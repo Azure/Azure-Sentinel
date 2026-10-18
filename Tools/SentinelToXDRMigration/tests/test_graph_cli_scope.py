@@ -193,7 +193,12 @@ class AzureCliGraphScopeTests(unittest.TestCase):
             mock.patch.object(
                 Path,
                 "read_text",
-                return_value=yaml.safe_dump(detection_document()),
+                autospec=True,
+                side_effect=lambda path, *args, **kwargs: (
+                    yaml.safe_dump(detection_document())
+                    if path.suffix in {".yaml", ".yml"}
+                    else json.dumps({"schemaVersion": 1, "graphClientIds": {}})
+                ),
             ),
             mock.patch.object(azure_cli, "_run_command", cli_backend),
             mock.patch(
