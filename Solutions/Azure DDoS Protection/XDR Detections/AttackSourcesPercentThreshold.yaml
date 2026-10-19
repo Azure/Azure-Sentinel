@@ -1,0 +1,84 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: DDOS
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: DDOS
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 402a42ad-f31c-48d1-8f80-0200846b7f25
+    path: Analytic Rules/AttackSourcesPercentThreshold.yaml
+    version: 3.2.2
+    querySha256: 50b14c1e447a1d9c4bd3f888e14a3a018b229b01a7fa614c18e697e56341b0a3
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1498
+    reviewScope:
+      sourceDocumentSha256: 331d1f85955912f681a936484f96c12566207d966ee3ed3ae89011827e57cf78
+      targetQuerySha256: 34995b5092464053d114758ec014defe5e972ded7e8d6e5b11d04d326c55d890
+properties:
+  id: xdr-402a42ad-f31c-48d1-8f80-0200846b7f25
+  displayName: DDoS Attack IP Addresses - Percent Threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let T1 = AzureDiagnostics
+        | where ResourceType == "PUBLICIPADDRESSES" and Category == "DDoSMitigationFlowLogs"
+        | extend destPublicIpAddress_s = coalesce(tostring(column_ifexists("destPublicIpAddress_s", "")), tostring(todynamic(column_ifexists("AdditionalFields", dynamic({})))["destPublicIpAddress"]), tostring(todynamic(column_ifexists("ResultDescription", ""))["destPublicIpAddress"]))
+        | extend sourcePublicIpAddress_s = coalesce(tostring(column_ifexists("sourcePublicIpAddress_s", "")), tostring(todynamic(column_ifexists("AdditionalFields", dynamic({})))["sourcePublicIpAddress"]), tostring(todynamic(column_ifexists("ResultDescription", ""))["sourcePublicIpAddress"]))
+        | summarize rows_count = count() by destPublicIpAddress_s, sourcePublicIpAddress_s;
+      let T2 = AzureDiagnostics
+        | where ResourceType == "PUBLICIPADDRESSES" and Category == "DDoSMitigationFlowLogs"
+        | extend destPublicIpAddress_s = coalesce(tostring(column_ifexists("destPublicIpAddress_s", "")), tostring(todynamic(column_ifexists("AdditionalFields", dynamic({})))["destPublicIpAddress"]), tostring(todynamic(column_ifexists("ResultDescription", ""))["destPublicIpAddress"]))
+        | summarize rows_total = count() by destPublicIpAddress_s;
+      T2
+        | join kind=leftouter T1 on destPublicIpAddress_s
+        | project destPublicIpAddress_s, sourcePublicIpAddress_s, percent_of_traffic = 100*rows_count/rows_total
+        | order by percent_of_traffic desc
+        | where percent_of_traffic > 5
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: DDoS Attack IP Addresses - Percent Threshold
+      description: Identifies IP addresses that generate over 5% of traffic during DDoS attack mitigation
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: sourcePublicIpAddress_s
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1498

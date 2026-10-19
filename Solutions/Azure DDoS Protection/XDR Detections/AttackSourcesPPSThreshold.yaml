@@ -1,0 +1,79 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: DDOS
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: DDOS
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6e76fd9d-8104-41eb-bad3-26054a3ad5f0
+    path: Analytic Rules/AttackSourcesPPSThreshold.yaml
+    version: 3.2.2
+    querySha256: 3ee530de37a891901d3ab9d24cc0ca3254fe54cdd746700231a106e403a809e2
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1498
+    reviewScope:
+      sourceDocumentSha256: 9ebc85812ba4752fd6010784f509de58c3ef1a73ed2c1273cd49eb3bcc63862c
+      targetQuerySha256: fd988779abc91ad430f1449140e5e1d6e4cff0ad32d31cba8e5c23185708f3f7
+properties:
+  id: xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0
+  displayName: DDoS Attack IP Addresses - PPS Threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AzureDiagnostics
+      | where ResourceType == 'PUBLICIPADDRESSES' and Category == "DDoSMitigationFlowLogs"
+      //sample rate of mitigation device 1:1000 so the PPS of the source is estimated to be x1000.
+      | extend destPublicIpAddress_s = coalesce(tostring(column_ifexists("destPublicIpAddress_s", "")), tostring(todynamic(column_ifexists("AdditionalFields", dynamic({})))["destPublicIpAddress"]), tostring(todynamic(column_ifexists("ResultDescription", ""))["destPublicIpAddress"]))
+      | extend sourcePublicIpAddress_s = coalesce(tostring(column_ifexists("sourcePublicIpAddress_s", "")), tostring(todynamic(column_ifexists("AdditionalFields", dynamic({})))["sourcePublicIpAddress"]), tostring(todynamic(column_ifexists("ResultDescription", ""))["sourcePublicIpAddress"]))
+      | summarize PPS = 1000 * count() by destPublicIpAddress_s, sec = bin(TimeGenerated, 1s), sourcePublicIpAddress_s
+      | summarize maxPPS = max(PPS) by destPublicIpAddress_s, sourcePublicIpAddress_s
+      | order by destPublicIpAddress_s, maxPPS desc
+      | where maxPPS > 10000
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: DDoS Attack IP Addresses - PPS Threshold
+      description: Identifies IP addresses that generates maximal traffic rate over 10k PPS during DDoS attack mitigation
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: sourcePublicIpAddress_s
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1498
