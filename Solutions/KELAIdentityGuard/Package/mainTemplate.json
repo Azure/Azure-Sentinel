@@ -1,0 +1,909 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "KELA Cyber",
+    "comments": "Solution template for KELAIdentityGuard"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "KELAIdentityGuard",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "kelacyber.kelaidentityguard-sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "1399A2AA-F54D-4265-A405-3CCE11BE226C",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '1399A2AA-F54D-4265-A405-3CCE11BE226C')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('1399A2AA-F54D-4265-A405-3CCE11BE226C')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','1399A2AA-F54D-4265-A405-3CCE11BE226C','-', '1.0.0')))]"
+    },
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "KELAIdentityGuardCCFConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "KELAIdentityGuardCCFConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "KELAIdentityGuard_Unresolved_Detection_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Identifies unresolved incidents ingested from the KELA Identity Guard API, regardless of their original severity.",
+                "displayName": "KELA Identity Guard Unresolved Incident",
+                "enabled": false,
+                "query": "KELA_IdentityGuard_Incidents_CL\n| summarize arg_max(TimeGenerated, *) by incidentId\n| where status =~ 'UNRESOLVED'\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "KELA_IdentityGuard_Incidents_CL"
+                    ],
+                    "connectorId": "KELAIdentityGuardCCFConnector"
+                  }
+                ],
+                "tactics": [
+                  "CredentialAccess",
+                  "InitialAccess"
+                ],
+                "techniques": [
+                  "T1078",
+                  "T1555"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "accountUserName"
+                      }
+                    ],
+                    "entityType": "Account"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "link"
+                      }
+                    ],
+                    "entityType": "URL"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "KELAIdentityGuard Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "KELAIdentityGuard",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "KELA Identity Guard Unresolved Incident",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "KELA - Identity Guard Connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "KELAIdentityGuardCCFConnector",
+                  "title": "KELA - Identity Guard Connector",
+                  "publisher": "KELA Cyber",
+                  "descriptionMarkdown": "This connector ingests incidents from KELA Identity Guard using Microsoft Sentinel's Codeless Connector Framework (CCF).",
+                  "graphQueriesTableName": "KELA_IdentityGuard_Incidents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Actionable Alerts collected",
+                      "legend": "All Actionable Alerts",
+                      "baseQuery": "KELA_IdentityGuard_Incidents_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of 20 recent Actionable Alerts",
+                      "query": "KELA_IdentityGuard_Incidents_CL\n| take 20"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "KELA_IdentityGuard_Incidents_CL",
+                      "lastDataReceivedQuery": "KELA_IdentityGuard_Incidents_CL \n | summarize Time = max(TimeGenerated)\n"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions required in the Workspace.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "KELA Credentials",
+                        "description": "You'll need your API key and the source workspace ID."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Configure the API connection",
+                      "description": "Please enter the required parameters to authenticate yourself and specify the time period from which to retrieve the data.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Workspace ID",
+                            "name": "WorkspaceId",
+                            "type": "text",
+                            "placeholder": "E.g. cb38eabb0e..."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Key (Token)",
+                            "name": "Password",
+                            "type": "password",
+                            "placeholder": "Enter your KELA API Key",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "KELAIdentityGuard_DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-KELA_IdentityGuard_Incidents_CL": {
+                    "columns": [
+                      {
+                        "name": "incidentId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "createdDate",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "updatedDate",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "sourceDate",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "accountServiceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "accountUserName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "accountServiceHostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "accountUsernameEmailDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "isArchived",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "isDeleted",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "link",
+                        "type": "string"
+                      },
+                      {
+                        "name": "workspaceId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "userClassification",
+                        "type": "string"
+                      },
+                      {
+                        "name": "passwordPolicy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sourceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sourceCategory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sourceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "hasCookies",
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "LogAnalyticsDestination_KELA"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-KELA_IdentityGuard_Incidents_CL"
+                    ],
+                    "destinations": [
+                      "LogAnalyticsDestination_KELA"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now()",
+                    "outputStream": "Custom-KELA_IdentityGuard_Incidents_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "KELA_IdentityGuard_Incidents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "KELA_IdentityGuard_Incidents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "incidentId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "createdDate",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "updatedDate",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "sourceDate",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "accountServiceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "accountUserName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "accountServiceHostname",
+                      "type": "string"
+                    },
+                    {
+                      "name": "accountUsernameEmailDomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "isArchived",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "isDeleted",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "link",
+                      "type": "string"
+                    },
+                    {
+                      "name": "workspaceId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "userClassification",
+                      "type": "string"
+                    },
+                    {
+                      "name": "passwordPolicy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "detection",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sourceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sourceCategory",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sourceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "fileName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "hasCookies",
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "KELAIdentityGuardCCFConnector",
+          "title": "KELA - Identity Guard Connector",
+          "publisher": "KELA Cyber",
+          "descriptionMarkdown": "This connector ingests incidents from KELA Identity Guard using Microsoft Sentinel's Codeless Connector Framework (CCF).",
+          "graphQueriesTableName": "KELA_IdentityGuard_Incidents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Actionable Alerts collected",
+              "legend": "All Actionable Alerts",
+              "baseQuery": "KELA_IdentityGuard_Incidents_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of 20 recent Actionable Alerts",
+              "query": "KELA_IdentityGuard_Incidents_CL\n| take 20"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "KELA_IdentityGuard_Incidents_CL",
+              "lastDataReceivedQuery": "KELA_IdentityGuard_Incidents_CL \n | summarize Time = max(TimeGenerated)\n"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions required in the Workspace.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "KELA Credentials",
+                "description": "You'll need your API key and the source workspace ID."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Configure the API connection",
+              "description": "Please enter the required parameters to authenticate yourself and specify the time period from which to retrieve the data.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Workspace ID",
+                    "name": "WorkspaceId",
+                    "type": "text",
+                    "placeholder": "E.g. cb38eabb0e..."
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key (Token)",
+                    "name": "Password",
+                    "type": "password",
+                    "placeholder": "Enter your KELA API Key",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "KELA Cyber"
+        },
+        "support": {
+          "name": "KELA Cyber",
+          "email": "support@ke-la.com",
+          "tier": "Partner",
+          "link": "https://www.kelacyber.com/contact-us/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "KELA - Identity Guard Connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "KELA - Identity Guard Connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "WorkspaceId": {
+              "defaultValue": "WorkspaceId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "Password": {
+              "defaultValue": "Password",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "KELA Cyber"
+                },
+                "support": {
+                  "name": "KELA Cyber",
+                  "email": "support@ke-la.com",
+                  "tier": "Partner",
+                  "link": "https://www.kelacyber.com/contact-us/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'KELAIdentityGuardPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKey": "[[parameters('Password')]",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.ke-la.com/bots-client-api/v1/search-incidents",
+                  "httpMethod": "POST",
+                  "isPostPayloadJson": true,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "queryWindowInMin": 15,
+                  "rateLimitQPS": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  },
+                  "queryParametersTemplate": "[[concat('{\"workspaceId\":\"', parameters('WorkspaceId'), '\",\"payload\":{\"filters\":{\"dateFilters\":{\"createdDate\":{\"startDate\":\"{_QueryWindowStartTime}\"}}}}}')]"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "size",
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": true
+                },
+                "connectorDefinitionName": "KELAIdentityGuardCCFConnector",
+                "dataType": "KELA_IdentityGuard_Incidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-KELA_IdentityGuard_Incidents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "KELAIdentityGuard",
+        "publisherDisplayName": "KELA Cyber",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/KELAIdentityGuard/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://docs.ke-la.com/kela-docs\">KELA Identity Guard</a> solution for Microsoft Sentinel provides the capability to ingest <a href=\"https://docs.ke-la.com/kela-docs\">KELA Identity Guard events and incidents</a> into your Microsoft Sentinel workspace, enabling correlation, analytics, and automated response.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-workspace-overview\">Log Analytics workspace</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/kela-logo-72px.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "KELAIdentityGuard",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "KELA Cyber"
+        },
+        "support": {
+          "name": "KELA Cyber",
+          "email": "support@ke-la.com",
+          "tier": "Partner",
+          "link": "https://www.kelacyber.com/contact-us/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-06",
+        "lastPublishDate": "2026-08-06",
+        "providers": [
+          "KELA Cyber"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Others"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
