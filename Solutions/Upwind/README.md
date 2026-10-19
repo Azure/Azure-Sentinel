@@ -37,6 +37,7 @@ UpwindCatalogLoader/
 │   └── testParameters.json
 └── Data Connectors/
     ├── azuredeploy_UpwindCatalogLoader_API_FunctionApp.json  <- ARM deploy template
+    ├── azuredeploy_UpwindLogsLoader_API_FunctionApp.json     <- Identical copy for older installs (see below)
     ├── UpwindCatalogLoader_API_FunctionApp.json              <- Connector definition
     ├── UpwindLogsLoader.zip         <- Self-contained Function App package
     ├── host.json
@@ -60,6 +61,8 @@ UpwindCatalogLoader/
 Click the button below to deploy all required Azure resources (DCE, 6 custom tables, DCR with 6 streams, role assignment, storage, App Insights, Function App) in one step:
 
 [![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FUpwind%2FData%2520Connectors%2Fazuredeploy_UpwindCatalogLoader_API_FunctionApp.json)
+
+> **Older installs:** solution versions before 3.0.3 shipped an "Upwind Logs Loader" connector whose Deploy button goes through `https://aka.ms/sentinel-Upwind-azuredeploy` to `azuredeploy_UpwindLogsLoader_API_FunctionApp.json`. Updating the solution doesn't remove that connector, so the file is kept as an identical copy of `azuredeploy_UpwindCatalogLoader_API_FunctionApp.json`. Keep the two files in sync.
 
 ### Parameters
 
