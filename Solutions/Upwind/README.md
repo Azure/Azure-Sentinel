@@ -108,19 +108,19 @@ Click the button below to deploy all required Azure resources (DCE, 6 custom tab
 |---|---|---|
 | `TimeGenerated` | datetime | Ingestion time |
 | `id` | string | `id` |
-| `cve_id` | string | `cve_id` |
-| `severity` | string | `severity` |
+| `cve_id` | string | `resource.cve_id` (or `vulnerability.nvd_cve_id`) |
+| `severity` | string | `vulnerability.nvd_cvss_v3_severity` |
 | `status` | string | `status` |
 | `first_seen_time` | datetime | `first_seen_time` |
 | `last_scan_time` | datetime | `last_scan_time` |
 | `resource` | dynamic | `resource` |
 | `package` | dynamic | `package` |
-| `fix` | dynamic | `fix` |
-| `fix_available` | string | `fix_available` |
-| `exploitable` | string | `exploitable` |
-| `internet_exposure` | string | `internet_exposure` |
+| `fix` | dynamic | `fixed_in_version` of the `OFFICIAL_FIX` entry in `remediation` |
+| `fix_available` | string | `true` when `remediation` has an official fix, else `false` |
+| `exploitable` | string | `vulnerability.exploitable` (`true`/`false`) |
+| `internet_exposure` | string | `resource.internet_exposure`, as JSON |
 | `source` | string | `source` |
-| `image_name` | string | `image_name` |
+| `image_name` | string | `image.name` |
 | `remediation` | dynamic | `remediation` |
 
 ### `UpwindThreatDetections_CL`
