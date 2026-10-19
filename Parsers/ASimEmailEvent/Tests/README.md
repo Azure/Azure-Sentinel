@@ -76,17 +76,15 @@ The ten-row CSV under `Sample Data\ASIM` contains the first ten synthetic cases 
 
 The older public Elastic streaming fixture informed source-shape research only. Its event envelope is not a native Sentinel row and it does not establish current production correctness.
 
-`build_regression.py` reads the current parser YAML, fixtures and source schema, then generates `EmailEventsRegression.kql`. It embeds source hashes to prevent silently testing stale parser copies. Hashes use UTF-8 text with LF-normalized line endings so Windows and Linux checkouts agree; the regression checks cover both LF and CRLF source text. The query contains the real parser variants and unifiers, a synthetic-only source table and an empty test watchlist. It reads no external table and performs no write.
+`EmailEventsRegression.kql` embeds source hashes to prevent silently testing stale parser copies. Hashes use UTF-8 text with LF-normalized line endings so Windows and Linux checkouts agree; the regression checks cover both LF and CRLF source text. The query contains the real parser variants and unifiers, a synthetic-only source table and an empty test watchlist. It reads no external table and performs no write. The Python generation and template-check helpers used during development are retained locally and are not included in this contribution.
 
 The regression query checks both variants against 14 mapping cases and includes 26 assertions for cardinality, disabling, time bounds, positive/negative filters, IPv4/IPv6 prefixes, packing, malformed-source diagnostics and the normalized query workflow. Zero result rows means success only when the query has actually been executed.
 
 ## Reproduce local checks
 
-Run from the repository root. Python 3.12 or newer is required by the existing repository template validator; Python dependencies are `pyyaml` and `tabulate`.
+Run the focused static checks from the repository root:
 
 ```powershell
-python Parsers\ASimEmailEvent\Tests\build_regression.py
-python Parsers\ASimEmailEvent\Tests\test_template.py
 dotnet test .script\tests\KqlvalidationsTests\Kqlvalidations.Tests.csproj --filter FullyQualifiedName~ASimEmailEventsTests
 ```
 
@@ -128,7 +126,7 @@ imEmailEvent(
 
 ## Reusable validation assets and AI assistance
 
-Reusable assets are the source schema snapshot, mapping contract, labeled fixtures, existing-validator wrapper, focused Kusto binding tests and synthetic regression generator.
+Included reusable assets are the source schema snapshot, mapping contract, labeled fixtures, focused Kusto binding tests and self-contained KQL regression query. The Python development helpers are retained locally, outside this contribution.
 
 AI assisted source comparison, mapping development, fixture generation, implementation and local validation. Static checks identified a regression-harness join-key mistake, which was corrected. Inspection also tightened packing, filtering order and result-detail semantics. This contribution does not claim production correctness, performance improvements or measured development-time savings.
 
