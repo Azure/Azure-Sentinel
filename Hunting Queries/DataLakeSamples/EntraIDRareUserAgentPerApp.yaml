@@ -1,7 +1,9 @@
 id: d190464d-83ac-4734-9953-2cf19826a28f
 name: Entra ID rare user agent per app
 description: |
-  Establish a baseline of the type of UserAgent (that is, browser, office application, etc.) that is typically used for a particular application by looking back for a number of days. It then searches the current day for any deviations from this pattern, that is, types of UserAgents not seen before in combination with this application.
+  Identify sign-ins using user agent types not previously seen for an application by comparing the current day with a seven-day baseline.
+description-detailed: |
+  Establish the user agent types typically used for each application, such as browsers, Office applications, and custom clients. Search the current day for types absent from the baseline, focusing on applications with sufficient historical activity.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -59,7 +61,8 @@ query: |
       union withsource=tbl_name AADNonInteractiveUserSignInLogs, SigninLogs
       | where TimeGenerated >= ago(start_time)
       | where TimeGenerated < ago(end_time)
-      | where ResultType == 0 // Only look at succesful logins
+      // Only look at successful logins.
+      | where ResultType == 0
       | extend ParsedUserAgent = ExtractBrowserTypeFromUA(UserAgent)
       | extend UserAgentType = tostring(ParsedUserAgent.AgentType)
       | extend UserAgentName = tostring(ParsedUserAgent.AgentName)
@@ -89,10 +92,18 @@ query: |
   // Begin allow-list.
   // End allow-list.
   | summarize count() by UserPrincipalName, AppDisplayName, AppId, UserAgentType, SimpleUserAgent, UserAgent
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
 version: 1.0.0
 metadata:
   source:
     kind: Microsoft
+  author:
+    name: Microsoft Sentinel Team
   support:
     tier: Microsoft
   categories:

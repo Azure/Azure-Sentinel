@@ -1,7 +1,9 @@
 id: 2c67a0a5-62f1-4eab-8a6c-e93a27f2c3e8
 name: Anomalous sign-in locations increase
 description: |
-  Analyze trend analysis of Microsoft Entra ID sign-in logs to detect unusual location changes for users across applications by computing trend lines of location diversity. It highlights the top three accounts with the steepest increase in location variability and lists their associated locations within 21-day windows.
+  Identify the top three user and application pairs with the steepest increase in sign-in location diversity over 21 days, and list their associated locations.
+description-detailed: |
+  Analyze Microsoft Entra ID sign-in logs using daily location counts and fitted trend lines to highlight unusual growth in location diversity. List the locations associated with each selected user and application within 21-day windows.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -12,8 +14,7 @@ relevantTechniques:
   - T1078
 query: |
   SigninLogs
-  | where TimeGenerated > ago(1d)
-  // Forces Log Analytics to recognize that the query should be run over full time range
+  | where TimeGenerated > ago(21d)
   | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";")
   | project TimeGenerated, AppDisplayName, UserPrincipalName, locationString
   // Create time series
@@ -26,6 +27,7 @@ query: |
   // Extract the set of locations for each top user:
   | join kind=inner (
       SigninLogs
+      | where TimeGenerated > ago(21d)
       | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";")
       | summarize locationList = makeset(locationString), threeDayWindowLocationCount = dcount(locationString) by AppDisplayName, UserPrincipalName, timerange = bin(TimeGenerated, 21d)
   ) on AppDisplayName, UserPrincipalName
@@ -42,6 +44,8 @@ version: 1.0.0
 metadata:
   source:
     kind: Microsoft
+  author:
+    name: Microsoft Sentinel Team
   support:
     tier: Microsoft
   categories:

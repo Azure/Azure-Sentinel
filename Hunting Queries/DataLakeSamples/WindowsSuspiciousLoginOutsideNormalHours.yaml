@@ -16,7 +16,7 @@ query: |
   let lookback = starttime - 14d;
   let AllLogonEvents = materialize(
       SecurityEvent
-      | where TimeGenerated between (lookback..starttime)
+      | where TimeGenerated between (lookback..endtime)
       | where EventID in (4624, 4625)
       | where LogonTypeName in~ ('2 - Interactive', '10 - RemoteInteractive')
       | where AccountType =~ 'User'
@@ -90,6 +90,7 @@ query: |
       | project StartTime = TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc
   );
   AllLogonEvents
+  | where StartTime >= lookback and StartTime < starttime
   | where TargetDomainName !in ("Window Manager", "Font Driver Host")
   | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek = make_set(DayofWeek, 10) by TargetUserName
   | join kind=inner (
@@ -100,7 +101,7 @@ query: |
   | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
   // Also populating additional column showing historical days of week when logon was seen
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
-  | summarize Total = count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek = make_set(DayofWeek, 10), StartTime = max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress, 10000), SourceHost = make_set(WorkstationName, 10000), SubjectUserName = make_set(SubjectUserName, 10000), HostLoggedOn = make_set(Computer, 10000) by EventID, Activity, TargetDomainName, TargetUserName, ProcessName, LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
+  | summarize Total = count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek = make_set(DayofWeek, 10), StartTime = min(StartTime), EndTime = max(StartTime), SourceIP = make_set(IpAddress, 10000), SourceHost = make_set(WorkstationName, 10000), SubjectUserName = make_set(SubjectUserName, 10000), HostLoggedOn = make_set(Computer, 10000) by EventID, Activity, TargetDomainName, TargetUserName, ProcessName, LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
   | extend historical_DayofWeek = todynamic(historical_DayofWeek)
   | extend timestamp = StartTime, NTDomain = split(TargetUserName, '\\', 0)[0], Name = split(TargetUserName, '\\', 1)[0]
   | extend Account_0_NTDomain = NTDomain
@@ -116,8 +117,10 @@ version: 1.0.0
 metadata:
   source:
     kind: Microsoft
+  author:
+    name: Microsoft Sentinel Team
   support:
     tier: Microsoft
   categories:
     domains:
-      - Security - Other
+      - Security - Others
