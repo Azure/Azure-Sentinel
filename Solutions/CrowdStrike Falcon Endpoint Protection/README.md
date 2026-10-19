@@ -10,6 +10,8 @@
   * [CrowdStrike Falcon Data Replicator (AWS S3) (via Codeless Connector Framework)](#2-crowdstrike-falcon-data-replicator-aws-s3-via-codeless-connector-framework)
   * [CrowdStrike Falcon Adversary Intelligence](#3-crowdstrike-falcon-adversary-intelligence)
 
+* [Upgrade Notes](#upgrade-notes)
+
 * [Best Practices](#best-practices)
 
 * [References](#references)
@@ -141,6 +143,12 @@ Use this connector when you need access to CrowdStrike-curated intelligence rela
 * Threat Intelligence Context
 
 This connector enriches investigations and threat hunting activities by providing intelligence about known adversaries and their tactics, techniques, and procedures (TTPs).
+
+---
+
+## Upgrade Notes
+
+* When migrating or upgrading to solution version **3.4.0 or later**, delete the existing data collection rule (DCR), and then reconnect the **CrowdStrike API data connector**. This prevents resource collisions and ensures that data is ingested into the V2 tables. To locate the existing DCR, search the solution's resource group for **Microsoft-Sentinel-CrowdStrikeDCR**, delete the matching resource, and then reconnect the connector.
 
 ---
 
