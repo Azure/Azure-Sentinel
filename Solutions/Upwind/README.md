@@ -110,7 +110,7 @@ Click the button below to deploy all required Azure resources (DCE, 6 custom tab
 | `id` | string | `id` |
 | `cve_id` | string | `resource.cve_id` (or `vulnerability.nvd_cve_id`) |
 | `severity` | string | `vulnerability.nvd_cvss_v3_severity` |
-| `status` | string | `status` |
+| `status` | string | `status`; `OPEN` when unset, since the API only returns active findings |
 | `first_seen_time` | datetime | `first_seen_time` |
 | `last_scan_time` | datetime | `last_scan_time` |
 | `resource` | dynamic | `resource` |
@@ -217,7 +217,7 @@ UpwindCatalogAssets_CL
 
 // Open critical/high vulnerabilities with an available fix
 UpwindVulnerabilityFindings_CL
-| where status == "open" and severity in ("critical", "high") and fix_available == "true"
+| where status =~ "open" and severity in~ ("critical", "high") and fix_available == "true"
 | project cve_id, severity, image_name, resource, fix
 | sort by severity asc
 
