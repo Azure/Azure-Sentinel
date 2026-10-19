@@ -1,0 +1,149 @@
+Parser:
+  Title: Email Event ASIM parser for Microsoft Defender for Office 365
+  Version: 0.1.0
+  LastUpdated: Oct 15, 2026
+Product:
+  Name: Microsoft Defender for Office 365
+Normalization:
+  Schema: EmailEvent
+  Version: 1.0.0
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: EmailEvents source schema
+  Link: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-emailevents-table
+Description: |
+  Normalizes Microsoft Defender for Office 365 EmailEvents in Microsoft Sentinel to ASIM EmailEvent.
+  Preserves individual recipient/update events without enrichment or deduplication.
+ParserName: ASimEmailEventMicrosoftDefenderOffice365
+EquivalentBuiltInParser: _ASim_EmailEvent_MicrosoftDefenderOffice365
+ParserParams:
+- Name: disabled
+  Type: bool
+  Default: false
+- Name: pack
+  Type: bool
+  Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      EmailEvents
+      | where not(disabled)
+
+      | extend _SourceFields = iff(pack, pack_all(), dynamic({}))
+      | extend
+          SrcIpAddr = case(
+              SenderIPv4 !contains "/" and isnotnull(parse_ipv4(SenderIPv4)), SenderIPv4,
+              SenderIPv6 !contains "/" and isnotnull(parse_ipv6(SenderIPv6)), SenderIPv6, ""),
+          _DeliveryAction = tolower(DeliveryAction),
+          _DeliveryLocation = tolower(DeliveryLocation)
+
+      | extend
+          EmailDirection = case(
+              EmailDirection =~ "Inbound", "Inbound",
+              EmailDirection =~ "Outbound", "Outbound",
+              EmailDirection =~ "Intra-org", "Internal", "Unknown"),
+          EmailDeliveryLocation = case(
+              _DeliveryLocation == "inbox/folder", "Inbox",
+              _DeliveryLocation == "junk", "Junk",
+              _DeliveryLocation == "quarantine", "Quarantine",
+              _DeliveryLocation in ("deleted items", "deleteditems"), "DeletedItems", ""),
+          EventResult = case(
+              _DeliveryLocation in ("failed", "dropped") or _DeliveryAction == "blocked", "Failure",
+              _DeliveryAction in ("delivered", "junked", "replaced"), "Success", "NA")
+
+      | extend
+          _Authentication = parse_json(AuthenticationDetails),
+          _To = column_ifexists("To", dynamic([])),
+          _Cc = column_ifexists("Cc", dynamic([]))
+
+      | project-rename
+          EmailFromAddress = SenderFromAddress,
+          EmailFromDomain = SenderFromDomain,
+          EmailMailFromAddress = SenderMailFromAddress,
+          EmailMailFromDomain = SenderMailFromDomain,
+          EmailSubject = Subject,
+          Dst = RecipientEmailAddress,
+          SrcUserId = SenderObjectId,
+          RuleName = EmailActionPolicy,
+          ThreatOriginalCategory = ThreatTypes,
+          ThreatName = ThreatNames,
+          EmailOriginalDeliveryLocation = DeliveryLocation,
+          DvcOriginalAction = DeliveryAction
+      | extend
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventType = "EmailDelivery",
+          EventSchema = "EmailEvent",
+          EventSchemaVersion = "1.0.0",
+          EventVendor = "Microsoft",
+          EventProduct = "Microsoft Defender for Office 365",
+          EventCount = int(1),
+          EventMessage = case(
+              isnull(TimeGenerated), "Source EmailEvents record has no event timestamp",
+              isempty(Dst), "Source EmailEvents record has no recipient identity", ""),
+          Dvc = "Microsoft Defender for Office 365",
+          DvcEntityKey = "",
+          AdditionalEntities = dynamic([]),
+          Src = SrcIpAddr,
+          SrcUserName = EmailFromAddress,
+          SrcUserIdType = iff(isnotempty(SrcUserId), "AADID", ""),
+          EmailToRecipients = iff(gettype(_To) == "array", _To, dynamic([])),
+          EmailCCRecipients = iff(gettype(_Cc) == "array", _Cc, dynamic([])),
+          EmailSizeBytes = tolong(column_ifexists("EmailSize", long(null))),
+          EmailFileCount = iff(AttachmentCount >= 0, toint(AttachmentCount), int(null)),
+          EmailUrlCount = iff(UrlCount >= 0, toint(UrlCount), int(null)),
+          DvcAction = case(
+              _DeliveryAction == "blocked" and _DeliveryLocation == "quarantine", "Quarantined",
+              _DeliveryAction == "blocked", "Blocked",
+              _DeliveryAction == "replaced", "Modified",
+              _DeliveryAction in ("delivered", "junked"), "Delivered", "NA"),
+          EventResultDetails = case(
+              ThreatOriginalCategory has "Malware", "MalwareDetected",
+              ThreatOriginalCategory has "Phish", "PhishingDetected",
+              ThreatOriginalCategory has "Spam" and _DeliveryAction == "blocked", "BlockedBySpamFilter",
+              _DeliveryAction == "blocked", "Other", ""),
+          EventOriginalUid = ReportId,
+          EventUid = hash_sha256(tostring(pack_array(
+              tostring(column_ifexists("TenantId", "")), NetworkMessageId, Dst, TimeGenerated, ReportId))),
+          EmailSpfOriginalResult = tostring(_Authentication.SPF),
+          EmailDkimOriginalResult = tostring(_Authentication.DKIM),
+          EmailDmarcOriginalResult = tostring(_Authentication.DMARC)
+      | extend
+          IpAddr = SrcIpAddr,
+          User = SrcUserName,
+          SrcUsernameType = iff(isnotempty(SrcUserName), "UPN", ""),
+          Rule = RuleName,
+          EmailSizeBytes = iff(EmailSizeBytes >= 0, EmailSizeBytes, long(null)),
+          EmailSpfResult = tostring(dynamic({
+              "pass":"Pass", "fail":"Fail", "softfail":"SoftFail", "neutral":"Neutral",
+              "none":"None", "temperror":"TemporaryError", "permerror":"PermanentError"
+          })[tolower(EmailSpfOriginalResult)]),
+          EmailDkimResult = tostring(dynamic({
+              "pass":"Pass", "fail":"Fail", "none":"None",
+              "temperror":"TemporaryError", "permerror":"PermanentError"
+          })[tolower(EmailDkimOriginalResult)]),
+          EmailDmarcResult = tostring(dynamic({
+              "pass":"Pass", "fail":"Fail", "bestguesspass":"BestGuessPass", "none":"None"
+          })[tolower(EmailDmarcOriginalResult)]),
+          AdditionalFields = _SourceFields
+
+      | project
+          TimeGenerated, Type,
+          EventStartTime, EventEndTime, EventType, EventSchema, EventSchemaVersion,
+          EventVendor, EventProduct, EventCount, EventResult, EventResultDetails,
+          EventOriginalUid, EventUid, EventMessage, Dvc, DvcEntityKey, DvcAction, DvcOriginalAction,
+          Dst, Src, SrcIpAddr, IpAddr, SrcUserName, SrcUsernameType, SrcUserId, SrcUserIdType, User,
+          EmailFromAddress, EmailFromDomain, EmailMailFromAddress, EmailMailFromDomain,
+          EmailToRecipients, EmailCCRecipients, EmailSubject, EmailLanguage, EmailSizeBytes,
+          EmailFileCount, EmailUrlCount, EmailDirection, EmailDeliveryLocation, EmailOriginalDeliveryLocation,
+          EmailSpfOriginalResult, EmailSpfResult, EmailDkimOriginalResult, EmailDkimResult,
+          EmailDmarcOriginalResult, EmailDmarcResult,
+          RuleName, Rule, ThreatName, ThreatOriginalCategory, AdditionalFields, AdditionalEntities
+
+  };
+  parser(disabled=disabled, pack=pack)
