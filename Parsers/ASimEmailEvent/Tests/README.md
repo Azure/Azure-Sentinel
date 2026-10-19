@@ -76,7 +76,7 @@ The ten-row CSV under `Sample Data\ASIM` contains the first ten synthetic cases 
 
 The older public Elastic streaming fixture informed source-shape research only. Its event envelope is not a native Sentinel row and it does not establish current production correctness.
 
-`build_regression.py` reads the current parser YAML, fixtures and source schema, then generates `EmailEventsRegression.kql`. It embeds source hashes to prevent silently testing stale parser copies. The query contains the real parser variants and unifiers, a synthetic-only source table and an empty test watchlist. It reads no external table and performs no write.
+`build_regression.py` reads the current parser YAML, fixtures and source schema, then generates `EmailEventsRegression.kql`. It embeds source hashes to prevent silently testing stale parser copies. Hashes use UTF-8 text with LF-normalized line endings so Windows and Linux checkouts agree; the regression checks cover both LF and CRLF source text. The query contains the real parser variants and unifiers, a synthetic-only source table and an empty test watchlist. It reads no external table and performs no write.
 
 The regression query checks both variants against 14 mapping cases and includes 26 assertions for cardinality, disabling, time bounds, positive/negative filters, IPv4/IPv6 prefixes, packing, malformed-source diagnostics and the normalized query workflow. Zero result rows means success only when the query has actually been executed.
 

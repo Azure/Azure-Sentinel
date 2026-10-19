@@ -37,7 +37,7 @@ def declaration(name):
         value = param["Default"]
         default = json.dumps(value) if param["Type"] == "string" else str(value).lower() if isinstance(value, bool) else str(value)
         params.append(param["Name"] + ":" + param["Type"] + "=" + default)
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256(path.read_text(encoding="utf-8-sig").encode("utf-8")).hexdigest()
     query = "\n".join(line.rstrip() for line in definition["ParserQuery"].splitlines())
     return f"// source-sha256 {name}: {digest}\nlet {name} = ({', '.join(params)}) {{\n{query}\n}};\n"
 

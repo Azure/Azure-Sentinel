@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using Kusto.Language;
 using Kusto.Language.Symbols;
 using Kusto.Language.Syntax;
@@ -113,15 +114,24 @@ namespace Kqlvalidations.Tests
             Assert.Equal(schemas[0], schemas[1]);
         }
 
-        [Fact]
-        public void SyntheticRegressionQueryBindsWithoutAnyExternalTables()
+        private static string SourceHash(string content)
+        {
+            var normalized = content.Replace("\r\n", "\n").Replace("\r", "\n");
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized))).ToLowerInvariant();
+        }
+
+        [Theory]
+        [InlineData("\n")]
+        [InlineData("\r\n")]
+        public void SyntheticRegressionQueryBindsWithoutAnyExternalTables(string lineEnding)
         {
             var path = Path.Combine(Root, "Parsers", "ASimEmailEvent", "Tests", "EmailEventsRegression.kql");
             var query = File.ReadAllText(path);
             foreach (var name in new[] { "ASim" + Suffix, "vim" + Suffix, "vimEmailEventEmpty", "ASimEmailEvent", "imEmailEvent" })
             {
                 var source = Path.Combine(Root, "Parsers", "ASimEmailEvent", "Parsers", name + ".yaml");
-                var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(source))).ToLowerInvariant();
+                var content = File.ReadAllText(source).Replace("\r\n", "\n").Replace("\r", "\n");
+                var hash = SourceHash(content.Replace("\n", lineEnding));
                 Assert.Contains("// source-sha256 " + name + ": " + hash, query);
             }
             var code = KustoCode.ParseAndAnalyze(query, GlobalState.Default);
