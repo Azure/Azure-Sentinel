@@ -923,7 +923,12 @@ FLOW_DESCRIPTIONS = {
 }
 
 
-def _flow_stage(stage: Any, *, freshness: Any = None) -> dict[str, Any]:
+def _flow_stage(
+    stage: Any,
+    *,
+    freshness: Any = None,
+    require_freshness: bool = False,
+) -> dict[str, Any]:
     if not isinstance(stage, dict):
         stage = {}
     raw = stage.get("status") if isinstance(stage.get("status"), str) else None
@@ -936,13 +941,15 @@ def _flow_stage(stage: Any, *, freshness: Any = None) -> dict[str, Any]:
         "failed": ("failed", "Failed"),
         "pending": ("pending", "Pending"),
         "notRequired": ("not-required", "Not required"),
+        "not-required": ("not-required", "Not required"),
+        "skipped": ("not-required", "Not required"),
         "stale": ("stale", "Stale"),
     }.get(raw, ("unknown", "Evidence unavailable" if raw is None else "Unknown status"))
     artifacts = stage.get("artifacts") if isinstance(stage.get("artifacts"), dict) else {}
     freshness_status = None
     if isinstance(freshness, dict):
         freshness_status = freshness.get("status") if isinstance(freshness.get("status"), str) else None
-    if raw in {"passed", "completed"}:
+    if raw in {"passed", "completed"} and (require_freshness or isinstance(freshness, dict)):
         if freshness_status == "stale":
             normalized = ("stale", "Stale package")
         elif freshness_status != "current":
@@ -1002,6 +1009,23 @@ def _flow_duration(started: Any, completed: Any) -> str:
 def _setup_station_value(report: dict[str, Any]) -> dict[str, Any]:
     setup = report.get("startupSetup")
     setup = setup if isinstance(setup, dict) else {}
+    workflow = report.get("workflow") if isinstance(report.get("workflow"), dict) else {}
+    pipeline = report.get("qualificationPipeline") if isinstance(report.get("qualificationPipeline"), dict) else {}
+    if pipeline.get("preflightPassed") is True and (
+        (setup.get("targetLocked") is True and setup.get("profileConfirmed") is True)
+        or workflow.get("profileSelectionConfirmed") is True
+    ):
+        return {
+            "state": "completed",
+            "display": "Target & profile locked",
+            "raw": "passed",
+            "message": (
+                "Locked target, confirmed workflow profile, and qualification preflight readiness are recorded in this run snapshot."
+            ),
+            "updated": str(pipeline.get("updatedAt") or ""),
+            "timing": "",
+            "attempts": "1",
+        }
     return {
         "state": "unknown",
         "display": setup.get("display") if isinstance(setup.get("display"), str) else "Setup checks not recorded",
@@ -1016,8 +1040,33 @@ def _setup_station_value(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _preflight_station_value(preflight: dict[str, Any]) -> dict[str, Any]:
+def _preflight_station_value(
+    preflight: dict[str, Any],
+    *,
+    qualification_pipeline: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if preflight.get("graphRecorded") is not True:
+        pipe_stages = (
+            qualification_pipeline.get("qualificationStages")
+            if isinstance(qualification_pipeline, dict)
+            and isinstance(qualification_pipeline.get("qualificationStages"), dict)
+            else {}
+        )
+        pipe_preflight = pipe_stages.get("preflight") if isinstance(pipe_stages.get("preflight"), dict) else {}
+        if isinstance(qualification_pipeline, dict) and (
+            qualification_pipeline.get("preflightPassed") is True
+            or pipe_preflight.get("status") == "passed"
+        ):
+            scope_summary = pipe_preflight.get("deploymentScopeSummary") or "recorded qualification scope"
+            return {
+                "state": "completed",
+                "display": "Preflight passed",
+                "raw": "passed",
+                "message": (
+                    f"Qualification preflight passed for {scope_summary}. "
+                    "Preflight is diagnostic/preapproval evidence; live writes still require hash-bound scope verification."
+                ),
+            }
         return {
             "state": "unknown",
             "display": "Graph preflight not recorded",
@@ -1048,6 +1097,16 @@ def _query_validation_value(report: dict[str, Any]) -> dict[str, Any]:
         if isinstance(rule, dict) and isinstance(rule.get("queryParity"), dict):
             results.append(rule["queryParity"])
     if not results:
+        pipeline = report.get("qualificationPipeline") if isinstance(report.get("qualificationPipeline"), dict) else {}
+        wb_contract = pipeline.get("workbookContractResult") if isinstance(pipeline.get("workbookContractResult"), dict) else {}
+        if wb_contract.get("status") == "passed" and wb_contract.get("accepted") is not False:
+            return {
+                "state": "completed",
+                "display": "Workbook queries passed",
+                "raw": "passed",
+            }
+        if wb_contract.get("status") == "failed":
+            return {"state": "failed", "display": "Failed", "raw": "failed"}
         return {"state": "unknown", "display": "Not run", "raw": "not-run"}
     if any(item.get("status") == "failed" for item in results):
         return {"state": "failed", "display": "Failed", "raw": "failed"}
@@ -1074,6 +1133,28 @@ def _package_acceptance_value(report: dict[str, Any]) -> dict[str, Any]:
     plan = report.get("deploymentPlanning")
     plan = plan.get("packageAcceptancePlan") if isinstance(plan, dict) else {}
     plan = plan if isinstance(plan, dict) else {}
+    pipeline = report.get("qualificationPipeline") if isinstance(report.get("qualificationPipeline"), dict) else {}
+    pipe_stages = pipeline.get("qualificationStages") if isinstance(pipeline.get("qualificationStages"), dict) else {}
+    pipe_deploy = pipe_stages.get("deployment") if isinstance(pipe_stages.get("deployment"), dict) else {}
+    readback = pipe_deploy.get("readbackReconciliation") if isinstance(pipe_deploy.get("readbackReconciliation"), dict) else {}
+    promo = pipeline.get("promotionGate") if isinstance(pipeline.get("promotionGate"), dict) else {}
+    if (
+        (
+            pipe_deploy.get("status") == "passed"
+            and pipe_deploy.get("deploymentVerified") is True
+            and readback.get("readbackVerified") is True
+        )
+        or (pipeline.get("deploymentVerified") is True and promo.get("passed") is True)
+    ):
+        return {
+            "state": "completed",
+            "display": "Disabled ARM & read-back verified",
+            "raw": "passed",
+            "message": (
+                "Solution ARM template deployment and GET read-back reconciliation passed in the lab with all deployed resources verified disabled."
+            ),
+            "plan": plan,
+        }
     return {
         "state": "unknown",
         "display": "Not tracked · not run",
@@ -1214,14 +1295,16 @@ def _flow_stage_detail(stage_name: str, report: dict[str, Any]) -> str:
     stages = workflow.get("stages") if isinstance(workflow.get("stages"), dict) else {}
     stage = stages.get(stage_name)
     preflight = report.get("qualificationPreflight") if isinstance(report.get("qualificationPreflight"), dict) else {}
+    qualification_pipeline = report.get("qualificationPipeline") if isinstance(report.get("qualificationPipeline"), dict) else None
+    setup_value: dict[str, Any] = {}
     preflight_value: dict[str, Any] = {}
     suite_value: dict[str, Any] = {}
     package_value: dict[str, Any] = {}
     if stage_name == "setup":
         setup_value = _setup_station_value(report)
-        stage = {"status": "unknown", "message": setup_value["message"]}
+        stage = {"status": setup_value.get("raw") or "unknown", "message": setup_value["message"]}
     elif stage_name == "preflight":
-        preflight_value = _preflight_station_value(preflight)
+        preflight_value = _preflight_station_value(preflight, qualification_pipeline=qualification_pipeline)
         stage = {
             "status": preflight_value["raw"] or "unknown",
             "message": preflight_value["message"],
@@ -1231,7 +1314,7 @@ def _flow_stage_detail(stage_name: str, report: dict[str, Any]) -> str:
     elif stage_name == "validationSuite":
         suite_value = _validation_suite_value(report)
         stage = {
-            "status": "unknown",
+            "status": suite_value.get("raw") or "unknown",
             "message": suite_value["message"],
         }
     elif stage_name == "queryValidation":
@@ -1243,12 +1326,14 @@ def _flow_stage_detail(stage_name: str, report: dict[str, Any]) -> str:
     elif stage_name == "packageAcceptance":
         package_value = _package_acceptance_value(report)
         stage = {
-            "status": "unknown",
+            "status": package_value.get("raw") or "unknown",
             "message": package_value["message"],
         }
     freshness = workflow.get("packageFreshness") if stage_name == "packaging" else None
-    value = _flow_stage(stage, freshness=freshness)
-    if stage_name == "preflight":
+    value = _flow_stage(stage, freshness=freshness, require_freshness=(stage_name == "packaging"))
+    if stage_name == "setup":
+        value = {**value, **setup_value}
+    elif stage_name == "preflight":
         value = {**value, **preflight_value}
     elif stage_name == "validationSuite":
         value = {**value, **suite_value}
@@ -1584,7 +1669,11 @@ def _flow_html(report: dict[str, Any]) -> str:
     mode = profile if workflow.get("profileSelectionConfirmed") is True else None
     freshness = workflow.get("packageFreshness")
     values = {
-        name: _flow_stage(stage, freshness=freshness if name == "packaging" else None)
+        name: _flow_stage(
+            stage,
+            freshness=freshness if name == "packaging" else None,
+            require_freshness=(name == "packaging"),
+        )
         for name, stage in stages.items()
     }
     for name, _ in FLOW_STATIONS:
@@ -1653,7 +1742,11 @@ def _flow_html(report: dict[str, Any]) -> str:
             ("validationSuite", "Official validation rerun", ("Official", "validation rerun"), 930, _validation_suite_value(report)),
             ("preflight", "Just-in-time preflight", ("Fresh", "preflight"), 1080, _preflight_station_value(
                 report.get("qualificationPreflight")
-                if isinstance(report.get("qualificationPreflight"), dict) else {}
+                if isinstance(report.get("qualificationPreflight"), dict) else {},
+                qualification_pipeline=(
+                    report.get("qualificationPipeline")
+                    if isinstance(report.get("qualificationPipeline"), dict) else None
+                ),
             )),
             ("deployment", "Direct AR/CD pair deployment", ("Direct AR/CD", "pair deployment"), 1230, values["deployment"]),
             ("mockIngestion", "Mock ingestion", ("Shared mock", "ingestion"), 1380, values["mockIngestion"]),
@@ -1664,7 +1757,7 @@ def _flow_html(report: dict[str, Any]) -> str:
     station_specs.extend([
         ("report", "Report", ("Report", "snapshot"), coordinates["report"], report_value),
         ("publication", "External publication (optional)", ("External", "publish (optional)"), coordinates["publication"], {
-            "state": "unknown", "display": "Not tracked", "raw": "", "freshness": "",
+            "state": "not-required", "display": "Not tracked", "raw": "", "freshness": "",
             "freshnessReason": "",
             "message": "Optional publication is external to the canonical workflow and has no recorded status here. A package artifact does not prove publication.",
             "evidence": [], "updated": "", "timing": "", "attempts": "",

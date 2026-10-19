@@ -835,6 +835,62 @@ class ReportDashboardTests(unittest.TestCase):
         for safe in ("evidence/check.json", "Reports/run/file%20name.json"):
             self.assertEqual(safe, _safe_local_href(safe))
 
+    def test_qualification_pipeline_state_projects_passed_stations_without_false_question_marks(self) -> None:
+        value = report()
+        value["rules"] = []
+        value["workflow"].update(
+            profile="qualification",
+            profileSelectionConfirmed=True,
+            status="completed",
+            packageFreshness={"status": "current", "reason": None},
+        )
+        value["workflow"]["stages"].update({
+            "discovery": {"status": "passed", "evidence": ["discovery-manifest.json"]},
+            "conversion": {"status": "passed", "evidence": ["workbooks-manifest.json"]},
+            "validation": {"status": "passed", "evidence": ["workbook-validation-summary.json"]},
+            "packaging": {"status": "passed", "evidence": ["package-v3-1-report.json"]},
+            "validationSuite": {"status": "passed", "evidence": ["arm-candidate.json"]},
+            "deployment": {"status": "passed", "evidence": ["deployment-report.json"]},
+            "mockIngestion": {"status": "passed", "evidence": ["qualification-pipeline-state.json"]},
+            "alertParity": {"status": "skipped", "message": "Not required for workbook-only solution"},
+        })
+        value["qualificationPipeline"] = {
+            "status": "passed",
+            "preflightPassed": True,
+            "deploymentVerified": True,
+            "mockIngestionVerified": True,
+            "workbookContractResult": {
+                "status": "passed",
+                "queryValidation": {
+                    "passedCount": 27,
+                    "failedCount": 0,
+                    "blockedCount": 0,
+                },
+            },
+            "promotionGate": {
+                "passed": True,
+            },
+        }
+        html = render_dashboard(value)
+        for station in (
+            "setup",
+            "discovery",
+            "conversion",
+            "validation",
+            "packaging",
+            "validationSuite",
+            "preflight",
+            "deployment",
+            "mockIngestion",
+            "queryValidation",
+            "packageAcceptance",
+            "report",
+        ):
+            self.assertIn(f'class="flow-station state-completed" data-flow-station="{station}"', html)
+        self.assertIn('class="flow-station state-not-required" data-flow-station="alertParity"', html)
+        self.assertIn('class="flow-station state-not-required" data-flow-station="publication"', html)
+        self.assertNotIn('class="flow-station state-unknown"', html)
+
 
 if __name__ == "__main__":
     unittest.main()

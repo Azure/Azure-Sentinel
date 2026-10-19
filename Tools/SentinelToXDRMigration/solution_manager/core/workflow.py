@@ -7491,6 +7491,9 @@ def build_migration_status_reminder(
             "createsExecutor": False,
             "singleOwnerRespected": True,
         }
+        from solution_manager.core.workflow_reminders import extract_review_notification_state
+
+        review_notification_state = extract_review_notification_state(state)
 
         return {
             "schemaVersion": "1.0.0",
@@ -7517,6 +7520,7 @@ def build_migration_status_reminder(
             "blockerCount": blocker_count,
             "workflowDiagram": workflow_diagram,
             "watchdogCoordination": watchdog_coordination,
+            "reviewNotificationState": review_notification_state,
         }
 
 

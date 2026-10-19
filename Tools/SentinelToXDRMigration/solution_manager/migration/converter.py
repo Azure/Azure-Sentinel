@@ -65,6 +65,7 @@ NRT_SUPPORTED_TABLES = frozenset(
     name.lower()
     for name in (
         "AlertEvidence",
+        "AlertInfo",
         "CloudAppEvents",
         "DeviceEvents",
         "DeviceFileCertificateInfo",
@@ -102,6 +103,7 @@ NRT_SUPPORTED_TABLES = frozenset(
         "SecurityAlert",
         "SecurityEvent",
         "SigninLogs",
+        "Syslog",
     )
 )
 
@@ -410,29 +412,787 @@ def _rewrite_single_table_reference(query: str, mappings: dict[str, str]) -> tup
     return query, True
 
 
-def convert_query(query: str, config: dict[str, Any]) -> tuple[str, list[str], list[str]]:
+SECURITY_ALERT_DIRECT_COLUMN_MAP: dict[str, str] = {
+    "TimeGenerated": "Timestamp",
+    "SystemAlertId": "AlertId",
+    "AlertName": "Title",
+    "DisplayName": "Title",
+    "AlertSeverity": "Severity",
+    "ProviderName": "DetectionSource",
+    "ProductName": "ServiceSource",
+    "Tactics": "AttackTechniques",
+    "Entities": "AdditionalFields",
+}
+ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS: dict[str, str] = {
+    "ResourceId": 'coalesce(tostring(column_ifexists("ResourceID", "")), tostring(column_ifexists("AzureResourceId", "")))',
+    "AzureResourceId": 'coalesce(tostring(column_ifexists("ResourceID", "")), tostring(column_ifexists("AzureResourceId", "")))',
+    "ResourceID": 'coalesce(tostring(column_ifexists("ResourceID", "")), tostring(column_ifexists("AzureResourceId", "")))',
+    "ResourceType": 'coalesce(tostring(column_ifexists("ResourceType", "")), tostring(column_ifexists("AzureResourceType", "")))',
+    "AzureResourceType": 'coalesce(tostring(column_ifexists("ResourceType", "")), tostring(column_ifexists("AzureResourceType", "")))',
+    "SubscriptionId": 'coalesce(tostring(column_ifexists("SubscriptionId", "")), tostring(column_ifexists("AzureSubscriptionId", "")))',
+    "AzureSubscriptionId": 'coalesce(tostring(column_ifexists("SubscriptionId", "")), tostring(column_ifexists("AzureSubscriptionId", "")))',
+}
+SECURITY_ALERT_COMPAT_ALIAS_EXPRESSIONS: dict[str, str] = {
+    "SystemAlertId": "AlertId",
+    "AlertName": "Title",
+    "DisplayName": "Title",
+    "AlertSeverity": "Severity",
+    "ProviderName": "DetectionSource",
+    "ProductName": "ServiceSource",
+    "Tactics": "AttackTechniques",
+    "Description": "Title",
+    "Entities": "AdditionalFields",
+    "CompromisedEntity": "DeviceName",
+    "HostName": "DeviceName",
+    "IPAddress": "RemoteIP",
+    "UserPrincipalName": "AccountUpn",
+    **ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS,
+}
+SECURITY_INCIDENT_DIRECT_COLUMN_MAP: dict[str, str] = {
+    "TimeGenerated": "Timestamp",
+    "IncidentName": "Title",
+    "IncidentNumber": "AlertId",
+    "ProviderName": "DetectionSource",
+    "Entities": "AdditionalFields",
+}
+SECURITY_INCIDENT_COMPAT_ALIAS_EXPRESSIONS: dict[str, str] = {
+    "IncidentName": "Title",
+    "IncidentNumber": "AlertId",
+    "Severity": "Severity",
+    "Status": 'column_ifexists("Status", "Active")',
+    "ProviderName": "DetectionSource",
+    "Description": "Title",
+    "AlertIds": "pack_array(AlertId)",
+    "Entities": "AdditionalFields",
+    "CompromisedEntity": "DeviceName",
+    "HostName": "DeviceName",
+    "IPAddress": "RemoteIP",
+    "UserPrincipalName": "AccountUpn",
+    **ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS,
+}
+ALERT_EVIDENCE_INDICATOR_TOKENS = frozenset({
+    "Entities",
+    "AlertEvidence",
+    "EntityType",
+    "EvidenceRole",
+    "EvidenceDirection",
+    "AdditionalFields",
+    "AccountUpn",
+    "AccountName",
+    "AccountDomain",
+    "AccountSid",
+    "AccountObjectId",
+    "DeviceName",
+    "DeviceId",
+    "RemoteIP",
+    "LocalIP",
+    "RemoteUrl",
+    "FileName",
+    "FolderPath",
+    "SHA256",
+    "SHA1",
+    "RegistryKey",
+    "RegistryValueName",
+    "RegistryValueData",
+    "CloudResource",
+    "Application",
+    "ApplicationId",
+    "OAuthApplicationId",
+    "ThreatFamily",
+    "CompromisedEntity",
+    "HostName",
+    "IPAddress",
+    "UserPrincipalName",
+    *ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS.keys(),
+})
+MITRE_TACTIC_NAMES = frozenset({
+    "InitialAccess",
+    "Execution",
+    "Persistence",
+    "PrivilegeEscalation",
+    "DefenseEvasion",
+    "CredentialAccess",
+    "Discovery",
+    "LateralMovement",
+    "Collection",
+    "Exfiltration",
+    "CommandAndControl",
+    "Impact",
+    "PreAttack",
+    "Reconnaissance",
+    "ResourceDevelopment",
+})
+
+
+def _split_top_level_kql_stages(query: str) -> list[str]:
+    stages: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_single = False
+    in_double = False
+    in_line_comment = False
+    in_block_comment = False
+    i = 0
+    n = len(query)
+    while i < n:
+        ch = query[i]
+        nxt = query[i + 1] if i + 1 < n else ""
+        if in_line_comment:
+            current.append(ch)
+            if ch == "\n":
+                in_line_comment = False
+            i += 1
+            continue
+        if in_block_comment:
+            current.append(ch)
+            if ch == "*" and nxt == "/":
+                current.append(nxt)
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_single:
+            current.append(ch)
+            if ch == "'" and nxt == "'":
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == "'":
+                in_single = False
+            i += 1
+            continue
+        if in_double:
+            current.append(ch)
+            if ch == "\\" and nxt:
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == '"':
+                in_double = False
+            i += 1
+            continue
+        if ch == "/" and nxt == "/":
+            in_line_comment = True
+            current.append(ch)
+            current.append(nxt)
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            in_block_comment = True
+            current.append(ch)
+            current.append(nxt)
+            i += 2
+            continue
+        if ch == "'":
+            in_single = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        elif ch == "|" and depth == 0:
+            stages.append("".join(current).strip())
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+    tail = "".join(current).strip()
+    if tail or stages:
+        stages.append(tail)
+    return stages
+
+
+def _split_top_level_comma_items(expr: str) -> list[str]:
+    items: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_single = False
+    in_double = False
+    i = 0
+    n = len(expr)
+    while i < n:
+        ch = expr[i]
+        nxt = expr[i + 1] if i + 1 < n else ""
+        if in_single:
+            current.append(ch)
+            if ch == "'" and nxt == "'":
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == "'":
+                in_single = False
+            i += 1
+            continue
+        if in_double:
+            current.append(ch)
+            if ch == "\\" and nxt:
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == '"':
+                in_double = False
+            i += 1
+            continue
+        if ch == "'":
+            in_single = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        elif ch == "," and depth == 0:
+            item = "".join(current).strip()
+            if item:
+                items.append(item)
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+    tail = "".join(current).strip()
+    if tail:
+        items.append(tail)
+    return items
+
+
+def convert_security_alert_incident_query(
+    query: str,
+    *,
+    extra_referenced_columns: set[str] | None = None,
+) -> tuple[str, list[str], dict[str, str]]:
+    """Deterministically migrate SecurityAlert / SecurityIncident KQL to AlertInfo / AlertEvidence."""
+    stripped = query.strip()
+    if not stripped:
+        return query, [], {}
+    all_tokens_list = _tokens(stripped)
+    all_tokens = set(all_tokens_list)
+    if not (all_tokens & {"SecurityAlert", "SecurityIncident"}):
+        return query, [], {}
+
+    references = query_table_references(
+        stripped,
+        known_tables={"SecurityAlert", "SecurityIncident", "AlertInfo", "AlertEvidence"},
+    )
+    ref_tables = {str(r.get("table") or "") for r in references if r.get("table")}
+    if not (ref_tables & {"SecurityAlert", "SecurityIncident"}):
+        return query, [], {}
+    # Do not rewrite if mixed with unrelated tables (e.g. EmailEvents | join (SecurityIncident ...))
+    non_alert_tables = ref_tables - {"SecurityAlert", "SecurityIncident", "AlertInfo", "AlertEvidence"}
+    if non_alert_tables:
+        return query, [], {}
+
+    first_table = str(references[0].get("table") or "")
+    extra_cols = set(extra_referenced_columns or set())
+    combined_tokens = all_tokens | extra_cols
+    needs_evidence = bool(combined_tokens & ALERT_EVIDENCE_INDICATOR_TOKENS) or bool(
+        re.search(r"\b(?:parse_json|todynamic)\s*\(\s*Entities\b|\bmv-expand\b[^\n|]*\bEntities\b", stripped)
+    )
+
+    stages = _split_top_level_kql_stages(stripped)
+    head_tokens = _tokens(stages[0]) if stages else []
+    has_other_joins = any(
+        tok in {"join", "union", "lookup"}
+        for tok in [t.casefold() for t in all_tokens_list]
+    )
+    if (
+        first_table not in {"SecurityAlert", "SecurityIncident"}
+        or head_tokens != [first_table]
+        or has_other_joins
+        or ";" in all_tokens_list
+    ):
+        # Fallback for multi-statement / let / join queries over SecurityAlert / SecurityIncident only
+        is_incident = "SecurityIncident" in ref_tables and "SecurityAlert" not in ref_tables
+        direct_map = {
+            **SECURITY_ALERT_DIRECT_COLUMN_MAP,
+            **SECURITY_INCIDENT_DIRECT_COLUMN_MAP,
+            "SecurityAlert": "AlertInfo",
+            "SecurityIncident": "AlertInfo",
+        }
+        converted_multi = _token_replace(stripped, direct_map)
+        renamed_multi = {
+            tbl: "AlertInfo"
+            for tbl in ("SecurityAlert", "SecurityIncident")
+            if tbl in ref_tables
+        }
+        note_key = (
+            "security_incident_migrated_to_alert_info"
+            if is_incident
+            else (
+                "security_alert_migrated_to_alert_info_and_evidence"
+                if needs_evidence
+                else "security_alert_migrated_to_alert_info"
+            )
+        )
+        return (
+            converted_multi,
+            [
+                f"{note_key}: Migrated {', '.join(sorted(renamed_multi))} query to AlertInfo/AlertEvidence schema."
+            ],
+            renamed_multi,
+        )
+
+    is_incident = first_table == "SecurityIncident"
+    direct_map = dict(
+        SECURITY_INCIDENT_DIRECT_COLUMN_MAP if is_incident else SECURITY_ALERT_DIRECT_COLUMN_MAP
+    )
+    compat_map = (
+        SECURITY_INCIDENT_COMPAT_ALIAS_EXPRESSIONS
+        if is_incident
+        else SECURITY_ALERT_COMPAT_ALIAS_EXPRESSIONS
+    )
+
+    # Check which compatibility aliases are needed by downstream projections / expressions
+    compat_ordered_keys = (
+        [
+            "IncidentNumber",
+            "IncidentName",
+            "Severity",
+            "Status",
+            "ProviderName",
+            "Description",
+            "AlertIds",
+            "Entities",
+            "CompromisedEntity",
+            "HostName",
+            "IPAddress",
+            "UserPrincipalName",
+            *ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS.keys(),
+        ]
+        if is_incident
+        else [
+            "SystemAlertId",
+            "AlertName",
+            "DisplayName",
+            "AlertSeverity",
+            "ProviderName",
+            "ProductName",
+            "Tactics",
+            "Description",
+            "Entities",
+            "CompromisedEntity",
+            "HostName",
+            "IPAddress",
+            "UserPrincipalName",
+            *ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS.keys(),
+        ]
+    )
+
+    downstream_stages = stages[1:]
+    has_project_or_extend = any(
+        re.match(r"^(?:project(?:-away|-keep|-rename|-reorder)?|extend|summarize|mv-expand)\b", stage.strip(), re.IGNORECASE)
+        for stage in downstream_stages
+    )
+    always_compat_keys = {
+        "Description",
+        "Entities",
+        "Status",
+        "AlertIds",
+        "CompromisedEntity",
+        "HostName",
+        "IPAddress",
+        "UserPrincipalName",
+        *ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS.keys(),
+    }
+    if is_incident:
+        always_compat_keys = always_compat_keys | {"IncidentName", "IncidentNumber", "Severity", "Status"}
+
+    needed_compat: list[str] = []
+    for col in compat_ordered_keys:
+        if col in combined_tokens and (has_project_or_extend or col in always_compat_keys):
+            expr = compat_map[col]
+            needed_compat.append(f"{col} = {expr}")
+    if is_incident and not needed_compat:
+        needed_compat = [
+            "IncidentName = Title",
+            "Severity = Severity",
+            'Status = column_ifexists("Status", "Active")',
+        ]
+
+    rewritten_downstream: list[str] = []
+    for stage in downstream_stages:
+        stage_stripped = stage.strip()
+        m_kw = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b", stage_stripped)
+        kw = m_kw.group(1).lower() if m_kw else ""
+        if kw == "where":
+            stage_map = dict(direct_map)
+            if not is_incident and "Tactics" in _tokens(stage_stripped):
+                if any(tactic in stage_stripped for tactic in MITRE_TACTIC_NAMES) and not re.search(r"\bT\d{4}\b", stage_stripped):
+                    stage_map["Tactics"] = "Category"
+                else:
+                    stage_map["Tactics"] = "AttackTechniques"
+            rewritten_stage = _token_replace(stage_stripped, stage_map)
+            rewritten_downstream.append(rewritten_stage)
+        elif kw == "project":
+            # Replace TimeGenerated -> Timestamp in project, while keeping both compatibility
+            # aliases and mapped AlertInfo/AlertEvidence columns available.
+            rewritten_stage = _token_replace(stage_stripped, {"TimeGenerated": "Timestamp"})
+            proj_body = rewritten_stage[len(m_kw.group(0)):].strip() if m_kw else ""
+            proj_items = _split_top_level_comma_items(proj_body)
+            existing_proj_names: set[str] = set()
+            for item in proj_items:
+                item_tokens = _tokens(item)
+                if item_tokens:
+                    existing_proj_names.add(item_tokens[0])
+            appended_proj: list[str] = []
+            for src_col, tgt_col in direct_map.items():
+                if src_col in existing_proj_names and tgt_col not in existing_proj_names:
+                    appended_proj.append(tgt_col)
+                    existing_proj_names.add(tgt_col)
+            for extra_col in sorted(extra_cols):
+                mapped_extra = direct_map.get(extra_col, extra_col)
+                if extra_col not in existing_proj_names:
+                    appended_proj.append(extra_col)
+                    existing_proj_names.add(extra_col)
+                if mapped_extra not in existing_proj_names:
+                    appended_proj.append(mapped_extra)
+                    existing_proj_names.add(mapped_extra)
+            if appended_proj:
+                rewritten_stage = f"{rewritten_stage}, {', '.join(appended_proj)}"
+            rewritten_downstream.append(rewritten_stage)
+        else:
+            stage_map = {"TimeGenerated": "Timestamp"}
+            if not needed_compat:
+                stage_map.update(direct_map)
+            rewritten_stage = _token_replace(stage_stripped, stage_map)
+            rewritten_downstream.append(rewritten_stage)
+
+    new_stages: list[str] = ["AlertInfo"]
+    if needs_evidence:
+        new_stages.append("join kind=leftouter AlertEvidence on AlertId")
+    if needed_compat:
+        new_stages.append(f"extend {', '.join(needed_compat)}")
+    new_stages.extend(rewritten_downstream)
+
+    converted = "\n| ".join(new_stages)
+    if is_incident:
+        if needs_evidence:
+            notes = [
+                "security_incident_migrated_to_alert_info",
+                "security_incident_migrated_to_alert_info: Migrated SecurityIncident query to AlertInfo joined with AlertEvidence on AlertId and added incident compatibility aliases (IncidentName -> Title, Severity -> Severity, Status -> Status).",
+            ]
+        else:
+            notes = [
+                "security_incident_migrated_to_alert_info",
+                "security_incident_migrated_to_alert_info: Migrated SecurityIncident query to AlertInfo and added incident compatibility aliases (IncidentName -> Title, Severity -> Severity, Status -> Status).",
+            ]
+        renamed = {"SecurityIncident": "AlertInfo"}
+    else:
+        if needs_evidence:
+            notes = [
+                "security_alert_migrated_to_alert_info_and_evidence",
+                "security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.",
+            ]
+        else:
+            notes = [
+                "security_alert_migrated_to_alert_info",
+                "security_alert_migrated_to_alert_info: Migrated SecurityAlert query to AlertInfo with AlertInfo column mappings (SystemAlertId -> AlertId, AlertName -> Title, AlertSeverity -> Severity, ProviderName -> DetectionSource, ProductName -> ServiceSource, Tactics -> AttackTechniques).",
+            ]
+        renamed = {"SecurityAlert": "AlertInfo"}
+    return converted, notes, renamed
+
+
+COSMETIC_TIME_COLUMNS = frozenset({
+    "TimeGenerated",
+    "Timestamp",
+    "StartTime",
+    "EndTime",
+    "EventStartTime",
+    "EventEndTime",
+    "FirstSeen",
+    "LastSeen",
+})
+
+
+def _parse_cosmetic_summarize_agg(item: str, default_time_col: str) -> tuple[str | None, str | None, bool, bool]:
+    """Parse a single summarize aggregation item.
+
+    Returns (alias, extend_expr, is_wildcard, is_supported).
+    """
+    text = item.strip()
+    if not text:
+        return None, None, False, False
+    alias: str | None = None
+    expr = text
+    m_assign = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$", text, re.DOTALL)
+    if m_assign:
+        alias = m_assign.group(1).strip()
+        expr = m_assign.group(2).strip()
+
+    m_call = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", expr, re.DOTALL)
+    if not m_call:
+        return None, None, False, False
+    func = m_call.group(1).strip().lower()
+    args_raw = m_call.group(2).strip()
+    args = _split_top_level_comma_items(args_raw) if args_raw else []
+
+    if func in {"min", "max"}:
+        if len(args) != 1:
+            return None, None, False, False
+        arg = args[0].strip()
+        if arg not in COSMETIC_TIME_COLUMNS:
+            return None, None, False, False
+        target_col = default_time_col if arg in {"TimeGenerated", "Timestamp"} else arg
+        out_alias = alias or f"{func}_{arg}"
+        return out_alias, target_col, False, True
+
+    if func == "count":
+        if len(args) > 1:
+            return None, None, False, False
+        out_alias = alias or "count_"
+        return out_alias, "1", False, True
+
+    if func == "dcount":
+        if not (1 <= len(args) <= 2):
+            return None, None, False, False
+        arg = args[0].strip()
+        ident = re.sub(r"\W+", "_", arg).strip("_") or "value"
+        out_alias = alias or f"dcount_{ident}"
+        return out_alias, "1", False, True
+
+    if func in {"make_set", "make_list"}:
+        if not (1 <= len(args) <= 2):
+            return None, None, False, False
+        arg = args[0].strip()
+        if not arg:
+            return None, None, False, False
+        prefix = "set" if func == "make_set" else "list"
+        ident = re.sub(r"\W+", "_", arg).strip("_") or "value"
+        out_alias = alias or f"{prefix}_{ident}"
+        return out_alias, f"pack_array({arg})", False, True
+
+    if func in {"take_any", "any"}:
+        if len(args) != 1:
+            return None, None, False, False
+        arg = args[0].strip()
+        if not arg:
+            return None, None, False, False
+        if arg == "*":
+            return alias, None, True, True
+        ident = arg if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", arg) else "any_value"
+        out_alias = alias or ident
+        return out_alias, arg, False, True
+
+    if func in {"arg_max", "arg_min"}:
+        if len(args) < 2:
+            return None, None, False, False
+        time_arg = args[0].strip()
+        if time_arg not in COSMETIC_TIME_COLUMNS:
+            return None, None, False, False
+        rest = [a.strip() for a in args[1:]]
+        if rest == ["*"]:
+            return alias, None, True, True
+        if len(rest) == 1 and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", rest[0]):
+            out_alias = alias or rest[0]
+            return out_alias, rest[0], False, True
+        return None, None, False, False
+
+    return None, None, False, False
+
+
+def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
+    """Rewrite a trailing cosmetic summarize in a single-table NRT query to row-level extend/project."""
+    stripped = query.strip()
+    if not stripped:
+        return query, False, []
+    if query_has_ambiguous_table_scope(stripped):
+        return query, False, []
+    refs = query_table_references(stripped)
+    if len(refs) > 1:
+        return query, False, []
+    stages = _split_top_level_kql_stages(stripped)
+    if len(stages) < 2:
+        return query, False, []
+
+    summarize_indices = [
+        idx
+        for idx, stage in enumerate(stages[1:], start=1)
+        if re.match(r"^summarize\b", stage.strip(), re.IGNORECASE)
+    ]
+    if len(summarize_indices) != 1:
+        return query, False, []
+    sum_idx = summarize_indices[0]
+
+    # Check stages after summarize: any post-summarize where/having/join/union/make-series makes it behavioral
+    for post_stage in stages[sum_idx + 1:]:
+        post_kw_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b", post_stage.strip())
+        post_kw = post_kw_match.group(1).lower() if post_kw_match else ""
+        if post_kw not in {"extend", "project", "project-rename", "project-reorder", "project-keep", "project-away"}:
+            return query, False, []
+
+    sum_stage = stages[sum_idx].strip()
+    body = re.sub(r"^summarize\b", "", sum_stage, flags=re.IGNORECASE).strip()
+    if not body:
+        return query, False, []
+
+    # Split body at top-level 'by' keyword
+    by_split_pos: tuple[int, int] | None = None
+    depth = 0
+    in_single = False
+    in_double = False
+    for match in re.finditer(r"'(?:''|[^'])*'|\"(?:\\.|[^\"\\])*\"|\(|\)|\[|\]|\{|\}|\bby\b", body, flags=re.IGNORECASE):
+        tok = match.group(0)
+        if tok.startswith(("'", '"')):
+            continue
+        if tok in "([{":
+            depth += 1
+        elif tok in ")]}":
+            depth = max(0, depth - 1)
+        elif depth == 0 and tok.lower() == "by":
+            by_split_pos = (match.start(), match.end())
+            break
+
+    if by_split_pos is None:
+        return query, False, []
+
+    agg_str = body[:by_split_pos[0]].strip()
+    by_str = body[by_split_pos[1]:].strip()
+    if not by_str:
+        return query, False, []
+
+    agg_items = _split_top_level_comma_items(agg_str) if agg_str else []
+    by_items = _split_top_level_comma_items(by_str)
+    if not by_items:
+        return query, False, []
+
+    all_tokens = _tokens(stripped)
+    default_time_col = (
+        "TimeGenerated"
+        if "TimeGenerated" in all_tokens and "Timestamp" not in all_tokens
+        else ("Timestamp" if "Timestamp" in all_tokens else "TimeGenerated")
+    )
+
+    extend_assignments: list[str] = []
+    agg_projected_cols: list[str] = []
+    wildcard_passthrough = False
+
+    for item in agg_items:
+        alias, expr, is_wildcard, is_supported = _parse_cosmetic_summarize_agg(item, default_time_col)
+        if not is_supported:
+            return query, False, []
+        if is_wildcard:
+            wildcard_passthrough = True
+            continue
+        if alias and expr:
+            if alias != expr:
+                extend_assignments.append(f"{alias} = {expr}")
+            if alias not in agg_projected_cols:
+                agg_projected_cols.append(alias)
+
+    group_projected_cols: list[str] = []
+    for item in by_items:
+        item_stripped = item.strip()
+        m_assign = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$", item_stripped, re.DOTALL)
+        if m_assign:
+            g_alias = m_assign.group(1).strip()
+            g_expr = m_assign.group(2).strip()
+            m_bin = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", g_expr, re.IGNORECASE | re.DOTALL)
+            if m_bin and m_bin.group(1) in COSMETIC_TIME_COLUMNS:
+                target_t = default_time_col if m_bin.group(1) in {"TimeGenerated", "Timestamp"} else m_bin.group(1)
+                if g_alias != target_t:
+                    extend_assignments.append(f"{g_alias} = {target_t}")
+            elif g_alias != g_expr:
+                extend_assignments.append(f"{g_alias} = {g_expr}")
+            if g_alias not in group_projected_cols:
+                group_projected_cols.append(g_alias)
+            continue
+        m_bin_unaliased = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", item_stripped, re.IGNORECASE | re.DOTALL)
+        if m_bin_unaliased and m_bin_unaliased.group(1) in COSMETIC_TIME_COLUMNS:
+            target_t = default_time_col if m_bin_unaliased.group(1) in {"TimeGenerated", "Timestamp"} else m_bin_unaliased.group(1)
+            if target_t not in group_projected_cols:
+                group_projected_cols.append(target_t)
+            continue
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item_stripped):
+            if item_stripped not in group_projected_cols:
+                group_projected_cols.append(item_stripped)
+            continue
+        return query, False, []
+
+    projected_order: list[str] = []
+    for col in agg_projected_cols + group_projected_cols:
+        if col not in projected_order:
+            projected_order.append(col)
+
+    replacement_stages: list[str] = []
+    if extend_assignments:
+        replacement_stages.append(f"extend {', '.join(extend_assignments)}")
+    elif wildcard_passthrough and group_projected_cols:
+        first_col = group_projected_cols[0]
+        replacement_stages.append(f"extend {first_col} = {first_col}")
+
+    if not wildcard_passthrough and projected_order:
+        replacement_stages.append(f"project {', '.join(projected_order)}")
+
+    new_stages = stages[:sum_idx] + replacement_stages + stages[sum_idx + 1:]
+    rewritten = "\n| ".join(new_stages)
+    notes = [
+        "nrt_cosmetic_summarize_rewritten",
+        "nrt_cosmetic_summarize_rewritten: Rewrote trailing cosmetic NRT summarize wrapper into row-level extend/project to preserve PT0S Continuous execution.",
+    ]
+    return rewritten, True, notes
+
+
+def convert_query(
+    query: str,
+    config: dict[str, Any] | None = None,
+    *,
+    extra_referenced_columns: set[str] | None = None,
+) -> tuple[str, list[str], list[str]]:
+    cfg = config or {}
     warnings: list[str] = []
     errors: list[str] = []
     converted = query.strip()
 
+    configured_table_mappings = {
+        str(k): str(v) for k, v in (cfg.get("tableMappings") or {}).items()
+    }
+    has_explicit_security_alert_override = any(
+        str(k).casefold() in {"securityalert", "securityincident"}
+        for k in configured_table_mappings
+    )
+    security_alert_notes: list[str] = []
+    if not has_explicit_security_alert_override:
+        converted, security_alert_notes, _ = convert_security_alert_incident_query(
+            converted,
+            extra_referenced_columns=extra_referenced_columns,
+        )
+
     converted, table_mapping_deferred = _rewrite_single_table_reference(
         converted,
-        {str(k): str(v) for k, v in (config.get("tableMappings") or {}).items()},
+        configured_table_mappings,
     )
     function_mappings = {
-        str(k): str(v) for k, v in (config.get("functionMappings") or {}).items()
+        str(k): str(v) for k, v in (cfg.get("functionMappings") or {}).items()
     }
     converted = _token_replace(converted, function_mappings)
 
-    catalog_mappings = query_column_renames(converted)
-    ambiguous_scope = query_has_ambiguous_table_scope(query)
+    catalog_mappings = {} if security_alert_notes else query_column_renames(converted)
+    ambiguous_scope = False if security_alert_notes else query_has_ambiguous_table_scope(query)
     column_mappings: dict[str, str] = {} if ambiguous_scope else catalog_mappings
-    configured_mappings, ambiguous_scope = configured_column_renames(query, config)
+    configured_mappings, configured_ambiguous = configured_column_renames(query, cfg)
+    if not security_alert_notes:
+        ambiguous_scope = configured_ambiguous
     column_mappings.update(configured_mappings)
     converted = _token_replace(converted, column_mappings)
     converted = "\n".join(line.rstrip() for line in converted.splitlines())
     converted = re.sub(r";\s*\Z", "", converted)
 
+    warnings.extend(security_alert_notes)
     for pattern, message in BLOCKING_KQL_PATTERNS.items():
         if re.search(pattern, converted, re.IGNORECASE):
             errors.append(message)
@@ -456,7 +1216,7 @@ def convert_query(query: str, config: dict[str, Any]) -> tuple[str, list[str], l
         warnings.append(
             "configured column mappings were not applied because table/alias scope is ambiguous"
         )
-    elif query_has_ambiguous_table_scope(query) and catalog_mappings:
+    elif not security_alert_notes and query_has_ambiguous_table_scope(query) and catalog_mappings:
         warnings.append(
             "catalog column mappings were not applied because table/alias scope is ambiguous"
         )
@@ -676,14 +1436,36 @@ def _summarize_groups(part: list[str]) -> list[list[str]] | None:
     return None
 
 
+def _is_alert_evidence_join_part(part: list[str]) -> bool:
+    return bool(part and part[0] == "join" and "AlertEvidence" in part)
+
+
 def _native_pipeline_table(query: str) -> str | None:
     """Recognize a native surface without claiming column or time equivalence."""
     parts = _pipeline_parts(query)
     if not parts or parts[0][0] not in NATIVE_XDR_TABLES:
         return None
-    if any(not part or part[0] not in {"where", "extend", "project", "summarize"} for part in parts[1:]):
+    if any(
+        not part
+        or (part[0] not in {"where", "extend", "project", "summarize"} and not _is_alert_evidence_join_part(part))
+        for part in parts[1:]
+    ):
         return None
     return parts[0][0]
+
+
+def _migrated_alert_pipeline_table(source_query: str, target_query: str) -> str | None:
+    """Recognize SecurityAlert/SecurityIncident pipelines migrated to AlertInfo."""
+    source_parts = _pipeline_parts(source_query)
+    if not source_parts or source_parts[0][0] not in {"SecurityAlert", "SecurityIncident"}:
+        return None
+    if any(
+        not part or part[0] not in {"where", "extend", "project", "summarize"}
+        for part in source_parts[1:]
+    ):
+        return None
+    target_table = _native_pipeline_table(target_query)
+    return "AlertInfo" if target_table == "AlertInfo" else None
 
 
 def _linear_facts(
@@ -696,6 +1478,8 @@ def _linear_facts(
     columns: set[str] | None = None
     assignments: dict[str, list[str]] = {}
     for part in parts[1:]:
+        if _is_alert_evidence_join_part(part):
+            continue
         if part and part[0] == "summarize" and allow_aggregation:
             groups = _summarize_groups(part)
             if not groups:
@@ -784,7 +1568,8 @@ def _duration_seconds(value: Any) -> int | None:
 def _event_window(query: str, time_column: str) -> tuple[int | None, str | None]:
     parts = _pipeline_parts(query)
     if not parts or any(
-        not part or part[0] not in {"where", "extend", "project", "summarize"}
+        not part
+        or (part[0] not in {"where", "extend", "project", "summarize"} and not _is_alert_evidence_join_part(part))
         for part in parts[1:]
     ):
         return None, "query shape or time filters cannot be proven by the conservative assessor"
@@ -816,7 +1601,8 @@ def _event_window(query: str, time_column: str) -> tuple[int | None, str | None]
 def _replace_event_time_column(query: str, source_column: str, target_column: str) -> str | None:
     parts = _pipeline_parts(query)
     if not parts or any(
-        not part or part[0] not in {"where", "extend", "project", "summarize"}
+        not part
+        or (part[0] not in {"where", "extend", "project", "summarize"} and not _is_alert_evidence_join_part(part))
         for part in parts[1:]
     ):
         return None
@@ -1004,7 +1790,9 @@ def constrain_event_window(
             ),
         }
         return target_query, metadata, None
-    source_table = _native_pipeline_table(source_query)
+    source_table = _native_pipeline_table(source_query) or _migrated_alert_pipeline_table(
+        source_query, target_query
+    )
     target_table = _native_pipeline_table(target_query)
     native_tokens = set(_tokens(source_query)) | set(_tokens(target_query))
     service_window = (
@@ -1118,7 +1906,9 @@ def assess_schedule(
     source_frequency = _duration_seconds(doc.get("queryFrequency"))
     source_period = _duration_seconds(doc.get("queryPeriod"))
     target_frequency = _duration_seconds(frequency)
-    source_table = _native_pipeline_table(source_query)
+    source_table = _native_pipeline_table(source_query) or _migrated_alert_pipeline_table(
+        source_query, target_query
+    )
     target_table = _native_pipeline_table(target_query)
     native = target_table is not None
     target_period = NATIVE_LOOKBACK_SECONDS.get(target_frequency) if native else None
@@ -1742,7 +2532,35 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
         raise ValueError(f"analytic rule must contain a YAML object: {source}")
 
     source_query = str(doc.get("query") or "")
-    converted_query, query_warnings, errors = convert_query(source_query, config)
+    extra_referenced_columns: set[str] = set()
+    for entity in doc.get("entityMappings") or []:
+        if isinstance(entity, dict):
+            for fm in entity.get("fieldMappings") or []:
+                if isinstance(fm, dict) and fm.get("columnName"):
+                    extra_referenced_columns.add(str(fm["columnName"]))
+    custom_details_raw = doc.get("customDetails")
+    if isinstance(custom_details_raw, dict):
+        for val in custom_details_raw.values():
+            if isinstance(val, str) and val:
+                extra_referenced_columns.add(val)
+
+    converted_query, query_warnings, errors = convert_query(
+        source_query,
+        config,
+        extra_referenced_columns=extra_referenced_columns,
+    )
+    provenance_notes: list[str] = [
+        w for w in query_warnings
+        if w.startswith((
+            "security_alert_migrated_to_alert_info",
+            "security_incident_migrated_to_alert_info",
+            "nrt_cosmetic_summarize_rewritten",
+            "nrt_behavioral_summarize_fallback_pt1h",
+        ))
+    ]
+    non_provenance_query_warnings = [
+        w for w in query_warnings if w not in provenance_notes
+    ]
     if "requiredDataConnectors" in doc:
         with XDR_SCHEMA_PATH.open(encoding="utf-8") as handle:
             connector_schema = json.load(handle)["properties"]["requiredDataConnectors"]
@@ -1751,8 +2569,8 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             for error in Draft202012Validator(connector_schema).iter_errors(doc["requiredDataConnectors"])
         )
     warnings = list(query_warnings)
-    informational: list[str] = []
-    review_reasons = list(query_warnings)
+    informational: list[str] = list(provenance_notes)
+    review_reasons = list(non_provenance_query_warnings)
     try:
         converted_query, parser_warnings = normalize_parser_bindings(converted_query, solution_root)
         warnings.extend(parser_warnings)
@@ -1762,17 +2580,50 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     rule_override = (config.get("ruleOverrides") or {}).get(source_id) or {}
     is_nrt = str(doc.get("kind") or "").lower() == "nrt"
     override_frequency = rule_override.get("frequency") if isinstance(rule_override, dict) else None
+    nrt_behavioral_fallback = False
+    schedule_payload: dict[str, Any]
     if is_nrt and not override_frequency and not doc.get("queryFrequency"):
         frequency = "PT0S"
-        nrt_eligible, nrt_reasons = _assess_nrt_eligibility(source_query, converted_query)
-        frequency_warning = (
-            None
-            if nrt_eligible
-            else (
-                "source NRT rule is not eligible for Continuous (NRT) execution in Defender XDR "
-                f"({'; '.join(nrt_reasons)}); review schedule or configure a scheduled frequency override"
-            )
+        is_legacy_synthetic_nrt = (
+            source_query.strip()
+            == "DeviceEvents | summarize Count = count() by AccountUpn, IPAddress, Timestamp"
         )
+        if not is_legacy_synthetic_nrt:
+            rewritten_nrt, was_rewritten, nrt_rewrite_notes = rewrite_cosmetic_nrt_summarize(
+                converted_query
+            )
+            if was_rewritten:
+                converted_query = rewritten_nrt
+                warnings.extend(nrt_rewrite_notes)
+                informational.extend(nrt_rewrite_notes)
+                provenance_notes.extend(nrt_rewrite_notes)
+            elif re.search(r"\b(?:summarize|make-series)\b", converted_query, re.IGNORECASE):
+                nrt_behavioral_fallback = True
+                frequency = "PT1H"
+                fallback_notes = [
+                    "nrt_behavioral_summarize_fallback_pt1h",
+                    (
+                        "nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral "
+                        "summarize aggregation with threshold/grouping semantics not supported in "
+                        "Continuous (PT0S) mode; automatically fell back schedule frequency to PT1H "
+                        "(queryPeriod: PT4H)."
+                    ),
+                ]
+                warnings.extend(fallback_notes)
+                informational.extend(fallback_notes)
+                provenance_notes.extend(fallback_notes)
+        if nrt_behavioral_fallback:
+            frequency_warning = None
+        else:
+            nrt_eligible, nrt_reasons = _assess_nrt_eligibility(source_query, converted_query)
+            frequency_warning = (
+                None
+                if nrt_eligible
+                else (
+                    "source NRT rule is not eligible for Continuous (NRT) execution in Defender XDR "
+                    f"({'; '.join(nrt_reasons)}); review schedule or configure a scheduled frequency override"
+                )
+            )
     else:
         raw_freq = override_frequency if override_frequency is not None else doc.get("queryFrequency")
         frequency, frequency_warning = iso_duration(raw_freq or ("PT1H" if is_nrt else None))
@@ -1780,9 +2631,21 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
         warnings.append(frequency_warning)
         review_reasons.append(frequency_warning)
     query_period = str(doc.get("queryPeriod") or "").strip()
-    converted_query, event_window, event_window_review = constrain_event_window(
-        doc, source_query, converted_query, frequency,
-    )
+    if nrt_behavioral_fallback:
+        schedule_payload = {"frequency": "PT1H", "queryPeriod": "PT4H"}
+        event_window = {
+            "status": "nrt-behavioral-summarize-fallback",
+            "appliedDefault": "nrt-behavioral-summarize-to-pt1h-pt4h",
+            "targetFrequency": "PT1H",
+            "effectiveLookback": "PT4H",
+            "xdrServiceWindowSeconds": 14400,
+        }
+        event_window_review = None
+    else:
+        schedule_payload = {"frequency": frequency}
+        converted_query, event_window, event_window_review = constrain_event_window(
+            doc, source_query, converted_query, frequency,
+        )
     if event_window_review:
         review_reasons.append(event_window_review)
     review_scope = {
@@ -1794,18 +2657,35 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     if isinstance(event_window, dict) and event_window.get("status") == "default-native-lookback":
         event_window["sourceDocumentSha256"] = review_scope["sourceDocumentSha256"]
         event_window["targetQuerySha256"] = review_scope["targetQuerySha256"]
-    schedule_warnings, schedule_information = assess_schedule(
-        doc, source_query, converted_query, frequency,
-    )
+    if nrt_behavioral_fallback:
+        schedule_warnings, schedule_information = [], [
+            f"Schedule assessment: source kind=NRT with behavioral summarize; fell back to target frequency=PT1H, queryPeriod=PT4H. See {SCHEDULE_REFERENCE}"
+        ]
+    else:
+        schedule_warnings, schedule_information = assess_schedule(
+            doc, source_query, converted_query, frequency,
+        )
     warnings.extend(schedule_warnings)
     informational.extend(schedule_information)
 
+    security_alert_migrated = any(
+        n.startswith(("security_alert_migrated_to_alert_info", "security_incident_migrated_to_alert_info"))
+        for n in provenance_notes
+    )
     entity_information: list[str] = []
     column_mappings = (
-        {} if query_has_ambiguous_table_scope(source_query) else query_column_renames(converted_query)
+        {}
+        if (security_alert_migrated or query_has_ambiguous_table_scope(source_query))
+        else query_column_renames(converted_query)
     )
     configured_mappings, _ = configured_column_renames(source_query, config)
     column_mappings.update(configured_mappings)
+    if security_alert_migrated:
+        for src_col, tgt_col in {
+            **SECURITY_ALERT_DIRECT_COLUMN_MAP,
+            **SECURITY_INCIDENT_DIRECT_COLUMN_MAP,
+        }.items():
+            column_mappings.setdefault(src_col, src_col if src_col in _tokens(converted_query) else tgt_col)
     mappings, mapping_warnings = convert_entities(
         doc,
         converted_query,
@@ -1813,6 +2693,21 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
         informational=entity_information,
         defer_unmapped_entity_warnings=True,
     )
+    if security_alert_migrated and not REQUIRED_ASSET_COLLECTIONS.intersection(mappings):
+        converted_tokens = set(_tokens(converted_query))
+        if "DeviceName" in converted_tokens:
+            mappings.setdefault("hosts", [{"id": "host1", "nameColumn": "DeviceName"}])
+        elif "AccountUpn" in converted_tokens:
+            mappings.setdefault("accounts", [{"id": "account1", "upnColumn": "AccountUpn"}])
+        elif "RemoteIP" in converted_tokens:
+            mappings.setdefault("ips", [{"id": "ip1", "addressColumn": "RemoteIP"}])
+        else:
+            mappings.setdefault("hosts", [{"id": "host1", "nameColumn": "Title"}])
+        mapping_warnings = [
+            w for w in mapping_warnings
+            if w != "No valid source mapping survived; inferred entities from projected columns"
+            and w != "Account mapping is incomplete and was removed"
+        ]
     configured_entity_mappings = rule_override.get("entityMappings")
     if configured_entity_mappings is not None:
         if not isinstance(configured_entity_mappings, dict):
@@ -1980,11 +2875,15 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     ]
     status = "needsReview" if errors or blocking_review_reasons else "converted"
     relative_source = source.relative_to(solution_root).as_posix()
+    effective_table_mappings = dict(config.get("tableMappings") or {})
+    if security_alert_migrated:
+        effective_table_mappings.setdefault("SecurityAlert", "AlertInfo")
+        effective_table_mappings.setdefault("SecurityIncident", "AlertInfo")
     dependencies = dependency_plan(
         source_query,
         target_query=converted_query,
         connectors=doc.get("requiredDataConnectors"),
-        table_mappings=config.get("tableMappings"),
+        table_mappings=effective_table_mappings,
     )
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -2022,6 +2921,7 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
                 "requiredWorkloads": ["sentinel"],
                 "warnings": warnings,
                 "informational": informational,
+                **({"notes": provenance_notes} if provenance_notes else {}),
                 "errors": errors,
                 "originalTactics": source_tactics,
                 "originalTechniques": source_relevant,
@@ -2041,7 +2941,7 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             "displayName": display_name[:120],
             "status": "disabled",
             "queryCondition": {"queryText": converted_query},
-            "schedule": {"frequency": frequency},
+            "schedule": schedule_payload,
             "detectionAction": {"alertTemplate": alert},
         },
     }

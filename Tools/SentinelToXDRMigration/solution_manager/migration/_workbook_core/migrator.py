@@ -51,7 +51,9 @@ def _status_of(tables: Optional[List[str]], res: dict) -> str:
 
 def convert(kql: str, tables: Optional[List[str]] = None,
             source_id: Optional[str] = None, artifact_type: str = "analyticRule",
-            resolve: bool = False) -> dict:
+            resolve: bool = False,
+            *,
+            preserve_sentinel_tables: bool = False) -> dict:
     """Convert one Sentinel KQL query and return the output contract.
 
     tables   - resolved data sources; pass them for offline/batch use.
@@ -62,20 +64,23 @@ def convert(kql: str, tables: Optional[List[str]] = None,
     if resolve:
         raise ValueError("Live resolution is not supported by the offline converter.")
 
-    res = rewrite.rewrite(kql, tables)
+    res = rewrite.rewrite(kql, tables, preserve_sentinel_tables=preserve_sentinel_tables)
+    effective_tables = list(tables) if tables is not None else (
+        sorted(res["renamedTables"].keys()) if res.get("renamedTables") else None
+    )
     source_free_literal = (
-        not tables and rewrite.is_source_free_literal_query(kql)
+        not effective_tables and rewrite.is_source_free_literal_query(kql)
     )
     if source_free_literal:
         res["deterministic"] = True
         res["overallTier"] = "1to1"
-    status = "converted" if source_free_literal else _status_of(tables, res)
+    status = "converted" if source_free_literal else _status_of(effective_tables, res)
     tier = res["overallTier"]
     mapping_tier = tier if tier in _CONTRACT_TIERS else "blocked"
 
     unsupported = [{"construct": f["name"], "kind": f["kind"], "reason": f["reason"]}
                    for f in res["flags"]]
-    if tables is None and not source_free_literal:
+    if effective_tables is None and not source_free_literal:
         unsupported.append({
             "construct": "data-sources", "kind": "unresolved",
             "reason": resolve_error or "Data sources could not be resolved "
@@ -89,23 +94,29 @@ def convert(kql: str, tables: Optional[List[str]] = None,
 
     # For tables with no confirmed AH mapping, recommend the best-fit AH table(s)
     # so a reviewer/LLM can re-home the query instead of hitting a dead end.
-    unmapped = recommend.unmapped_tables(tables)
+    unmapped = recommend.unmapped_tables(effective_tables)
     recommendations = recommend.recommend_for_tables(unmapped) if unmapped else []
 
-    return {
+    contract = {
         "sourceId": source_id,
         "artifactType": artifact_type,
         "status": status,
         "convertedKql": res["convertedKql"],
-        "resolvedTables": tables or [],
+        "resolvedTables": effective_tables or [],
         "mappingTier": mapping_tier,
         "renamedTables": res["renamedTables"],
         "renamedAsimTables": res.get("renamedAsimTables") or {},
         "diff": res["diff"],
-        "schemaMap": schema_map.build_schema_map(tables, include_identical_columns=False),
+        "schemaMap": schema_map.build_schema_map(effective_tables, include_identical_columns=False),
         "recommendations": recommendations,
         "confidence": _CONFIDENCE[status],
         "unsupported": unsupported,
         "validation": None,           # filled by the Judge MCP
         "blockedReason": blocked_reason,
     }
+    if res.get("targetTables"):
+        contract["targetTables"] = list(res["targetTables"])
+    if res.get("notes"):
+        contract["notes"] = list(res["notes"])
+        contract["provenanceNotes"] = list(res["notes"])
+    return contract

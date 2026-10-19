@@ -105,13 +105,20 @@ def query_table_references(
         table.casefold(): table
         for table in NATIVE_XDR_TABLES | PASSTHROUGH_TABLES.keys() | set(known_tables)
     }
+    let_bindings = {
+        tokens[i + 1].casefold()
+        for i in range(len(tokens) - 2)
+        if tokens[i].casefold() == "let" and tokens[i + 2] == "="
+    }
     results: list[dict[str, str | None]] = []
     seen: set[tuple[str, str | None]] = set()
     for index, token in enumerate(tokens):
         lowered = token.casefold()
         is_custom = re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*_CL", token, re.IGNORECASE)
         is_simple_base = (
-            index == 0
+            (index == 0 or tokens[index - 1] == ";")
+            and lowered != "let"
+            and lowered not in let_bindings
             and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token)
             and (index + 1 == len(tokens) or tokens[index + 1].casefold() == "as" or tokens[index + 1] == "|")
         )
