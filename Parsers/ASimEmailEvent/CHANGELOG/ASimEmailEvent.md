@@ -2,7 +2,7 @@
 
 ## Version 1.0.1
 
-- (2026-10-15) Include Microsoft Defender for Office 365 EmailEvents in the unifying parser.
+- (2026-10-15) Include Microsoft Defender for Office 365 EmailEvents in the unifying parser - [PR #15354](https://github.com/Azure/Azure-Sentinel/pull/15354)
 - Honor the existing global and source-specific exclusion controls and forward the packing option.
 
 ## Version 0.1.0
