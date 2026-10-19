@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AGWAccessLogs
+    - AGWFirewallLogs
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AGWAccessLogs
+    - AGWFirewallLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 46ac55ae-47b8-414a-8f94-89ccd1962178
+    path: Analytic Rules/MaliciousWAFSessions.yaml
+    version: 1.0.6
+    querySha256: 8e4cd037d6213dfd841a03f4e307ddaa13e39afc74c91065551929f49dba2d31
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: 1b37f7e0064d331473108fcf024aaecef0d7b231ee71a4bea80eca2bafe3b82b
+      targetQuerySha256: 14715d9ade549d1cf4117b163a88e1599b43c8b2f633c4abd515bd822e514603
+properties:
+  id: xdr-46ac55ae-47b8-414a-8f94-89ccd1962178
+  displayName: A potentially malicious web request was executed against a web server
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let queryperiod = 1d;
+      let mode = dynamic(['Blocked', 'Detected']);
+      let successCode = dynamic(['200', '101','204', '400','504','304','401','500']);
+      let sessionBin = 30m;
+      AGWFirewallLogs
+      | where TimeGenerated > ago(queryperiod)
+      | where Action  in (mode)
+      | sort by Hostname asc, ClientIp asc, TimeGenerated asc
+      | extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((ClientIp != prev(ClientIp)) or (Hostname != prev(Hostname))))
+      | summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by Hostname, ClientIp, SessionBlockedStarted
+      | extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)
+      | mv-expand TimeKey to typeof(datetime)
+      | join kind = inner(
+          AGWAccessLogs
+          | where TimeGenerated > ago(queryperiod)
+          | where  (isempty(HttpStatus) or HttpStatus in (successCode))
+          | extend TimeKey = bin(TimeGenerated, sessionBin)
+          | extend Hostname = coalesce(Host,OriginalHost)
+          | extend ClientIp = tostring(ClientIp)
+      ) on TimeKey, Hostname, ClientIp
+      | where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)
+      | extend
+          OriginalRequestUriWithArgs = column_ifexists("OriginalRequestUriWithArgs", ""),
+          ServerStatus = column_ifexists("ServerStatus", "")
+      | summarize
+          SuccessfulAccessCount = count(),
+          UserAgents = make_set(UserAgent, 250),
+          RequestURIs = make_set(RequestUri, 250),
+          OriginalRequestURIs = make_set(OriginalRequestUriWithArgs, 250),
+          SuccessCodes = make_set(HttpStatus, 250),
+          SuccessCodes_BackendServer = make_set(ServerStatus, 250),
+          take_any(SessionBlockedEnded, SessionBlockedCount)
+          by Hostname, ClientIp, SessionBlockedStarted
+      | where SessionBlockedCount > SuccessfulAccessCount
+      | extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)
+      | sort by BlockvsSuccessRatio desc, SessionBlockedStarted asc
+      | project-reorder SessionBlockedStarted, SessionBlockedEnded, Hostname, ClientIp, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: A potentially malicious web request was executed against a web server
+      description: |-
+        'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the ratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric).
+        A high ratio value for a given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number of blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode variable defines what the detection thinks is a successful status code and
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190

@@ -1,0 +1,110 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AGWFirewallLogs
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AGWFirewallLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9b8dd8fd-f192-42eb-84f6-541920400a7a
+    path: Analytic Rules/App-GW-WAF-Scanner-detection.yaml
+    version: 1.0.3
+    querySha256: ed2243e0e26225f800cfde81f2cbd172593ce85c6710affe2a13b6085ec83dc8
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Execution
+    - InitialAccess
+    - Reconnaissance
+    - Discovery
+    originalTechniques:
+    - T1548
+    - T1203
+    - T1190
+    - T1595
+    - T1046
+    reviewScope:
+      sourceDocumentSha256: 0bba86aa3f784858cef047346316a6b0817614cd5f5f25aa8ef51384515562fd
+      targetQuerySha256: 2a8df85904b646a6e6ed0d6589d31ff77ffab0d93d09b5f1c70c279e3d944c49
+properties:
+  id: xdr-9b8dd8fd-f192-42eb-84f6-541920400a7a
+  displayName: App Gateway WAF - Scanner Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AGWFirewallLogs
+      | where Action == "Matched"
+      | where Message contains "Found User-Agent associated with security scanner"
+      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
+      | join kind = inner(
+      AGWFirewallLogs
+      | where Action == "Blocked"
+      ) on TransactionId
+      | extend Uri = strcat(Hostname,RequestUri)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId), Message = make_set(Message), Detail_Message = make_set(DetailedMessage), Detail_Data = make_set(DetailedData), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
+      | where Total_TransactionId >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: App Gateway WAF - Scanner Detection
+      description: |-
+        'Identifies a match for a Scanner detection user agent based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        References: https://owasp.org/www-community/Vulnerability_Scanning_Tools'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Uri
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d7c39e15-997f-49e5-a782-73bf07db8aa5
+    path: Analytic Rules/AWS_PrivilegeEscalationViaCRUDKMSPolicy.yaml
+    version: 1.0.2
+    querySha256: 37fd79c8dcd7754c2c444efe8fba6f8dd83419de77ea8030d880f259b7bc96cf
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PolicyName' column `PolicyName` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.RecipientAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.RecipientAccountId column `RecipientAccountId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098.003
+    reviewScope:
+      sourceDocumentSha256: 15bf12d1d47d63f25cff39baef83df181b849738aa735a3bf2c30fe9483e8e08
+      targetQuerySha256: 924cb36adf19df2845e0a71414c36a4b2a769cc8c08226f99504e43e8c0a3041
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: RecipientAccountId
+properties:
+  id: xdr-d7c39e15-997f-49e5-a782-73bf07db8aa5
+  displayName: AWSCloudTrail - Privilege escalation via CRUD KMS policy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+      | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+      | mvexpand Statement
+      | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+      | extend Action = tostring(Action)
+      | where Effect =~ "Allow" and (Action contains "kms:Create" and (Action contains "kms:Get" or Action contains "kms:Describe")  and (Action contains "kms:Disable" or Action contains "kms:Enable") and Action contains "kms:Delete") and Resource == "*" and Condition == ""
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Privilege escalation via CRUD KMS policy
+      description: |-
+        Detects inline IAM policy updates that grant broad KMS create, read, update, enable/disable, and delete
+        permissions. This pattern can support key management abuse and indicates possible privilege escalation through
+        expanded cloud role capabilities.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      customDetails:
+        PolicyName: PolicyName
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn
+        RecipientAccountId: RecipientAccountId

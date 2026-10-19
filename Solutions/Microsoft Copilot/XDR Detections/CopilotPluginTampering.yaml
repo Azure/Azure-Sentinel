@@ -1,0 +1,106 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftCopilot
+  dataTypes:
+  - CopilotActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CopilotActivity
+  requiredDataConnectors:
+  - connectorId: MicrosoftCopilot
+    dataTypes:
+    - CopilotActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9
+    path: Analytic Rules/CopilotPluginTampering.yaml
+    version: 1.0.0
+    querySha256: 3c864f9e7759ef710fbf821eb8f17dad20ecfc486e202656cf4602e5d745434e
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `AccountCustomEntity`; supplemental details do not restore entity identity, correlation, or alert
+      parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - DefenseEvasion
+    originalTechniques:
+    - T1087
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: 6c03c350eb9777bc2d450e2b27ed457c63e6937506eb8ceba10e89049de63416
+      targetQuerySha256: 89b5451e2578ee79af59bd1ef5db99788b9de180a080a1ddb2efb3e880c615a7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9
+  displayName: Copilot - Plugin Tampering (Enable and Disable Within 5 Minutes)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CopilotActivity
+      | where RecordType in ("EnableCopilotPlugin","DisableCopilotPlugin")
+      | summarize
+          Actions = make_set(RecordType),
+          FirstSeen = min(TimeGenerated),
+          LastSeen = max(TimeGenerated)
+        by ActorName, SrcIpAddr
+      | where Actions has "EnableCopilotPlugin" and Actions has "DisableCopilotPlugin"
+      | where LastSeen - FirstSeen < 5m
+      | extend AccountCustomEntity = ActorName, IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Copilot - Plugin Tampering (Enable and Disable Within 5 Minutes)
+      description: |-
+        'Detects when a user enables and disables Copilot plugins within a 5-minute window. This behavior often indicates probing for security controls or living-off-Copilot techniques.
+        This rule identifies discovery and defense evasion activities where users rapidly toggle plugin states, potentially testing security boundaries.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        AccountFullName: AccountCustomEntity

@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftCopilot
+  dataTypes:
+  - CopilotActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CopilotActivity
+  requiredDataConnectors:
+  - connectorId: MicrosoftCopilot
+    dataTypes:
+    - CopilotActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e5f6a7b8-c9d0-41e2-f3a4-b5c6d7e8f9a0
+    path: Analytic Rules/CopilotJailbreakAttempt.yaml
+    version: 1.0.0
+    querySha256: a6f4b466a912096798c75862088db0a7ebae91f2b191d1ab9c3b2c9185b2424f
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `ActorName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors:
+    - no supported entity mappings were produced
+    originalTactics:
+    - InitialAccess
+    - CredentialAccess
+    - Impact
+    originalTechniques:
+    - T1078
+    - T1110
+    - T1565
+    reviewScope:
+      sourceDocumentSha256: fc276836ee38586c733ecd6b27d7f0b8a83125936f7efe68a9e737d89e6b8aae
+      targetQuerySha256: 9f8d69ddfb49c6c3c575599935ba2ebb4f89f5bd3fe154e8617699ec7156f846
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorName
+      column: ActorName
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-e5f6a7b8-c9d0-41e2-f3a4-b5c6d7e8f9a0
+  displayName: Copilot - Jailbreak Attempt Detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CopilotActivity
+      | where RecordType == "CopilotInteraction"
+      | where LLMEventData has "JailbreakDetected"
+      | extend Data = parse_json(LLMEventData)
+      | extend Jailbreak = tostring(Data.Messages[0].JailbreakDetected)
+      | where Jailbreak == "true"
+      | project TimeGenerated, ActorName, AIModelName, Jailbreak
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Copilot - Jailbreak Attempt Detected
+      description: |-
+        'Detects jailbreak attempts in Copilot interactions where users are trying to bypass Copilot guardrails and security controls.
+        This rule identifies prompt injection and LLM abuse scenarios that could lead to initial access, credential access, or system impact.'
+      severity: high
+      entityMappings: {}
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      - tactic: Impact
+        techniques:
+        - technique: T1565
+      customDetails:
+        AccountFullName: ActorName

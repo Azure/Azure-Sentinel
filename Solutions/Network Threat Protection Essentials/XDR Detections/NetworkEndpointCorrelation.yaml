@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: TrendMicro
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvents
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - SecurityEvent
+    - WindowsEvent
+  requiredDataConnectors:
+  - connectorId: TrendMicro
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+    - WindowsEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 01f64465-b1ef-41ea-a7f5-31553a11ad43
+    path: Analytic Rules/NetworkEndpointCorrelation.yaml
+    version: 1.1.6
+    querySha256: 8b852878e12f57000a91af079e9561e5c1aa4172c87aa5e7575bbd2fa90739aa
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was completed with projected column `DnsDomain`
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+    reviewScope:
+      sourceDocumentSha256: a74d98393cfe8691baa30f7fb356d8d484ecfa3d491dd33531dd8f8e5b070909
+      targetQuerySha256: 48538b58551500542bd9c844bb6ea24eff76c4aa590bcc0356f71e92634b2784
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: a74d98393cfe8691baa30f7fb356d8d484ecfa3d491dd33531dd8f8e5b070909
+      targetQuerySha256: 48538b58551500542bd9c844bb6ea24eff76c4aa590bcc0356f71e92634b2784
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-01f64465-b1ef-41ea-a7f5-31553a11ad43
+  displayName: Network endpoint to host executable correlation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let endpointData =
+      (union isfuzzy=true
+      (SecurityEvent
+        | where EventID == 4688
+        | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
+        ),
+        (WindowsEvent
+        | where EventID == 4688
+        | extend  NewProcessName = tostring(EventData.NewProcessName)
+        | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
+        | extend TargetUserName = tostring(EventData.TargetUserName)
+        ));
+      // Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
+      CommonSecurityLog
+      | where DeviceVendor =~ "Trend Micro"
+      | where Activity =~ "Deny List updated"
+      | where RequestURL endswith ".exe"
+      | project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP
+      | extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))
+      | join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName
+      | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Network endpoint to host executable correlation
+      description: '''Correlates blocked URLs hosting [malicious] executables with host endpoint data to identify potential
+        instances of executables of the same name having been recently run.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetUserName
+          dnsDomainColumn: DnsDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: DestinationIP
+        urls:
+        - id: url1
+          addressColumn: RequestURL
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204

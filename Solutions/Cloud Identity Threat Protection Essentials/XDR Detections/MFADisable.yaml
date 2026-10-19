@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 65c78944-930b-4cae-bd79-c3664ae30ba7
+    path: Analytic Rules/MFADisable.yaml
+    version: 1.0.5
+    querySha256: 8c8e3246b07051fde374f7020d31e2434cee4622103180c7f62f173d72165dcb
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Persistence
+    originalTechniques:
+    - T1098
+    - T1556
+    reviewScope:
+      sourceDocumentSha256: 68ed8b92c871aee4d4fc3f3f2d93e589ab556b8ccd7a9be4ac3039d66c290010
+      targetQuerySha256: 31e06270a28cdf3c00cef3feed7ca039c29b83b06eb108f7bb4114fd096ef8d7
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 68ed8b92c871aee4d4fc3f3f2d93e589ab556b8ccd7a9be4ac3039d66c290010
+      targetQuerySha256: 31e06270a28cdf3c00cef3feed7ca039c29b83b06eb108f7bb4114fd096ef8d7
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 68ed8b92c871aee4d4fc3f3f2d93e589ab556b8ccd7a9be4ac3039d66c290010
+      targetQuerySha256: 31e06270a28cdf3c00cef3feed7ca039c29b83b06eb108f7bb4114fd096ef8d7
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-65c78944-930b-4cae-bd79-c3664ae30ba7
+  displayName: Multi-Factor Authentication Disabled for a User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      (union isfuzzy=true
+      (AuditLogs
+      | where OperationName =~ "Disable Strong Authentication"
+      | extend _parsedIntiatedByUser = parse_json(tostring(InitiatedBy.user))
+      | extend _parsedIntiatedByApp = parse_json(tostring(InitiatedBy.app))
+      | extend IPAddress = tostring(_parsedIntiatedByUser.ipAddress)
+      | extend InitiatedByUser = iff(isnotempty(tostring(_parsedIntiatedByUser.userPrincipalName)),
+       tostring(_parsedIntiatedByUser.userPrincipalName), tostring(_parsedIntiatedByApp.displayName))
+      | extend Targetprop = todynamic(TargetResources)
+      | extend TargetUser = tostring(Targetprop[0].userPrincipalName)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by User = TargetUser, InitiatedByUser , Operation = OperationName , CorrelationId, IPAddress, Category, Source = SourceSystem , AADTenantId, Type
+      ),
+      (AWSCloudTrail
+      | where EventName in~ ("DeactivateMFADevice", "DeleteVirtualMFADevice")
+      | extend _parsedRequestParameters = parse_json(RequestParameters)
+      | extend InstanceProfileName = tostring(_parsedRequestParameters.InstanceProfileName)
+      | extend TargetUser = tostring(_parsedRequestParameters.userName)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by User = TargetUser, Source = EventSource , Operation = EventName , TenantorInstance_Detail = InstanceProfileName, IPAddress = SourceIpAddress
+      )
+      )
+      | extend timestamp = StartTimeUtc, UserName = tostring(split(User, '@', 0)[0]), UPNSuffix = tostring(split(User, '@', 1)[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Multi-Factor Authentication Disabled for a User
+      description: '''Multi-Factor Authentication (MFA) helps prevent credential compromise. This alert identifies when an
+        attempt has been made to deactivate MFA for a user.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: UserName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1556
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1556

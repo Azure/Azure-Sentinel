@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 44a5b65e-b0a9-4591-aabc-388fd92a28c4
+    path: Analytic Rules/AWS_S3BucketExposedviaPolicy.yaml
+    version: 1.0.2
+    querySha256: c168f80436cb725924f85fb6b4214b5c2e442dc4107e83330f68e4f5714f8937
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.RecipientAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.RecipientAccountId column `RecipientAccountId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1537
+    reviewScope:
+      sourceDocumentSha256: 3a0e617221daafc4946c55a72f777b0bc902330f12c8d98d1072fad6c7f76345
+      targetQuerySha256: 17c514ef78d941caf9f2b06c91d970d113253f78cb46d6ba2cae0168e65bd29c
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 3a0e617221daafc4946c55a72f777b0bc902330f12c8d98d1072fad6c7f76345
+      targetQuerySha256: 17c514ef78d941caf9f2b06c91d970d113253f78cb46d6ba2cae0168e65bd29c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: RecipientAccountId
+properties:
+  id: xdr-44a5b65e-b0a9-4591-aabc-388fd92a28c4
+  displayName: AWSCloudTrail - S3 bucket exposed via policy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName == "PutBucketPolicy" and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend Statement = parse_json(tostring((parse_json(RequestParameters).bucketPolicy))).Statement
+      | mvexpand Statement
+      | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)
+      | extend Action = tostring(Action)
+      | where Effect =~ "Allow" and (Principal_aws == "*" or Principal == "*") and isempty(Condition)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | distinct TimeGenerated, EventName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - S3 bucket exposed via policy
+      description: |-
+        Detects S3 bucket policy updates that allow public principals without restrictive conditions.
+        Public bucket policies can expose sensitive data and should be reviewed immediately.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1537
+      customDetails:
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn
+        RecipientAccountId: RecipientAccountId

@@ -1,0 +1,171 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftCloudAppSecurity
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+    - StorageFileLogs
+    - StorageBlobLogs
+  requiredDataConnectors:
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+    - SecurityAlert
+  - connectorId: AzureStorageAccount
+    dataTypes:
+    - StorageFileLogs
+    - StorageBlobLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d
+    path: Analytic Rules/AdditionalFilesUploadedByActor.yaml
+    version: 1.0.3
+    querySha256: 54a958ddc1013450839867d5d89d024e7287015b2ebab062e5b19251543d9a2d
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'converter cannot map FileHash.Algorithm/Value: requires a query-proven constant SHA1 or SHA256 algorithm and an available
+      hash value column; MD5, unknown algorithms and linked file/process references are not inferred'
+    - FileHash.Algorithm value is retained as customDetails.FileHashAlgorithm from query column `HashAlgorithm`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashAlgorithm column `HashAlgorithm` requires runtime output-schema binding verification
+    - FileHash.Value value is retained as customDetails.FileHashValue from query column `LinkedMaliciousFileHash`, but its
+      target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashValue column `LinkedMaliciousFileHash` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    - Exfiltration
+    originalTechniques:
+    - T1071
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: be0bbd643349505d4a7db294380d17fe78cb164fc7aca228e922398e1376c5b3
+      targetQuerySha256: 854a31948f6e4455e510963ce5b9306da8059983c4a07036d30f4799a67a0dd5
+    supplementalEntityDetails:
+    - entityType: FileHash
+      entityIndex: 2
+      identifier: Algorithm
+      sourceColumn: HashAlgorithm
+      column: HashAlgorithm
+      status: runtime-binding-pending
+      customDetailKey: FileHashAlgorithm
+    - entityType: FileHash
+      entityIndex: 2
+      identifier: Value
+      sourceColumn: LinkedMaliciousFileHash
+      column: LinkedMaliciousFileHash
+      status: runtime-binding-pending
+      customDetailKey: FileHashValue
+properties:
+  id: xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d
+  displayName: Linked Malicious Storage Artifacts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      //Collect the alert events
+      let alertData = SecurityAlert
+      | where DisplayName has "Potential malware uploaded to"
+      | extend Entities = parse_json(Entities)
+      | mv-expand Entities;
+      //Parse the IP address data
+      let ipData = alertData
+      | where Entities['Type'] =~ "ip"
+      | extend AttackerIP = tostring(Entities['Address']), AttackerCountry = tostring(Entities['Location']['CountryName']);
+      //Parse the file data
+      let FileData = alertData
+      | where Entities['Type'] =~ "file"
+      | extend MaliciousFileDirectory = tostring(Entities['Directory']), MaliciousFileName = tostring(Entities['Name']), MaliciousFileHashes = tostring(Entities['FileHashes']);
+      //Combine the File and IP data together
+      ipData
+      | join (FileData) on VendorOriginalId
+      | summarize by TimeGenerated, AttackerIP, AttackerCountry, DisplayName, ResourceId, AlertType, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes
+      //Create a type column so we can track if it was a File storage or blobl storage upload
+      | extend type = iff(DisplayName has "file", "File", "Blob")
+      | join (
+        union
+        StorageFileLogs,
+        StorageBlobLogs
+        //File upload operations
+        | where OperationName =~ "PutBlob" or OperationName =~ "PutRange"
+        //Parse out the uploader IP
+        | extend ClientIP = tostring(split(CallerIpAddress, ":", 0)[0])
+        //Extract the filename from the Uri
+        | extend FileName = extract(@"\/([\w\-. ]+)\?", 1, Uri)
+        //Base64 decode the MD5 filehash, we will encounter non-ascii hex so string operations don't work
+        //We can work around this by making it an array then converting it to hex from an int
+        | extend base64Char = base64_decode_toarray(ResponseMd5)
+        | mv-expand base64Char
+        | extend hexChar = tohex(toint(base64Char))
+        | extend hexChar = iff(strlen(hexChar) < 2, strcat("0", hexChar), hexChar)
+        | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
+        | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable
+        | extend Md5Hash = strcat_array(list_hexChar, "")
+        //Pack the file information the summarise into a ClientIP row
+        | extend p = pack("FileName", FileName, "FileSize", RequestBodySize, "Md5Hash", Md5Hash, "Time", TimeGenerated, "SourceTable", SourceTable)
+        | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP
+            | join kind=leftouter (
+              union
+              StorageFileLogs,
+              StorageBlobLogs
+              | where OperationName =~ "DeleteFile" or OperationName =~ "DeleteBlob"
+              | extend ClientIP = tostring(split(CallerIpAddress, ":", 0)[0])
+              | extend FileName = extract(@"\/([\w\-. ]+)\?", 1, Uri)
+              | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
+              | extend p = pack("FileName", FileName, "Time", TimeGenerated, "SourceTable", SourceTable)
+              | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP
+              ) on ClientIP
+        ) on $left.AttackerIP == $right.ClientIP
+      | mvexpand UploadedFileInfo
+      | extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)
+      | extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)
+      | extend HashAlgorithm = "MD5"
+      | project AlertTimeGenerated = TimeGenerated, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Linked Malicious Storage Artifacts
+      description: '''This query identifies the additional files uploaded by the same IP address which triggered a malware
+        alert for malicious content upload on Azure Blob or File Storage Container.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: AttackerIP
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        FileHashAlgorithm: HashAlgorithm
+        FileHashValue: LinkedMaliciousFileHash
