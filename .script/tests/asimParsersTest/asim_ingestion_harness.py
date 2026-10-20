@@ -100,6 +100,25 @@ class TokenProvider(Protocol):
         ...
 
 
+class ValidationRunner(Protocol):
+    def evaluate_filter(
+        self,
+        query_client: Any,
+        source_snapshot: Mapping[str, Any],
+        parser_document: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        ...
+
+    def validate_outputs(
+        self,
+        query_client: Any,
+        source_snapshot: Mapping[str, Any],
+        parser_document: Mapping[str, Any],
+        query_time_document: Mapping[str, Any] | None,
+    ) -> Mapping[str, Any]:
+        ...
+
+
 class DefaultAzureTokenProvider:
     def __init__(self):
         from azure.identity import DefaultAzureCredential
@@ -869,8 +888,8 @@ class AsimIngestionHarness:
                 ),
             }
 
-    def query_exact_rows(
-        self, table_name: str, timestamps: Sequence[str]
+    def query_kql(
+        self, query: str, *, stage: str = "query"
     ) -> dict[str, Any]:
         response = self._request(
             "POST",
@@ -879,29 +898,32 @@ class AsimIngestionHarness:
                 f"{self.config.workspace_id}/query"
             ),
             scope=QUERY_SCOPE,
-            stage="query",
-            json_body={
-                "query": build_exact_timestamp_query(
-                    table_name, timestamps
-                )
-            },
+            stage=stage,
+            json_body={"query": query},
             accepted_statuses={200},
         )
         body = _safe_response_body(response)
         if not isinstance(body, dict):
             raise HarnessError(
-                "query", "Log Analytics returned an invalid response."
+                stage, "Log Analytics returned an invalid response."
             )
         tables = body.get("tables")
         if not isinstance(tables, list) or not tables:
             raise HarnessError(
-                "query", "Log Analytics returned no result table."
+                stage, "Log Analytics returned no result table."
             )
         if not isinstance(tables[0], dict):
             raise HarnessError(
-                "query", "Log Analytics returned an invalid result table."
+                stage, "Log Analytics returned an invalid result table."
             )
         return tables[0]
+
+    def query_exact_rows(
+        self, table_name: str, timestamps: Sequence[str]
+    ) -> dict[str, Any]:
+        return self.query_kql(
+            build_exact_timestamp_query(table_name, timestamps)
+        )
 
     def wait_for_exact_rows(
         self,
@@ -1133,7 +1155,9 @@ class AsimIngestionHarness:
         parser_document: Mapping[str, Any],
         *,
         snapshot_output: Path,
-        expected_target_counts: Mapping[str, int],
+        expected_target_counts: Mapping[str, int] | None = None,
+        validation_runner: ValidationRunner | None = None,
+        query_time_document: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         target_id = str(prepared_fixture["targetId"])
         namespace = prepared_fixture["namespace"]
@@ -1153,19 +1177,32 @@ class AsimIngestionHarness:
             raise ValueError(
                 "Prepared fixture timestamps do not match its namespace."
             )
-        normalized_target_counts = {
-            _validate_timestamp(str(timestamp)): int(count)
-            for timestamp, count in expected_target_counts.items()
-        }
-        if set(normalized_target_counts) != set(timestamps):
+        if (
+            validation_runner is not None
+            and expected_target_counts is not None
+        ):
             raise ValueError(
-                "Expected target counts must include every prepared "
-                "timestamp exactly once."
+                "Use either validation_runner or expected_target_counts, "
+                "not both."
             )
-        if any(count < 0 for count in normalized_target_counts.values()):
-            raise ValueError(
-                "Expected target counts cannot contain negative values."
-            )
+        normalized_target_counts: dict[str, int] | None = None
+        if expected_target_counts is not None:
+            normalized_target_counts = {
+                _validate_timestamp(str(timestamp)): int(count)
+                for timestamp, count in expected_target_counts.items()
+            }
+            if set(normalized_target_counts) != set(timestamps):
+                raise ValueError(
+                    "Expected target counts must include every prepared "
+                    "timestamp exactly once."
+                )
+            if any(
+                count < 0
+                for count in normalized_target_counts.values()
+            ):
+                raise ValueError(
+                    "Expected target counts cannot contain negative values."
+                )
 
         names = build_resource_names(
             target_id,
@@ -1187,6 +1224,8 @@ class AsimIngestionHarness:
             "rawUpload": [],
             "parserUpload": [],
             "snapshotPath": str(snapshot_output),
+            "filterValidation": None,
+            "outputValidation": None,
             "cleanup": cleanup,
         }
         try:
@@ -1231,6 +1270,44 @@ class AsimIngestionHarness:
                 "timestampSetHash": snapshot["timestampSetHash"],
                 "excludedColumns": snapshot["excludedColumns"],
             }
+            if validation_runner is not None:
+                filter_validation = dict(
+                    validation_runner.evaluate_filter(
+                        self,
+                        snapshot,
+                        parser_document,
+                    )
+                )
+                selected_counts = filter_validation.get(
+                    "selectedCountsByTimestamp"
+                )
+                if not isinstance(selected_counts, Mapping):
+                    raise ValueError(
+                        "Validation runner did not return "
+                        "selectedCountsByTimestamp."
+                    )
+                normalized_target_counts = {
+                    _validate_timestamp(str(timestamp)): int(count)
+                    for timestamp, count in selected_counts.items()
+                }
+                result["filterValidation"] = filter_validation
+            if normalized_target_counts is None:
+                raise ValueError(
+                    "Expected target counts or a validation runner "
+                    "is required."
+                )
+            if set(normalized_target_counts) != set(timestamps):
+                raise ValueError(
+                    "Expected target counts must include every prepared "
+                    "timestamp exactly once."
+                )
+            if any(
+                count < 0
+                for count in normalized_target_counts.values()
+            ):
+                raise ValueError(
+                    "Expected target counts cannot contain negative values."
+                )
 
             parser_resource_id = self.dcr_resource_id(
                 names["parserDcr"]
@@ -1257,6 +1334,15 @@ class AsimIngestionHarness:
                 normalized_target_counts,
                 stage="target-visibility",
             )
+            if validation_runner is not None:
+                result["outputValidation"] = dict(
+                    validation_runner.validate_outputs(
+                        self,
+                        snapshot,
+                        parser_document,
+                        query_time_document,
+                    )
+                )
             result["status"] = "completed"
             return result
         finally:

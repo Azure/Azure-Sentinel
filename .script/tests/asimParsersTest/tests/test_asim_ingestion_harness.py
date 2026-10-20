@@ -62,6 +62,53 @@ class FakeTokenProvider:
         return f"token-for-{scope}"
 
 
+class FakeValidationRunner:
+    def __init__(self, timestamp):
+        self.timestamp = timestamp
+        self.filter_calls = 0
+        self.output_calls = 0
+
+    def evaluate_filter(
+        self, query_client, source_snapshot, parser_document
+    ):
+        self.filter_calls += 1
+        return {
+            "status": "passed",
+            "selectedCountsByTimestamp": {
+                self.timestamp: 1,
+            },
+        }
+
+    def validate_outputs(
+        self,
+        query_client,
+        source_snapshot,
+        parser_document,
+        query_time_document,
+    ):
+        self.output_calls += 1
+        return {
+            "status": "passed",
+            "parity": {"status": "not-applicable"},
+        }
+
+
+class FailingFilterRunner:
+    def evaluate_filter(
+        self, query_client, source_snapshot, parser_document
+    ):
+        raise RuntimeError("filter validation failed")
+
+    def validate_outputs(
+        self,
+        query_client,
+        source_snapshot,
+        parser_document,
+        query_time_document,
+    ):
+        raise AssertionError("Output validation must not run.")
+
+
 class FakeClock:
     def __init__(self):
         self.value = 0.0
@@ -592,6 +639,164 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     snapshot_output=Path(directory) / "snapshot.json",
                     expected_target_counts={timestamp: 1},
                 )
+        self.assertEqual("DELETE", session.calls[-1]["method"])
+
+    def test_full_run_uses_validation_runner_counts_and_outputs(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_result = query_payload(
+            [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Type", "type": "string"},
+                {"name": "Value", "type": "string"},
+            ],
+            [[timestamp, "Contoso", "one"]],
+        )
+        harness, _, _ = self.harness(
+            [
+                FakeResponse(201),  # raw DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/raw",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "raw-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # raw upload
+                FakeResponse(200, query_result),  # raw snapshot
+                FakeResponse(200, query_result),  # raw stable
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(200, query_result),  # target visibility
+                FakeResponse(200, query_result),  # target stable
+                FakeResponse(204),  # parser cleanup
+                FakeResponse(204),  # raw cleanup
+            ]
+        )
+        prepared = {
+            "version": 1,
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Value", "type": "string"},
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [
+                {
+                    "TimeGenerated": timestamp,
+                    "Type": "Contoso",
+                    "Value": "one",
+                }
+            ],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "SourceRawTable": "Contoso",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": (
+                "source\n| project TimeGenerated, Type, Value"
+            ),
+        }
+        validation_runner = FakeValidationRunner(timestamp)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = harness.run(
+                prepared,
+                parser,
+                snapshot_output=Path(directory) / "snapshot.json",
+                validation_runner=validation_runner,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(1, validation_runner.filter_calls)
+        self.assertEqual(1, validation_runner.output_calls)
+        self.assertEqual(
+            "passed", result["filterValidation"]["status"]
+        )
+        self.assertEqual(
+            "passed", result["outputValidation"]["status"]
+        )
+
+    def test_filter_validation_failure_still_cleans_up_raw_dcr(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_result = query_payload(
+            [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Type", "type": "string"},
+            ],
+            [[timestamp, "Contoso"]],
+        )
+        harness, session, _ = self.harness(
+            [
+                FakeResponse(201),  # raw DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/raw",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "raw-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # raw upload
+                FakeResponse(200, query_result),  # raw snapshot
+                FakeResponse(200, query_result),  # raw stable
+                FakeResponse(204),  # raw cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [{"TimeGenerated": timestamp}],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "SourceRawTable": "Contoso",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                RuntimeError, "filter validation failed"
+            ):
+                harness.run(
+                    prepared,
+                    parser,
+                    snapshot_output=Path(directory) / "snapshot.json",
+                    validation_runner=FailingFilterRunner(),
+                )
+
         self.assertEqual("DELETE", session.calls[-1]["method"])
 
     def test_full_run_rejects_incomplete_expected_count_map(self):

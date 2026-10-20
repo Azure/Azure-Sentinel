@@ -1,3 +1,4 @@
+import csv
 import importlib.util
 import json
 import sys
@@ -615,6 +616,49 @@ class FixturePreparationTests(unittest.TestCase):
                 self.assertEqual(
                     "repository", artifact["schemaSource"]
                 )
+
+    def test_salesforce_fixtures_include_rejected_filter_rows(self):
+        repo_root = Path(__file__).resolve().parents[4]
+        cases = (
+            (
+                "Salesforce_Service Cloud_Authentication_"
+                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
+                {"Login", "LoginAs", "Logout"},
+            ),
+            (
+                "Salesforce_Salesforce Service Cloud_WebSession_"
+                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
+                {
+                    "ApiTotalUsage",
+                    "RestApi",
+                    "BulkApi2",
+                    "ApexCallout",
+                    "ExternalODataCallout",
+                    "MetadataApiOperation",
+                    "NamedCredential",
+                    "URI",
+                    "AuraRequest",
+                    "LightningPageView",
+                    "LightningPerformance",
+                    "LightningInteraction",
+                    "UiTelemetryResourceTiming",
+                    "UiTelemetryNavigationTiming",
+                    "CSPViolation",
+                },
+            ),
+        )
+        for filename, accepted_types in cases:
+            with self.subTest(filename=filename):
+                path = repo_root / "Sample Data/ASIM" / filename
+                with path.open(
+                    "r", encoding="utf-8-sig", newline=""
+                ) as stream:
+                    rows = list(csv.DictReader(stream))
+                event_types = {
+                    row["EventType"] for row in rows
+                }
+                self.assertTrue(event_types & accepted_types)
+                self.assertTrue(event_types - accepted_types)
 
 
 if __name__ == "__main__":
