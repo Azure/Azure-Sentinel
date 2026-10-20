@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.2.2       | 20-10-2026                     | Added disabled Defender XDR Custom Detections corresponding to the solution's **Analytic Rules**. Defender Workbook drafts requiring review are excluded from packaging. |
 | 3.0.4       | 17-12-2025                     | Updated UbiquitiAuditEvent **parser** for new log format.                 |
 | 3.0.3       | 04-12-2024                     | Removed Deprecated **Data Connector**                                     |
 | 3.0.2       | 09-08-2024                     | Deprecating data connectors                                               |
