@@ -18,6 +18,17 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
+  let SalesforceServiceCloud = () {
+      union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL
+      | extend
+          EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),
+          LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),
+          ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),
+          User = column_ifexists('user_name_s', column_ifexists('User', '')),
+          UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),
+          UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),
+          TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))
+  };
   let failureCountThreshold = 10;
   let successCountThreshold = 1;
   let Failures =
@@ -34,19 +45,24 @@ query: |
             SuccessStartTime = min(TimeGenerated),
             SuccessEndTime = max(TimeGenerated),
             IpAddresses = make_set (ClientIp, 100),
+            ClientIp = take_any(ClientIp),
             SuccessCount = count() by User, UserId, UserType
     | join kind=leftouter Failures on UserId
     | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
     | where FailureEndTime < SuccessStartTime
-    | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses
+    | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses, ClientIp
 customDetails:
-  EventStartTime: FailureStartTime
-  EventEndTime: SuccessEndTime
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
   IPAddresses: IpAddresses
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Upn
         columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
 version: 1.0.4
 kind: Scheduled

@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.3.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SalesforceServiceCloudCCPDefinition
+  dataTypes:
+  - SalesforceServiceCloud
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SalesforceServiceCloudV2_CL
+    - SalesforceServiceCloudV3_CL
+    - SalesforceServiceCloud_CL
+  requiredDataConnectors:
+  - connectorId: SalesforceServiceCloudCCPDefinition
+    dataTypes:
+    - SalesforceServiceCloud
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5a6ce089-e756-40fb-b022-c8e8864a973a
+    path: Analytic Rules/Salesforce-BruteForce.yaml
+    version: 1.0.4
+    querySha256: 4345b0be0a23e1a60fa74f8fdbcafc5b5370b52c12ab5c94c963a6b68403dd9c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Renamed local parser binding SalesforceServiceCloud to __xdr_inline_SalesforceServiceCloud to avoid a saved parser collision
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - customDetails 'IPAddresses' column `IpAddresses` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 472466f3e97787bb63fa9644077af088baebdeba1f8960ed644141b52e87b68f
+      targetQuerySha256: ba8c6ff9a2667ae6ee4ebf70743cf7d864839c0c2f12fa039072c6f7d2fa59eb
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 472466f3e97787bb63fa9644077af088baebdeba1f8960ed644141b52e87b68f
+      targetQuerySha256: ba8c6ff9a2667ae6ee4ebf70743cf7d864839c0c2f12fa039072c6f7d2fa59eb
+properties:
+  id: xdr-5a6ce089-e756-40fb-b022-c8e8864a973a
+  displayName: Brute force attack against user credentials
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let __xdr_inline_SalesforceServiceCloud = () {
+          union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL
+          | extend
+              EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),
+              LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),
+              ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),
+              User = column_ifexists('user_name_s', column_ifexists('User', '')),
+              UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),
+              UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),
+              TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))
+      };
+      let failureCountThreshold = 10;
+      let successCountThreshold = 1;
+      let Failures =
+      __xdr_inline_SalesforceServiceCloud
+      | where EventType == "Login" and LoginStatus != "LOGIN_NO_ERROR"
+      | summarize
+            FailureStartTime = min(TimeGenerated),
+            FailureEndTime = max(TimeGenerated),
+            IpAddresses = make_set (ClientIp, 100),
+            FailureCount = count() by User, UserId, UserType;
+        __xdr_inline_SalesforceServiceCloud
+        | where EventType == "Login" and LoginStatus == "LOGIN_NO_ERROR"
+        | summarize
+                SuccessStartTime = min(TimeGenerated),
+                SuccessEndTime = max(TimeGenerated),
+                IpAddresses = make_set (ClientIp, 100),
+                ClientIp = take_any(ClientIp),
+                SuccessCount = count() by User, UserId, UserType
+        | join kind=leftouter Failures on UserId
+        | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+        | where FailureEndTime < SuccessStartTime
+        | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses, ClientIp
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Brute force attack against user credentials
+      description: |-
+        'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.
+        The default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        IPAddresses: IpAddresses

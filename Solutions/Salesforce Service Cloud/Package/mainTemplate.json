@@ -49,6 +49,41 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel workbook content and its Content Hub registration carried by this solution (ContentKind Workbook and WorkbookTemplate)."
+      }
+    },
+    "DeployDataConnector": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the data connectors carried by this solution, together with their metadata and catalog entries (ContentKind DataConnector, ResourceDataConnector and DataType)."
+      }
+    },
+    "DeployCustomDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy the XDR-native custom detection resources and their Content Hub registrations (ContentKind CustomDetection and CustomDetectionTemplate). Independent of DeployAnalyticsRule: both kinds can be selected together. Existing analytic-rule instances are not disabled or removed. CD enabled or disabled status is controlled separately from this deployment switch."
+      }
+    },
+    "DeployParser": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the parsers and their registrations carried by this solution."
+      }
     }
   },
   "variables": {
@@ -164,7 +199,7 @@
                 "description": "Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.",
                 "displayName": "Brute force attack against user credentials",
                 "enabled": false,
-                "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\nSalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses\n",
+                "query": "let SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\nSalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          ClientIp = take_any(ClientIp),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses, ClientIp\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -192,16 +227,25 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "User",
-                        "identifier": "FullName"
+                        "identifier": "Upn",
+                        "columnName": "User"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "EventEndTime": "SuccessEndTime",
-                  "EventStartTime": "FailureStartTime",
-                  "IPAddresses": "IpAddresses"
+                  "IPAddresses": "IpAddresses",
+                  "EventEndTime": "EventEndTime",
+                  "EventStartTime": "EventStartTime"
                 }
               }
             },
@@ -245,7 +289,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -273,7 +318,7 @@
                 "description": "This query searches for failed attempts to log in from more than 15 various users within a 5 minutes timeframe from the same source. This is a potential indication of a password spray attack.",
                 "displayName": "Potential Password Spray Attack",
                 "enabled": false,
-                "query": "let FailureThreshold = 15;  \nSalesforceServiceCloud\n| where EventType =~ 'Login' and  LoginStatus != 'LOGIN_NO_ERROR'\n| where LoginStatus  in~ ('LOGIN_ERROR_INVALID_PASSWORD', 'LOGIN_ERROR_SSO_PWD_INVALID')\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize UserCount=dcount(UserId), Users = make_set(UserId,100) by ClientIp, bin(TimestampDerived, 5m)\n| where UserCount > FailureThreshold\n",
+                "query": "let SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet FailureThreshold = 15;  \nSalesforceServiceCloud\n| where EventType =~ 'Login' and  LoginStatus != 'LOGIN_NO_ERROR'\n| where LoginStatus  in~ ('LOGIN_ERROR_INVALID_PASSWORD', 'LOGIN_ERROR_SSO_PWD_INVALID')\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize UserCount=dcount(UserId), Users = make_set(UserId,100) by ClientIp, bin(TimestampDerived, 5m)\n| where UserCount > FailureThreshold\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -301,8 +346,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIp",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
                       }
                     ]
                   }
@@ -352,7 +397,8 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -380,7 +426,7 @@
                 "description": "This query searches for successful user logins from different countries within 30 mins.",
                 "displayName": "User Sign in from different countries",
                 "enabled": false,
-                "query": "let threshold = 2;\nlet Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = SalesforceServiceCloud\n| where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'\n| project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;\nUsersLocation\n| extend Dummy=1\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy\n| partition by Hour(\n                lookup (Countrydb|extend Dummy=1) on Dummy\n              | where ipv4_is_match(ClientIp, Network)\n              )\n| summarize NumOfCountries = dcount(country_name) by User, Hour\n| where NumOfCountries >= threshold\n",
+                "query": "let SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet threshold = 2;\nlet Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = SalesforceServiceCloud\n| where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'\n| project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;\nUsersLocation\n| extend Dummy=1\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy\n| partition by Hour(\n                lookup (Countrydb|extend Dummy=1) on Dummy\n              | where ipv4_is_match(ClientIp, Network)\n              )\n| summarize NumOfCountries = dcount(country_name) by User, Hour\n| where NumOfCountries >= threshold\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -408,8 +454,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "User",
-                        "identifier": "AadUserId"
+                        "identifier": "AadUserId",
+                        "columnName": "User"
                       }
                     ]
                   }
@@ -456,7 +502,8 @@
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -841,7 +888,8 @@
                     }
                   ]
                 }
-              }
+              },
+              "condition": "[parameters('DeployDataConnector')]"
             },
             {
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
@@ -5251,7 +5299,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
@@ -5618,7 +5667,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
@@ -5653,7 +5703,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -5879,7 +5930,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -6261,7 +6313,8 @@
                     }
                   ]
                 }
-              }
+              },
+              "condition": "[parameters('DeployDataConnector')]"
             },
             {
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
@@ -6724,7 +6777,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
@@ -7088,7 +7142,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
@@ -7123,7 +7178,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -7378,7 +7434,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -7823,7 +7880,8 @@
                     }
                   ]
                 }
-              }
+              },
+              "condition": "[parameters('DeployDataConnector')]"
             },
             {
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition3')))]",
@@ -9657,7 +9715,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition3'))]",
@@ -10084,7 +10143,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition3')))]",
@@ -10119,7 +10179,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -11584,7 +11645,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -11959,7 +12021,8 @@
                     }
                   ]
                 }
-              }
+              },
+              "condition": "[parameters('DeployDataConnector')]"
             },
             {
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition4')))]",
@@ -12358,7 +12421,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition4'))]",
@@ -12715,7 +12779,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition4')))]",
@@ -12750,7 +12815,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13158,7 +13224,8 @@
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
-      }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13239,7 +13306,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
         "version": "[variables('parserObject1').parserVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -13260,7 +13328,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -13290,7 +13359,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com/"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13371,7 +13441,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
         "version": "[variables('parserObject2').parserVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -13392,7 +13463,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -13422,7 +13494,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com/"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13503,7 +13576,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject3').parserContentId3,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject3').parserContentId3,'-', '1.0.0')))]",
         "version": "[variables('parserObject3').parserVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -13524,7 +13598,8 @@
             "value": "SalesforceMarketingCloudAuditEvents"
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -13554,7 +13629,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com/"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13635,7 +13711,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject4').parserContentId4,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject4').parserContentId4,'-', '1.0.0')))]",
         "version": "[variables('parserObject4').parserVersion4]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -13656,7 +13733,8 @@
             "value": "SalesforceMarketingCloudSecurityEvents"
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -13686,7 +13764,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com/"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -13774,7 +13853,8 @@
         "contentProductId": "[variables('_workbookcontentProductId1')]",
         "id": "[variables('_workbookcontentProductId1')]",
         "version": "[variables('workbookVersion1')]"
-      }
+      },
+      "condition": "[parameters('DeployWorkbook')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
@@ -13786,7 +13866,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Salesforce Service Cloud",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.salesforce.com/in/products/service-cloud/overview/\">Salesforce Service Cloud</a> solution for Microsoft Sentinel enables you to ingest Service Cloud events and Salesforce Marketing Cloud audit and security events into Microsoft Sentinel.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 4, <strong>Parsers:</strong> 4, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.salesforce.com/in/products/service-cloud/overview/\">Salesforce Service Cloud</a> solution for Microsoft Sentinel enables you to ingest Service Cloud events and Salesforce Marketing Cloud audit and security events into Microsoft Sentinel.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 4, <strong>Parsers:</strong> 4, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 3, <strong>XDR Detections:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -13870,6 +13950,21 @@
               "kind": "Workbook",
               "contentId": "[variables('_workbookContentId1')]",
               "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-5a6ce089-e756-40fb-b022-c8e8864a973a",
+              "version": "3.3.1"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+              "version": "3.3.1"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
+              "version": "3.3.1"
             }
           ]
         },
@@ -13884,6 +13979,593 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "SalesforceServiceCloud-CD-xdr-5a6ce089-e756-40fb-b022-c-8f8132e6",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-5a6ce089-e756-40fb-b022-c8e8864a973a', 'xdr-5a6ce089-e756-40fb-b022-c8e8864a973a')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\n__xdr_inline_SalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  __xdr_inline_SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          ClientIp = take_any(ClientIp),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses, ClientIp"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "Brute force attack against user credentials",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "title": "Brute force attack against user credentials",
+                    "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "customDetails": {
+                      "IPAddresses": "IpAddresses",
+                      "EventEndTime": "EventEndTime",
+                      "EventStartTime": "EventStartTime"
+                    },
+                    "severity": "medium",
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "upnColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIp",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-5a6ce089-e756-40fb-b022-c8e8864a973a",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-5a6ce089-e756-40fb-b022-c8e8864a973a')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'SalesforceServiceCloud-CD-xdr-5a6ce089-e756-40fb-b022-c-8f8132e6')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-5a6ce089-e756-40fb-b022-c8e8864a973a', 'xdr-5a6ce089-e756-40fb-b022-c8e8864a973a')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\n__xdr_inline_SalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  __xdr_inline_SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          ClientIp = take_any(ClientIp),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses, ClientIp"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "Brute force attack against user credentials",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "title": "Brute force attack against user credentials",
+                    "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "customDetails": {
+                      "IPAddresses": "IpAddresses",
+                      "EventEndTime": "EventEndTime",
+                      "EventStartTime": "EventStartTime"
+                    },
+                    "severity": "medium",
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "upnColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIp",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-5a6ce089-e756-40fb-b022-c8e8864a973a",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-5a6ce089-e756-40fb-b022-c8e8864a973a",
+        "contentKind": "CustomDetection",
+        "displayName": "Brute force attack against user credentials",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-5a6ce089-e756-40fb-b022-c8e8864a973a','-','3.3.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-5a6ce089-e756-40fb-b022-c8e8864a973a','-','3.3.1')))]",
+        "version": "3.3.1",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+          "packageVersion": "3.7.1",
+          "contentId": "xdr-5a6ce089-e756-40fb-b022-c8e8864a973a",
+          "contentVersion": "3.3.1",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "SalesforceServiceCloudV2_CL",
+                "SalesforceServiceCloudV3_CL",
+                "SalesforceServiceCloud_CL"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SalesforceServiceCloudCCPDefinition",
+              "dataTypes": [
+                "SalesforceServiceCloud"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "SalesforceServiceCloud-CD-xdr-64d16e62-1a17-4a35-9ea7-2-9d88cdd0",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118', 'xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet FailureThreshold = 15;\n__xdr_inline_SalesforceServiceCloud\n| where EventType =~ 'Login' and  LoginStatus != 'LOGIN_NO_ERROR'\n| where LoginStatus  in~ ('LOGIN_ERROR_INVALID_PASSWORD', 'LOGIN_ERROR_SSO_PWD_INVALID')\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize UserCount=dcount(UserId), Users = make_set(UserId,100) by ClientIp, bin(TimestampDerived, 5m)\n| where UserCount > FailureThreshold"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "Potential Password Spray Attack",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "title": "Potential Password Spray Attack",
+                    "description": "'This query searches for failed attempts to log in from more than 15 various users within a 5 minutes timeframe from the same source. This is a potential indication of a password spray attack.'",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "customDetails": {
+                      "Users": "Users"
+                    },
+                    "severity": "medium",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIp",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'SalesforceServiceCloud-CD-xdr-64d16e62-1a17-4a35-9ea7-2-9d88cdd0')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query searches for failed attempts to log in from more than 15 various users within a 5 minutes timeframe from the same source. This is a potential indication of a password spray attack.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118', 'xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet FailureThreshold = 15;\n__xdr_inline_SalesforceServiceCloud\n| where EventType =~ 'Login' and  LoginStatus != 'LOGIN_NO_ERROR'\n| where LoginStatus  in~ ('LOGIN_ERROR_INVALID_PASSWORD', 'LOGIN_ERROR_SSO_PWD_INVALID')\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize UserCount=dcount(UserId), Users = make_set(UserId,100) by ClientIp, bin(TimestampDerived, 5m)\n| where UserCount > FailureThreshold"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "Potential Password Spray Attack",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "title": "Potential Password Spray Attack",
+                    "description": "'This query searches for failed attempts to log in from more than 15 various users within a 5 minutes timeframe from the same source. This is a potential indication of a password spray attack.'",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "customDetails": {
+                      "Users": "Users"
+                    },
+                    "severity": "medium",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIp",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+        "contentKind": "CustomDetection",
+        "displayName": "Potential Password Spray Attack",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118','-','3.3.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118','-','3.3.1')))]",
+        "version": "3.3.1",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+          "packageVersion": "3.7.1",
+          "contentId": "xdr-64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+          "contentVersion": "3.3.1",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "SalesforceServiceCloudV2_CL",
+                "SalesforceServiceCloudV3_CL",
+                "SalesforceServiceCloud_CL"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SalesforceServiceCloudCCPDefinition",
+              "dataTypes": [
+                "SalesforceServiceCloud"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "SalesforceServiceCloud-CD-xdr-3094e036-e5ae-4d6e-8626-b-8a8f7a4e",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2', 'xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet threshold = 2;\nlet Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = __xdr_inline_SalesforceServiceCloud\n| where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'\n| project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;\nUsersLocation\n| extend Dummy=1\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy\n| partition by Hour(\n                lookup (Countrydb|extend Dummy=1) on Dummy\n              | where ipv4_is_match(ClientIp, Network)\n              )\n| summarize NumOfCountries = dcount(country_name) by User, Hour\n| where NumOfCountries >= threshold"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "User Sign in from different countries",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "aadUserIdColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    },
+                    "title": "User Sign in from different countries",
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "description": "'This query searches for successful user logins from different countries within 30 mins.'"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'SalesforceServiceCloud-CD-xdr-3094e036-e5ae-4d6e-8626-b-8a8f7a4e')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query searches for successful user logins from different countries within 30 mins.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "id": "[if(true(), 'xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2', 'xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2')]",
+                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let __xdr_inline_SalesforceServiceCloud = () {\n    union SalesforceServiceCloud_CL, SalesforceServiceCloudV2_CL, SalesforceServiceCloudV3_CL\n    | extend\n        EventType = column_ifexists('event_type_s', column_ifexists('EventType', '')),\n        LoginStatus = column_ifexists('login_status_s', column_ifexists('LoginStatus', '')),\n        ClientIp = column_ifexists('client_ip_s', column_ifexists('ClientIp', '')),\n        User = column_ifexists('user_name_s', column_ifexists('User', '')),\n        UserId = column_ifexists('user_id_s', column_ifexists('UserId', '')),\n        UserType = column_ifexists('user_type_s', column_ifexists('UserType', '')),\n        TimestampDerived = column_ifexists('timestamp_derived_t', column_ifexists('TimestampDerived', ''))\n};\nlet threshold = 2;\nlet Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = __xdr_inline_SalesforceServiceCloud\n| where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'\n| project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;\nUsersLocation\n| extend Dummy=1\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy\n| partition by Hour(\n                lookup (Countrydb|extend Dummy=1) on Dummy\n              | where ipv4_is_match(ClientIp, Network)\n              )\n| summarize NumOfCountries = dcount(country_name) by User, Hour\n| where NumOfCountries >= threshold"
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "displayName": "User Sign in from different countries",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "aadUserIdColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    },
+                    "title": "User Sign in from different countries",
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "description": "'This query searches for successful user logins from different countries within 30 mins.'"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+                  "packageVersion": "3.7.1",
+                  "contentId": "xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
+                  "contentVersion": "3.3.1"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
+        "contentKind": "CustomDetection",
+        "displayName": "User Sign in from different countries",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2','-','3.3.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2','-','3.3.1')))]",
+        "version": "3.3.1",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+          "packageVersion": "3.7.1",
+          "contentId": "xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
+          "contentVersion": "3.3.1",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "SalesforceServiceCloudV2_CL",
+                "SalesforceServiceCloudV3_CL",
+                "SalesforceServiceCloud_CL"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SalesforceServiceCloudCCPDefinition",
+              "dataTypes": [
+                "SalesforceServiceCloud"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "pid-9f51c37c-c26c-40ba-8f6b-0a7d2e02a85e-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
     }
   ],
   "outputs": {}
