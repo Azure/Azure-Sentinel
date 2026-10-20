@@ -51,9 +51,15 @@ query: |
       | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
       | extend ActorApp = tostring(InitiatedBy.app.displayName)
       | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      | extend ActorAppId = tostring(InitiatedBy.app.servicePrincipalId)
       // External accounts are written as "name_domain#EXT#@tenant.onmicrosoft.com" by some services
-      // and as "name@domain" by others, so both forms are brought to "name@domain"
-      | extend ActorKey = tolower(replace_regex(Actor, @"^(.+)_([^_#]+)#EXT#@.*$", @"\1@\2"))
+      // and as "name@domain" by others, so both forms are brought to "name@domain" (matched without regard to case).
+      // Applications are keyed by service principal id, never by display name, which is not unique; an event with
+      // neither a user nor a service principal id is only grouped with itself.
+      | extend ActorKey = case(
+            isnotempty(ActorUpn), tolower(replace_regex(ActorUpn, @"(?i)^(.+)_([^_#]+)#EXT#@.*$", @"\1@\2")),
+            isnotempty(ActorAppId), strcat("app:", ActorAppId),
+            strcat("event:", CorrelationId))
       | extend Hour = bin(TimeGenerated, 1h);
   let ChangesPerActorHour = TenantPolicyChanges
       | summarize
