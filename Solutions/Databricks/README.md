@@ -17,8 +17,8 @@ Azure Databricks is not covered by this solution. It writes to Log Analytics thr
 
 See `Data Connectors/README.md`. In short:
 
-1. Databricks: enable audit log delivery to S3 (Premium or Enterprise tier), output format JSON, with a delivery path prefix.
-2. AWS: deploy `OIDCWebIdProvider.json` (once per account) and `DatabricksAuditLogsResources.json` with your Workspace ID, bucket and prefix. Add an ObjectCreated notification on the bucket to the queue, filtered on the prefix, if the bucket already exists.
+1. Databricks: enable audit log delivery to S3 (Premium or Enterprise tier), output format JSON, optionally with a delivery path prefix.
+2. AWS: deploy `OIDCWebIdProvider.json` (once per account) and `DatabricksAuditLogsResources.json` with your Workspace ID, bucket and prefix (empty if there is none). Add an ObjectCreated notification on the bucket to the queue, filtered on the stack output `NotificationPrefix`, if the bucket already exists.
 3. Microsoft Sentinel: install the solution, open the connector page, click **Add new collector**, paste the Role ARN and Queue URL.
 
 Rows appear within 5 to 15 minutes of the next Databricks file landing in S3. Objects that were already in the bucket are not read.

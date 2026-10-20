@@ -34,7 +34,7 @@
           "default": "Databricks S3 bucket name"
         },
         "DeliveryPathPrefix": {
-          "default": "Databricks delivery path prefix"
+          "default": "Databricks delivery path prefix (empty if none)"
         },
         "KmsKeyArn": {
           "default": "KMS key ARN (SSE-KMS buckets only)"
@@ -66,10 +66,10 @@
     },
     "DeliveryPathPrefix": {
       "Type": "String",
-      "Description": "The delivery_path_prefix from the Databricks log delivery configuration, the folder that holds the workspaceId= folders. No leading or trailing slash.",
-      "Default": "audit-logs",
-      "AllowedPattern": "^[^/](.*[^/])?$",
-      "ConstraintDescription": "Must not start or end with a slash. Enter audit-logs, not /audit-logs/."
+      "Description": "The delivery_path_prefix from the Databricks log delivery configuration: the folder that holds the workspaceId= folders. No leading or trailing slash. Leave empty if the workspaceId= folders are at the top of the bucket (no delivery_path_prefix).",
+      "Default": "",
+      "AllowedPattern": "^$|^[^/](.*[^/])?$",
+      "ConstraintDescription": "Leave empty, or enter the folder without slashes: audit-logs, not /audit-logs/."
     },
     "KmsKeyArn": {
       "Type": "String",
@@ -115,6 +115,18 @@
           "Fn::Equals": [
             {
               "Ref": "KmsKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasPrefix": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "DeliveryPathPrefix"
             },
             ""
           ]
@@ -202,7 +214,15 @@
                     "s3:GetObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/${DeliveryPathPrefix}/*"
+                    "Fn::If": [
+                      "HasPrefix",
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/${DeliveryPathPrefix}/*"
+                      },
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/workspaceId=*"
+                      }
+                    ]
                   }
                 },
                 {
@@ -352,7 +372,13 @@
                     {
                       "Name": "prefix",
                       "Value": {
-                        "Fn::Sub": "${DeliveryPathPrefix}/"
+                        "Fn::If": [
+                          "HasPrefix",
+                          {
+                            "Fn::Sub": "${DeliveryPathPrefix}/"
+                          },
+                          "workspaceId="
+                        ]
                       }
                     }
                   ]
@@ -391,9 +417,15 @@
       }
     },
     "NotificationPrefix": {
-      "Description": "Prefix filter to use on the S3 event notification.",
+      "Description": "Prefix filter to use on the S3 event notification: the delivery path prefix with a trailing slash, or workspaceId= when the prefix is empty.",
       "Value": {
-        "Fn::Sub": "${DeliveryPathPrefix}/"
+        "Fn::If": [
+          "HasPrefix",
+          {
+            "Fn::Sub": "${DeliveryPathPrefix}/"
+          },
+          "workspaceId="
+        ]
       }
     }
   }

@@ -4,8 +4,8 @@ This connector ingests the account and workspace audit logs that Databricks on A
 
 ## How it works
 
-1. Databricks writes audit events as JSON lines to `s3://<bucket>/<prefix>/workspaceId=<id>/date=<yyyy-mm-dd>/auditlogs_<id>.json`. Account-level events use `workspaceId=0`.
-2. S3 sends an `ObjectCreated` message for each new file under the prefix to an SQS queue.
+1. Databricks writes audit events as JSON lines to `s3://<bucket>/<prefix>/workspaceId=<id>/date=<yyyy-mm-dd>/auditlogs_<id>.json`. Account-level events use `workspaceId=0`. Without a delivery path prefix the `workspaceId=` folders are at the top of the bucket.
+2. S3 sends an `ObjectCreated` message for each new file under the prefix (or under `workspaceId=` when there is no prefix) to an SQS queue.
 3. The Microsoft Sentinel S3 poller signs in to AWS with Microsoft Sentinel's own Entra ID identity and assumes an IAM role in your account through the IAM OpenID Connect provider.
 4. It reads messages from the queue.
 5. It downloads each file the messages name.
@@ -17,7 +17,7 @@ This connector ingests the account and workspace audit logs that Databricks on A
 
 | Step | Where | Check before the next step |
 |---|---|---|
-| 1. Prerequisites and values | Databricks, AWS, Azure | Files exist under `<prefix>/workspaceId=` in the bucket |
+| 1. Prerequisites and values | Databricks, AWS, Azure | `workspaceId=` folders exist in the bucket, under the prefix if there is one |
 | 2. Install the solution | Microsoft Sentinel content hub | Connector listed in Data connectors; Workspace ID noted |
 | 3. Role and queues | AWS CloudFormation console | Stack outputs: Role ARN, Queue URL, Queue ARN |
 | 4. S3 event notification | S3 console | An `s3:TestEvent` message in the queue |
@@ -28,7 +28,7 @@ If a check fails, fix it there. Later steps only fail with less specific errors.
 
 ## Step 1. Prerequisites and values
 
-- **Databricks**: Premium or Enterprise tier, with [audit log delivery](https://docs.databricks.com/aws/en/admin/account-settings/audit-logs) to S3 configured: `log_type` AUDIT_LOGS, `output_format` JSON, and a `delivery_path_prefix`.
+- **Databricks**: Premium or Enterprise tier, with [audit log delivery](https://docs.databricks.com/aws/en/admin/account-settings/audit-logs) to S3 configured: `log_type` AUDIT_LOGS, `output_format` JSON, and optionally a `delivery_path_prefix`.
 - **AWS**: rights in the account that owns the bucket to deploy CloudFormation stacks that create IAM resources, and to add an S3 event notification.
 - **Azure**: Microsoft Sentinel Contributor on the workspace and Contributor on its resource group.
 
@@ -36,7 +36,7 @@ If a check fails, fix it there. Later steps only fail with less specific errors.
 |---|---|---|---|
 | 1 | Workspace ID | Connector page (step 2), or the Log Analytics workspace Overview | `1a2b3c4d-1234-5678-9abc-def012345678` |
 | 2 | Bucket name and region | S3 console | `acme-databricks-logs`, `us-east-1` |
-| 3 | Delivery path prefix | Databricks log delivery configuration, no slashes | `audit-logs` |
+| 3 | Delivery path prefix | The folder that holds the `workspaceId=` folders, no slashes. Empty if they are at the top of the bucket | `audit-logs`, or empty |
 | 4 | KMS key ARN | Only if the bucket uses SSE-KMS | `arn:aws:kms:us-east-1:123456789012:key/...` |
 | 5 | Role ARN | Stack output `SentinelRoleArn` (step 3) | `arn:aws:iam::123456789012:role/OIDC_MicrosoftSentinelDatabricksAudit` |
 | 6 | Queue URL | Stack output `SentinelSQSQueueURL` (step 3) | `https://sqs.us-east-1.amazonaws.com/123456789012/MicrosoftSentinelDatabricksAuditSqs` |
@@ -75,7 +75,7 @@ Fill in the first parameter group, **Enter your values**:
 |---|---|
 | Microsoft Sentinel Workspace ID | Value 1 |
 | Databricks S3 bucket name | Value 2, the name only (no `s3://`) |
-| Databricks delivery path prefix | Value 3, no slashes |
+| Databricks delivery path prefix (empty if none) | Value 3, no slashes; leave it empty if there is no prefix |
 | KMS key ARN (SSE-KMS buckets only) | Value 4, or empty |
 
 Leave the second group, **Keep the defaults**, as it is: IAM role name `OIDC_MicrosoftSentinelDatabricksAudit` (it must start with `OIDC_`), SQS queue name `MicrosoftSentinelDatabricksAuditSqs`, Create a new bucket `false`. The form rejects a Workspace ID that is not a GUID, a bucket written as `s3://...` and a prefix with a leading or trailing slash.
@@ -98,7 +98,7 @@ Then:
 CloudFormation cannot add a notification to a bucket it did not create.
 
 1. S3, the bucket, **Properties**, **Event notifications**, **Create event notification**.
-2. Name `databricks-audit-to-sentinel`. Prefix: the **NotificationPrefix** output (value 3 with a trailing slash, for example `audit-logs/`). Event types: **All object create events**.
+2. Name `databricks-audit-to-sentinel`. Prefix: the **NotificationPrefix** output, exactly as shown: value 3 with a trailing slash (for example `audit-logs/`), or `workspaceId=` if value 3 is empty. Suffix: `.json`, or empty. Event types: **All object create events**.
 3. Destination **SQS queue**, the queue from step 3 (or value 7). **Save changes**.
 
 Check: in SQS, open the queue, **Send and receive messages**, **Poll for messages**. A message containing `s3:TestEvent` is there. Polling is safe now; do not poll the queue in the console after step 5, because it hides messages from the collector and counts toward the five reads before a message moves to the dead-letter queue.
@@ -114,7 +114,7 @@ aws s3api put-bucket-notification-configuration --bucket <bucket> --notification
     "Id": "databricks-audit-to-sentinel",
     "QueueArn": "<SentinelSQSQueueArn>",
     "Events": ["s3:ObjectCreated:*"],
-    "Filter": {"Key": {"FilterRules": [{"Name": "prefix", "Value": "<DeliveryPathPrefix>/"}]}}
+    "Filter": {"Key": {"FilterRules": [{"Name": "prefix", "Value": "<NotificationPrefix>"}, {"Name": "suffix", "Value": ".json"}]}}
   }]
 }'
 ```
@@ -157,7 +157,7 @@ In AWS, the queue's **Monitoring** tab should show messages returning to 0, and 
 
 ## Without CloudFormation
 
-Create the same resources by hand, in the bucket's region and in this order. Replace `<account-id>`, `<region>`, `<workspace-id>`, `<bucket>` and `<prefix>` (no slashes) before pasting.
+Create the same resources by hand, in the bucket's region and in this order. Replace `<account-id>`, `<region>`, `<workspace-id>`, `<bucket>` and `<prefix>` (no slashes) before pasting. If there is no prefix, use `arn:aws:s3:::<bucket>/workspaceId=*` for `s3:GetObject` and `workspaceId=` as the notification prefix.
 
 1. **Identity provider** (skip if it exists, see 3a): IAM, **Identity providers**, **Add provider**, **OpenID Connect**, URL `https://sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/`, audience `api://1462b192-27f7-4cb9-8523-0f4ecb54b47e`.
 2. **Role**: IAM, **Roles**, **Create role**, **Custom trust policy**:
@@ -218,9 +218,9 @@ Create the same resources by hand, in the bucket's region and in this order. Rep
 | `SentinelHealth` mentions `AssumeRoleWithWebIdentity` or `AccessDenied` | Trust policy does not match | Role name starts with `OIDC_`; `sts:RoleSessionName` is `MicrosoftSentinel_` plus the Workspace ID (not the tenant or subscription ID); provider and audience as above |
 | `InvalidIdentityToken` | Identity provider missing or without the audience | Step 3a |
 | `NonExistentQueue` | Wrong Queue URL on the collector | Delete the collector and add it again with the stack output |
-| `s3:GetObject` `AccessDenied` | Role cannot read the file | The stack's delivery prefix must equal the notification prefix without the slash |
+| `s3:GetObject` `AccessDenied` | Role cannot read the file | The stack's delivery prefix must be the folder holding the `workspaceId=` folders, or empty if they are at the top of the bucket |
 | `kms:Decrypt` | Bucket uses SSE-KMS | Update stack 2 with the KMS key ARN |
-| Queue stays at 0 | Notification missing or prefix wrong | The prefix is the folder holding the `workspaceId=` folders, with a trailing slash |
+| Queue stays at 0 | Notification missing or prefix wrong | Use the stack output `NotificationPrefix`: the folder holding the `workspaceId=` folders with a trailing slash, or `workspaceId=` if they are at the top of the bucket |
 | Messages deleted, no rows after 30 minutes | Rows rejected by the data collection rule | Enable diagnostic settings on `DatabricksAuditLogs-DCR` and check `DCRLogErrors` |
 | Messages in the `-dlq` queue | A file failed five reads | Poll the `-dlq` queue to see the file; fix the cause, then **Start DLQ redrive** |
 
@@ -229,7 +229,7 @@ Create the same resources by hand, in the bucket's region and in this order. Rep
 - **Daily check**: the first validation query above; save it as a scheduled analytics rule if you want an alert.
 - **Collector changes**: a collector cannot be edited. To change the Role ARN or Queue URL, delete it on the connector page and add it again.
 - **Another bucket or Databricks account**: deploy `DatabricksAuditLogsResources.json` again with a different stack, role and queue name, add a notification on that bucket, and add a second collector.
-- **Loading history**: only files created after the notification exists are read. Upload older files again under the prefix with new names to ingest them.
+- **Loading history**: only files created after the notification exists are read. Upload older files again under the prefix (or `workspaceId=`) with new names to ingest them.
 - **Removal**: delete the collector, then the solution in the content hub, the S3 event notification, and the `MicrosoftSentinel-DatabricksAudit` stack. Keep the identity provider if other Microsoft Sentinel AWS connectors use it.
 
 ## Known limits
