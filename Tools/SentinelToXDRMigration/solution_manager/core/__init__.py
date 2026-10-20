@@ -18,19 +18,6 @@ _WORKFLOW_REMINDER_EXPORTS = {
     "extract_review_notification_state",
 }
 
-__all__ = [
-    "NOTIFICATION_STATES",
-    "VALID_NOTIFICATION_STATES",
-    "build_migration_status_reminder",
-    "build_workflow_status_reminder",
-    "extract_review_notification_state",
-    "mark_notification_acknowledged",
-    "mark_notification_delivered",
-    "mark_notification_failed",
-    "reconcile_pending_notifications",
-    "sync_review_gate_notification",
-]
-
 
 def __getattr__(name: str) -> Any:
     if name in _REVIEW_NOTIFICATION_EXPORTS:
@@ -42,4 +29,12 @@ def __getattr__(name: str) -> Any:
 
         return getattr(workflow_reminders, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals().keys(), *_REVIEW_NOTIFICATION_EXPORTS, *_WORKFLOW_REMINDER_EXPORTS})
+
+
+
+
 

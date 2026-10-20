@@ -13,14 +13,10 @@ from typing import Any, Mapping, Optional
 import yaml
 
 from solution_manager.core.artifacts import (
-    artifact_path,
     existing_artifact_path,
-     existing_artifacts,
-    portable_artifact,
+    existing_artifacts,
     report_directory,
-    write_json_artifact,
 )
-from solution_manager.core.content_paths import content_path
 from solution_manager.core.target_config import read_solution_target_config
 from solution_manager.core.target_context import workspace_identity
 from solution_manager.migration.converter import xdr_detection_files
@@ -172,6 +168,7 @@ def _collect_private_identifiers(
         if isinstance(env_cfg, Mapping):
             sources.append(env_cfg)
     except ValueError:
+        # Target config is optional during offline manifest projection.
         pass
 
     if run_dir is not None:
@@ -451,6 +448,7 @@ def _find_artifact_json(root: Path, run_dir: Optional[Path], filename: str) -> d
     try:
         candidates.append(existing_artifact_path(root, filename))
     except (OSError, ValueError):
+        # Ignore missing or invalid artifact paths and fall back to local candidates.
         pass
     candidates.append(root / filename)
     candidates.append(root / "Reports" / filename)
@@ -469,6 +467,7 @@ def _find_artifact_yaml(root: Path, run_dir: Optional[Path], filename: str) -> d
     try:
         candidates.append(existing_artifact_path(root, filename))
     except (OSError, ValueError):
+        # Ignore missing or invalid artifact paths and fall back to local candidates.
         pass
     candidates.append(root / filename)
     candidates.append(root / "Reports" / filename)
@@ -501,6 +500,7 @@ def _resolve_solution_version(root: Path, state: Mapping[str, Any]) -> str:
         elif isinstance(ver_info, str) and ver_info.strip():
             return ver_info.strip()
     except (OSError, ValueError, TypeError):
+        # Fall back to SolutionMetadata.json or default version if Data file is unavailable.
         pass
     meta = _read_json_safe(root / "SolutionMetadata.json")
     if isinstance(meta.get("version"), str) and meta["version"].strip():
@@ -595,6 +595,7 @@ def build_sanitized_decision_manifest(
                 try:
                     resolved_src_sha = _sha256_hex(candidate_src.read_bytes())
                 except OSError:
+                    # Leave hash empty if source file cannot be read.
                     pass
         if not resolved_tgt_sha and item_str:
             if scope == "rule_review":
@@ -603,11 +604,13 @@ def build_sanitized_decision_manifest(
                     try:
                         resolved_tgt_sha = _sha256_hex(candidate_tgt.read_bytes())
                     except OSError:
+                        # Leave hash empty if target detection file cannot be read.
                         pass
             elif (root / item_str).is_file() and not (root / item_str).is_symlink():
                 try:
                     resolved_tgt_sha = _sha256_hex((root / item_str).read_bytes())
                 except OSError:
+                    # Leave hash empty if target file cannot be read.
                     pass
 
         rec = _build_decision_record(

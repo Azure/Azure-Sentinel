@@ -11,14 +11,10 @@ import yaml
 
 from solution_manager.qualification.pr_applicability import (
     BUILTIN_CHECK_CATALOG,
-    CONTENT_TYPES,
-    detect_is_migration,
-    detect_solution_content_types,
     determine_pr_applicability,
     load_check_catalog,
 )
 from solution_manager.qualification.pr_check_runner import (
-    evaluate_solution_pr_qualification,
     run_pr_qualification_checks,
 )
 from solution_manager.cli import main as cli_main

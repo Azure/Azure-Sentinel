@@ -1043,8 +1043,6 @@ def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
     # Split body at top-level 'by' keyword
     by_split_pos: tuple[int, int] | None = None
     depth = 0
-    in_single = False
-    in_double = False
     for match in re.finditer(r"'(?:''|[^'])*'|\"(?:\\.|[^\"\\])*\"|\(|\)|\[|\]|\{|\}|\bby\b", body, flags=re.IGNORECASE):
         tok = match.group(0)
         if tok.startswith(("'", '"')):

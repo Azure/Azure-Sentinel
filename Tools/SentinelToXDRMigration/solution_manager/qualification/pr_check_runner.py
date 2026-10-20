@@ -1,7 +1,6 @@
 """PR Qualification Check Runner Engine for Validation, Qualification, and Migration checklists."""
 from __future__ import annotations
 
-from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -287,6 +286,7 @@ def _extract_version_quartet(
             if match:
                 release_notes_version = match.group(0)
         except Exception:
+            # Leave release_notes_version as None if ReleaseNotes.md cannot be read.
             pass
 
     zip_versions: list[str] = []
@@ -890,7 +890,6 @@ def _evaluate_validation_checks(
     """Evaluate all Validation checklist checks."""
     files_by_type: Mapping[str, list[str]] = applicability["filesByContentType"]
     present_by_type: Mapping[str, list[str]] = applicability["presentFilesByContentType"]
-    is_migration = bool(applicability["isMigration"])
     quartet = _extract_version_quartet(solution_root, target_version=target_version)
     results: list[dict[str, Any]] = []
 

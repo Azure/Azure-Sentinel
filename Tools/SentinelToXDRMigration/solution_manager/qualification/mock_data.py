@@ -103,6 +103,7 @@ def generate_mock_data(
                             "recordCount": total_records,
                         }
                 except Exception:
+                    # Fall back to generating synthetic records if candidate mock file is unreadable or malformed.
                     pass
 
     if generator is not None:

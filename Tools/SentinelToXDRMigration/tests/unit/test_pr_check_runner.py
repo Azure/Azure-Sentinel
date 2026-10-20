@@ -5,19 +5,9 @@ from typing import Any
 
 from solution_manager.qualification.pr_check_runner import (
     _extract_xdr_detection_fields,
-    run_pr_qualification_checks,
 )
 from tests.test_pr_qualification_engine import (
-    DDOS_SOLUTION_PATH,
-    test_applicability_workbook_only_vs_hybrid_migration_vs_general_update,
-    test_cli_pr_qualify_command_and_report_generation,
     test_ddos_solution_nested_xdr_detections_and_sample_data,
-    test_e2e_v01_subject_inventory_full_vs_acknowledged_vs_unacknowledged,
-    test_e2e_v02_and_e2e_v03_offline_mock_data_validation,
-    test_markdown_check_definition_loader_merges_with_builtin_catalog,
-    test_qual_00_prerequisite_and_e2e_g01_no_simulated_fallback,
-    test_qualification_checks_q01_q02_q03_q04_q05_q06_and_author_waivers,
-    test_real_solution_azure_ddos_protection_integration,
 )
 
 

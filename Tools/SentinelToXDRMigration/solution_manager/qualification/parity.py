@@ -137,6 +137,7 @@ def evaluate_rule_parity(
                 if isinstance(doc, dict) and doc.get("id"):
                     rule_id = str(doc["id"])
             except Exception:
+                # Keep fallback rule_id if YAML cannot be parsed.
                 pass
         if det_file.is_file():
             try:
@@ -146,6 +147,7 @@ def evaluate_rule_parity(
                     if isinstance(props, dict) and props.get("id"):
                         det_id = str(props["id"])
             except Exception:
+                # Keep fallback det_id if YAML cannot be parsed.
                 pass
 
         pair_descriptor = {

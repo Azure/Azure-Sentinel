@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = [
+_LAZY_EXPORTS = (
     "DEFAULT_LAB_TARGET",
     "PIPELINE_STATE_FILENAME",
     "PREFLIGHT_PACKET_FILENAME",
@@ -15,14 +15,22 @@ __all__ = [
     "generate_mock_data",
     "plan_qualification_pipeline",
     "run_qualification_pipeline",
-]
+)
 
 
 def __getattr__(name: str) -> Any:
-    if name in __all__:
+    if name in _LAZY_EXPORTS:
         from solution_manager.qualification import orchestrator
 
         return getattr(orchestrator, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals().keys(), *_LAZY_EXPORTS})
+
+
+
+
 
 

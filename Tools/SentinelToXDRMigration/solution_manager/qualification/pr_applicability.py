@@ -401,6 +401,7 @@ def _normalize_rel_path(path_str: str, solution_root: Path) -> str:
         if candidate.is_absolute():
             cleaned = candidate.resolve().relative_to(solution_root).as_posix()
     except Exception:
+        # Keep prefix-stripped path if relative resolution against solution_root fails.
         pass
     return cleaned.strip("/")
 
@@ -552,6 +553,7 @@ def detect_solution_content_types(
                         if rel not in changed_by_type["logos"]:
                             changed_by_type["logos"].append(rel)
                 except Exception:
+                    # Skip unreadable files when scanning for embedded logo references.
                     pass
 
     present_types = [ct for ct in CONTENT_TYPES if present_by_type[ct]]
@@ -627,6 +629,7 @@ def _has_xdr_workbook_migration_provenance(solution_root: Path, rel_paths: Itera
                 ):
                     return True
             except Exception:
+                # Ignore malformed state/report JSON when checking migration provenance.
                 pass
     manifest_path = solution_root / "Evidence" / "decision-manifest.json"
     if manifest_path.is_file() and not manifest_path.is_symlink():
@@ -637,6 +640,7 @@ def _has_xdr_workbook_migration_provenance(solution_root: Path, rel_paths: Itera
                     if dec.get("sourceSha256") and dec.get("targetSha256"):
                         return True
         except Exception:
+            # Ignore malformed decision manifest when checking migration provenance.
             pass
     return False
 

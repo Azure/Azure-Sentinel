@@ -26,7 +26,7 @@ def verify_workbook_playwright_rendering(
     playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Run or validate Playwright visual/tile rendering checks for Defender Workbooks."""
-    root = Path(solution_path).expanduser().resolve()
+    _ = Path(solution_path).expanduser().resolve()
     wb_list = list(workbooks or [])
     if not wb_list:
         return {

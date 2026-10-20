@@ -6,7 +6,6 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
-import pytest
 import yaml
 
 from solution_manager.core import workflow

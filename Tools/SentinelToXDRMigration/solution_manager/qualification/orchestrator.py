@@ -540,6 +540,7 @@ class QualificationOrchestrator:
                     loaded["consolidatedPreflightPacket"] = self.plan["consolidatedPreflightPacket"]
                     return loaded
             except Exception:
+                # Re-initialize pipeline state if existing state file cannot be parsed.
                 pass
 
         counts = self.plan["expectedContentCounts"]
@@ -671,6 +672,7 @@ class QualificationOrchestrator:
 
                 workflow._write_unlocked(wf_path, wf_state)
         except Exception:
+            # Best-effort workflow state sync; do not fail qualification pipeline persistence.
             pass
 
     def _persist_state(self, state: dict[str, Any]) -> dict[str, Any]:
