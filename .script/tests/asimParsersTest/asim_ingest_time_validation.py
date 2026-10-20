@@ -28,6 +28,7 @@ import yaml
 
 MANIFEST_VERSION = 2
 VALIDATION_RESULT_VERSION = 2
+MAX_YAML_BYTES = 1024 * 1024
 
 QUERY_TIME_PATH_RE = re.compile(
     r"^Parsers/ASim(?P<schema>[^/]+)/Parsers/(?P<name>ASim[^/]+)\.yaml$"
@@ -262,6 +263,11 @@ def classify_changed_path(path: str) -> str | None:
 
 
 def load_yaml_file(path: Path) -> dict[str, Any]:
+    file_size = path.stat().st_size
+    if file_size > MAX_YAML_BYTES:
+        raise ValueError(
+            f"{path} exceeds the {MAX_YAML_BYTES}-byte YAML limit."
+        )
     try:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:

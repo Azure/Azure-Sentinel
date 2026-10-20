@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "asim_fixture_preparation.py"
@@ -399,6 +400,29 @@ class FixturePreparationTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "multiple Type values"):
             self.prepare(fixture)
+
+    def test_rejects_fixture_over_size_limit(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type\n"
+            "2026-01-01T00:00:00Z,Contoso_CL\n"
+        )
+        with mock.patch.object(FIXTURES, "MAX_FIXTURE_BYTES", 10):
+            with self.assertRaisesRegex(ValueError, "fixture limit"):
+                self.prepare(fixture)
+
+    def test_rejects_schema_over_size_limit(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type\n"
+            "2026-01-01T00:00:00Z,Contoso_CL\n"
+        )
+        schema = self.root / "schema.csv"
+        schema.write_text(
+            "ColumnName,ColumnType\nTimeGenerated,datetime\n",
+            encoding="utf-8",
+        )
+        with mock.patch.object(FIXTURES, "MAX_SCHEMA_BYTES", 10):
+            with self.assertRaisesRegex(ValueError, "schema limit"):
+                self.prepare(fixture, schema_path=schema)
 
     def test_rejects_fixture_type_that_does_not_match_itp_source(self):
         fixture = self.write_fixture(

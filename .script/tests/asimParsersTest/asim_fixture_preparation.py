@@ -30,6 +30,8 @@ from typing import Any, Iterable, Sequence
 
 
 ARTIFACT_VERSION = 1
+MAX_FIXTURE_BYTES = 5 * 1024 * 1024
+MAX_SCHEMA_BYTES = 1024 * 1024
 TICKS_PER_SECOND = 10_000_000
 TICKS_PER_MICROSECOND = 10
 SAFETY_DELAY_SECONDS = 5 * 60
@@ -357,6 +359,10 @@ def _normalized_column_name(column_name: str) -> tuple[str, bool]:
 def load_fixture_csv(
     path: Path,
 ) -> tuple[list[dict[str, str]], str, set[str]]:
+    if path.stat().st_size > MAX_FIXTURE_BYTES:
+        raise ValueError(
+            f"{path} exceeds the {MAX_FIXTURE_BYTES}-byte fixture limit."
+        )
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         if not reader.fieldnames:
@@ -430,6 +436,10 @@ def _normalize_schema_type(value: str) -> str:
 
 
 def load_schema_csv(path: Path) -> list[dict[str, str]]:
+    if path.stat().st_size > MAX_SCHEMA_BYTES:
+        raise ValueError(
+            f"{path} exceeds the {MAX_SCHEMA_BYTES}-byte schema limit."
+        )
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         if not reader.fieldnames:
@@ -461,6 +471,10 @@ def _find_repo_root(path: Path) -> Path | None:
 
 
 def load_table_schema_json(path: Path) -> list[dict[str, str]]:
+    if path.stat().st_size > MAX_SCHEMA_BYTES:
+        raise ValueError(
+            f"{path} exceeds the {MAX_SCHEMA_BYTES}-byte schema limit."
+        )
     document = json.loads(path.read_text(encoding="utf-8-sig"))
     properties = document.get("Properties")
     if not isinstance(properties, list):

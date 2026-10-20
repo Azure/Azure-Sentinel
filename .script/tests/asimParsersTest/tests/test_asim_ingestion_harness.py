@@ -302,6 +302,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(200, response.status_code)
         self.assertEqual([2.0], clock.sleeps)
+        self.assertEqual(
+            2, harness.request_attempts[0]["attemptCount"]
+        )
 
     def test_wait_for_rows_polls_until_exact_count(self):
         harness, _, clock = self.harness(
@@ -640,6 +643,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     expected_target_counts={timestamp: 1},
                 )
         self.assertEqual("DELETE", session.calls[-1]["method"])
+        self.assertEqual("failed", harness.last_result["status"])
+        self.assertEqual(
+            "deleted",
+            harness.last_result["cleanup"][0]["status"],
+        )
+        self.assertIn(
+            "cleanup",
+            harness.last_result["telemetry"]["stageTimingsSeconds"],
+        )
 
     def test_full_run_uses_validation_runner_counts_and_outputs(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
@@ -735,6 +747,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(
             "passed", result["outputValidation"]["status"]
         )
+        self.assertIn(
+            "filter-validation",
+            result["telemetry"]["stageTimingsSeconds"],
+        )
+        self.assertIn(
+            "output-validation",
+            result["telemetry"]["stageTimingsSeconds"],
+        )
+        self.assertTrue(result["telemetry"]["requestAttempts"])
 
     def test_filter_validation_failure_still_cleans_up_raw_dcr(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"

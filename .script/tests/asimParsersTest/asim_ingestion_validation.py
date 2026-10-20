@@ -973,6 +973,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
+    harness: AsimIngestionHarness | None = None
     result: dict[str, Any] = {
         "version": VALIDATION_RESULT_VERSION,
         "status": "failed",
@@ -1015,6 +1016,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         KeyError,
         yaml.YAMLError,
     ) as exc:
+        if harness is not None and harness.last_result is not None:
+            result = dict(harness.last_result)
+            result["status"] = "failed"
         result["error"] = {
             "type": type(exc).__name__,
             "message": str(exc),

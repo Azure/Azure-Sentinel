@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -880,6 +881,23 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn(
             "Duplicate YAML key", result["findings"][0]["message"]
+        )
+
+    def test_rejects_yaml_over_size_limit(self):
+        path = (
+            self.repo_root
+            / "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("ParserName: oversized\n", encoding="utf-8")
+
+        with mock.patch.object(VALIDATION, "MAX_YAML_BYTES", 5):
+            result = VALIDATION.validate_ingest_time_parser(path)
+
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            "YAML limit", result["findings"][0]["message"]
         )
 
 

@@ -20,6 +20,7 @@ ASIM data/parity validation.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -563,6 +564,9 @@ class AsimIngestionHarness:
         self.poll_delays = tuple(poll_delays)
         self.settling_delay_seconds = settling_delay_seconds
         self.random = random_source or random.Random()
+        self.request_attempts: list[dict[str, Any]] = []
+        self.stage_timings: dict[str, float] = {}
+        self.last_result: dict[str, Any] | None = None
 
     def _remaining(self) -> float:
         return self.deadline - self.clock.monotonic()
@@ -572,6 +576,37 @@ class AsimIngestionHarness:
         if remaining <= 0:
             raise HarnessError("deadline", "Validation deadline expired.")
         self.clock.sleep(min(delay, remaining))
+
+    @contextmanager
+    def _stage(self, name: str):
+        started = self.clock.monotonic()
+        try:
+            yield
+        finally:
+            elapsed = self.clock.monotonic() - started
+            self.stage_timings[name] = round(
+                self.stage_timings.get(name, 0.0) + elapsed,
+                3,
+            )
+
+    def _record_request(
+        self,
+        *,
+        stage: str,
+        method: str,
+        attempt_count: int,
+        status_code: int | None,
+        error: str | None = None,
+    ) -> None:
+        entry: dict[str, Any] = {
+            "stage": stage,
+            "method": method,
+            "attemptCount": attempt_count,
+            "statusCode": status_code,
+        }
+        if error is not None:
+            entry["error"] = error[:500]
+        self.request_attempts.append(entry)
 
     def _auth_headers(self, scope: str) -> dict[str, str]:
         return {
@@ -609,6 +644,13 @@ class AsimIngestionHarness:
                 )
             except requests.RequestException as exc:
                 if not idempotent or attempt >= max_attempts:
+                    self._record_request(
+                        stage=stage,
+                        method=method,
+                        attempt_count=attempt,
+                        status_code=None,
+                        error=str(exc),
+                    )
                     raise HarnessError(
                         stage,
                         f"{method} request failed: {exc}",
@@ -617,8 +659,20 @@ class AsimIngestionHarness:
                 continue
 
             if response.status_code in accepted:
+                self._record_request(
+                    stage=stage,
+                    method=method,
+                    attempt_count=attempt,
+                    status_code=response.status_code,
+                )
                 return response
             if response.status_code in {400, 401, 403}:
+                self._record_request(
+                    stage=stage,
+                    method=method,
+                    attempt_count=attempt,
+                    status_code=response.status_code,
+                )
                 raise HarnessError(
                     stage,
                     f"{method} failed with HTTP {response.status_code}.",
@@ -645,6 +699,12 @@ class AsimIngestionHarness:
                 jitter = self.random.uniform(0, 0.5)
                 self._sleep(min(2**attempt + jitter, 10))
                 continue
+            self._record_request(
+                stage=stage,
+                method=method,
+                attempt_count=attempt,
+                status_code=response.status_code,
+            )
             raise HarnessError(
                 stage,
                 f"{method} failed with HTTP {response.status_code}.",
@@ -854,6 +914,7 @@ class AsimIngestionHarness:
                         "status": "deleted"
                         if response.status_code != 404
                         else "not-found",
+                        "attemptCount": attempt + 1,
                     }
                 if (
                     (response.status_code == 429
@@ -881,6 +942,7 @@ class AsimIngestionHarness:
                 "resourceId": resource_id,
                 "status": "warning",
                 "message": str(exc),
+                "attemptCount": 2,
                 "statusCode": (
                     exc.status_code
                     if isinstance(exc, HarnessError)
@@ -1048,6 +1110,7 @@ class AsimIngestionHarness:
                         "batch": batch_index,
                         "rowCount": len(batch),
                         "status": "reconciled",
+                        "attemptCount": 1,
                     }
                 )
                 continue
@@ -1058,6 +1121,7 @@ class AsimIngestionHarness:
                         "batch": batch_index,
                         "rowCount": len(batch),
                         "status": "accepted",
+                        "attemptCount": 1,
                     }
                 )
                 continue
@@ -1090,6 +1154,7 @@ class AsimIngestionHarness:
                             "batch": batch_index,
                             "rowCount": len(batch),
                             "status": "reconciled-after-retry",
+                            "attemptCount": 2,
                         }
                     )
                     continue
@@ -1099,6 +1164,7 @@ class AsimIngestionHarness:
                             "batch": batch_index,
                             "rowCount": len(batch),
                             "status": "accepted-after-retry",
+                            "attemptCount": 2,
                         }
                     )
                     continue
@@ -1159,6 +1225,8 @@ class AsimIngestionHarness:
         validation_runner: ValidationRunner | None = None,
         query_time_document: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self.request_attempts = []
+        self.stage_timings = {}
         target_id = str(prepared_fixture["targetId"])
         namespace = prepared_fixture["namespace"]
         source_table = str(prepared_fixture["sourceRawTable"])
@@ -1216,6 +1284,7 @@ class AsimIngestionHarness:
         cleanup: list[dict[str, Any]] = []
         result: dict[str, Any] = {
             "version": HARNESS_RESULT_VERSION,
+            "status": "failed",
             "targetId": target_id,
             "sourceRawTable": source_table,
             "targetASIMTable": target_table,
@@ -1227,57 +1296,69 @@ class AsimIngestionHarness:
             "filterValidation": None,
             "outputValidation": None,
             "cleanup": cleanup,
+            "telemetry": {
+                "stageTimingsSeconds": self.stage_timings,
+                "requestAttempts": self.request_attempts,
+            },
         }
+        self.last_result = result
+        run_started = self.clock.monotonic()
         try:
-            self.ensure_raw_table(source_table, schema)
+            with self._stage("raw-table"):
+                self.ensure_raw_table(source_table, schema)
             raw_resource_id = self.dcr_resource_id(names["rawDcr"])
             attempted_dcr_ids.append(raw_resource_id)
-            raw_handle = self.create_dcr(
-                name=names["rawDcr"],
-                stream_name=names["rawStream"],
-                destination_name=names["destination"],
-                schema=schema,
-                transform_kql="source",
-                output_stream=(
-                    f"Custom-{source_table}"
-                    if source_table.lower().endswith("_cl")
-                    else f"Microsoft-{source_table}"
-                ),
-            )
+            with self._stage("raw-dcr"):
+                raw_handle = self.create_dcr(
+                    name=names["rawDcr"],
+                    stream_name=names["rawStream"],
+                    destination_name=names["destination"],
+                    schema=schema,
+                    transform_kql="source",
+                    output_stream=(
+                        f"Custom-{source_table}"
+                        if source_table.lower().endswith("_cl")
+                        else f"Microsoft-{source_table}"
+                    ),
+                )
             result["rawDcr"] = raw_handle.to_dict()
             raw_counts = count_rows_by_timestamp(rows)
-            result["rawUpload"] = self.upload_rows(
-                raw_handle,
-                rows,
-                reconcile_table=source_table,
-                expected_counts_by_timestamp=raw_counts,
-            )
-            raw_query_table = self.wait_for_exact_rows(
-                source_table,
-                timestamps,
-                raw_counts,
-                stage="raw-visibility",
-            )
-            snapshot = build_source_snapshot(
-                target_id=target_id,
-                table_name=source_table,
-                timestamps=timestamps,
-                query_table=raw_query_table,
-            )
-            _write_json_no_clobber(snapshot, snapshot_output)
+            with self._stage("raw-upload"):
+                result["rawUpload"] = self.upload_rows(
+                    raw_handle,
+                    rows,
+                    reconcile_table=source_table,
+                    expected_counts_by_timestamp=raw_counts,
+                )
+            with self._stage("raw-visibility"):
+                raw_query_table = self.wait_for_exact_rows(
+                    source_table,
+                    timestamps,
+                    raw_counts,
+                    stage="raw-visibility",
+                )
+            with self._stage("source-snapshot"):
+                snapshot = build_source_snapshot(
+                    target_id=target_id,
+                    table_name=source_table,
+                    timestamps=timestamps,
+                    query_table=raw_query_table,
+                )
+                _write_json_no_clobber(snapshot, snapshot_output)
             result["snapshot"] = {
                 "rowCount": snapshot["rowCount"],
                 "timestampSetHash": snapshot["timestampSetHash"],
                 "excludedColumns": snapshot["excludedColumns"],
             }
             if validation_runner is not None:
-                filter_validation = dict(
-                    validation_runner.evaluate_filter(
-                        self,
-                        snapshot,
-                        parser_document,
+                with self._stage("filter-validation"):
+                    filter_validation = dict(
+                        validation_runner.evaluate_filter(
+                            self,
+                            snapshot,
+                            parser_document,
+                        )
                     )
-                )
                 selected_counts = filter_validation.get(
                     "selectedCountsByTimestamp"
                 )
@@ -1313,41 +1394,50 @@ class AsimIngestionHarness:
                 names["parserDcr"]
             )
             attempted_dcr_ids.append(parser_resource_id)
-            parser_handle = self.create_dcr(
-                name=names["parserDcr"],
-                stream_name=names["parserStream"],
-                destination_name=names["destination"],
-                schema=snapshot["schema"],
-                transform_kql=parser_query,
-                output_stream=f"Microsoft-{target_table}",
-            )
-            result["parserDcr"] = parser_handle.to_dict()
-            result["parserUpload"] = self.upload_rows(
-                parser_handle,
-                snapshot["rows"],
-                reconcile_table=target_table,
-                expected_counts_by_timestamp=normalized_target_counts,
-            )
-            self.wait_for_exact_rows(
-                target_table,
-                list(normalized_target_counts),
-                normalized_target_counts,
-                stage="target-visibility",
-            )
-            if validation_runner is not None:
-                result["outputValidation"] = dict(
-                    validation_runner.validate_outputs(
-                        self,
-                        snapshot,
-                        parser_document,
-                        query_time_document,
-                    )
+            with self._stage("parser-dcr"):
+                parser_handle = self.create_dcr(
+                    name=names["parserDcr"],
+                    stream_name=names["parserStream"],
+                    destination_name=names["destination"],
+                    schema=snapshot["schema"],
+                    transform_kql=parser_query,
+                    output_stream=f"Microsoft-{target_table}",
                 )
+            result["parserDcr"] = parser_handle.to_dict()
+            with self._stage("parser-upload"):
+                result["parserUpload"] = self.upload_rows(
+                    parser_handle,
+                    snapshot["rows"],
+                    reconcile_table=target_table,
+                    expected_counts_by_timestamp=normalized_target_counts,
+                )
+            with self._stage("target-visibility"):
+                self.wait_for_exact_rows(
+                    target_table,
+                    list(normalized_target_counts),
+                    normalized_target_counts,
+                    stage="target-visibility",
+                )
+            if validation_runner is not None:
+                with self._stage("output-validation"):
+                    result["outputValidation"] = dict(
+                        validation_runner.validate_outputs(
+                            self,
+                            snapshot,
+                            parser_document,
+                            query_time_document,
+                        )
+                    )
             result["status"] = "completed"
             return result
         finally:
-            for resource_id in reversed(attempted_dcr_ids):
-                cleanup.append(self.delete_dcr(resource_id))
+            with self._stage("cleanup"):
+                for resource_id in reversed(attempted_dcr_ids):
+                    cleanup.append(self.delete_dcr(resource_id))
+            result["telemetry"]["elapsedSeconds"] = round(
+                self.clock.monotonic() - run_started,
+                3,
+            )
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
@@ -1412,6 +1502,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
+    harness: AsimIngestionHarness | None = None
     result: dict[str, Any] = {
         "version": HARNESS_RESULT_VERSION,
         "status": "failed",
@@ -1446,6 +1537,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         exit_code = 0
     except (HarnessError, OSError, ValueError, KeyError, yaml.YAMLError) as exc:
+        if harness is not None and harness.last_result is not None:
+            result = dict(harness.last_result)
+            result["status"] = "failed"
         result["error"] = {
             "type": type(exc).__name__,
             "message": str(exc),
