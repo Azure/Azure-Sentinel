@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2 | 20-10-2026 | Added ten disabled Defender XDR Custom Detections alongside the existing Microsoft Sentinel content. Defender Workbook drafts remain excluded pending review. |
 | 3.2.0       | 22-09-2026                     | Added V3 Snowflake tables for nested ingestion. |
 | 3.1.0       | 04-08-2026                     | Updated **CCF Data Connector** to fix pagination and migrate to V2 tables |
 | 3.0.9       | 03-02-2026                     | Updated the **analytic rule** query.|
