@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator
 import yaml
@@ -7366,6 +7366,58 @@ def _build_duration_explanation(
     )
 
 
+def extract_review_notification_state(state: Mapping[str, Any]) -> dict[str, Any]:
+    """Read-only projection of coordinator-owned review-gate notification state.
+
+    Generating a status summary must NEVER mutate notification status or count as delivery.
+    """
+    run_id = str(state.get("runId") or "default-run")
+    notif: Mapping[str, Any] | None = None
+
+    raw_notif = state.get("reviewNotification")
+    if isinstance(raw_notif, Mapping):
+        notif = raw_notif
+    else:
+        notif_map = state.get("reviewNotifications")
+        if isinstance(notif_map, Mapping):
+            candidate = notif_map.get(run_id)
+            if isinstance(candidate, Mapping):
+                notif = candidate
+            else:
+                for val in notif_map.values():
+                    if isinstance(val, Mapping):
+                        notif = val
+                        break
+
+    if notif is None:
+        return {
+            "status": "none",
+            "runId": run_id,
+            "reviewPacketSha256": None,
+            "needsImmediateDelivery": False,
+            "countedAsDelivery": False,
+            "duplicateSuppressed": False,
+            "deliveryCount": 0,
+            "failureCount": 0,
+        }
+
+    status = str(notif.get("status") or "pending")
+    needs_delivery = status in {"pending", "failed"}
+    return {
+        "status": status,
+        "runId": str(notif.get("runId") or run_id),
+        "reviewPacketSha256": notif.get("reviewPacketSha256"),
+        "needsImmediateDelivery": needs_delivery,
+        "countedAsDelivery": False,
+        "duplicateSuppressed": bool(notif.get("duplicateSuppressed", False)),
+        "deliveryCount": int(notif.get("deliveryCount") or 0),
+        "failureCount": int(notif.get("failureCount") or 0),
+        "lastError": notif.get("lastError"),
+        "ownerId": notif.get("ownerId"),
+        "acknowledgedBy": notif.get("acknowledgedBy"),
+    }
+
+
 def build_migration_status_reminder(
     solution_path: str | Path,
     *,
@@ -7491,8 +7543,6 @@ def build_migration_status_reminder(
             "createsExecutor": False,
             "singleOwnerRespected": True,
         }
-        from solution_manager.core.workflow_reminders import extract_review_notification_state
-
         review_notification_state = extract_review_notification_state(state)
 
         return {

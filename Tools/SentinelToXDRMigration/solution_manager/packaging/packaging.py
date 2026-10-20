@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import re
 import shutil
@@ -1026,11 +1027,11 @@ def package_solution_v3_1(
         workbook_validation = validate_workbooks(root, selected_only=True)
         if workbook_validation["invalid"] or workbook_validation["valid"] != len(workbook_files):
             raise ValueError("selected Defender workbooks have unresolved structural or review blockers")
-        from solution_manager.authoring.workbook_publication import is_public, publication_errors
+        workbook_publication = importlib.import_module("solution_manager.authoring.workbook_publication")
         for workbook_file in workbook_files:
             workbook_doc = _read_json(workbook_file)
-            if is_public(workbook_doc):
-                blockers = publication_errors(root, workbook_doc)
+            if workbook_publication.is_public(workbook_doc):
+                blockers = workbook_publication.publication_errors(root, workbook_doc)
                 if blockers:
                     raise ValueError("; ".join(blockers))
     script = (

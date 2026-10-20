@@ -562,7 +562,7 @@ def rewrite(kql: str, tables: Optional[List[str]],
     target_tables: List[str] = []
 
     if not preserve_sentinel_tables:
-        from solution_manager.migration.converter import (
+        from solution_manager.migration.catalog import (
             SECURITY_ALERT_DIRECT_COLUMN_MAP,
             SECURITY_INCIDENT_DIRECT_COLUMN_MAP,
             convert_security_alert_incident_query,
