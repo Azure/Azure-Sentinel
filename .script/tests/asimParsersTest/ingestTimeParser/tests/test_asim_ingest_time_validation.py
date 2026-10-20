@@ -893,7 +893,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         path.write_text("ParserName: oversized\n", encoding="utf-8")
 
         with unittest.mock.patch.object(
-            VALIDATION, "MAX_YAML_BYTES", 5
+            VALIDATION.parser_common, "MAX_YAML_BYTES", 5
         ):
             result = VALIDATION.validate_ingest_time_parser(path)
 

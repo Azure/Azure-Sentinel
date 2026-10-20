@@ -499,10 +499,14 @@ class CleanupTests(unittest.TestCase):
             }
 
     @unittest.mock.patch.object(
-        WORKFLOW, "DefaultAzureTokenProvider", return_value=object()
+        WORKFLOW.workflow_contracts,
+        "DefaultAzureTokenProvider",
+        return_value=object(),
     )
     @unittest.mock.patch.object(
-        WORKFLOW, "AsimIngestionHarness", FakeHarness
+        WORKFLOW.workflow_contracts,
+        "AsimIngestionHarness",
+        FakeHarness,
     )
     def test_cleanup_uses_deterministic_raw_and_parser_names(
         self, token_provider
@@ -643,16 +647,20 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_trusted_helpers_are_restored_from_ingest_time_subfolder(self):
+    def test_trusted_helper_package_is_restored_from_master(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
             3,
-            workflow.count(
-                "origin/master:.script/tests/asimParsersTest/"
-                "ingestTimeParser/$helper"
-            ),
+            workflow.count("git archive origin/master"),
         )
+        self.assertGreaterEqual(
+            workflow.count(
+                ".script/tests/asimParsersTest/ingestTimeParser"
+            ),
+            6,
+        )
+        self.assertNotIn("ingestTimeParser/$helper", workflow)
 
 
 if __name__ == "__main__":

@@ -407,7 +407,7 @@ class FixturePreparationTests(unittest.TestCase):
             "2026-01-01T00:00:00Z,Contoso_CL\n"
         )
         with unittest.mock.patch.object(
-            FIXTURES, "MAX_FIXTURE_BYTES", 10
+            FIXTURES.fixture_data, "MAX_FIXTURE_BYTES", 10
         ):
             with self.assertRaisesRegex(ValueError, "fixture limit"):
                 self.prepare(fixture)
@@ -423,7 +423,7 @@ class FixturePreparationTests(unittest.TestCase):
             encoding="utf-8",
         )
         with unittest.mock.patch.object(
-            FIXTURES, "MAX_SCHEMA_BYTES", 10
+            FIXTURES.fixture_data, "MAX_SCHEMA_BYTES", 10
         ):
             with self.assertRaisesRegex(ValueError, "schema limit"):
                 self.prepare(fixture, schema_path=schema)
