@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.2.2       | 20-04-2026                     | Added 10 **Defender XDR Custom Detections** migrated from **Analytic Rules**. |
 | 3.0.6       | 13-04-2026                     | Deprecate Atlassian Jira Audit (using Azure Function)  |
 | 3.0.5       | 18-03-2026                     | Rename to Atlassian Jira Audit (via Codeless Connector Framework) 	       |
 | 3.0.4       | 30-08-2024                     | Updated parameters for CCP **Data Connector**							   |

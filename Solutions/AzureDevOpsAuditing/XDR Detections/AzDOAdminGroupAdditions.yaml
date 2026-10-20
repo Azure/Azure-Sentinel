@@ -1,0 +1,85 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 89e6adbd-612c-4fbe-bc3d-32f81baf3b6c
+    path: Analytic Rules/AzDOAdminGroupAdditions.yaml
+    version: 1.0.5
+    querySha256: 707b1648b1e1ecee1fcc108658216796f4fe7ddd626441469edc1a75046041e3
+    schedule:
+      queryFrequency: 4h
+      queryPeriod: 4h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=4h, lookback=4h; target frequency=PT4H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Adder`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Adder` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 8c19508a29478991bdc153a7f25e97f57cd20601968d187bac8c2ba4236ad4fa
+      targetQuerySha256: 44394ffa97d2632d89cebfd2da0eae84b44ffb76b60dad77e8e811661b84a2cc
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Adder
+      column: Adder
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-89e6adbd-612c-4fbe-bc3d-32f81baf3b6c
+  displayName: Azure DevOps Administrator Group Monitoring
+  status: disabled
+  queryCondition:
+    queryText: "// Change to true to monitor for Project Administrator adds to *any* project\nlet MonitorAllProjects = false;\n// If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects\nlet ProjectsToMonitor = dynamic(['<project_X>','<project_Y>']);\nAzureDevOpsAuditing\n| where Area == \"Group\" and OperationName == \"Group.UpdateGroupMembership.Add\"\n| where Details has 'Administrators'\n| where Details has \"was added as a member of group\" and (Details endswith '\\\\Project Administrators' or Details endswith '\\\\Project Collection Administrators')\n| parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\\\' GroupName\n| extend Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), AddedIdentityId = Data.MemberId\n| extend Severity = iif(Level == 'Organization', 'High', 'Medium'), AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added\
+      \ ', AddedIdentity, ' to the ', EntityName, ' ', Level)\n| where MonitorAllProjects == true or EntityName in (ProjectsToMonitor) or Level == 'Organization'\n| project TimeGenerated, Severity, Adder = ActorUPN, AddedIdentity, AddedIdentityId, AlertDetails, Level, EntityName, GroupName, ActorAuthType = AuthenticationMechanism,\n  ActorIpAddress = IpAddress, ActorUserAgent = UserAgent, RawDetails = Details\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(Adder, \"@\")[0]), AccountUPNSuffix = tostring(split(Adder, \"@\")[1])"
+  schedule:
+    frequency: PT4H
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Administrator Group Monitoring
+      description: '''This detection monitors for additions to projects or project collection administration groups in an Azure DevOps Organization.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ActorIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: Adder

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 | ----------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| 3.2.2       | 20-04-2026                     | Added 18 **XDR Detections** and updated **Analytical Rules** for Defender XDR migration |
 | 3.0.9       | 17-04-2026                     | Updated **Polling Config** to fix parameter mismatch                                    |
 | 3.0.8       | 26-01-2026                     | Updated **Data Connector** to support dynamic Redirect URI                              |
 | 3.0.7       | 22-01-2026                     | Updated solution description by eliminating legacy streaming text                       |
