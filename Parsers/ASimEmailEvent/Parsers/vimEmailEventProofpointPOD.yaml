@@ -1,0 +1,193 @@
+Parser:
+  Title: Email Event ASIM filtering parser for Proofpoint POD message inspection
+  Version: 0.1.0
+  LastUpdated: Oct 20, 2026
+Product:
+  Name: Proofpoint On Demand Email Security
+Normalization:
+  Schema: EmailEvent
+  Version: 1.0.0
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Proofpoint POD connector source-table contract
+  Link: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand(POD)%20Email%20Security/Data%20Connectors/ProofPointEmailSecurity_CCP/ProofpointPOD_Table_Message.json
+Description: |
+  Normalizes inspection records from ProofpointPODMessage_CL into ASIM EmailEvent 1.0.0.
+  A continue disposition does not establish delivery. EventResult remains NA.
+  Created following the official ASIM parser creation skills, with documented query-only validation adaptations.
+  Only published examples and labeled synthetic cases were tested; current production-data validation remains pending.
+  Supports the standard EmailEvent filters, early source-time filtering, disabled and optional packing.
+ParserName: vimEmailEventProofpointPOD
+EquivalentBuiltInParser: _Im_EmailEvent_ProofpointPOD
+ParserParams:
+- Name: starttime
+  Type: datetime
+  Default: datetime(null)
+- Name: endtime
+  Type: datetime
+  Default: datetime(null)
+- Name: ipaddr_has_any_prefix
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailfromaddress_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailrecipient_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailsubject_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emaildirection_in
+  Type: dynamic
+  Default: dynamic([])
+- Name: emaildeliverylocation_in
+  Type: dynamic
+  Default: dynamic([])
+- Name: eventresult
+  Type: string
+  Default: '*'
+- Name: disabled
+  Type: bool
+  Default: false
+- Name: pack
+  Type: bool
+  Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      ipaddr_has_any_prefix:dynamic=dynamic([]),
+      emailfromaddress_has_any:dynamic=dynamic([]),
+      emailrecipient_has_any:dynamic=dynamic([]),
+      emailsubject_has_any:dynamic=dynamic([]),
+      emaildirection_in:dynamic=dynamic([]),
+      emaildeliverylocation_in:dynamic=dynamic([]),
+      eventresult:string="*",
+      disabled:bool=false,
+      pack:bool=false
+  ) {
+      let one_text = (v:dynamic) {
+          case(gettype(v) == "string", tostring(v),
+               gettype(v) == "array" and array_length(v) == 1 and gettype(v[0]) == "string", tostring(v[0]),
+               "")
+      };
+      let string_array = (v:dynamic) {
+          iff(gettype(v) == "array" and tostring(v) matches regex @'^\[\s*(?:"(?:[^"\\]|\\.)*"\s*(?:,\s*"(?:[^"\\]|\\.)*"\s*)*)?\]$', v, dynamic([]))
+      };
+      let email_domain = (address:string) {
+          iff(address contains "@", tolower(tostring(split(address, "@")[-1])), "")
+      };
+      let spf_values = dynamic({"pass":"Pass","fail":"Fail","softfail":"SoftFail","neutral":"Neutral","none":"None","temperror":"TemporaryError","permerror":"PermanentError"});
+      let dkim_values = dynamic({"pass":"Pass","fail":"Fail","none":"None","temperror":"TemporaryError","permerror":"PermanentError"});
+      let dmarc_values = dynamic({"pass":"Pass","fail":"Fail","none":"None","bestguesspass":"BestGuessPass"});
+      // Escape literal prefixes before joining them into a scalar IPv4/IPv6 filter.
+      let escaped_prefixes = replace_regex(strcat_array(ipaddr_has_any_prefix, "\u001f"), @'([\\.^$|?*+(){}\[\]])', @'\\\1');
+      let prefix_pattern = strcat("(?i)^(?:", replace_string(escaped_prefixes, "\u001f", "|"), ")");
+      ProofpointPODMessage_CL
+      | where not(disabled)
+      | where isnull(starttime) or eventTime >= starttime
+      | where isnull(endtime) or eventTime <= endtime
+      | extend
+          AdditionalFields = iff(pack, pack_all(), dynamic({})),
+          EventStartTime = todatetime(eventTime),
+          EventOriginalUid = tostring(guid),
+          EmailFromAddress = one_text(msg.parsedAddresses.from),
+          EmailMailFromAddress = tostring(envelope.from),
+          EmailToRecipients = string_array(msg.parsedAddresses.['to']),
+          EmailCCRecipients = string_array(msg.parsedAddresses.cc),
+          EmailBCCRecipients = string_array(msg.parsedAddresses.bcc),
+          EmailSubject = one_text(msg.normalizedHeader.subject),
+          _ReplyTo = one_text(msg.normalizedHeader.['reply-to']),
+          _ClientIp = tostring(connection.ip),
+          _ClientHost = tolower(tostring(connection.host)),
+          Dvc = coalesce(tostring(pps.agent), tostring(metadata.origin.data.agent), "Proofpoint On Demand Email Security"),
+          DvcOriginalAction = tostring(['filter'].disposition),
+          _Direction = tolower(tostring(['filter'].routeDirection)),
+          _Protocol = toupper(tostring(split(tostring(connection.protocol), ":")[0])),
+          _Size = tolong(msg.sizeBytes),
+          _Dkim = iff(array_length(['filter'].modules.dkimv) == 1, ['filter'].modules.dkimv[0], dynamic(null)),
+          EmailSpfOriginalResult = tostring(['filter'].modules.spf.result),
+          EmailDmarcOriginalResult = tostring(['filter'].modules.dmarc.filterdResult)
+      | where array_length(emailfromaddress_has_any) == 0 or EmailFromAddress has_any (emailfromaddress_has_any)
+      | where array_length(emailsubject_has_any) == 0 or EmailSubject has_any (emailsubject_has_any)
+      | where array_length(emailrecipient_has_any) == 0
+          or tostring(EmailToRecipients) has_any (emailrecipient_has_any)
+          or tostring(EmailCCRecipients) has_any (emailrecipient_has_any)
+          or tostring(EmailBCCRecipients) has_any (emailrecipient_has_any)
+          or tostring(envelope.rcpts) has_any (emailrecipient_has_any)
+      | extend
+          SrcIpAddr = iff(isnotempty(parse_ipv6(_ClientIp)), _ClientIp, ""),
+          EmailReplyToAddress = trim(" ", iff(_ReplyTo contains "<", tostring(split(tostring(split(_ReplyTo, "<")[1]), ">")[0]), _ReplyTo)),
+          EmailSizeBytes = iff(_Size >= 0, _Size, long(null)),
+          EmailLanguage = tostring(msg.lang),
+          EmailProtocolName = iff(_Protocol in ("SMTP", "IMAP", "POP3"), _Protocol, ""),
+          EmailDirection = case(_Direction == "inbound", "Inbound", _Direction == "outbound", "Outbound",
+                                _Direction == "internal", "Internal", _Direction == "local", "Local", "Unknown"),
+          DvcAction = case(tolower(DvcOriginalAction) == "reject", "Blocked",
+                           tolower(DvcOriginalAction) == "quarantine", "Quarantined",
+                           tolower(DvcOriginalAction) == "discard", "Deleted", "NA"),
+          EmailDeliveryLocation = iff(tolower(DvcOriginalAction) == "quarantine", "Quarantine", ""),
+          DvcScopeId = coalesce(tostring(pps.cid), tostring(metadata.origin.data.cid)),
+          EventProductVersion = coalesce(tostring(pps.version), tostring(metadata.origin.data.version)),
+          SrcGeoCountry = toupper(tostring(connection.country)),
+          EmailDkimOriginalResult = tostring(_Dkim.result),
+          EmailDkimDomain = tostring(_Dkim.domain)
+      | where array_length(ipaddr_has_any_prefix) == 0 or (isnotempty(SrcIpAddr) and SrcIpAddr matches regex prefix_pattern)
+      | where array_length(emaildirection_in) == 0 or EmailDirection in~ (emaildirection_in)
+      | where array_length(emaildeliverylocation_in) == 0 or EmailDeliveryLocation in~ (emaildeliverylocation_in)
+      | where eventresult == "*" or eventresult =~ "NA"
+      | extend
+          EmailFromDomain = email_domain(EmailFromAddress),
+          EmailMailFromDomain = email_domain(EmailMailFromAddress),
+          EmailReplyToDomain = email_domain(EmailReplyToAddress),
+          EmailSpfResult = tostring(spf_values[tolower(EmailSpfOriginalResult)]),
+          EmailDkimResult = tostring(dkim_values[tolower(EmailDkimOriginalResult)]),
+          EmailDmarcResult = tostring(dmarc_values[tolower(EmailDmarcOriginalResult)]),
+          Dst = coalesce(one_text(envelope.rcpts[0]), tostring(EmailToRecipients[0]), tostring(EmailCCRecipients[0]), tostring(EmailBCCRecipients[0])),
+          _ReportingFqdn = iff(Dvc contains "." and isempty(parse_ipv6(Dvc)), tolower(Dvc), ""),
+          _SourceFqdn = iff(_ClientHost contains "." and isempty(parse_ipv6(_ClientHost)), _ClientHost, "")
+      | extend
+          DvcFQDN = _ReportingFqdn,
+          DvcHostname = iff(isnotempty(_ReportingFqdn), tostring(split(_ReportingFqdn, ".")[0]), ""),
+          DvcDomain = iff(isnotempty(_ReportingFqdn), substring(_ReportingFqdn, indexof(_ReportingFqdn, ".") + 1), ""),
+          DvcDomainType = iff(isnotempty(_ReportingFqdn), "FQDN", ""),
+          SrcFQDN = _SourceFqdn,
+          SrcHostname = iff(isnotempty(_SourceFqdn), tostring(split(_SourceFqdn, ".")[0]), ""),
+          SrcDomain = iff(isnotempty(_SourceFqdn), substring(_SourceFqdn, indexof(_SourceFqdn, ".") + 1), ""),
+          SrcDomainType = iff(isnotempty(_SourceFqdn), "FQDN", ""),
+          EventMessage = strcat(
+              iff(isnull(EventStartTime), "Missing or invalid source eventTime; ", ""),
+              iff(isempty(Dst), "Missing destination; ", ""),
+              iff(isnotempty(_ClientIp) and isempty(SrcIpAddr), "Invalid source IP; ", ""),
+              iff(array_length(msg.parsedAddresses.from) > 1, "Multiple header authors left unmapped; ", ""),
+              iff(array_length(['filter'].modules.dkimv) > 1, "Multiple DKIM signatures retained only in packed source; ", ""),
+              iff(gettype(msg.parsedAddresses.['to']) == "array" and array_length(msg.parsedAddresses.['to']) != array_length(EmailToRecipients), "Malformed To recipient array; ", ""),
+              iff(gettype(msg.parsedAddresses.cc) == "array" and array_length(msg.parsedAddresses.cc) != array_length(EmailCCRecipients), "Malformed Cc recipient array; ", ""),
+              iff(gettype(msg.parsedAddresses.bcc) == "array" and array_length(msg.parsedAddresses.bcc) != array_length(EmailBCCRecipients), "Malformed Bcc recipient array; ", ""),
+              iff(isnotempty(EmailSpfOriginalResult) and isempty(EmailSpfResult), "Unknown SPF result; ", ""),
+              iff(isnotempty(EmailDkimOriginalResult) and isempty(EmailDkimResult), "Unknown DKIM result; ", ""),
+              iff(isnotempty(EmailDmarcOriginalResult) and isempty(EmailDmarcResult), "Unknown DMARC result; ", ""),
+              iff(isnotempty(DvcOriginalAction) and tolower(DvcOriginalAction) !in ("continue", "reject", "quarantine", "discard"), "Unrecognized disposition; ", ""))
+      | project
+          TimeGenerated, Type = "ProofpointPODMessage_CL",
+          EventStartTime, EventEndTime = EventStartTime, EventCount = int(1),
+          EventSchema = "EmailEvent", EventSchemaVersion = "1.0.0",
+          EventType = "EmailInspection", EventResult = "NA",
+          EventVendor = "Proofpoint", EventProduct = "Proofpoint On Demand Email Security",
+          EventProductVersion, EventOriginalUid, EventUid = EventOriginalUid, EventMessage,
+          Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScopeId,
+          DvcAction, DvcOriginalAction, DvcEntityKey = "",
+          EmailFromAddress, EmailFromDomain, EmailMailFromAddress, EmailMailFromDomain,
+          EmailReplyToAddress, EmailReplyToDomain, EmailToRecipients, EmailCCRecipients, EmailBCCRecipients,
+          EmailSubject, EmailLanguage, EmailSizeBytes, EmailDirection, EmailDeliveryLocation, EmailProtocolName,
+          EmailSpfOriginalResult, EmailSpfResult, EmailDkimOriginalResult, EmailDkimResult, EmailDkimDomain,
+          EmailDmarcOriginalResult, EmailDmarcResult,
+          SrcIpAddr, IpAddr = SrcIpAddr, Src = coalesce(SrcIpAddr, SrcFQDN),
+          SrcFQDN, SrcHostname, SrcDomain, SrcDomainType, SrcGeoCountry, Dst,
+          AdditionalEntities = dynamic([]), AdditionalFields
+  };
+  parser(starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix, emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any, emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in, emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult, disabled=disabled, pack=pack)
