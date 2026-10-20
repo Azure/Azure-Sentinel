@@ -59,7 +59,7 @@ class QueryClient(Protocol):
     def query_kql(
         self, query: str, *, stage: str = "query"
     ) -> dict[str, Any]:
-        ...
+        raise NotImplementedError
 
 
 class ValidationError(RuntimeError):

@@ -4,9 +4,9 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest import mock
 
 import yaml
 
@@ -498,10 +498,12 @@ class CleanupTests(unittest.TestCase):
                 "status": "not-found",
             }
 
-    @mock.patch.object(
+    @unittest.mock.patch.object(
         WORKFLOW, "DefaultAzureTokenProvider", return_value=object()
     )
-    @mock.patch.object(WORKFLOW, "AsimIngestionHarness", FakeHarness)
+    @unittest.mock.patch.object(
+        WORKFLOW, "AsimIngestionHarness", FakeHarness
+    )
     def test_cleanup_uses_deterministic_raw_and_parser_names(
         self, token_provider
     ):
@@ -602,6 +604,43 @@ class WorkflowTopologyTests(unittest.TestCase):
                 "ingestionValidation",
             ],
             jobs["report"]["needs"],
+        )
+
+    def test_workflow_has_no_manual_or_pr_head_checkout(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertNotIn(
+            "ref: ${{ github.event.pull_request.head.sha }}",
+            workflow,
+        )
+        self.assertEqual(
+            3,
+            workflow.count(
+                "ref: ${{ github.event.pull_request.base.sha }}"
+            ),
+        )
+
+    def test_untrusted_pr_content_is_materialized_only_as_data(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            2,
+            workflow.count(
+                "Materialize pull request content as untrusted data"
+            ),
+        )
+        self.assertIn(
+            "$ARTIFACT_DIR/ingest-time-parser.yaml",
+            workflow,
+        )
+        self.assertIn(
+            "$ARTIFACT_DIR/query-time-parser.yaml",
+            workflow,
+        )
+        self.assertIn(
+            '"$ARTIFACT_DIR/ingest-time-parser.yaml"',
+            workflow,
         )
 
 

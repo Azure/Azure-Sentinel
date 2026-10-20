@@ -4,8 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "asim_fixture_preparation.py"
@@ -406,7 +406,9 @@ class FixturePreparationTests(unittest.TestCase):
             "TimeGenerated,Type\n"
             "2026-01-01T00:00:00Z,Contoso_CL\n"
         )
-        with mock.patch.object(FIXTURES, "MAX_FIXTURE_BYTES", 10):
+        with unittest.mock.patch.object(
+            FIXTURES, "MAX_FIXTURE_BYTES", 10
+        ):
             with self.assertRaisesRegex(ValueError, "fixture limit"):
                 self.prepare(fixture)
 
@@ -420,7 +422,9 @@ class FixturePreparationTests(unittest.TestCase):
             "ColumnName,ColumnType\nTimeGenerated,datetime\n",
             encoding="utf-8",
         )
-        with mock.patch.object(FIXTURES, "MAX_SCHEMA_BYTES", 10):
+        with unittest.mock.patch.object(
+            FIXTURES, "MAX_SCHEMA_BYTES", 10
+        ):
             with self.assertRaisesRegex(ValueError, "schema limit"):
                 self.prepare(fixture, schema_path=schema)
 

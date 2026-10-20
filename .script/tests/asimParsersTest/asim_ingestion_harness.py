@@ -33,7 +33,7 @@ from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 import requests
 import yaml
@@ -98,7 +98,7 @@ class OutcomeUnknownError(HarnessError):
 
 class TokenProvider(Protocol):
     def get_token(self, scope: str) -> str:
-        ...
+        raise NotImplementedError
 
 
 class ValidationRunner(Protocol):
@@ -108,7 +108,7 @@ class ValidationRunner(Protocol):
         source_snapshot: Mapping[str, Any],
         parser_document: Mapping[str, Any],
     ) -> Mapping[str, Any]:
-        ...
+        raise NotImplementedError
 
     def validate_outputs(
         self,
@@ -117,7 +117,7 @@ class ValidationRunner(Protocol):
         parser_document: Mapping[str, Any],
         query_time_document: Mapping[str, Any] | None,
     ) -> Mapping[str, Any]:
-        ...
+        raise NotImplementedError
 
 
 class DefaultAzureTokenProvider:

@@ -3,8 +3,8 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 import yaml
 
@@ -892,7 +892,9 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("ParserName: oversized\n", encoding="utf-8")
 
-        with mock.patch.object(VALIDATION, "MAX_YAML_BYTES", 5):
+        with unittest.mock.patch.object(
+            VALIDATION, "MAX_YAML_BYTES", 5
+        ):
             result = VALIDATION.validate_ingest_time_parser(path)
 
         self.assertFalse(result["valid"])

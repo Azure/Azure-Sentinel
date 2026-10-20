@@ -21,9 +21,6 @@ on:
       - "Parsers/ASim*/IngestTimeParsers/*.yaml"
       - "Sample Data/ASIM/*_IngestedLogs.csv"
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -355,25 +352,43 @@ jobs:
       has_targets: ${{ steps.discovery.outputs.has_targets }}
       target_ids: ${{ steps.discovery.outputs.target_ids }}
     steps:
-      - name: Checkout pull request branch
+      - name: Checkout trusted base revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Merge master into pull request branch
+      - name: Materialize pull request content as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-          git merge --no-edit origin/master
-          conflicts=$(git ls-files -u | wc -l)
-          if [ "$conflicts" -gt 0 ]; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
             exit 1
           fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          git fetch --no-tags origin \
+            "refs/pull/$PR_NUMBER/head:refs/remotes/origin/asim-pr-head"
+          git worktree add --detach \
+            "$pr_data_dir" refs/remotes/origin/asim-pr-head
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge --no-edit --no-commit origin/master
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -410,7 +425,7 @@ jobs:
           set +e
           python "$ASIM_TRUSTED_DIR/asim_ingest_time_validation.py" \
             discover \
-            --repo-root . \
+            --repo-root "$ASIM_PR_DATA_DIR" \
             --base-ref origin/master \
             --output asim-workflow/discovery.json
           discovery_exit=$?
@@ -418,7 +433,7 @@ jobs:
             python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
               matrix \
               --manifest asim-workflow/discovery.json \
-              --repo-root . \
+              --repo-root "$ASIM_PR_DATA_DIR" \
               --max-targets "$ASIM_INGESTION_MAX_TARGETS" \
               --max-fixture-bytes "$ASIM_INGESTION_MAX_FIXTURE_BYTES" \
               --output asim-workflow/matrix.json \
@@ -478,25 +493,43 @@ jobs:
       TARGET_ID: ${{ matrix.target_id }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      - name: Checkout pull request branch
+      - name: Checkout trusted base revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Merge master into pull request branch
+      - name: Materialize pull request content as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-          git merge --no-edit origin/master
-          conflicts=$(git ls-files -u | wc -l)
-          if [ "$conflicts" -gt 0 ]; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
             exit 1
           fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          git fetch --no-tags origin \
+            "refs/pull/$PR_NUMBER/head:refs/remotes/origin/asim-pr-head"
+          git worktree add --detach \
+            "$pr_data_dir" refs/remotes/origin/asim-pr-head
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge --no-edit --no-commit origin/master
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
 
       - name: Download ingestion discovery artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -558,7 +591,7 @@ jobs:
           args=(
             validate
             "$ITP_PATH"
-            --repo-root .
+            --repo-root "$ASIM_PR_DATA_DIR"
             --output "$ARTIFACT_DIR/static-validation.json"
           )
           if [ -n "$QTP_PATH" ]; then
@@ -595,7 +628,7 @@ jobs:
         run: |
           python "$ASIM_TRUSTED_DIR/asim_fixture_preparation.py" \
             prepare \
-            "$FIXTURE_PATH" \
+            "$ASIM_PR_DATA_DIR/$FIXTURE_PATH" \
             --expected-source-raw-table "$SOURCE_RAW_TABLE" \
             --target-id "$TARGET_ID" \
             --target-group "$TARGET_ASIM_TABLE" \
@@ -606,6 +639,25 @@ jobs:
             --target-slot "$TARGET_SLOT" \
             --target-count "$TARGET_COUNT" \
             --output "$ARTIFACT_DIR/prepared-fixture.json"
+
+      - name: Copy validated parser inputs as untrusted data artifacts
+        if: always()
+        env:
+          ITP_PATH: ${{ steps.target.outputs.ingest_time_path }}
+          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
+        run: |
+          if [ -n "$ITP_PATH" ] &&
+             [ -f "$ASIM_PR_DATA_DIR/$ITP_PATH" ]; then
+            cp -- \
+              "$ASIM_PR_DATA_DIR/$ITP_PATH" \
+              "$ARTIFACT_DIR/ingest-time-parser.yaml"
+          fi
+          if [ -n "$QTP_PATH" ] &&
+             [ -f "$ASIM_PR_DATA_DIR/$QTP_PATH" ]; then
+            cp -- \
+              "$ASIM_PR_DATA_DIR/$QTP_PATH" \
+              "$ARTIFACT_DIR/query-time-parser.yaml"
+          fi
 
       - name: Upload template validation artifact
         if: always()
@@ -643,25 +695,13 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       ENFORCEMENT_REQUIRED: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED }}
     steps:
-      - name: Checkout pull request branch
+      - name: Checkout trusted base revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
           fetch-depth: 0
-
-      - name: Merge master into pull request branch
-        run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-          git merge --no-edit origin/master
-          conflicts=$(git ls-files -u | wc -l)
-          if [ "$conflicts" -gt 0 ]; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
-            exit 1
-          fi
 
       - name: Initialize ingestion validation artifacts
         run: |
@@ -730,6 +770,8 @@ jobs:
       - name: Inspect template validation artifacts
         id: template-decision
         if: always()
+        env:
+          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
         run: |
           if [ -f "$ARTIFACT_DIR/static-validation.json" ]; then
             python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
@@ -748,11 +790,26 @@ jobs:
             echo "fixture_prepared=false" >> "$GITHUB_OUTPUT"
           fi
 
+          if [ -f "$ARTIFACT_DIR/ingest-time-parser.yaml" ]; then
+            echo "parser_input_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "parser_input_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -z "$QTP_PATH" ] ||
+             [ -f "$ARTIFACT_DIR/query-time-parser.yaml" ]; then
+            echo "qtp_input_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "qtp_input_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Login to Azure Public Cloud
         id: azure-login
         if: |
           steps.template-decision.outputs.itp_valid == 'true' &&
-          steps.template-decision.outputs.fixture_prepared == 'true'
+          steps.template-decision.outputs.fixture_prepared == 'true' &&
+          steps.template-decision.outputs.parser_input_prepared == 'true' &&
+          steps.template-decision.outputs.qtp_input_prepared == 'true'
         continue-on-error: true
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
@@ -765,20 +822,22 @@ jobs:
         if: steps.azure-login.outcome == 'success'
         continue-on-error: true
         env:
-          ITP_PATH: ${{ steps.target.outputs.ingest_time_path }}
-          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
           QTP_ELIGIBLE: ${{ steps.template-decision.outputs.qtp_eligible }}
         run: |
           args=(
             "$ARTIFACT_DIR/prepared-fixture.json"
-            "$ITP_PATH"
+            "$ARTIFACT_DIR/ingest-time-parser.yaml"
             --repo-root "$ASIM_TRUSTED_ROOT"
             --snapshot-output "$ARTIFACT_DIR/source-snapshot.json"
             --result-output "$ARTIFACT_DIR/validation-result.json"
             --deadline-seconds 900
           )
-          if [ "$QTP_ELIGIBLE" = "true" ] && [ -n "$QTP_PATH" ]; then
-            args+=(--query-time-yaml "$QTP_PATH")
+          if [ "$QTP_ELIGIBLE" = "true" ] &&
+             [ -f "$ARTIFACT_DIR/query-time-parser.yaml" ]; then
+            args+=(
+              --query-time-yaml
+              "$ARTIFACT_DIR/query-time-parser.yaml"
+            )
           fi
           python "$ASIM_TRUSTED_DIR/asim_ingestion_validation.py" \
             "${args[@]}"
@@ -788,6 +847,8 @@ jobs:
         env:
           ITP_VALID: ${{ steps.template-decision.outputs.itp_valid }}
           FIXTURE_PREPARED: ${{ steps.template-decision.outputs.fixture_prepared }}
+          PARSER_INPUT_PREPARED: ${{ steps.template-decision.outputs.parser_input_prepared }}
+          QTP_INPUT_PREPARED: ${{ steps.template-decision.outputs.qtp_input_prepared }}
           AZURE_LOGIN_OUTCOME: ${{ steps.azure-login.outcome }}
           VALIDATION_OUTCOME: ${{ steps.ingestion-validation.outcome }}
         run: |
@@ -799,6 +860,12 @@ jobs:
           if [ "$FIXTURE_PREPARED" != "true" ]; then
             stage="fixture-preparation"
             message="Source-specific fixture preparation failed."
+          elif [ "$PARSER_INPUT_PREPARED" != "true" ]; then
+            stage="template-artifact"
+            message="Validated parser input artifact is missing."
+          elif [ "$QTP_INPUT_PREPARED" != "true" ]; then
+            stage="template-artifact"
+            message="Mapped query-time parser artifact is missing."
           elif [ "$AZURE_LOGIN_OUTCOME" != "success" ]; then
             stage="azure-login"
             message="Azure OIDC login failed or did not complete."
