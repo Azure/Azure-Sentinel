@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -89,16 +90,102 @@ def _escape(value: Any, default: str = "") -> str:
     return html.escape(text if text else default, quote=True)
 
 
-def _rebase_evidence_url(candidate: str) -> str:
+def _resolve_solution_root(
+    solution_path: str | None,
+    output_dir: Path | None,
+    explicit_solution_root: Path | None = None,
+) -> Path | None:
+    if explicit_solution_root is not None:
+        return Path(explicit_solution_root).expanduser().resolve()
+    candidates: list[Path] = []
+    if solution_path:
+        raw_p = Path(solution_path).expanduser()
+        candidates.append(raw_p)
+        if output_dir is not None:
+            candidates.extend([
+                output_dir / raw_p,
+                output_dir / "workspace" / raw_p,
+                output_dir / "workspace" / raw_p.name,
+                output_dir.parent.parent,
+            ])
+        candidates.append(Path("Solutions") / raw_p.name)
+    elif output_dir is not None:
+        candidates.append(output_dir.parent.parent)
+    for cand in candidates:
+        resolved = cand.resolve()
+        if resolved.exists():
+            return resolved
+    return Path(solution_path).expanduser().resolve() if solution_path else None
+
+
+def _rebase_evidence_url(
+    candidate: str,
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     if candidate == "qualification_evidence":
+        if output_dir is not None:
+            for ev_cand in (
+                output_dir / "qualification-evidence.json",
+                output_dir / "evidence" / "qualification-evidence.json",
+                output_dir.parent / "qualification-evidence.json",
+            ):
+                if ev_cand.exists():
+                    rel = os.path.relpath(ev_cand, output_dir).replace("\\", "/")
+                    return rel if rel.startswith(".") else f"./{rel}"
         return "../qualification-evidence.json"
     if candidate.startswith("qualification_evidence.") or candidate.startswith("qualification_evidence:"):
         sep = "." if "." in candidate else ":"
         frag = candidate.split(sep, 1)[1]
-        return f"../qualification-evidence.json#{frag}"
+        base = _rebase_evidence_url(
+            "qualification_evidence",
+            output_dir=output_dir,
+            solution_root=solution_root,
+        )
+        return f"{base}#{frag}"
     if candidate == "validationStatus":
         return "./pr-qualification-result.json#validationStatus"
     if not candidate.startswith(("http://", "https://", "file://", "mailto:", "/", ".", "#", "Solutions/")):
+        path_only, sep, frag = candidate.partition("#")
+        suffix = f"#{frag}" if sep else ""
+        if output_dir is not None:
+            search_candidates: list[Path] = []
+            if solution_root is not None:
+                search_candidates.append(solution_root / path_only)
+            if path_only.startswith("Evidence/pr-qualification/"):
+                sub = path_only[len("Evidence/pr-qualification/"):]
+                search_candidates.append(output_dir / sub)
+            if path_only.startswith("Evidence/"):
+                sub = path_only[len("Evidence/"):]
+                search_candidates.extend([
+                    output_dir / "evidence" / sub,
+                    output_dir / sub,
+                    output_dir.parent / sub,
+                ])
+                if solution_root is not None:
+                    search_candidates.append(solution_root / "Evidence" / sub)
+            search_candidates.extend([
+                output_dir / path_only,
+                output_dir / "workspace" / path_only,
+            ])
+            for cand_path in search_candidates:
+                if cand_path.exists():
+                    rel = os.path.relpath(cand_path, output_dir).replace("\\", "/")
+                    if not rel.startswith("."):
+                        rel = f"./{rel}"
+                    return f"{rel}{suffix}"
+            if path_only.startswith("Evidence/") and (output_dir / "evidence").exists():
+                sub = path_only[len("Evidence/"):]
+                rel = os.path.relpath(output_dir / "evidence" / sub, output_dir).replace("\\", "/")
+                if not rel.startswith("."):
+                    rel = f"./{rel}"
+                return f"{rel}{suffix}"
+            if solution_root is not None and not path_only.startswith(("Evidence/", "Logs/")):
+                rel = os.path.relpath(solution_root / path_only, output_dir).replace("\\", "/")
+                if not rel.startswith("."):
+                    rel = f"./{rel}"
+                return f"{rel}{suffix}"
         if candidate.startswith("Evidence/pr-qualification/"):
             return "./" + candidate[len("Evidence/pr-qualification/"):]
         if candidate.startswith("Evidence/"):
@@ -109,13 +196,22 @@ def _rebase_evidence_url(candidate: str) -> str:
     return candidate
 
 
-def _sanitize_href(raw_url: Any) -> str:
+def _sanitize_href(
+    raw_url: Any,
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     if raw_url is None:
         return "#"
     candidate = str(raw_url).strip()
     if not candidate or _UNSAFE_SCHEME_RE.match(candidate):
         return "#"
-    candidate = _rebase_evidence_url(candidate)
+    candidate = _rebase_evidence_url(
+        candidate,
+        output_dir=output_dir,
+        solution_root=solution_root,
+    )
     try:
         parsed = urlsplit(candidate)
     except ValueError:
@@ -125,13 +221,22 @@ def _sanitize_href(raw_url: Any) -> str:
     return html.escape(candidate, quote=True)
 
 
-def _sanitize_markdown_url(raw_url: Any) -> str:
+def _sanitize_markdown_url(
+    raw_url: Any,
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     if raw_url is None:
         return "#"
     candidate = str(raw_url).strip()
     if not candidate or _UNSAFE_SCHEME_RE.match(candidate):
         return "#"
-    candidate = _rebase_evidence_url(candidate)
+    candidate = _rebase_evidence_url(
+        candidate,
+        output_dir=output_dir,
+        solution_root=solution_root,
+    )
     try:
         parsed = urlsplit(candidate)
     except ValueError:
@@ -344,9 +449,17 @@ def _normalize_report_data(report_data: dict[str, Any] | None) -> dict[str, Any]
         else None
     )
 
+    solution_path_raw = raw.get("solutionPath")
+    solution_path = (
+        str(solution_path_raw).strip()
+        if solution_path_raw is not None and str(solution_path_raw).strip()
+        else None
+    )
+
     return {
         "schemaVersion": str(raw.get("schemaVersion") or SCHEMA_VERSION),
         "solutionName": str(raw.get("solutionName") or "Unknown Solution"),
+        "solutionPath": solution_path,
         "solutionVersion": str(raw.get("solutionVersion") or "0.0.0"),
         "previousVersion": previous_version,
         "isMigration": is_migration,
@@ -365,14 +478,19 @@ def _is_reviewer_action_check(check: dict[str, Any]) -> bool:
     return status in ACTION_QUEUE_STATUSES or bool(check.get("reviewerActionRequired", False))
 
 
-def _format_evidence_ref_html(ref: dict[str, Any]) -> str:
+def _format_evidence_ref_html(
+    ref: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     raw_path = str(ref.get("path") or "").strip()
     raw_label = str(ref.get("label") or raw_path or "Evidence").strip()
     raw_kind = str(ref.get("kind") or "").strip()
     line = ref.get("line")
     has_line = isinstance(line, int) and not isinstance(line, bool)
 
-    href = _sanitize_href(raw_path)
+    href = _sanitize_href(raw_path, output_dir=output_dir, solution_root=solution_root)
     escaped_label = _escape(raw_label)
     escaped_path = _escape(raw_path)
     line_suffix = f":{line}" if has_line else ""
@@ -396,19 +514,26 @@ def _format_evidence_ref_html(ref: dict[str, Any]) -> str:
     )
 
 
-def _render_evidence_links_list_html(check: dict[str, Any]) -> str:
+def _render_evidence_links_list_html(
+    check: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     items: list[str] = []
     evidence_refs = check.get("evidenceRefs")
     if isinstance(evidence_refs, list):
         for ref in evidence_refs:
             if isinstance(ref, dict) and (ref.get("path") or ref.get("label")):
-                items.append(f"<li>{_format_evidence_ref_html(ref)}</li>")
+                items.append(
+                    f"<li>{_format_evidence_ref_html(ref, output_dir=output_dir, solution_root=solution_root)}</li>"
+                )
 
     author_exc = check.get("authorException")
     if isinstance(author_exc, dict):
         supporting_ref = str(author_exc.get("supportingEvidenceRef") or "").strip()
         if supporting_ref:
-            href = _sanitize_href(supporting_ref)
+            href = _sanitize_href(supporting_ref, output_dir=output_dir, solution_root=solution_root)
             escaped_ref = _escape(supporting_ref)
             items.append(
                 "<li>"
@@ -424,7 +549,12 @@ def _render_evidence_links_list_html(check: dict[str, Any]) -> str:
     return f'<ul class="evidence-list">{"".join(items)}</ul>'
 
 
-def _format_evidence_links_markdown(check: dict[str, Any]) -> str:
+def _format_evidence_links_markdown(
+    check: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     links: list[str] = []
     evidence_refs = check.get("evidenceRefs")
     if isinstance(evidence_refs, list):
@@ -439,7 +569,7 @@ def _format_evidence_links_markdown(check: dict[str, Any]) -> str:
                 continue
             label_with_line = f"{raw_label}:{line}" if has_line else raw_label
             safe_label = _escape_markdown_cell(label_with_line)
-            safe_url = _sanitize_markdown_url(raw_path)
+            safe_url = _sanitize_markdown_url(raw_path, output_dir=output_dir, solution_root=solution_root)
             links.append(f"[{safe_label}]({safe_url})")
 
     author_exc = check.get("authorException")
@@ -447,7 +577,9 @@ def _format_evidence_links_markdown(check: dict[str, Any]) -> str:
         supporting_ref = str(author_exc.get("supportingEvidenceRef") or "").strip()
         if supporting_ref:
             safe_ref_label = _escape_markdown_cell(supporting_ref)
-            safe_ref_url = _sanitize_markdown_url(supporting_ref)
+            safe_ref_url = _sanitize_markdown_url(
+                supporting_ref, output_dir=output_dir, solution_root=solution_root
+            )
             links.append(f"[Author Evidence: {safe_ref_label}]({safe_ref_url})")
 
     return ", ".join(links) if links else "—"
@@ -469,7 +601,13 @@ def _reviewer_prompt_for_check(check: dict[str, Any]) -> str:
     return "Review check details and confirm qualification sign-off."
 
 
-def _render_author_exception_box_html(author_exc: dict[str, Any] | None, reviewer_prompt: str) -> str:
+def _render_author_exception_box_html(
+    author_exc: dict[str, Any] | None,
+    reviewer_prompt: str,
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     if not isinstance(author_exc, dict):
         return ""
     original_status = _escape(author_exc.get("originalStatus") or "FAIL")
@@ -478,7 +616,7 @@ def _render_author_exception_box_html(author_exc: dict[str, Any] | None, reviewe
     author = str(author_exc.get("author") or "").strip()
 
     supporting_link_html = (
-        f'<a class="evidence-link supporting-evidence-link" href="{_sanitize_href(supporting_ref)}" target="_blank" rel="noopener noreferrer">'
+        f'<a class="evidence-link supporting-evidence-link" href="{_sanitize_href(supporting_ref, output_dir=output_dir, solution_root=solution_root)}" target="_blank" rel="noopener noreferrer">'
         f"{_escape(supporting_ref)}</a>"
         if supporting_ref
         else '<span class="muted">None provided</span>'
@@ -501,7 +639,12 @@ def _render_author_exception_box_html(author_exc: dict[str, Any] | None, reviewe
     )
 
 
-def _render_reviewer_action_queue_html(checks: list[dict[str, Any]]) -> str:
+def _render_reviewer_action_queue_html(
+    checks: list[dict[str, Any]],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     action_checks = [c for c in checks if _is_reviewer_action_check(c)]
     if not action_checks:
         return (
@@ -529,8 +672,12 @@ def _render_reviewer_action_queue_html(checks: list[dict[str, Any]]) -> str:
         why_result = _escape(check.get("whyPassedOrFailed") or "—")
 
         author_exc = check.get("authorException") if isinstance(check.get("authorException"), dict) else None
-        waiver_html = _render_author_exception_box_html(author_exc, prompt)
-        evidence_list_html = _render_evidence_links_list_html(check)
+        waiver_html = _render_author_exception_box_html(
+            author_exc, prompt, output_dir=output_dir, solution_root=solution_root
+        )
+        evidence_list_html = _render_evidence_links_list_html(
+            check, output_dir=output_dir, solution_root=solution_root
+        )
 
         human_review_block = ""
         if status != "WAIVED_WITH_AUTHOR_EVIDENCE" or not waiver_html:
@@ -577,7 +724,12 @@ def _render_reviewer_action_queue_html(checks: list[dict[str, Any]]) -> str:
     )
 
 
-def _render_checklist_row_html(check: dict[str, Any]) -> str:
+def _render_checklist_row_html(
+    check: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     check_id = _escape(check.get("id") or "CHECK")
     checklist = str(check.get("checklist") or "validation").strip().lower()
     title = _escape(check.get("title") or check.get("id") or "Untitled Check")
@@ -598,7 +750,9 @@ def _render_checklist_row_html(check: dict[str, Any]) -> str:
 
     prompt = _reviewer_prompt_for_check(check)
     author_exc = check.get("authorException") if isinstance(check.get("authorException"), dict) else None
-    waiver_box_html = _render_author_exception_box_html(author_exc, prompt)
+    waiver_box_html = _render_author_exception_box_html(
+        author_exc, prompt, output_dir=output_dir, solution_root=solution_root
+    )
 
     reviewer_prompt_inline = ""
     if _is_reviewer_action_check(check) and not waiver_box_html:
@@ -620,7 +774,9 @@ def _render_checklist_row_html(check: dict[str, Any]) -> str:
         else ""
     )
 
-    evidence_links_html = _render_evidence_links_list_html(check)
+    evidence_links_html = _render_evidence_links_list_html(
+        check, output_dir=output_dir, solution_root=solution_root
+    )
 
     return (
         f'<tr class="check-row" '
@@ -657,7 +813,12 @@ def _render_checklist_row_html(check: dict[str, Any]) -> str:
     )
 
 
-def _render_checklist_tables_html(checks: list[dict[str, Any]]) -> str:
+def _render_checklist_tables_html(
+    checks: list[dict[str, Any]],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     sections_html: list[str] = []
     for checklist_key, heading, description in CHECKLIST_DEFINITIONS:
         section_checks = [
@@ -665,7 +826,10 @@ def _render_checklist_tables_html(checks: list[dict[str, Any]]) -> str:
             if str(c.get("checklist") or "validation").strip().lower() == checklist_key
         ]
         rows_html = (
-            "".join(_render_checklist_row_html(c) for c in section_checks)
+            "".join(
+                _render_checklist_row_html(c, output_dir=output_dir, solution_root=solution_root)
+                for c in section_checks
+            )
             if section_checks
             else (
                 '<tr class="empty-checklist-row">'
@@ -700,9 +864,20 @@ def _render_checklist_tables_html(checks: list[dict[str, Any]]) -> str:
     return "".join(sections_html)
 
 
-def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
+def render_pr_qualification_html(
+    report_data: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     """Render a self-contained HTML5 PR Qualification & Validation report."""
     data = _normalize_report_data(report_data)
+    resolved_output_dir = Path(output_dir).expanduser().resolve() if output_dir else None
+    resolved_solution_root = _resolve_solution_root(
+        data.get("solutionPath"),
+        resolved_output_dir,
+        solution_root,
+    )
     solution_name = _escape(data["solutionName"])
     solution_version = _escape(data["solutionVersion"])
     previous_version = data["previousVersion"]
@@ -728,6 +903,22 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
     mig_tone = ROLLUP_CARD_TONES.get(mig_status, "gray")
 
     counts = data["summaryCounts"]
+    checklist_counts = {
+        "all": len(data["checks"]),
+        "validation": sum(
+            1 for c in data["checks"]
+            if str(c.get("checklist") or "validation").strip().lower() == "validation"
+        ),
+        "qualification": sum(
+            1 for c in data["checks"]
+            if str(c.get("checklist") or "validation").strip().lower() == "qualification"
+        ),
+        "migration": sum(
+            1 for c in data["checks"]
+            if str(c.get("checklist") or "validation").strip().lower() == "migration"
+        ),
+    }
+    action_required_count = sum(1 for c in data["checks"] if _is_reviewer_action_check(c))
     detected_types = data["detectedContentTypes"]
     detected_pills = (
         "".join(f'<span class="content-type-pill">{_escape(t)}</span>' for t in detected_types)
@@ -735,8 +926,16 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
         else '<span class="content-type-pill">None Detected</span>'
     )
 
-    action_queue_html = _render_reviewer_action_queue_html(data["checks"])
-    checklists_html = _render_checklist_tables_html(data["checks"])
+    action_queue_html = _render_reviewer_action_queue_html(
+        data["checks"],
+        output_dir=resolved_output_dir,
+        solution_root=resolved_solution_root,
+    )
+    checklists_html = _render_checklist_tables_html(
+        data["checks"],
+        output_dir=resolved_output_dir,
+        solution_root=resolved_solution_root,
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1004,11 +1203,27 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
       font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }}
     .filter-btn.active {{
       background: var(--accent);
       color: #ffffff;
       border-color: var(--accent);
+    }}
+    .filter-count {{
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      background: rgba(15, 23, 42, 0.08);
+      color: inherit;
+    }}
+    .filter-btn.active .filter-count {{
+      background: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
     }}
     .search-input {{
       padding: 7px 12px;
@@ -1149,20 +1364,20 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
       <div class="filter-controls">
         <div class="filter-group" role="group" aria-label="Filter by Checklist">
           <span class="filter-group-label">Checklist:</span>
-          <button type="button" class="filter-btn active" data-filter-checklist="all">All</button>
-          <button type="button" class="filter-btn" data-filter-checklist="validation">Validation</button>
-          <button type="button" class="filter-btn" data-filter-checklist="qualification">Qualification</button>
-          <button type="button" class="filter-btn" data-filter-checklist="migration">Migration</button>
+          <button type="button" class="filter-btn active" data-filter-checklist="all">All <span class="filter-count">{checklist_counts["all"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-checklist="validation">Validation <span class="filter-count">{checklist_counts["validation"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-checklist="qualification">Qualification <span class="filter-count">{checklist_counts["qualification"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-checklist="migration">Migration <span class="filter-count">{checklist_counts["migration"]}</span></button>
         </div>
         <div class="filter-group" role="group" aria-label="Filter by Status">
           <span class="filter-group-label">Status:</span>
-          <button type="button" class="filter-btn active" data-filter-status="ALL">All Statuses</button>
-          <button type="button" class="filter-btn" data-filter-status="ACTION_REQUIRED">Action Required</button>
-          <button type="button" class="filter-btn" data-filter-status="PASS">PASS</button>
-          <button type="button" class="filter-btn" data-filter-status="WAIVED_WITH_AUTHOR_EVIDENCE">WAIVED_WITH_AUTHOR_EVIDENCE</button>
-          <button type="button" class="filter-btn" data-filter-status="HUMAN_REVIEW_REQUIRED">HUMAN_REVIEW_REQUIRED</button>
-          <button type="button" class="filter-btn" data-filter-status="FAIL">FAIL</button>
-          <button type="button" class="filter-btn" data-filter-status="NOT_APPLICABLE">NOT_APPLICABLE</button>
+          <button type="button" class="filter-btn active" data-filter-status="ALL">All Statuses <span class="filter-count">{counts["total"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="ACTION_REQUIRED">Action Required <span class="filter-count">{action_required_count}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="PASS">PASS <span class="filter-count">{counts["pass"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="WAIVED_WITH_AUTHOR_EVIDENCE">WAIVED_WITH_AUTHOR_EVIDENCE <span class="filter-count">{counts["waivedWithAuthorEvidence"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="HUMAN_REVIEW_REQUIRED">HUMAN_REVIEW_REQUIRED <span class="filter-count">{counts["humanReviewRequired"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="FAIL">FAIL <span class="filter-count">{counts["fail"]}</span></button>
+          <button type="button" class="filter-btn" data-filter-status="NOT_APPLICABLE">NOT_APPLICABLE <span class="filter-count">{counts["notApplicable"]}</span></button>
         </div>
         <div class="filter-group">
           <input type="search" id="check-search-input" class="search-input" placeholder="Search checks, criteria, evidence..." aria-label="Search checks">
@@ -1187,6 +1402,74 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
       var rows = document.querySelectorAll("tr.check-row");
       var sections = document.querySelectorAll("[data-checklist-section]");
 
+      function matchesStatus(rowStatus, rowAction, targetStatus) {{
+        if (targetStatus === "ALL") {{
+          return true;
+        }}
+        if (targetStatus === "ACTION_REQUIRED") {{
+          return rowAction;
+        }}
+        return rowStatus === targetStatus;
+      }}
+
+      function updateFilterCounts() {{
+        var q = searchQuery.toLowerCase();
+        var cCounts = {{ all: 0, validation: 0, qualification: 0, migration: 0 }};
+        var sCounts = {{
+          ALL: 0,
+          ACTION_REQUIRED: 0,
+          PASS: 0,
+          WAIVED_WITH_AUTHOR_EVIDENCE: 0,
+          HUMAN_REVIEW_REQUIRED: 0,
+          FAIL: 0,
+          NOT_APPLICABLE: 0
+        }};
+
+        rows.forEach(function (row) {{
+          var rowChecklist = (row.getAttribute("data-checklist") || "").toLowerCase();
+          var rowStatus = row.getAttribute("data-status") || "";
+          var rowAction = row.getAttribute("data-action-required") === "true";
+          var text = (row.textContent || "").toLowerCase();
+          var matchSearch = !q || text.indexOf(q) !== -1;
+          if (!matchSearch) {{
+            return;
+          }}
+
+          if (matchesStatus(rowStatus, rowAction, activeStatus)) {{
+            cCounts.all += 1;
+            if (cCounts.hasOwnProperty(rowChecklist)) {{
+              cCounts[rowChecklist] += 1;
+            }}
+          }}
+
+          if (activeChecklist === "all" || rowChecklist === activeChecklist) {{
+            sCounts.ALL += 1;
+            if (rowAction) {{
+              sCounts.ACTION_REQUIRED += 1;
+            }}
+            if (sCounts.hasOwnProperty(rowStatus)) {{
+              sCounts[rowStatus] += 1;
+            }}
+          }}
+        }});
+
+        checklistButtons.forEach(function (btn) {{
+          var key = (btn.getAttribute("data-filter-checklist") || "all").toLowerCase();
+          var badge = btn.querySelector(".filter-count");
+          if (badge && cCounts.hasOwnProperty(key)) {{
+            badge.textContent = String(cCounts[key]);
+          }}
+        }});
+
+        statusButtons.forEach(function (btn) {{
+          var key = btn.getAttribute("data-filter-status") || "ALL";
+          var badge = btn.querySelector(".filter-count");
+          if (badge && sCounts.hasOwnProperty(key)) {{
+            badge.textContent = String(sCounts[key]);
+          }}
+        }});
+      }}
+
       function applyFilters() {{
         var q = searchQuery.toLowerCase();
         rows.forEach(function (row) {{
@@ -1196,14 +1479,7 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
           var text = (row.textContent || "").toLowerCase();
 
           var matchChecklist = activeChecklist === "all" || rowChecklist === activeChecklist;
-          var matchStatus = false;
-          if (activeStatus === "ALL") {{
-            matchStatus = true;
-          }} else if (activeStatus === "ACTION_REQUIRED") {{
-            matchStatus = rowAction;
-          }} else {{
-            matchStatus = rowStatus === activeStatus;
-          }}
+          var matchStatus = matchesStatus(rowStatus, rowAction, activeStatus);
           var matchSearch = !q || text.indexOf(q) !== -1;
 
           if (matchChecklist && matchStatus && matchSearch) {{
@@ -1221,6 +1497,8 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
             sec.classList.remove("hidden-by-filter");
           }}
         }});
+
+        updateFilterCounts();
       }}
 
       checklistButtons.forEach(function (btn) {{
@@ -1254,9 +1532,20 @@ def render_pr_qualification_html(report_data: dict[str, Any]) -> str:
 """
 
 
-def render_pr_qualification_markdown(report_data: dict[str, Any]) -> str:
+def render_pr_qualification_markdown(
+    report_data: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    solution_root: Path | None = None,
+) -> str:
     """Render the reviewer-facing Markdown qualification summary (`qualification-summary.md`)."""
     data = _normalize_report_data(report_data)
+    resolved_output_dir = Path(output_dir).expanduser().resolve() if output_dir else None
+    resolved_solution_root = _resolve_solution_root(
+        data.get("solutionPath"),
+        resolved_output_dir,
+        solution_root,
+    )
     solution_name = _escape_markdown_cell(data["solutionName"])
     solution_version = _escape_markdown_cell(data["solutionVersion"])
     previous_version = (
@@ -1325,7 +1614,11 @@ def render_pr_qualification_markdown(report_data: dict[str, Any]) -> str:
             what_observed = _escape_markdown_cell(check.get("whatWeObserved") or "—")
             why_result = _escape_markdown_cell(check.get("whyPassedOrFailed") or "—")
             prompt = _escape_markdown_cell(_reviewer_prompt_for_check(check))
-            evidence_md = _format_evidence_links_markdown(check)
+            evidence_md = _format_evidence_links_markdown(
+                check,
+                output_dir=resolved_output_dir,
+                solution_root=resolved_solution_root,
+            )
 
             lines.extend([
                 f"### **{status_label} - {title}** (`{check_id}`)",
@@ -1347,7 +1640,11 @@ def render_pr_qualification_markdown(report_data: dict[str, Any]) -> str:
                 lines.append(f"- **Author Justification:** {justification}")
                 if supporting_ref:
                     safe_label = _escape_markdown_cell(supporting_ref)
-                    safe_url = _sanitize_markdown_url(supporting_ref)
+                    safe_url = _sanitize_markdown_url(
+                        supporting_ref,
+                        output_dir=resolved_output_dir,
+                        solution_root=resolved_solution_root,
+                    )
                     lines.append(f"- **Supporting Evidence:** [{safe_label}]({safe_url})")
 
             lines.extend([
@@ -1412,7 +1709,11 @@ def render_pr_qualification_markdown(report_data: dict[str, Any]) -> str:
                     )
 
                 criterion_cell = f"**{title}**" + (f"<br>{criterion}" if criterion and criterion != "—" else "")
-                evidence_cell = _format_evidence_links_markdown(check)
+                evidence_cell = _format_evidence_links_markdown(
+                    check,
+                    output_dir=resolved_output_dir,
+                    solution_root=resolved_solution_root,
+                )
 
                 lines.append(
                     f"| `{check_id}` ({content_type} · {source_checklist}) "
@@ -1435,16 +1736,26 @@ def render_pr_qualification_markdown(report_data: dict[str, Any]) -> str:
 def write_pr_qualification_reports(
     report_data: dict[str, Any],
     output_dir: Path,
+    *,
+    solution_root: Path | None = None,
 ) -> dict[str, Path]:
     """Write both `qualification-report.html` and `qualification-summary.md` to `output_dir`."""
-    target_dir = Path(output_dir)
+    target_dir = Path(output_dir).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
     html_path = target_dir / HTML_REPORT_FILENAME
     markdown_path = target_dir / MARKDOWN_SUMMARY_FILENAME
 
-    html_content = render_pr_qualification_html(report_data)
-    markdown_content = render_pr_qualification_markdown(report_data)
+    html_content = render_pr_qualification_html(
+        report_data,
+        output_dir=target_dir,
+        solution_root=solution_root,
+    )
+    markdown_content = render_pr_qualification_markdown(
+        report_data,
+        output_dir=target_dir,
+        solution_root=solution_root,
+    )
 
     html_path.write_text(html_content, encoding="utf-8")
     markdown_path.write_text(markdown_content, encoding="utf-8")

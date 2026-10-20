@@ -1361,7 +1361,11 @@ def main(argv: list[str] | None = None) -> int:
                 json.dumps(report_data, indent=2) + "\n",
                 encoding="utf-8",
             )
-            written_reports = write_pr_qualification_reports(report_data, out_dir)
+            written_reports = write_pr_qualification_reports(
+                report_data,
+                out_dir,
+                solution_root=sol_root,
+            )
             result = {
                 "solutionName": report_data["solutionName"],
                 "solutionVersion": report_data["solutionVersion"],

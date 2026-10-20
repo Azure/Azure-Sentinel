@@ -396,3 +396,117 @@ def test_report_redacts_file_urls_local_paths_and_emails() -> None:
         assert "[REDACTED_ID]" in rendered
 
 
+def test_filter_button_counters_render_accurate_checklist_and_status_counts() -> None:
+    waived_check = _sample_check(
+        "VAL-WAIV-001",
+        checklist="validation",
+        status="WAIVED_WITH_AUTHOR_EVIDENCE",
+        reviewer_action_required=True,
+    )
+    human_check = _sample_check(
+        "QUAL-HUM-001",
+        checklist="qualification",
+        status="HUMAN_REVIEW_REQUIRED",
+        reviewer_action_required=True,
+    )
+    na_check = _sample_check(
+        "MIG-NA-001",
+        checklist="migration",
+        applicable=False,
+        status="NOT_APPLICABLE",
+    )
+    report_data = _sample_report_data(
+        summaryCounts=None,
+        checks=[
+            _sample_check("VAL-PASS-001", checklist="validation", status="PASS"),
+            waived_check,
+            _sample_check("QUAL-PASS-001", checklist="qualification", status="PASS"),
+            human_check,
+            na_check,
+        ],
+    )
+
+    html_out = render_pr_qualification_html(report_data)
+
+    assert 'data-filter-checklist="all">All <span class="filter-count">5</span>' in html_out
+    assert 'data-filter-checklist="validation">Validation <span class="filter-count">2</span>' in html_out
+    assert 'data-filter-checklist="qualification">Qualification <span class="filter-count">2</span>' in html_out
+    assert 'data-filter-checklist="migration">Migration <span class="filter-count">1</span>' in html_out
+
+    assert 'data-filter-status="ALL">All Statuses <span class="filter-count">5</span>' in html_out
+    assert 'data-filter-status="ACTION_REQUIRED">Action Required <span class="filter-count">2</span>' in html_out
+    assert 'data-filter-status="PASS">PASS <span class="filter-count">2</span>' in html_out
+    assert (
+        'data-filter-status="WAIVED_WITH_AUTHOR_EVIDENCE">'
+        'WAIVED_WITH_AUTHOR_EVIDENCE <span class="filter-count">1</span>'
+    ) in html_out
+    assert (
+        'data-filter-status="HUMAN_REVIEW_REQUIRED">'
+        'HUMAN_REVIEW_REQUIRED <span class="filter-count">1</span>'
+    ) in html_out
+    assert 'data-filter-status="FAIL">FAIL <span class="filter-count">0</span>' in html_out
+    assert (
+        'data-filter-status="NOT_APPLICABLE">'
+        'NOT_APPLICABLE <span class="filter-count">1</span>'
+    ) in html_out
+
+
+def test_relative_path_rebasing_with_output_dir_and_solution_root(tmp_path: Path) -> None:
+    output_dir = tmp_path / "Reports" / "ddos-pr-qualification"
+    evidence_dir = output_dir / "evidence"
+    screenshots_dir = evidence_dir / "screenshots"
+    solution_root = output_dir / "workspace" / "Azure DDoS Protection"
+    (solution_root / "Data").mkdir(parents=True, exist_ok=True)
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+    (solution_root / "SolutionMetadata.json").write_text("{}", encoding="utf-8")
+    (evidence_dir / "qualification-evidence.json").write_text("{}", encoding="utf-8")
+    (evidence_dir / "workbook-arg-sku-limitation.md").write_text("# Waiver", encoding="utf-8")
+    (screenshots_dir / "ddos-workbook-overview.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    check_with_links = _sample_check(
+        "QUAL-WB-001",
+        checklist="qualification",
+        status="WAIVED_WITH_AUTHOR_EVIDENCE",
+        evidence_refs=[
+            {"label": "SolutionMetadata.json", "path": "SolutionMetadata.json", "kind": "file"},
+            {"label": "Qualification Evidence", "path": "qualification_evidence.workbookQualification", "kind": "json"},
+            {"label": "Screenshot", "path": "Evidence/screenshots/ddos-workbook-overview.png", "kind": "screenshot"},
+            {"label": "Validation Status", "path": "validationStatus", "kind": "json"},
+        ],
+        author_exception={
+            "checkId": "QUAL-WB-001",
+            "originalStatus": "FAIL",
+            "authorJustification": "Lab subscription SKU limitation.",
+            "supportingEvidenceRef": "Evidence/workbook-arg-sku-limitation.md",
+            "author": "@maintainer",
+        },
+        reviewer_action_required=True,
+    )
+    report_data = _sample_report_data(
+        solutionName="Azure DDoS Protection",
+        checks=[check_with_links],
+    )
+
+    html_out = render_pr_qualification_html(
+        report_data,
+        output_dir=output_dir,
+        solution_root=solution_root,
+    )
+    md_out = render_pr_qualification_markdown(
+        report_data,
+        output_dir=output_dir,
+        solution_root=solution_root,
+    )
+
+    assert 'href="./workspace/Azure DDoS Protection/SolutionMetadata.json"' in html_out
+    assert 'href="./evidence/qualification-evidence.json#workbookQualification"' in html_out
+    assert 'href="./evidence/screenshots/ddos-workbook-overview.png"' in html_out
+    assert 'href="./pr-qualification-result.json#validationStatus"' in html_out
+    assert 'href="./evidence/workbook-arg-sku-limitation.md"' in html_out
+
+    assert "(./workspace/Azure%20DDoS%20Protection/SolutionMetadata.json)" in md_out
+    assert "(./evidence/workbook-arg-sku-limitation.md)" in md_out
+
+
+
