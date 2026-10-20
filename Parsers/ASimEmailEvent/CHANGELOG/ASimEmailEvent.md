@@ -2,8 +2,7 @@
 
 ## Version 1.0.1
 
-- (2026-10-20) Include Microsoft Defender for Office 365 EmailEvents normalization - [PR #15373](https://github.com/Azure/Azure-Sentinel/pull/15373)
-- Forward parser parameters and honor global and source-specific exclusions.
+- (2026-10-20) Registered Microsoft Defender for Office 365 EmailEvent delivery normalization with source and global exclusions. - [PR #15373](https://github.com/Azure/Azure-Sentinel/pull/15373)
 
 ## Version 0.1.0
 

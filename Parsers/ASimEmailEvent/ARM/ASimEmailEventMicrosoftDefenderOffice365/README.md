@@ -2,9 +2,10 @@
 
 ARM template for ASIM EmailEvent schema parser for Microsoft Defender for Office 365.
 
-Normalizes native Sentinel EmailEvents from Microsoft Defender for Office 365 to ASIM EmailEvent.
-Preserves individual recipient/update records and distinguishes delivery outcomes from threat detection.
-Developed by following the official ASIM parser skill files directly, with disclosed read-only validation adaptations.
+Normalizes native EmailEvents delivery records into ASIM EmailEvent 1.0.0.
+Successful delivery does not establish that a message is safe.
+Created following the official ASIM parser creation skill files directly, with documented query-only validation adaptations.
+Only labeled synthetic records were tested; current production-data validation remains pending.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
