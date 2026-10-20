@@ -11,6 +11,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import csv
 import functools
 import hashlib
 import json
@@ -25,14 +26,17 @@ from typing import Any, Iterable, Sequence
 import yaml
 
 
-MANIFEST_VERSION = 1
-VALIDATION_RESULT_VERSION = 1
+MANIFEST_VERSION = 2
+VALIDATION_RESULT_VERSION = 2
 
 QUERY_TIME_PATH_RE = re.compile(
     r"^Parsers/ASim(?P<schema>[^/]+)/Parsers/(?P<name>ASim[^/]+)\.yaml$"
 )
 INGEST_TIME_PATH_RE = re.compile(
     r"^Parsers/ASim(?P<schema>[^/]+)/IngestTimeParsers/(?P<name>[^/]+)\.yaml$"
+)
+FIXTURE_PATH_RE = re.compile(
+    r"^Sample Data/ASIM/[^/]+_IngestedLogs\.csv$"
 )
 PARSER_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]+$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -191,11 +195,15 @@ class ParserRecord:
     document: dict[str, Any]
     parser_name: str
     schema: str
-    schema_version: str
+    schema_version: str | None
     product: str
     parser_query: str
     source_raw_table: str | None = None
     target_asim_table: str | None = None
+    event_vendor: str | None = None
+    event_product: str | None = None
+    fixture_path: str | None = None
+    fixture_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -241,6 +249,16 @@ def classify_parser_path(path: str) -> str | None:
     if filename in ADDITIONAL_UNION_PARSERS.get(schema, set()):
         return None
     return "query-time"
+
+
+def classify_changed_path(path: str) -> str | None:
+    normalized = normalize_changed_path(path)
+    parser_kind = classify_parser_path(normalized)
+    if parser_kind is not None:
+        return parser_kind
+    if FIXTURE_PATH_RE.fullmatch(normalized):
+        return "fixture"
+    return None
 
 
 def load_yaml_file(path: Path) -> dict[str, Any]:
@@ -654,13 +672,143 @@ def _validate_statement_shape(
     return statements[-1]
 
 
-def _contains_identifier(query: str, identifier: str) -> bool:
-    return bool(
-        re.search(
-            rf"(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])",
-            mask_kql(query),
-            re.I,
+def _query_uses_source_table(query: str, table_name: str) -> bool:
+    masked_query = mask_kql(query)
+    identifier_pattern = re.compile(
+        rf"(?<![A-Za-z0-9_]){re.escape(table_name)}(?![A-Za-z0-9_])",
+        re.I,
+    )
+    for match in identifier_pattern.finditer(masked_query):
+        line_start = masked_query.rfind("\n", 0, match.start()) + 1
+        line_end = masked_query.find("\n", match.end())
+        if line_end < 0:
+            line_end = len(masked_query)
+        prefix = masked_query[line_start:match.start()].rstrip()
+        suffix = masked_query[match.end():line_end].lstrip()
+        source_position = (
+            not prefix
+            or prefix[-1:] in {"{", "(", ",", "=", ";"}
+            or bool(
+                re.search(
+                    r"\bunion(?:\s+[A-Za-z_][A-Za-z0-9_]*"
+                    r"\s*=\s*\S+)*\s*$",
+                    prefix,
+                    re.I,
+                )
+            )
         )
+        source_terminator = not suffix or suffix[0] in {"|", ",", ")"}
+        if source_position and source_terminator:
+            return True
+    return False
+
+
+def _parse_kql_string_literal(
+    query: str, start: int
+) -> tuple[str, int] | None:
+    index = start
+    while index < len(query) and query[index].isspace():
+        index += 1
+    verbatim = False
+    if (
+        index + 1 < len(query)
+        and query[index] == "@"
+        and query[index + 1] in {"'", '"'}
+    ):
+        verbatim = True
+        index += 1
+    if index >= len(query) or query[index] not in {"'", '"'}:
+        return None
+    quote = query[index]
+    index += 1
+    value: list[str] = []
+    escapes = {
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "\\": "\\",
+        "'": "'",
+        '"': '"',
+    }
+    while index < len(query):
+        char = query[index]
+        if char == quote:
+            if index + 1 < len(query) and query[index + 1] == quote:
+                value.append(quote)
+                index += 2
+                continue
+            return "".join(value), index + 1
+        if not verbatim and char == "\\":
+            if index + 1 >= len(query):
+                raise ValueError("KQL string literal ends with an escape.")
+            escaped = query[index + 1]
+            value.append(escapes.get(escaped, escaped))
+            index += 2
+            continue
+        value.append(char)
+        index += 1
+    raise ValueError("KQL string literal is not terminated.")
+
+
+def _resolve_static_string_assignment(query: str, field: str) -> str:
+    masked_query = mask_kql(query)
+    assignment_pattern = re.compile(
+        rf"(?<![A-Za-z0-9_]){re.escape(field)}"
+        r"(?![A-Za-z0-9_])\s*=",
+        re.I,
+    )
+    matches = list(assignment_pattern.finditer(masked_query))
+    if not matches:
+        raise ValueError(
+            f"ParserQuery does not assign a static {field} value."
+        )
+    values: list[str] = []
+    for match in matches:
+        parsed = _parse_kql_string_literal(query, match.end())
+        if parsed is None:
+            raise ValueError(
+                f"ParserQuery assigns {field} from a non-static expression."
+            )
+        values.append(parsed[0])
+    unique_values = sorted(set(values))
+    if len(unique_values) != 1:
+        raise ValueError(
+            f"ParserQuery assigns conflicting {field} values: "
+            f"{unique_values}."
+        )
+    value = unique_values[0]
+    if not value:
+        raise ValueError(f"ParserQuery assigns an empty {field} value.")
+    if any(
+        ord(char) < 32 or char in '<>:"/\\|?*'
+        for char in value
+    ):
+        raise ValueError(
+            f"ParserQuery {field} value cannot be used in a fixture name: "
+            f"{value!r}."
+        )
+    return value
+
+
+def resolve_source_specific_fixture(
+    parser_query: str,
+    schema: str,
+    source_raw_table: str,
+) -> tuple[str, str, str]:
+    event_vendor = _resolve_static_string_assignment(
+        parser_query, "EventVendor"
+    )
+    event_product = _resolve_static_string_assignment(
+        parser_query, "EventProduct"
+    )
+    fixture_name = (
+        f"{event_vendor}_{event_product}_{schema}_{source_raw_table}"
+        "_IngestedLogs.csv"
+    )
+    return (
+        event_vendor,
+        event_product,
+        f"Sample Data/ASIM/{fixture_name}",
     )
 
 
@@ -703,15 +851,58 @@ def build_parser_record(repo_root: Path, relative_path: str) -> ParserRecord:
     required_values = {
         "ParserName": parser_name,
         "Normalization.Schema": schema,
-        "Normalization.Version": schema_version,
         "Product.Name": product,
         "ParserQuery": parser_query,
     }
-    missing = [name for name, value in required_values.items() if not isinstance(value, str) or not value.strip()]
+    if kind == "ingest-time":
+        required_values["Normalization.Version"] = schema_version
+    missing = [
+        name
+        for name, value in required_values.items()
+        if not isinstance(value, str) or not value.strip()
+    ]
     if missing:
         raise ValueError(
             f"{relative_path} is missing required parser metadata: {', '.join(missing)}."
         )
+    source_raw_table = (
+        document.get("SourceRawTable")
+        if kind == "ingest-time"
+        else None
+    )
+    target_asim_table = (
+        document.get("TargetASIMTable")
+        if kind == "ingest-time"
+        else None
+    )
+    event_vendor: str | None = None
+    event_product: str | None = None
+    fixture_path: str | None = None
+    fixture_errors: list[str] = []
+    if kind == "ingest-time":
+        if not isinstance(source_raw_table, str) or not source_raw_table:
+            fixture_errors.append(
+                f"{relative_path} is missing SourceRawTable."
+            )
+        else:
+            try:
+                (
+                    event_vendor,
+                    event_product,
+                    fixture_path,
+                ) = resolve_source_specific_fixture(
+                    parser_query,
+                    schema,
+                    source_raw_table,
+                )
+            except ValueError as exc:
+                fixture_errors.append(str(exc))
+            else:
+                if not (repo_root / fixture_path).is_file():
+                    fixture_errors.append(
+                        "Missing source-table-specific fixture: "
+                        f"{fixture_path}."
+                    )
     return ParserRecord(
         path=relative_path,
         kind=kind,
@@ -721,8 +912,12 @@ def build_parser_record(repo_root: Path, relative_path: str) -> ParserRecord:
         schema_version=schema_version,
         product=product,
         parser_query=parser_query,
-        source_raw_table=document.get("SourceRawTable") if kind == "ingest-time" else None,
-        target_asim_table=document.get("TargetASIMTable") if kind == "ingest-time" else None,
+        source_raw_table=source_raw_table,
+        target_asim_table=target_asim_table,
+        event_vendor=event_vendor,
+        event_product=event_product,
+        fixture_path=fixture_path,
+        fixture_errors=tuple(fixture_errors),
     )
 
 
@@ -745,7 +940,11 @@ def resolve_query_time_pair(
         for record in query_records
         if record.schema == ingest_record.schema
         and isinstance(ingest_record.source_raw_table, str)
-        and _contains_identifier(record.parser_query, ingest_record.source_raw_table)
+        and _identity_key(record.product)
+        == _identity_key(ingest_record.product)
+        and _query_uses_source_table(
+            record.parser_query, ingest_record.source_raw_table
+        )
     ]
 
     ingestion_identities = {
@@ -758,7 +957,9 @@ def resolve_query_time_pair(
         if ingestion_identities
         & {
             _identity_key(record.parser_name),
-            _identity_key(str(record.document.get("EquivalentBuiltInParser", ""))),
+            _identity_key(
+                str(record.document.get("EquivalentBuiltInParser", ""))
+            ),
             _identity_key(PurePosixPath(record.path).stem),
         }
     ]
@@ -766,13 +967,7 @@ def resolve_query_time_pair(
         candidates = identity_matches
         tier = "identity"
     else:
-        product_matches = [
-            record
-            for record in eligible
-            if _identity_key(record.product)
-            == _identity_key(ingest_record.product)
-        ]
-        candidates = product_matches
+        candidates = eligible
         tier = "product"
 
     candidate_evidence = [
@@ -796,7 +991,9 @@ def resolve_query_time_pair(
         "candidates": candidate_evidence,
     }
     if len(candidates) == 1:
-        return PairResolution("paired", candidates[0], tuple(candidates), evidence)
+        return PairResolution(
+            "paired", candidates[0], tuple(candidates), evidence
+        )
     if len(candidates) > 1:
         return PairResolution("ambiguous", None, tuple(candidates), evidence)
     return PairResolution("unpaired", None, tuple(), evidence)
@@ -813,6 +1010,11 @@ def _target_from_ingest(
     trigger_path: str,
 ) -> dict[str, Any]:
     query_record = resolution.selected
+    fixture_status = "resolved"
+    if ingest_record.fixture_path is None:
+        fixture_status = "invalid"
+    elif ingest_record.fixture_errors:
+        fixture_status = "missing"
     return {
         "targetId": _make_target_id(ingest_record),
         "triggerPaths": [trigger_path],
@@ -825,36 +1027,13 @@ def _target_from_ingest(
         "product": ingest_record.product,
         "sourceRawTable": ingest_record.source_raw_table,
         "targetASIMTable": ingest_record.target_asim_table,
+        "eventVendor": ingest_record.event_vendor,
+        "eventProduct": ingest_record.event_product,
+        "fixturePath": ingest_record.fixture_path,
+        "fixtureStatus": fixture_status,
         "pairCandidates": [record.path for record in resolution.candidates],
         "pairEvidence": resolution.evidence,
-        "discoveryErrors": [],
-    }
-
-
-def _target_from_query(
-    query_record: ParserRecord,
-    trigger_path: str,
-    candidate_ingest_records: Sequence[ParserRecord],
-) -> dict[str, Any]:
-    pair_status = "ambiguous" if candidate_ingest_records else "unpaired"
-    return {
-        "targetId": _make_target_id(query_record),
-        "triggerPaths": [trigger_path],
-        "validationKind": "query-only",
-        "pairStatus": pair_status,
-        "queryTimeParserPath": query_record.path,
-        "ingestTimeParserPath": None,
-        "schema": query_record.schema,
-        "schemaVersion": query_record.schema_version,
-        "product": query_record.product,
-        "sourceRawTable": None,
-        "targetASIMTable": None,
-        "pairCandidates": [record.path for record in candidate_ingest_records],
-        "pairEvidence": {
-            "tier": "reverse",
-            "candidates": [record.path for record in candidate_ingest_records],
-        },
-        "discoveryErrors": [],
+        "discoveryErrors": list(ingest_record.fixture_errors),
     }
 
 
@@ -866,10 +1045,11 @@ def get_changed_files(repo_root: Path, base_ref: str) -> list[str]:
             str(repo_root),
             "diff",
             "--name-only",
-            "--diff-filter=AMR",
+            "--diff-filter=AMRD",
             base_ref,
             "--",
             "Parsers",
+            "Sample Data/ASIM",
         ],
         check=True,
         capture_output=True,
@@ -890,7 +1070,7 @@ def build_validation_manifest(
         {
             normalize_changed_path(path)
             for path in changed_files
-            if classify_parser_path(path)
+            if classify_changed_path(path)
         }
     )
     index_errors: list[dict[str, str]] = []
@@ -906,19 +1086,53 @@ def build_validation_manifest(
 
     query_records = load_index("query-time")
     ingest_records = load_index("ingest-time")
-    query_by_path = {record.path: record for record in query_records}
     ingest_by_path = {record.path: record for record in ingest_records}
     resolutions = {
         record.path: resolve_query_time_pair(record, query_records)
         for record in ingest_records
     }
+    query_to_ingest: dict[str, list[ParserRecord]] = {}
+    fixture_to_ingest: dict[str, list[ParserRecord]] = {}
+    for record in ingest_records:
+        resolution = resolutions[record.path]
+        if resolution.selected is not None:
+            query_to_ingest.setdefault(
+                resolution.selected.path, []
+            ).append(record)
+        if record.fixture_path is not None:
+            fixture_to_ingest.setdefault(
+                record.fixture_path, []
+            ).append(record)
 
     targets: dict[str, dict[str, Any]] = {}
+
+    def add_target(record: ParserRecord, trigger_path: str) -> None:
+        target = targets.setdefault(
+            record.path,
+            _target_from_ingest(
+                record,
+                resolutions[record.path],
+                trigger_path,
+            ),
+        )
+        if trigger_path not in target["triggerPaths"]:
+            target["triggerPaths"].append(trigger_path)
+
     for changed_path in normalized_changes:
-        kind = classify_parser_path(changed_path)
+        kind = classify_changed_path(changed_path)
         if kind == "ingest-time":
             record = ingest_by_path.get(changed_path)
             if record is None:
+                discovery_errors = [
+                    error["message"]
+                    for error in index_errors
+                    if error["path"] == changed_path
+                ]
+                if not discovery_errors:
+                    discovery_errors.append(
+                        "Changed ingestion-time parser does not exist "
+                        f"in the current revision: {changed_path}."
+                    )
                 targets[f"invalid:{changed_path}"] = {
                     "targetId": re.sub(
                         r"[^a-z0-9]+",
@@ -935,83 +1149,25 @@ def build_validation_manifest(
                     "product": None,
                     "sourceRawTable": None,
                     "targetASIMTable": None,
+                    "eventVendor": None,
+                    "eventProduct": None,
+                    "fixturePath": None,
+                    "fixtureStatus": "invalid",
                     "pairCandidates": [],
                     "pairEvidence": {},
-                    "discoveryErrors": [
-                        error["message"]
-                        for error in index_errors
-                        if error["path"] == changed_path
-                    ],
+                    "discoveryErrors": discovery_errors,
                 }
                 continue
-            resolution = resolutions[changed_path]
-            key = (
-                f"pair:{record.path}"
-                if resolution.selected
-                else f"ingest:{record.path}"
-            )
-            target = targets.setdefault(
-                key, _target_from_ingest(record, resolution, changed_path)
-            )
-            if changed_path not in target["triggerPaths"]:
-                target["triggerPaths"].append(changed_path)
+            add_target(record, changed_path)
             continue
 
-        if kind != "query-time":
+        if kind == "query-time":
+            for record in query_to_ingest.get(changed_path, []):
+                add_target(record, changed_path)
             continue
-        query_record = query_by_path.get(changed_path)
-        if query_record is None:
-            targets[f"invalid:{changed_path}"] = {
-                "targetId": re.sub(
-                    r"[^a-z0-9]+",
-                    "-",
-                    PurePosixPath(changed_path).stem.lower(),
-                ).strip("-"),
-                "triggerPaths": [changed_path],
-                "validationKind": "query-only",
-                "pairStatus": "invalid",
-                "queryTimeParserPath": changed_path,
-                "ingestTimeParserPath": None,
-                "schema": None,
-                "schemaVersion": None,
-                "product": None,
-                "sourceRawTable": None,
-                "targetASIMTable": None,
-                "pairCandidates": [],
-                "pairEvidence": {},
-                "discoveryErrors": [
-                    error["message"]
-                    for error in index_errors
-                    if error["path"] == changed_path
-                ],
-            }
-            continue
-        selected_ingest = [
-            ingest_by_path[path]
-            for path, resolution in resolutions.items()
-            if resolution.selected and resolution.selected.path == changed_path
-        ]
-        if len(selected_ingest) == 1:
-            ingest_record = selected_ingest[0]
-            key = f"pair:{ingest_record.path}"
-            target = targets.setdefault(
-                key,
-                _target_from_ingest(
-                    ingest_record, resolutions[ingest_record.path], changed_path
-                ),
-            )
-            if changed_path not in target["triggerPaths"]:
-                target["triggerPaths"].append(changed_path)
-            continue
-
-        candidate_ingest = [
-            ingest_by_path[path]
-            for path, resolution in resolutions.items()
-            if any(candidate.path == changed_path for candidate in resolution.candidates)
-        ]
-        targets[f"query:{changed_path}"] = _target_from_query(
-            query_record, changed_path, candidate_ingest
-        )
+        if kind == "fixture":
+            for record in fixture_to_ingest.get(changed_path, []):
+                add_target(record, changed_path)
 
     ordered_targets = sorted(
         targets.values(),
@@ -1041,7 +1197,12 @@ def build_validation_manifest(
     return {
         "version": MANIFEST_VERSION,
         "base": str(repo_root),
-        "changedParserPaths": normalized_changes,
+        "changedPaths": normalized_changes,
+        "changedParserPaths": [
+            path
+            for path in normalized_changes
+            if classify_parser_path(path) is not None
+        ],
         "targets": ordered_targets,
         "indexErrors": index_errors,
     }
@@ -1268,12 +1429,113 @@ def _validate_connector_metadata(
     return sorted(set(evidence_paths))
 
 
+def _validate_fixture_contract(
+    repo_root: Path | None,
+    parser_query: str | None,
+    schema: str | None,
+    source_raw_table: str | None,
+    findings: list[Finding],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "invalid",
+        "eventVendor": None,
+        "eventProduct": None,
+        "path": None,
+    }
+    if (
+        parser_query is None
+        or schema is None
+        or source_raw_table is None
+    ):
+        return result
+    try:
+        event_vendor, event_product, fixture_path = (
+            resolve_source_specific_fixture(
+                parser_query,
+                schema,
+                source_raw_table,
+            )
+        )
+    except ValueError as exc:
+        findings.append(
+            Finding("FIXTURE001", "ParserQuery", str(exc))
+        )
+        return result
+
+    result.update(
+        {
+            "eventVendor": event_vendor,
+            "eventProduct": event_product,
+            "path": fixture_path,
+        }
+    )
+    if repo_root is None:
+        findings.append(
+            Finding(
+                "FIXTURE002",
+                "fixture",
+                "Repository root is required to validate the resolved "
+                f"fixture: {fixture_path}.",
+            )
+        )
+        return result
+
+    absolute_path = repo_root / fixture_path
+    if not absolute_path.is_file():
+        result["status"] = "missing"
+        findings.append(
+            Finding(
+                "FIXTURE002",
+                "fixture",
+                f"Missing source-table-specific fixture: {fixture_path}.",
+            )
+        )
+        return result
+
+    try:
+        with absolute_path.open(
+            "r", encoding="utf-8-sig", newline=""
+        ) as stream:
+            reader = csv.DictReader(stream)
+            if not reader.fieldnames or "Type" not in reader.fieldnames:
+                raise ValueError("Fixture must contain a Type column.")
+            type_values = {
+                str(row.get("Type", "")).strip()
+                for row in reader
+                if str(row.get("Type", "")).strip()
+            }
+    except (OSError, UnicodeDecodeError, csv.Error, ValueError) as exc:
+        findings.append(
+            Finding(
+                "FIXTURE003",
+                "fixture",
+                f"Invalid source-table-specific fixture "
+                f"{fixture_path}: {exc}",
+            )
+        )
+        return result
+
+    if type_values != {source_raw_table}:
+        findings.append(
+            Finding(
+                "FIXTURE004",
+                "fixture.Type",
+                f"Fixture Type values must be exactly "
+                f"{source_raw_table!r}; found {sorted(type_values)}.",
+            )
+        )
+        return result
+    result["status"] = "resolved"
+    return result
+
+
 def validate_ingest_time_parser(
     parser_path: Path,
     query_time_path: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
     findings: list[Finding] = []
+    query_findings: list[Finding] = []
     document: dict[str, Any] | None = None
     try:
         document = load_yaml_file(parser_path)
@@ -1282,6 +1544,21 @@ def validate_ingest_time_parser(
 
     metadata: dict[str, Any] = {}
     connector_evidence: list[str] = []
+    fixture_resolution: dict[str, Any] = {
+        "status": "invalid",
+        "eventVendor": None,
+        "eventProduct": None,
+        "path": None,
+    }
+    query_eligibility: dict[str, Any] = {
+        "status": (
+            "not-applicable"
+            if query_time_path is None
+            else "blocked"
+        ),
+        "supportsDisabled": False,
+        "supportsPack": False,
+    }
     if document is not None:
         display_name = _require_string(
             document, findings, "Parser.DisplayName", "Parser", "DisplayName"
@@ -1462,58 +1739,102 @@ def validate_ingest_time_parser(
         if filter_query is not None and parser_query is not None:
             _validate_filter_consistency(filter_query, parser_query, findings)
 
+        fixture_resolution = _validate_fixture_contract(
+            effective_repo_root,
+            parser_query,
+            schema,
+            source_raw_table,
+            findings,
+        )
+
         if query_time_path is not None:
+            def block_query(
+                code: str, field: str, message: str
+            ) -> None:
+                query_findings.append(
+                    Finding(
+                        code,
+                        field,
+                        message,
+                        severity="blocked",
+                    )
+                )
+
             try:
                 query_document = load_yaml_file(query_time_path)
             except (OSError, ValueError, yaml.YAMLError) as exc:
-                findings.append(
-                    Finding("PAIR001", "queryTimeParser", str(exc))
-                )
+                block_query("PAIR001", "queryTimeParser", str(exc))
             else:
                 query_schema = _get_nested(
                     query_document, "Normalization", "Schema"
                 )
-                query_schema_version = _get_nested(
-                    query_document, "Normalization", "Version"
-                )
                 query_product = _get_nested(query_document, "Product", "Name")
+                query_parser_name = query_document.get("ParserName")
                 query_body = query_document.get("ParserQuery")
+                required_query_values = {
+                    "ParserName": query_parser_name,
+                    "Normalization.Schema": query_schema,
+                    "Product.Name": query_product,
+                    "ParserQuery": query_body,
+                }
+                for field, value in required_query_values.items():
+                    if not isinstance(value, str) or not value.strip():
+                        block_query(
+                            "PAIR006",
+                            field,
+                            "Mapped query-time parser execution metadata "
+                            "must be a non-empty string.",
+                        )
                 if schema != query_schema:
-                    findings.append(
-                        Finding(
-                            "PAIR002",
-                            "Normalization.Schema",
-                            "Query-time and ingestion-time schemas must match.",
-                        )
+                    block_query(
+                        "PAIR002",
+                        "Normalization.Schema",
+                        "Query-time and ingestion-time schemas must match.",
                     )
-                if schema_version != query_schema_version:
-                    findings.append(
-                        Finding(
-                            "PAIR003",
-                            "Normalization.Version",
-                            "Query-time and ingestion-time schema versions must match.",
-                        )
-                    )
-                if product != query_product:
-                    findings.append(
-                        Finding(
-                            "PAIR004",
-                            "Product.Name",
-                            "Query-time and ingestion-time product names must match.",
-                        )
+                if (
+                    isinstance(product, str)
+                    and isinstance(query_product, str)
+                    and _identity_key(product)
+                    != _identity_key(query_product)
+                ):
+                    block_query(
+                        "PAIR004",
+                        "Product.Name",
+                        "Query-time and ingestion-time product identities "
+                        "must match.",
                     )
                 if (
                     source_raw_table is not None
                     and isinstance(query_body, str)
-                    and not _contains_identifier(query_body, source_raw_table)
-                ):
-                    findings.append(
-                        Finding(
-                            "PAIR005",
-                            "SourceRawTable",
-                            "SourceRawTable is not referenced by the paired query-time parser.",
-                        )
+                    and not _query_uses_source_table(
+                        query_body, source_raw_table
                     )
+                ):
+                    block_query(
+                        "PAIR005",
+                        "SourceRawTable",
+                        "SourceRawTable is not used as a source table by "
+                        "the mapped query-time parser.",
+                    )
+                parser_params = query_document.get("ParserParams")
+                parameter_names = (
+                    {
+                        str(parameter.get("Name", "")).casefold()
+                        for parameter in parser_params
+                        if isinstance(parameter, dict)
+                    }
+                    if isinstance(parser_params, list)
+                    else set()
+                )
+                query_eligibility["supportsDisabled"] = (
+                    "disabled" in parameter_names
+                )
+                query_eligibility["supportsPack"] = (
+                    "pack" in parameter_names
+                )
+            query_eligibility["status"] = (
+                "blocked" if query_findings else "eligible"
+            )
 
         metadata = {
             "displayName": display_name,
@@ -1533,7 +1854,10 @@ def validate_ingest_time_parser(
             "changeDescription": change_description,
         }
 
-    finding_dicts = [finding.to_dict() for finding in findings]
+    finding_dicts = [
+        finding.to_dict()
+        for finding in (*findings, *query_findings)
+    ]
     return {
         "version": VALIDATION_RESULT_VERSION,
         "path": str(parser_path),
@@ -1544,6 +1868,8 @@ def validate_ingest_time_parser(
             finding["severity"] == "error" for finding in finding_dicts
         ),
         "metadata": metadata,
+        "fixtureResolution": fixture_resolution,
+        "queryTimeEligibility": query_eligibility,
         "connectorEvidence": connector_evidence,
         "findings": finding_dicts,
     }
@@ -1571,7 +1897,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     discover = subparsers.add_parser(
-        "discover", help="Build the changed-parser validation target manifest."
+        "discover",
+        help="Build the changed-input ITP validation target manifest.",
     )
     discover.add_argument("--repo-root", default=".")
     discover.add_argument("--base-ref", default="upstream/master")

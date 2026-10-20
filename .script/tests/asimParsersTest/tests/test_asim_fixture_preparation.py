@@ -287,9 +287,19 @@ class FixturePreparationTests(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def prepare(self, fixture_path, schema_path=None):
+    def prepare(
+        self,
+        fixture_path,
+        schema_path=None,
+        expected_source_raw_table=None,
+    ):
+        if expected_source_raw_table is None:
+            _, expected_source_raw_table, _ = (
+                FIXTURES.load_fixture_csv(fixture_path)
+            )
         return FIXTURES.prepare_fixture(
             fixture_path=fixture_path,
+            expected_source_raw_table=expected_source_raw_table,
             target_id="parser-a",
             target_group="ASimAuthenticationEventLogs",
             repository="Azure/Azure-Sentinel",
@@ -352,6 +362,34 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertIs(artifact["rows"][0]["Enabled"], False)
         self.assertEqual({"x": 1}, artifact["rows"][0]["Payload"])
 
+    def test_adapts_repository_style_schema_aliases(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,Enabled,Count,Payload\n"
+            '2026-01-01T00:00:00Z,Contoso_CL,true,7,"{""x"":1}"\n'
+        )
+        schema_path = self.root / "ContosoSchema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,DateTime\n"
+            "Enabled,SByte\n"
+            "Count,Int32\n"
+            "Payload,Object\n",
+            encoding="utf-8",
+        )
+
+        artifact = self.prepare(fixture, schema_path=schema_path)
+
+        schema = {
+            column["name"]: column["type"]
+            for column in artifact["schema"]
+        }
+        self.assertEqual("boolean", schema["Enabled"])
+        self.assertEqual("int", schema["Count"])
+        self.assertEqual("dynamic", schema["Payload"])
+        self.assertIs(artifact["rows"][0]["Enabled"], True)
+        self.assertEqual(7, artifact["rows"][0]["Count"])
+        self.assertEqual({"x": 1}, artifact["rows"][0]["Payload"])
+
     def test_rejects_multiple_source_table_types(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type\n"
@@ -360,6 +398,20 @@ class FixturePreparationTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "multiple Type values"):
             self.prepare(fixture)
+
+    def test_rejects_fixture_type_that_does_not_match_itp_source(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type\n"
+            "2026-01-01T00:00:00Z,Other_CL\n"
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "Fixture Type must be 'Contoso_CL'"
+        ):
+            self.prepare(
+                fixture,
+                expected_source_raw_table="Contoso_CL",
+            )
 
     def test_artifact_is_deterministic_for_same_inputs(self):
         fixture = self.write_fixture(
@@ -398,6 +450,7 @@ class FixturePreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "target_slot"):
             FIXTURES.prepare_fixture(
                 fixture_path=fixture,
+                expected_source_raw_table="Contoso_CL",
                 target_id="parser-a",
                 target_group="ASimAuthenticationEventLogs",
                 repository="Azure/Azure-Sentinel",
@@ -419,6 +472,8 @@ class FixturePreparationTests(unittest.TestCase):
             [
                 "prepare",
                 str(fixture),
+                "--expected-source-raw-table",
+                "Contoso_CL",
                 "--target-id",
                 "parser-a",
                 "--target-group",
@@ -456,6 +511,8 @@ class FixturePreparationTests(unittest.TestCase):
             [
                 "prepare",
                 str(fixture),
+                "--expected-source-raw-table",
+                "Contoso_CL",
                 "--target-id",
                 "parser-a",
                 "--target-group",
@@ -472,10 +529,12 @@ class FixturePreparationTests(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[4]
         fixture = (
             repo_root
-            / "Sample Data/ASIM/AWS_GuardDuty_AlertEvent_IngestedLogs.csv"
+            / "Sample Data/ASIM/"
+            "AWS_GuardDuty_AlertEvent_AWSGuardDuty_IngestedLogs.csv"
         )
         artifact = FIXTURES.prepare_fixture(
             fixture_path=fixture,
+            expected_source_raw_table="AWSGuardDuty",
             target_id="asimalerteventawsguardduty",
             target_group="ASimAlertEventLogs",
             repository="Azure/Azure-Sentinel",
@@ -509,6 +568,53 @@ class FixturePreparationTests(unittest.TestCase):
                 "sha256:"
             )
         )
+
+    def test_prepares_all_available_source_specific_fixtures(self):
+        repo_root = Path(__file__).resolve().parents[4]
+        cases = (
+            (
+                "CrowdStrike_Falcon_AlertEvent_"
+                "CrowdStrikeDetections_IngestedLogs.csv",
+                "CrowdStrikeDetections",
+                "ASimAlertEventLogs",
+            ),
+            (
+                "Salesforce_Service Cloud_Authentication_"
+                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
+                "SalesforceServiceCloudV3_CL",
+                "ASimAuthenticationEventLogs",
+            ),
+            (
+                "Salesforce_Salesforce Service Cloud_WebSession_"
+                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
+                "SalesforceServiceCloudV3_CL",
+                "ASimWebSessionLogs",
+            ),
+        )
+        for index, (filename, source_table, target_group) in enumerate(
+            cases
+        ):
+            with self.subTest(filename=filename):
+                artifact = FIXTURES.prepare_fixture(
+                    fixture_path=repo_root / "Sample Data/ASIM" / filename,
+                    expected_source_raw_table=source_table,
+                    target_id=f"fixture-{index}",
+                    target_group=target_group,
+                    repository="Azure/Azure-Sentinel",
+                    pull_request="123",
+                    run_id="456",
+                    run_attempt=1,
+                    now_ticks=FIXTURES.parse_kusto_datetime_ticks(
+                        "2026-10-16T20:00:00Z"
+                    ),
+                )
+                self.assertGreater(artifact["rowCount"], 0)
+                self.assertEqual(
+                    source_table, artifact["sourceRawTable"]
+                )
+                self.assertEqual(
+                    "repository", artifact["schemaSource"]
+                )
 
 
 if __name__ == "__main__":

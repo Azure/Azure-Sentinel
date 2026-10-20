@@ -3,7 +3,8 @@
 
 Example:
   python asim_fixture_preparation.py prepare \
-      "Sample Data/ASIM/AWS_GuardDuty_AlertEvent_IngestedLogs.csv" \
+      "Sample Data/ASIM/AWS_GuardDuty_AlertEvent_AWSGuardDuty_IngestedLogs.csv" \
+      --expected-source-raw-table AWSGuardDuty \
       --target-id asimalerteventawsguardduty \
       --run-id 123456789 \
       --run-attempt 1 \
@@ -415,7 +416,15 @@ def _normalize_schema_type(value: str) -> str:
         "bool": "boolean",
         "double": "real",
         "float": "real",
+        "int16": "int",
+        "int32": "int",
+        "int64": "long",
         "integer": "int",
+        "object": "dynamic",
+        "short": "int",
+        "ushort": "int",
+        "uint16": "int",
+        "uint32": "long",
     }
     return aliases.get(normalized, normalized)
 
@@ -551,6 +560,27 @@ def infer_schema(
     return schema
 
 
+def _adapt_schema_to_rows(
+    schema: Sequence[dict[str, str]],
+    rows: Sequence[dict[str, Any]],
+) -> list[dict[str, str]]:
+    adapted: list[dict[str, str]] = []
+    for column in schema:
+        name = column["name"]
+        column_type = _normalize_schema_type(column["type"])
+        if column_type in {"byte", "sbyte"}:
+            values = _nonempty_values(rows, name)
+            if values and all(
+                value.casefold() in {"true", "false"}
+                for value in values
+            ):
+                column_type = "boolean"
+            else:
+                column_type = "int"
+        adapted.append({"name": name, "type": column_type})
+    return adapted
+
+
 def _convert_boolean(value: str, column_name: str) -> bool:
     normalized = value.casefold()
     if normalized == "true":
@@ -646,6 +676,7 @@ def _sha256_bytes(value: bytes) -> str:
 
 def prepare_fixture(
     fixture_path: Path,
+    expected_source_raw_table: str,
     target_id: str,
     target_group: str,
     repository: str,
@@ -661,6 +692,11 @@ def prepare_fixture(
     if schema_path is not None:
         schema_path = schema_path.resolve()
     rows, table_name, datetime_columns = load_fixture_csv(fixture_path)
+    if table_name != expected_source_raw_table:
+        raise ValueError(
+            f"Fixture Type must be {expected_source_raw_table!r}; "
+            f"found {table_name!r}."
+        )
     schema, resolved_schema_path, schema_source = _resolve_schema(
         fixture_path,
         table_name,
@@ -668,6 +704,7 @@ def prepare_fixture(
         datetime_columns,
         schema_path,
     )
+    schema = _adapt_schema_to_rows(schema, rows)
     if target_slot < 0 or target_slot >= target_count:
         raise ValueError(
             "target_slot must be between 0 and target_count - 1."
@@ -790,6 +827,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         "prepare", help="Prepare one ASIM fixture artifact."
     )
     prepare.add_argument("fixture", type=Path)
+    prepare.add_argument(
+        "--expected-source-raw-table",
+        required=True,
+    )
     prepare.add_argument("--target-id", required=True)
     prepare.add_argument("--target-group", required=True)
     prepare.add_argument(
@@ -826,6 +867,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             artifact = prepare_fixture(
                 fixture_path=args.fixture,
+                expected_source_raw_table=args.expected_source_raw_table,
                 target_id=args.target_id,
                 target_group=args.target_group,
                 repository=args.repository,

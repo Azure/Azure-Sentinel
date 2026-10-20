@@ -22,6 +22,12 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.temp_directory = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.temp_directory.name)
         self.write_dcr_output_stream("Custom-Contoso_CL")
+        self.write_fixture(
+            "Contoso",
+            "Contoso",
+            "Authentication",
+            "Contoso_CL",
+        )
 
     def tearDown(self):
         self.temp_directory.cleanup()
@@ -63,6 +69,28 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         )
         return path
 
+    def write_fixture(
+        self,
+        event_vendor,
+        event_product,
+        schema,
+        source_table,
+    ):
+        relative_path = (
+            "Sample Data/ASIM/"
+            f"{event_vendor}_{event_product}_{schema}_{source_table}"
+            "_IngestedLogs.csv"
+        )
+        path = self.repo_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "TimeGenerated,Type,EventType\n"
+            f"2026-10-19T00:00:00Z,{source_table},Login\n"
+            f"2026-10-19T00:00:01Z,{source_table},Logout\n",
+            encoding="utf-8",
+        )
+        return relative_path
+
     def query_parser(
         self,
         parser_name="ASimAuthenticationContoso",
@@ -70,8 +98,19 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         schema="Authentication",
         schema_version="1.0.0",
         source_table="Contoso_CL",
+        parser_query=None,
     ):
         parser_suffix = parser_name.removeprefix(f"ASim{schema}")
+        if parser_query is None:
+            parser_query = (
+                "let parser=(disabled:bool=false, pack:bool=false) {\n"
+                f"  {source_table}\n"
+                "  | where not(disabled)\n"
+                '  | where EventType == "Login"\n'
+                "  | project TimeGenerated, EventType\n"
+                "};\n"
+                "parser(disabled=false, pack=true)"
+            )
         return {
             "Parser": {
                 "Title": f"{product} query-time parser",
@@ -86,17 +125,10 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "ParserName": parser_name,
             "EquivalentBuiltInParser": f"_ASim_{schema}_{parser_suffix}",
             "ParserParams": [
-                {"Name": "disabled", "Type": "bool", "Default": False}
+                {"Name": "disabled", "Type": "bool", "Default": False},
+                {"Name": "pack", "Type": "bool", "Default": False},
             ],
-            "ParserQuery": (
-                "let parser=(disabled:bool=false) {\n"
-                f"  {source_table}\n"
-                "  | where not(disabled)\n"
-                '  | where EventType == "Login"\n'
-                "  | project TimeGenerated, EventType\n"
-                "};\n"
-                "parser(disabled=false)"
-            ),
+            "ParserQuery": parser_query,
         }
 
     def ingest_parser(
@@ -108,13 +140,22 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         source_table="Contoso_CL",
         target_table="ASimAuthenticationEventLogs",
         parser_filter_query='source\n| where EventType == "Login"',
-        parser_query=(
-            'source\n| where EventType == "Login"\n'
-            "| project TimeGenerated, EventType"
-        ),
+        parser_query=None,
         dcr_type="Standard",
         input_stream="Custom-Contoso_CL",
+        event_vendor=None,
+        event_product=None,
     ):
+        event_vendor = event_vendor or product
+        event_product = event_product or product
+        if parser_query is None:
+            parser_query = (
+                'source\n| where EventType == "Login"\n'
+                f'| extend EventVendor = "{event_vendor}", '
+                f'EventProduct = "{event_product}"\n'
+                "| project TimeGenerated, EventType, "
+                "EventVendor, EventProduct"
+            )
         return {
             "Parser": {
                 "DisplayName": f"{product} ingestion-time parser",
@@ -228,6 +269,106 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertIsNone(target["queryTimeParserPath"])
         self.assertEqual(2, len(target["pairCandidates"]))
 
+    def test_identity_match_still_requires_product_agreement(self):
+        query_path = (
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        self.write_yaml(
+            query_path,
+            self.query_parser(product="Different Product"),
+        )
+        self.write_yaml(ingest_path, self.ingest_parser())
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [ingest_path]
+        )["targets"][0]
+
+        self.assertEqual("unpaired", target["pairStatus"])
+        self.assertIsNone(target["queryTimeParserPath"])
+
+    def test_qtp_identifier_must_be_used_as_a_source_table(self):
+        query_path = (
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        self.write_yaml(
+            query_path,
+            self.query_parser(
+                parser_query=(
+                    "let parser=(disabled:bool=false) {\n"
+                    "  Other_CL\n"
+                    "  | extend Contoso_CL = EventType\n"
+                    "  | project TimeGenerated\n"
+                    "};\n"
+                    "parser(disabled=false)"
+                )
+            ),
+        )
+        self.write_yaml(ingest_path, self.ingest_parser())
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [ingest_path]
+        )["targets"][0]
+
+        self.assertEqual("unpaired", target["pairStatus"])
+
+    def test_resolves_source_table_specific_fixture_metadata(self):
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        self.write_yaml(ingest_path, self.ingest_parser())
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [ingest_path]
+        )["targets"][0]
+
+        self.assertEqual("Contoso", target["eventVendor"])
+        self.assertEqual("Contoso", target["eventProduct"])
+        self.assertEqual(
+            "Sample Data/ASIM/"
+            "Contoso_Contoso_Authentication_Contoso_CL"
+            "_IngestedLogs.csv",
+            target["fixturePath"],
+        )
+        self.assertEqual("resolved", target["fixtureStatus"])
+        self.assertEqual([], target["discoveryErrors"])
+
+    def test_non_static_event_product_blocks_fixture_resolution(self):
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        self.write_yaml(
+            ingest_path,
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| extend EventVendor = "Contoso", '
+                    "EventProduct = ProductName\n"
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [ingest_path]
+        )["targets"][0]
+
+        self.assertEqual("invalid", target["fixtureStatus"])
+        self.assertIsNone(target["fixturePath"])
+        self.assertTrue(target["discoveryErrors"])
+
     def test_deduplicates_target_when_both_parser_files_change(self):
         query_path = (
             "Parsers/ASimAuthentication/Parsers/"
@@ -250,22 +391,128 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             manifest["targets"][0]["triggerPaths"],
         )
 
-    def test_query_time_parser_without_ingestion_counterpart_is_query_only(self):
+    def test_deduplicates_itp_qtp_and_fixture_triggers(self):
+        query_path = (
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        fixture_path = (
+            "Sample Data/ASIM/"
+            "Contoso_Contoso_Authentication_Contoso_CL"
+            "_IngestedLogs.csv"
+        )
+        self.write_yaml(query_path, self.query_parser())
+        self.write_yaml(ingest_path, self.ingest_parser())
+
+        manifest = VALIDATION.build_validation_manifest(
+            self.repo_root,
+            [fixture_path, query_path, ingest_path],
+        )
+
+        self.assertEqual(1, len(manifest["targets"]))
+        self.assertEqual(
+            sorted([fixture_path, query_path, ingest_path]),
+            manifest["targets"][0]["triggerPaths"],
+        )
+
+    def test_fixture_change_selects_standalone_ingestion_target(self):
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        fixture_path = (
+            "Sample Data/ASIM/"
+            "Contoso_Contoso_Authentication_Contoso_CL"
+            "_IngestedLogs.csv"
+        )
+        self.write_yaml(ingest_path, self.ingest_parser())
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [fixture_path]
+        )["targets"][0]
+
+        self.assertEqual("unpaired", target["pairStatus"])
+        self.assertEqual("ingest-only", target["validationKind"])
+        self.assertEqual(fixture_path, target["fixturePath"])
+        self.assertEqual([fixture_path], target["triggerPaths"])
+
+    def test_query_change_selects_every_mapped_ingestion_target(self):
+        query_path = (
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        first_ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContosoFirst.yaml"
+        )
+        second_ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContosoSecond.yaml"
+        )
+        self.write_yaml(
+            query_path,
+            self.query_parser(
+                parser_query=(
+                    "let parser=(disabled:bool=false, pack:bool=false) {\n"
+                    "  union First_CL, Second_CL\n"
+                    "  | where not(disabled)\n"
+                    "  | project TimeGenerated, EventType\n"
+                    "};\n"
+                    "parser(disabled=false, pack=true)"
+                )
+            ),
+        )
+        self.write_yaml(
+            first_ingest_path,
+            self.ingest_parser(
+                parser_name="ASimAuthenticationContosoFirst",
+                source_table="First_CL",
+                input_stream="Custom-First_CL",
+            ),
+        )
+        self.write_yaml(
+            second_ingest_path,
+            self.ingest_parser(
+                parser_name="ASimAuthenticationContosoSecond",
+                source_table="Second_CL",
+                input_stream="Custom-Second_CL",
+            ),
+        )
+
+        targets = VALIDATION.build_validation_manifest(
+            self.repo_root, [query_path]
+        )["targets"]
+
+        self.assertEqual(2, len(targets))
+        self.assertEqual(
+            {first_ingest_path, second_ingest_path},
+            {
+                target["ingestTimeParserPath"]
+                for target in targets
+            },
+        )
+        self.assertTrue(
+            all(target["triggerPaths"] == [query_path] for target in targets)
+        )
+
+    def test_query_time_parser_without_ingestion_counterpart_adds_no_target(self):
         query_path = (
             "Parsers/ASimAuthentication/Parsers/"
             "ASimAuthenticationContoso.yaml"
         )
         self.write_yaml(query_path, self.query_parser())
 
-        target = VALIDATION.build_validation_manifest(
+        manifest = VALIDATION.build_validation_manifest(
             self.repo_root, [query_path]
-        )["targets"][0]
+        )
 
-        self.assertEqual("query-only", target["validationKind"])
-        self.assertEqual("unpaired", target["pairStatus"])
-        self.assertIsNone(target["ingestTimeParserPath"])
+        self.assertEqual([], manifest["targets"])
 
-    def test_invalid_changed_query_parser_is_preserved_in_manifest(self):
+    def test_invalid_changed_query_parser_is_left_to_existing_qtp_ci(self):
         query_path = (
             "Parsers/ASimAuthentication/Parsers/"
             "ASimAuthenticationBroken.yaml"
@@ -274,13 +521,17 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("ParserName: Broken\nParserName: Duplicate\n")
 
-        target = VALIDATION.build_validation_manifest(
+        manifest = VALIDATION.build_validation_manifest(
             self.repo_root, [query_path]
-        )["targets"][0]
+        )
 
-        self.assertEqual("invalid", target["pairStatus"])
-        self.assertEqual(query_path, target["queryTimeParserPath"])
-        self.assertTrue(target["discoveryErrors"])
+        self.assertEqual([], manifest["targets"])
+        self.assertTrue(
+            any(
+                error["path"] == query_path
+                for error in manifest["indexErrors"]
+            )
+        )
 
     def test_valid_ingestion_parser_passes_contract_validation(self):
         query_path = self.write_yaml(
@@ -301,6 +552,100 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertTrue(result["valid"], result["findings"])
         self.assertEqual([], result["findings"])
         self.assertTrue(result["connectorEvidence"])
+        self.assertEqual(
+            "resolved", result["fixtureResolution"]["status"]
+        )
+        self.assertEqual(
+            "eligible", result["queryTimeEligibility"]["status"]
+        )
+        self.assertTrue(
+            result["queryTimeEligibility"]["supportsDisabled"]
+        )
+        self.assertTrue(result["queryTimeEligibility"]["supportsPack"])
+
+    def test_standalone_ingestion_parser_is_valid_without_qtp(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(
+            "not-applicable",
+            result["queryTimeEligibility"]["status"],
+        )
+
+    def test_qtp_mismatch_blocks_optional_stages_only(self):
+        query_path = self.write_yaml(
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.query_parser(
+                product="Different Product",
+                schema_version="9.9.9",
+            ),
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(
+            ingest_path, query_time_path=query_path
+        )
+
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(
+            "blocked", result["queryTimeEligibility"]["status"]
+        )
+        pair_findings = [
+            finding
+            for finding in result["findings"]
+            if finding["code"].startswith("PAIR")
+        ]
+        self.assertEqual(["PAIR004"], [
+            finding["code"] for finding in pair_findings
+        ])
+        self.assertTrue(
+            all(
+                finding["severity"] == "blocked"
+                for finding in pair_findings
+            )
+        )
+
+    def test_malformed_qtp_blocks_optional_stages_only(self):
+        query_path = (
+            self.repo_root
+            / "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        query_path.parent.mkdir(parents=True, exist_ok=True)
+        query_path.write_text(
+            "ParserName: ASimAuthenticationContoso\n"
+            "ParserName: Duplicate\n",
+            encoding="utf-8",
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(
+            ingest_path, query_time_path=query_path
+        )
+
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(
+            "blocked", result["queryTimeEligibility"]["status"]
+        )
+        self.assertIn(
+            "PAIR001",
+            {finding["code"] for finding in result["findings"]},
+        )
 
     def test_rejects_target_table_that_does_not_match_schema(self):
         ingest_path = self.write_yaml(
@@ -343,6 +688,12 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertIn("SOURCE002", codes)
 
     def test_workspace_parser_accepts_none_without_dcr_evidence(self):
+        self.write_fixture(
+            "Legacy",
+            "Legacy",
+            "Authentication",
+            "Legacy_CL",
+        )
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationLegacy.yaml",
@@ -412,7 +763,10 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "let selectedType = 'Login';\n"
             "source\n"
             "| where EventType == selectedType\n"
-            "| project TimeGenerated, EventType"
+            '| extend EventVendor = "Contoso", '
+            'EventProduct = "Contoso"\n'
+            "| project TimeGenerated, EventType, "
+            "EventVendor, EventProduct"
         )
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
@@ -496,7 +850,10 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                     'source\n| where EventType == "Login"\n'
                     '// | join OtherTable on EventUid\n'
                     '| extend Message = "coalesce(join)"\n'
-                    "| project TimeGenerated, EventType, Message"
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, Message, "
+                    "EventVendor, EventProduct"
                 )
             ),
         )
@@ -555,6 +912,12 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
                 "Parsers/ASimWebSession/Parsers/"
                 "ASimWebSessionSalesforceServiceCloud.yaml",
         }
+        missing_fixture_parsers = {
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationOktaV2.yaml",
+            "Parsers/ASimNetworkSession/IngestTimeParsers/"
+            "ASimNetworkSessionAWSVPC.yaml",
+        }
         manifest = VALIDATION.build_validation_manifest(
             repo_root, list(pairs.keys())
         )
@@ -564,16 +927,38 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
             for target in manifest["targets"]
         }
         self.assertEqual(pairs, manifest_pairs)
+        targets_by_path = {
+            target["ingestTimeParserPath"]: target
+            for target in manifest["targets"]
+        }
 
         for ingest_path, query_path in pairs.items():
             result = VALIDATION.validate_ingest_time_parser(
                 repo_root / ingest_path,
                 query_time_path=repo_root / query_path,
             )
-            self.assertTrue(
-                result["valid"],
-                f"{ingest_path}: {result['findings']}",
-            )
+            if ingest_path in missing_fixture_parsers:
+                self.assertFalse(result["valid"])
+                self.assertEqual(
+                    "missing",
+                    targets_by_path[ingest_path]["fixtureStatus"],
+                )
+                self.assertIn(
+                    "FIXTURE002",
+                    {
+                        finding["code"]
+                        for finding in result["findings"]
+                    },
+                )
+            else:
+                self.assertTrue(
+                    result["valid"],
+                    f"{ingest_path}: {result['findings']}",
+                )
+                self.assertEqual(
+                    "resolved",
+                    targets_by_path[ingest_path]["fixtureStatus"],
+                )
 
 
 if __name__ == "__main__":
