@@ -534,7 +534,7 @@ class CleanupTests(unittest.TestCase):
 
 class WorkflowTopologyTests(unittest.TestCase):
     def setUp(self):
-        self.repo_root = Path(__file__).resolve().parents[4]
+        self.repo_root = Path(__file__).resolve().parents[5]
         self.legacy_path = (
             self.repo_root
             / ".github/workflows/runAsimSchemaAndDataTesters.yaml"
@@ -641,6 +641,17 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertIn(
             '"$ARTIFACT_DIR/ingest-time-parser.yaml"',
             workflow,
+        )
+
+    def test_trusted_helpers_are_restored_from_ingest_time_subfolder(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            3,
+            workflow.count(
+                "origin/master:.script/tests/asimParsersTest/"
+                "ingestTimeParser/$helper"
+            ),
         )
 
 

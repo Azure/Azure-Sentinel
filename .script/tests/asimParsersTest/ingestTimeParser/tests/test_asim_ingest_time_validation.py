@@ -905,7 +905,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
 class CurrentRepositoryIngestionParserTests(unittest.TestCase):
     def test_current_ingestion_parsers_validate_and_pair(self):
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = Path(__file__).resolve().parents[5]
         pairs = {
             "Parsers/ASimAlertEvent/IngestTimeParsers/"
             "ASimAlertEventAWSGuardDuty.yaml":

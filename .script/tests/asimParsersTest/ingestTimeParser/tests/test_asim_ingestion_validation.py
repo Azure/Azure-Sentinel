@@ -153,7 +153,7 @@ class FilterValidationTests(unittest.TestCase):
 
     def validator(self):
         return VALIDATION.AsimIngestionValidator(
-            Path(__file__).resolve().parents[4]
+            Path(__file__).resolve().parents[5]
         )
 
     def test_selective_filter_reports_selected_and_rejected_rows(self):
@@ -561,7 +561,7 @@ class ParityTests(unittest.TestCase):
 class OutputValidationTests(unittest.TestCase):
     def validator(self):
         return VALIDATION.AsimIngestionValidator(
-            Path(__file__).resolve().parents[4]
+            Path(__file__).resolve().parents[5]
         )
 
     def parser_document(self):

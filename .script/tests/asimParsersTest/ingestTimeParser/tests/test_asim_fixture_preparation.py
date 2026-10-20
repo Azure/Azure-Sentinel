@@ -555,7 +555,7 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
 
     def test_prepares_real_guardduty_fixture(self):
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = Path(__file__).resolve().parents[5]
         fixture = (
             repo_root
             / "Sample Data/ASIM/"
@@ -599,7 +599,7 @@ class FixturePreparationTests(unittest.TestCase):
         )
 
     def test_prepares_all_available_source_specific_fixtures(self):
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = Path(__file__).resolve().parents[5]
         cases = (
             (
                 "CrowdStrike_Falcon_AlertEvent_"
@@ -646,7 +646,7 @@ class FixturePreparationTests(unittest.TestCase):
                 )
 
     def test_salesforce_fixtures_include_rejected_filter_rows(self):
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = Path(__file__).resolve().parents[5]
         cases = (
             (
                 "Salesforce_Service Cloud_Authentication_"
