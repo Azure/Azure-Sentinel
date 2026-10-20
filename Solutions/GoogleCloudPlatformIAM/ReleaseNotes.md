@@ -1,5 +1,6 @@
- **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+| **Version** | **Date Modified (DD-MM-YYYY)**| **Change History**                                                                         |
 |------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.2.2      | 20-04-2026                    | Added 10 Defender XDR Custom Detections migrated from the existing Analytic Rules and hybrid V3.1 solution packaging. |
 | 3.0.7      | 28-08-2025                    | Improved type handling in the parser query by explicitly converting certain fields to bool and datetime.|
 | 3.0.6      | 31-07-2025                    | Removed deprecated **Data Connector** |
 | 3.0.5      | 27-06-2025                    | GoogleCloudPlatformIAM **CCF Data Connector** moving to GA |
