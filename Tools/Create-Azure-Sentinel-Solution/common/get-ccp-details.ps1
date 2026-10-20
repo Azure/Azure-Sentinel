@@ -1,27 +1,45 @@
+function Read-ContainedSolutionJson($filePath, $solutionRoot, $solutionName) {
+    $relativePath = [System.IO.Path]::GetRelativePath(
+        [System.IO.Path]::GetFullPath($solutionRoot),
+        [System.IO.Path]::GetFullPath($filePath)
+    )
+    $resolved = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $relativePath `
+        -RequireFile
+    return ReadFileContent -filePath $resolved.FullPath
+}
 
 function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFolderName) {
     try {
+    $dataFileMetadata = Convert-SolutionDataContentArrays -Content $dataFileMetadata
     $ccpDict = @()
     $dataConnectorsInputArray = $dataFileMetadata.PsObject.Properties | Where-Object { $_.Name -eq "$DCFolderName" };
+    $solutionRoot = Join-Path -Path $baseFolderPath -ChildPath $solutionName
+    $resolvedConnectorFolder = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $DCFolderName
+    $identifiedDCPath = $resolvedConnectorFolder.FullPath
 
     # IDENTIFY CCP DATA DEFINITION IN DATA INPUT FILE
     foreach ($objectProperties in $dataConnectorsInputArray) {
         $items = $objectProperties.Value 
-        if ($items -is [System.String]) {
-            $items = $items | ConvertFrom-Json
+        if ($items -isnot [array]) {
+            throw "Solution Data content array '$DCFolderName' must be a JSON-encoded or native array."
         }
-
         foreach ($file in $items) {
-            $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
-
-            $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
+            $resolvedDefinition = Resolve-SolutionContentPath `
+                -SolutionRoot $solutionRoot `
+                -SolutionName $solutionName `
+                -ContentPath $file `
+                -RequireFile
+            $file = $resolvedDefinition.RelativePath
+            $currentFileDCPath = $resolvedDefinition.FullPath
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
-            # Resolve to absolute path for proper comparison later
-            $ccpBaseFolderPath = (Resolve-Path -Path $ccpBaseFolderPath).Path -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
-            #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
-            
-            $fileContent = ReadFileContent -filePath "$currentFileDCPath"
+            $fileContent = Read-ContainedSolutionJson -filePath $currentFileDCPath -solutionRoot $solutionRoot -solutionName $solutionName
             if ($null -eq $fileContent) {
                 exit 1;
             }
@@ -126,12 +144,10 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
     # identify ccp files definition provided has corresponding poller files if no then fail it.
     if ($ccpDict.Count -gt 0) {
-        $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
-        
         # identify relation between definition and poller files
         foreach ($ccpDefinitionFile in $ccpDict) {
             #identify given file is present in dc folder or not
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpDefinitionFile.CCPBaseFolder -or
                 ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -143,7 +159,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     try
                     {
                         #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                        $fileContent = ReadFileContent -filePath $inputFile.FullName
+                        $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                         if ($null -eq $fileContent) {
                             exit 1;
                         }
@@ -235,7 +251,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
         
         # identify relation between poller and DCR
         foreach ($ccpPollerFile in $ccpDict) {
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpPollerFile.CCPBaseFolder -or
                 $inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -245,7 +261,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 }
                 else {
                     #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                     if ($null -eq $fileContent) {
                         exit 1;
                     }
@@ -339,7 +355,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
         # identify relation between DCR and table
         foreach ($ccpTable in $ccpDict) {
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpTable.CCPBaseFolder -or
                 $inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -349,7 +365,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 }
                 else {
                     #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                     if ($null -eq $fileContent) {
                         exit 1;
                     }
@@ -395,18 +411,25 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
     return $ccpDict;
   }
   catch {
-    Write-Host "Error in get-ccpdetails. Error Details: $_" -ForegroundColor Red
-    return $null;
+    throw "Error in get-ccpdetails. Error Details: $_"
   }
 }
 
 function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, $DCFolderName) {
     # call this only when there are atleast 1 ccp connector
     $ccpTablesFilePaths = @()
-    $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
+    $solutionRoot = Join-Path -Path $baseFolderPath -ChildPath $solutionName
+    $resolvedConnectorFolder = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $DCFolderName
+    $identifiedDCPath = $resolvedConnectorFolder.FullPath
+    if (-not (Test-Path -LiteralPath $identifiedDCPath -PathType Container)) {
+        throw "Solution Data Connector folder does not exist: $identifiedDCPath"
+    }
     #$currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $identifiedDCPath).Replace("//", "/")
 
-    foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+    foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
         if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
         $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
         {
@@ -414,7 +437,7 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
         }
         else {
             #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-            $fileContent = ReadFileContent -filePath $inputFile.FullName
+            $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
             if ($null -eq $fileContent) {
                 exit 1;
             }
