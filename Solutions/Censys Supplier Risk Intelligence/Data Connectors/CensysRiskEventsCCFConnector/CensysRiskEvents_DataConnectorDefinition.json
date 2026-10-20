@@ -1,0 +1,255 @@
+{
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "apiVersion": "2022-09-01-preview",
+  "name": "CensysRiskEventsCCPDefinition",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "CensysRiskEventsCCPDefinition",
+      "title": "Censys Supply Chain Risk Events (via Codeless Connector Framework)",
+      "publisher": "Censys",
+      "descriptionMarkdown": "This connector ingests the Censys Supplier Risk Intelligence risk-events change feed (`/v1/supplychains/default/risk-events`) into Microsoft Sentinel. `default` resolves to the single supply chain associated with the Censys organization. The feed is append-only and delivers `opened`, `resolved`, and `reopened` state transitions for risk instances, each carrying a full snapshot of the risk instance at the time of the change.",
+      "graphQueriesTableName": "CensysRiskEvents_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total risk events received",
+          "legend": "Censys Supply Chain Risk Events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get a sample of Censys risk events",
+          "query": "{{graphQueriesTableName}}\n| take 10"
+        },
+        {
+          "description": "Newly opened critical and high severity risks",
+          "query": "{{graphQueriesTableName}}\n| where ChangeType in ('opened', 'reopened')\n| where Severity in ('CRITICAL', 'HIGH')\n| project TimeGenerated, Severity, RiskName, SupplierDisplayName, AssetIp, AssetHostname, PlatformUrl\n| order by TimeGenerated desc"
+        },
+        {
+          "description": "Rapid response findings (actively exploited)",
+          "query": "{{graphQueriesTableName}}\n| where RapidResponse == true and ChangeType in ('opened', 'reopened')\n| project TimeGenerated, Severity, CveId, RiskName, SupplierDisplayName, AssetIp, Evidence, PlatformUrl"
+        },
+        {
+          "description": "Currently open risks per supplier (latest event per instance)",
+          "query": "{{graphQueriesTableName}}\n| summarize arg_max(InsertedAt, *) by RiskInstanceId\n| where Status == 'open'\n| summarize OpenRisks = count() by SupplierDisplayName, Severity\n| order by OpenRisks desc"
+        },
+        {
+          "description": "Risk events mapped to known CVEs",
+          "query": "{{graphQueriesTableName}}\n| where isnotempty(CveId)\n| summarize AffectedAssets = dcount(RiskInstanceId) by CveId, Severity\n| order by AffectedAssets desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          },
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+            "permissionsDisplayText": "read permissions to shared keys for the workspace are required.",
+            "providerDisplayName": "Keys",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "action": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Censys Personal Access Token",
+            "description": "A Censys personal access token, created at https://accounts.censys.io/settings/personal-access-tokens. Users on Starter, Search, and Core plans require the API Access role."
+          },
+          {
+            "name": "Censys Organization ID",
+            "description": "The UUID of the Censys organization whose risk events should be collected. Risk events are collected from the organization's default supply chain, so the organization must have a supply chain."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Obtain Censys credentials",
+          "description": "Create a personal access token at [Censys account settings](https://accounts.censys.io/settings/personal-access-tokens). Users on Starter, Search, and Core plans need the API Access role. Copy the organization ID of the Censys organization and, optionally, the ID(s) of the supplier(s) you want to restrict collection to.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "Create a personal access token at [Censys account settings](https://accounts.censys.io/settings/personal-access-tokens). Users on Starter, Search, and Core plans need the API Access role. Copy the organization ID of the Censys organization and, optionally, the ID(s) of the supplier(s) you want to restrict collection to."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Connect Censys to Microsoft Sentinel",
+          "description": "Enter the personal access token and organization ID, optionally set the initial start time and narrow what is collected using the supplier IDs and filters, then select Connect.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Personal Access Token",
+                "type": "password",
+                "name": "apikey",
+                "placeholder": "Enter your Censys personal access token",
+                "required": true
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Organization ID",
+                "type": "text",
+                "name": "organizationId",
+                "placeholder": "00000000-0000-0000-0000-000000000000",
+                "required": true
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Optional filters\nAll settings below are optional. Leave a filter empty to collect everything for that dimension - an empty filter is not sent to the Censys API at all. Leave the initial start time empty to collect the full history (all events Censys still retains). Risk events are always collected from the organization's default supply chain."
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Initial start time (UTC)",
+                "type": "text",
+                "name": "initialStartTime",
+                "placeholder": "Keep empty for full history",
+                "required": false
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Supplier IDs",
+                "type": "text",
+                "name": "supplierIds",
+                "placeholder": "Comma-separated supplier UUIDs, for example 00000000-0000-0000-0000-000000000000,11111111-1111-1111-1111-111111111111",
+                "required": false
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Risk type IDs",
+                "type": "text",
+                "name": "riskTypeIds",
+                "placeholder": "Comma-separated CVE IDs or Censys catalog IDs, for example CVE-2021-44228,CENSYS-2022-1194",
+                "required": false
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Change type",
+                "name": "changeTypes",
+                "options": [
+                  {
+                    "key": "opened",
+                    "text": "opened - risk instance newly opened"
+                  },
+                  {
+                    "key": "resolved",
+                    "text": "resolved - risk instance resolved"
+                  },
+                  {
+                    "key": "reopened",
+                    "text": "reopened - previously resolved risk instance opened again"
+                  }
+                ],
+                "placeholder": "All change types",
+                "isMultiSelect": true,
+                "defaultAllSelected": false,
+                "required": false
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Severity",
+                "name": "severity",
+                "options": [
+                  {
+                    "key": "CRITICAL",
+                    "text": "CRITICAL"
+                  },
+                  {
+                    "key": "HIGH",
+                    "text": "HIGH"
+                  },
+                  {
+                    "key": "MEDIUM",
+                    "text": "MEDIUM"
+                  },
+                  {
+                    "key": "LOW",
+                    "text": "LOW"
+                  }
+                ],
+                "placeholder": "All severities",
+                "isMultiSelect": true,
+                "defaultAllSelected": false,
+                "required": false
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Rapid response",
+                "name": "rapidResponse",
+                "options": [
+                  {
+                    "key": "true",
+                    "text": "Only rapid response (actively exploited) findings"
+                  },
+                  {
+                    "key": "false",
+                    "text": "Exclude rapid response findings"
+                  }
+                ],
+                "placeholder": "Both rapid response and non-rapid response findings",
+                "isMultiSelect": false,
+                "defaultAllSelected": false,
+                "required": false
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ],
+      "metadata": {
+        "version": "1.0.0",
+        "kind": "dataConnector"
+      }
+    }
+  }
+}

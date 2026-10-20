@@ -1,0 +1,89 @@
+id: 8a208922-5ef7-4721-ad8b-7f69e2163d79
+name: Censys SRI - Risk State Change
+version: 1.0.0
+kind: Scheduled
+status: Available
+requiredDataConnectors:
+  - connectorId: CensysSRIRiskEventsFunction
+    dataTypes:
+      - CensysRiskEvents_CL
+queryFrequency: 1h
+queryPeriod: 7d
+suppressionDuration: PT1H
+suppressionEnabled: false
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1195
+severity: Medium
+description: |
+  Creates one incident per supplier risk and keeps the whole life of that risk in it. An incident is opened when a risk is opened with CRITICAL or HIGH severity, or when any risk is reopened. Alerts are grouped by RiskInstanceId, so later reopened and resolved events for the same risk are added to the same incident while it is open.
+  A resolved event raises an alert only when the same risk has an opened (CRITICAL or HIGH) or reopened event in the last 7 days, so a resolved event never creates an incident on its own.
+  Alert severity follows the Censys severity: CRITICAL maps to High, HIGH to Medium, MEDIUM to Low, LOW to Informational. Rapid response findings (actively exploited) are always High. Resolved alerts are Informational.
+query: |
+  // New events are selected by the time they reached Sentinel (IngestedAt), not by the Censys insert time,
+  // so a delay between Censys and the connector can never make an event fall between two runs.
+  // Each run covers 60 minutes that end 5 minutes ago, and consecutive runs are contiguous, so no event is alerted twice.
+  // The 7 day query period is only used to look up earlier opened or reopened events of the same risk (matches the incident grouping look-back).
+  let Alertable = materialize(
+      CensysRiskEvents
+      | where ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH")));
+  let TrackedRisks = Alertable | distinct RiskInstanceId;
+  CensysRiskEvents
+  | where IngestedAt between (ago(65m) .. ago(5m))
+  | where (ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH")))
+      or (ChangeType == "resolved" and RiskInstanceId in (TrackedRisks))
+  | extend SentinelSeverity = case(
+      ChangeType == "resolved", "Informational",
+      RapidResponse == true, "High",
+      Severity == "CRITICAL", "High",
+      Severity == "HIGH", "Medium",
+      Severity == "MEDIUM", "Low",
+      "Informational")
+  | project TimeGenerated, IngestedAt, EventId, InsertedAt, OccurredAt, ChangeType, RiskInstanceId, Severity, SentinelSeverity,
+      RiskCategory, RiskName, Description, CveId, RapidResponse, SupplierDisplayName,
+      AssetName, AssetHostname, AssetIp, ServicePort, ServiceProtocol, Evidence, ResolveTime, ResolveReason, PlatformUrl
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AssetHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: AssetIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PlatformUrl
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - RiskInstanceId
+customDetails:
+  RiskInstanceId: RiskInstanceId
+  ChangeType: ChangeType
+  CensysSeverity: Severity
+  RiskCategory: RiskCategory
+  Supplier: SupplierDisplayName
+  CveId: CveId
+  RapidResponse: RapidResponse
+  Evidence: Evidence
+  ResolveReason: ResolveReason
+  ResolveTime: ResolveTime
+alertDetailsOverride:
+  alertDisplayNameFormat: "Censys: {{ChangeType}} risk - {{RiskName}} ({{SupplierDisplayName}})"
+  alertDescriptionFormat: "{{Description}} Asset: {{AssetName}}. Open in Censys: {{PlatformUrl}}"
+  alertSeverityColumnName: SentinelSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: PlatformUrl

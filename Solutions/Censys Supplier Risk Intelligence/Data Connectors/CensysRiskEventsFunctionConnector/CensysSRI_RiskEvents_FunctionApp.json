@@ -1,0 +1,132 @@
+{
+  "id": "CensysSRIRiskEventsFunction",
+  "title": "Censys Supplier Risk Intelligence (using Azure Functions)",
+  "publisher": "Censys",
+  "descriptionMarkdown": "The Censys Supplier Risk Intelligence data connector brings the Censys risk-events change feed (`/v1/supplychains/default/risk-events`) into Microsoft Sentinel using Azure Functions and the [Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview). The function runs on a schedule and remembers the `inserted_at` and `id` of the last event it ingested, so each run continues where the previous one stopped. Events are written to the table `CensysRiskEvents_CL` through a data collection endpoint and a data collection rule that the deployment template creates.",
+  "graphQueries": [
+    {
+      "metricName": "Total Censys risk events received",
+      "legend": "CensysRiskEvents_CL",
+      "baseQuery": "CensysRiskEvents_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All Censys risk events received, newest first.",
+      "query": "CensysRiskEvents_CL\n| sort by TimeGenerated desc"
+    },
+    {
+      "description": "Newly opened or reopened risks with critical or high severity.",
+      "query": "CensysRiskEvents_CL\n| where ChangeType in ('opened', 'reopened')\n| where Severity in ('CRITICAL', 'HIGH')\n| project TimeGenerated, Severity, RiskName, SupplierDisplayName, AssetIp, AssetHostname, PlatformUrl\n| order by TimeGenerated desc"
+    },
+    {
+      "description": "Rapid response findings (actively exploited).",
+      "query": "CensysRiskEvents_CL\n| where RapidResponse == true and ChangeType in ('opened', 'reopened')\n| project TimeGenerated, Severity, CveId, RiskName, SupplierDisplayName, AssetIp, Evidence, PlatformUrl"
+    },
+    {
+      "description": "Currently open risks per supplier (latest event per risk).",
+      "query": "CensysRiskEvents_CL\n| summarize arg_max(InsertedAt, *) by RiskInstanceId\n| where Status == 'open'\n| summarize OpenRisks = count() by SupplierDisplayName, Severity\n| order by OpenRisks desc"
+    },
+    {
+      "description": "Risk events mapped to known CVEs.",
+      "query": "CensysRiskEvents_CL\n| where isnotempty(CveId)\n| summarize AffectedAssets = dcount(RiskInstanceId) by CveId, Severity\n| order by AffectedAssets desc"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CensysRiskEvents_CL",
+      "lastDataReceivedQuery": "CensysRiskEvents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CensysRiskEvents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Microsoft.Web/sites permissions",
+        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+      },
+      {
+        "name": "REST API Credentials/permissions",
+        "description": "A Censys personal access token and the Censys Organization ID are required. Users on Starter, Search, and Core plans need the API Access role. [Create a token](https://accounts.censys.io/settings/personal-access-tokens)."
+      },
+      {
+        "name": "Microsoft Entra application",
+        "description": "An app registration with a client secret is required. Permission to create role assignments on the data collection rule (Owner or User Access Administrator) is required to give the application the Monitoring Metrics Publisher role."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Censys API to pull risk events into Microsoft Sentinel using the [Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview). The deployment template creates the table CensysRiskEvents_CL, a data collection endpoint and a data collection rule in the workspace. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+    },
+    {
+      "title": "",
+      "description": ">**(Optional Step)** Securely store the Censys API token and the client secret in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+    },
+    {
+      "title": "",
+      "description": "**STEP 1 - Steps to Create/Get a Censys Personal Access Token and Organization ID**\n\n Follow these instructions to get the values needed by this connector:\n 1. Sign in to Censys and open [Personal access tokens](https://accounts.censys.io/settings/personal-access-tokens).\n 2. Create a personal access token. Users on Starter, Search, and Core plans need the **API Access** role.\n 3. Copy the token. It is shown only once.\n 4. Copy the **Organization ID** (UUID) of the Censys organization you want to collect risk events for."
+    },
+    {
+      "title": "",
+      "description": "**STEP 2 - Get the name of the Log Analytics workspace**\n\n The deployment template creates the table, the data collection endpoint and the data collection rule in the workspace of Microsoft Sentinel, so deploy it in the resource group of that workspace. You need the **name** of the workspace (workspace Overview page)."
+    },
+    {
+      "title": "",
+      "description": "**STEP 3 - App Registration steps for the Application in Microsoft Entra ID**\n\n This integration requires an App registration in the Azure portal. Follow the steps in this section to create a new application in Microsoft Entra ID:\n 1. Sign in to the [Azure portal](https://portal.azure.com/).\n 2. Search for and select **Microsoft Entra ID**.\n 3. Under **Manage**, select **App registrations > New registration**.\n 4. Enter a display **Name** for your application.\n 5. Select **Register** to complete the initial app registration.\n 6. When registration finishes, the Azure portal displays the app registration's Overview pane. You see the **Application (client) ID** and **Tenant ID**. The client ID and Tenant ID are required as configuration parameters for the execution of the Censys SRI data connector. \n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app)"
+    },
+    {
+      "title": "",
+      "description": "**STEP 4 - Add a client secret for application in Microsoft Entra ID**\n\n Sometimes called an application password, a client secret is a string value required for the execution of the Censys SRI data connector. Follow the steps in this section to create a new Client Secret:\n 1. In the Azure portal, in **App registrations**, select your application.\n 2. Select **Certificates & secrets > Client secrets > New client secret**.\n 3. Add a description for your client secret.\n 4. Select an expiration for the secret or specify a custom lifetime. Limit is 24 months.\n 5. Select **Add**. \n 6. *Record the secret's value for use in your client application code. This secret value is never displayed again after you leave this page.* The secret value is required as configuration parameter for the execution of the Censys SRI data connector. \n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
+    },
+    {
+      "title": "",
+      "description": "**STEP 5 - Get Object ID of your application in Microsoft Entra ID**\n\n After creating your app registration, follow the steps in this section to get Object ID:\n 1. Go to **Microsoft Entra ID**.\n 2. Select **Enterprise applications** from the left menu.\n 3. Find your newly created application in the list (you can search by the name you provided).\n 4. Click on the application.\n 5. On the overview page, copy the **Object ID**. This is the **Azure_Entra_Object_Id** needed for your ARM template role assignment. The template gives this application the **Monitoring Metrics Publisher** role on the data collection rule, so no other role needs to be assigned."
+    },
+    {
+      "title": "",
+      "description": "**STEP 6 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Censys SRI data connector, have the Censys API token, the Organization ID, the Workspace name and the Azure credentials (Client ID, Client Secret, Tenant ID, Object ID) readily available."
+    },
+    {
+      "title": "Option 1 - Azure Resource Manager (ARM) Template",
+      "description": "Use this method for automated deployment of the Censys SRI connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fharsh-maradia%2FHarsh-Azure-Connectors%2Frefs%2Fheads%2Fmain%2FCensys-SRI-RiskEvents-1.0.0%2Fazuredeploy_CensysSRI_RiskEvents_FunctionApp.json)\n2. Select the preferred **Subscription** and **Resource Group**. Use the resource group of the Log Analytics workspace of Microsoft Sentinel. \n3. Enter the below information :  \n\n\t a. **FunctionName** - Name prefix of the Azure Function App to be created, up to 10 characters. Default is CensysSRI.\n\n\t b. **CensysApiToken** - Enter your Censys personal access token.\n\n\t c. **OrganizationId** - Enter the UUID of the Censys organization to collect risk events for.\n\n\t d. **InitialStartTime** - Optional. UTC time to start collecting from, for example 2026-10-01T00:00:00Z. Leave empty for full history (all events Censys still retains).\n\n\t e. **SupplierIds** - Optional. Comma-separated Censys supplier UUIDs. Leave empty for all suppliers.\n\n\t f. **RiskTypeIds** - Optional. Comma-separated Censys risk type IDs, up to 100: CVE IDs such as CVE-2021-44228 or Censys catalog IDs such as CENSYS-2022-1194, as listed in the Censys UI. Leave empty for all risk types.\n\n\t g. **ChangeTypes** - Optional. Comma-separated change types: opened, resolved, reopened. Leave empty for all.\n\n\t h. **Severity** - Optional. Comma-separated severities: CRITICAL, HIGH, MEDIUM, LOW. Leave empty for all.\n\n\t i. **RapidResponse** - Optional. Select true for rapid response findings only, false to exclude them. Leave empty for both.\n\n\t j. **Azure_Client_Id** - Enter Azure Client Id that you have created during app registration.\n\n\t k. **Azure_Client_Secret** - Enter Azure Client Secret that you have created during creating the client secret.\n\n\t l. **Azure_Tenant_Id** - Enter Azure Tenant Id of your Microsoft Entra ID.\n\n\t m. **Azure_Entra_Object_Id** - Enter Object id of your Microsoft Entra App.\n\n\t n. **WorkspaceName** - Name of the Log Analytics workspace of Microsoft Sentinel. The deployment creates the table CensysRiskEvents_CL, a data collection endpoint and a data collection rule in it.\n\n\t o. **Location** - Region of the data collection endpoint and rule. It must be the region of the workspace. Default is the region of the resource group.\n\n\t p. **Schedule** - Please enter a valid Quartz cron-expression. Default is 0 */30 * * * * (every 30 minutes).\n\n\t q. **AppInsightsWorkspaceResourceID** - Use 'Log Analytic Workspace > Properties' blade having 'Resource ID' property value. This is a fully qualified resource ID which is in format '/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/Microsoft.OperationalInsights/workspaces/{workspace-name}'.\n\n\t r. **LogLevel** - Select log level or log severity value from DEBUG, INFO, ERROR. By default it is set to INFO.\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
+    },
+    {
+      "title": "Option 2 - Manual Deployment of Azure Functions",
+      "description": "Use the following step-by-step instructions to deploy the Censys SRI data connector manually with Azure Functions (Deployment via Visual Studio Code)."
+    },
+    {
+      "title": "",
+      "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://github.com/harsh-maradia/Harsh-Azure-Connectors/raw/refs/heads/main/Censys-SRI-RiskEvents-1.0.0/CensysSRIRiskEvents.zip) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. CensysSRIXXXXX).\n\n\te. **Select a runtime:** Choose Python 3.10 or above.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration.\n8. In the Function App, enable the system-assigned managed identity if you want to use it for the function app storage.\n9. The manual method needs the table CensysRiskEvents_CL, a data collection endpoint and a data collection rule. Deploy the template of Option 1 once to create them, or create them yourself.\n10. Give the Microsoft Entra application the **Monitoring Metrics Publisher** role on the data collection rule: open the rule, select **Access control (IAM) > Add role assignment**, choose the role and select your application."
+    },
+    {
+      "title": "",
+      "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective values (case-sensitive): \n\n\t a. **CensysApiToken** - Enter your Censys personal access token.\n\n\t b. **OrganizationId** - Enter the UUID of the Censys organization.\n\n\t c. **InitialStartTime** - Optional. UTC start time, for example 2026-10-01T00:00:00Z. Leave empty for all events Censys still retains.\n\n\t d. **SupplierIds** - Optional. Comma-separated supplier UUIDs.\n\n\t e. **RiskTypeIds** - Optional. Comma-separated risk type IDs, up to 100 (CVE IDs or Censys catalog IDs as listed in the Censys UI).\n\n\t f. **ChangeTypes** - Optional. Comma-separated: opened, resolved, reopened.\n\n\t g. **Severity** - Optional. Comma-separated: CRITICAL, HIGH, MEDIUM, LOW.\n\n\t h. **RapidResponse** - Optional. true or false.\n\n\t i. **AZURE_CLIENT_ID** - Azure Client Id of your Microsoft Entra app.\n\n\t j. **AZURE_CLIENT_SECRET** - Client secret of your Microsoft Entra app.\n\n\t k. **AZURE_TENANT_ID** - Azure Tenant Id of your Microsoft Entra ID.\n\n\t l. **AZURE_DATA_COLLECTION_ENDPOINT** - Logs ingestion URL of the data collection endpoint created for this connector (Monitor > Data Collection Endpoints > the endpoint > Logs Ingestion).\n\n\t m. **AZURE_DATA_COLLECTION_RULE_ID** - Immutable ID of the data collection rule created for this connector (Monitor > Data Collection Rules > the rule > JSON View > immutableId).\n\n\t n. **StreamName** - Input stream of that data collection rule, Custom-CensysRiskEvents_CL.\n\n\t o. **SCOPE** - https://monitor.azure.com/.default\n\n\t p. **Schedule** - Quartz cron-expression. Default is 0 */30 * * * *.\n\n\t q. **LogLevel** - DEBUG, INFO or ERROR. Default is INFO.\n\n4. Once all application settings have been entered, click **Save**."
+    }
+  ]
+}
