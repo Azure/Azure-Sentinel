@@ -1,0 +1,142 @@
+{
+  "name": "PolySwarmFeedCCFDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "PolySwarmFeedCCFDefinition",
+      "title": "PolySwarm Curated Feed",
+      "publisher": "PolySwarm",
+      "descriptionMarkdown": "Brings PolySwarm's curated threat intelligence feed into Microsoft Sentinel as threat indicators, even if you have not set up any PolySwarm hunts.\n\nEach indicator is a file hash (SHA-256, SHA-1 or MD5) that PolySwarm's engines have convicted. They go into the [ThreatIntelIndicators](https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelindicators) table, where Microsoft Sentinel's built-in threat intelligence matching, the PolySwarm analytics rules and the hunting queries use them.\n\nThe feed carries the hash, a confidence score and how long the indicator stays valid. If you also want the malware family on every indicator, connect PolySwarm Hunting as well.\n\n**How much data.** This feed is large: about 500,000 indicators a day, roughly 0.5 GB a day, in our tests. Microsoft Sentinel charges for data it ingests, so check [Microsoft Sentinel pricing](https://azure.microsoft.com/pricing/details/microsoft-sentinel/) before you connect.",
+      "graphQueriesTableName": "ThreatIntelIndicators",
+      "graphQueries": [
+        {
+          "metricName": "Total curated feed indicators received",
+          "legend": "PolySwarm curated feed",
+          "baseQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm curated feed\"\n| summarize count() by bin(TimeGenerated, 1h)"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All PolySwarm curated feed indicators",
+          "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm curated feed\"\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "File hash indicators by hash type",
+          "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm curated feed\"\n| summarize count() by ObservableKey"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm curated feed\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "availability": {
+        "isPreview": false
+      },
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "A PolySwarm plan that includes the feed",
+            "description": "You need your PolySwarm account number and API key, both in your account settings at polyswarm.network. Your PolySwarm plan must include the feed you choose. If you are not sure which feeds your plan includes, ask PolySwarm support before connecting."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "description": "1. Sign in at [polyswarm.network](https://polyswarm.network) and open your account settings.\n2. Copy your **account number** into **PolySwarm Account Number** below.\n3. Copy your **API key** into **PolySwarm API Key** below.\n4. In **Feed**, choose the feed your PolySwarm plan includes. If you are not sure, choose the Trust Group 14-day feed.\n5. Leave **Polling window** at 60 minutes unless you have a reason to change it.\n6. Select **Connect**.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "PolySwarm Account Number",
+                "placeholder": "Your PolySwarm Team/Account number",
+                "type": "text",
+                "name": "accountNumber",
+                "required": true
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "PolySwarm API Key",
+                "placeholder": "Paste your PolySwarm API key",
+                "type": "password",
+                "name": "apiKey",
+                "required": true
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Feed",
+                "name": "feedRoot",
+                "placeholder": "Choose the feed your PolySwarm plan includes",
+                "isMultiSelect": false,
+                "required": true,
+                "options": [
+                  {
+                    "key": "trustgroup/collections/3f153afb-5bf5-5cca-bfe9-ee854d92658d",
+                    "text": "PolySwarm Trust Group, 14-day feed (recommended)"
+                  },
+                  {
+                    "key": "ransomware/collections/7b6bbecc-95cf-5317-a900-5bb7008eae93",
+                    "text": "Ransomware family feed"
+                  },
+                  {
+                    "key": "freemium/collections/019630e9-0cdb-5d7d-b8c1-120c793093ad",
+                    "text": "Freemium feed"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Polling window (minutes)",
+                "placeholder": "60",
+                "type": "number",
+                "name": "queryWindowInMin",
+                "defaultValue": "60",
+                "required": true
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "connect"
+              }
+            }
+          ],
+          "title": "Connect the PolySwarm Curated Feed"
+        },
+        {
+          "title": "What to expect after you connect",
+          "description": "**The fields look empty after you connect.** That is normal: Azure never shows a saved key, and the Feed box shows its hint text instead of your choice.\n\n**Connected, nothing yet.** This is normal for the first hour, because the first check runs on the polling window (60 minutes by default). If nothing arrives after that, your plan may not include the feed you chose. Ask PolySwarm support which feeds your plan includes.\n\n**Data arriving.** Run this query in Logs to see the feed:\n\n`ThreatIntelIndicators | where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm curated feed\"`\n\n**Something went wrong.** Usually the account number or API key is wrong. Disconnect, check both, and connect again. To check for errors, turn on health monitoring in your workspace settings, then run this query in Logs:\n\n`SentinelHealth | where SentinelResourceType == \"Data connector\" and SentinelResourceName has \"PolySwarm\"`"
+        }
+      ]
+    }
+  }
+}

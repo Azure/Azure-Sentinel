@@ -1,0 +1,123 @@
+{
+  "name": "PolySwarmHuntingCCFDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "PolySwarmHuntingCCFDefinition",
+      "title": "PolySwarm Hunting",
+      "publisher": "PolySwarm",
+      "descriptionMarkdown": "Brings the files your PolySwarm hunts find into Microsoft Sentinel as threat indicators.\n\nA hunt is a YARA rule you set up at [polyswarm.network](https://polyswarm.network). Every time a file anywhere on PolySwarm matches one of your rules, this connector adds that file's SHA-256, SHA-1 and MD5 to the [ThreatIntelIndicators](https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelindicators) table. Microsoft Sentinel's built-in threat intelligence matching, the PolySwarm analytics rules and the hunting queries then use them like any other indicator.\n\nYou need live hunts in PolySwarm first. Without them this connector has nothing to bring in, and that is normal.",
+      "graphQueriesTableName": "ThreatIntelIndicators",
+      "graphQueries": [
+        {
+          "metricName": "Total hunt hits received",
+          "legend": "PolySwarm hunting",
+          "baseQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\"\n| summarize count() by bin(TimeGenerated, 1h)"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All PolySwarm hunt hits",
+          "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\"\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Hunt hits by rule name",
+          "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\"\n| extend RuleName = tostring(AdditionalFields.rule_name)\n| summarize count() by RuleName\n| sort by count_ desc"
+        },
+        {
+          "description": "High-confidence hunt hits (PolyScore-derived confidence at or above 90)",
+          "query": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\" and Confidence >= 90\n| sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "availability": {
+        "isPreview": false
+      },
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "PolySwarm API access",
+            "description": "You need a PolySwarm API key. You find it in your account settings at polyswarm.network. Your hunts must be in the public community or in a private community whose short name you know."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "description": "1. Sign in at [polyswarm.network](https://polyswarm.network), open your account settings and copy your API key.\n2. Paste the key into **PolySwarm API Key** below.\n3. Leave **Community** as `public` unless your hunts run in a private community. For a private community, type its short name (lowercase, no spaces, for example `acme`), not its display name. PolySwarm support can tell you the short name.\n4. Leave **Polling window** at 15 minutes unless you have a reason to change it.\n5. Select **Connect**.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "PolySwarm API Key",
+                "placeholder": "Paste your PolySwarm API key",
+                "type": "password",
+                "name": "apiKey",
+                "required": true
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Community",
+                "placeholder": "public, or your private community short name",
+                "type": "text",
+                "name": "community",
+                "required": true,
+                "defaultValue": "public"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Polling window (minutes)",
+                "placeholder": "15",
+                "type": "number",
+                "name": "queryWindowInMin",
+                "defaultValue": "15",
+                "required": true
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "connect"
+              }
+            }
+          ],
+          "title": "Connect PolySwarm Hunting"
+        },
+        {
+          "title": "What to expect after you connect",
+          "description": "**The fields look empty after you connect.** That is normal: Azure never shows a saved key.\n\n**Connected, nothing yet.** This is normal for a new connection. Either none of your hunts has matched a file yet, or the first check has not run (it runs every 15 minutes by default). Nothing is wrong.\n\n**Data arriving.** Run this query in Logs to see your hunt results:\n\n`ThreatIntelIndicators | where SourceSystem == \"PolySwarm\" and LastUpdateMethod == \"PolySwarm hunting\"`\n\n**Something went wrong.** Usually the API key or the community name is wrong. Disconnect, check both, and connect again. To check for errors, turn on health monitoring in your workspace settings, then run this query in Logs:\n\n`SentinelHealth | where SentinelResourceType == \"Data connector\" and SentinelResourceName has \"PolySwarm\"`"
+        }
+      ]
+    }
+  }
+}

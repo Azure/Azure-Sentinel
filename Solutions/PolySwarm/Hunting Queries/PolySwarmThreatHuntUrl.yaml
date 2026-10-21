@@ -1,0 +1,44 @@
+id: b0b68076-7765-42f8-9401-c336551abfc2
+name: PolySwarm - Threat Hunting URL
+description: |
+  'PolySwarm URL correlation. Joins active PolySwarm URL indicators against observed web
+  sessions.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1566
+tags:
+  - PolySwarm
+query: |
+  _Im_WebSession
+  | where isnotempty(Url)
+  | extend Url = tolower(Url)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == "url:value"
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "PolySwarm"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  | extend ObservableValue = tolower(ObservableValue)
+  ) on $left.Url == $right.ObservableValue
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | project Url, Confidence, Family, Permalink
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.1

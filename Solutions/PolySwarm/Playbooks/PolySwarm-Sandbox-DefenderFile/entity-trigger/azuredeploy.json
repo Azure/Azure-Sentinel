@@ -1,0 +1,2919 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "PolySwarm - Sandbox Defender File Detonation - Entity Triggered (Preview)",
+    "description": "Preview: deploys and passes every local check, but has not yet been run against a live Defender for Endpoint tenant. Feedback to support@polyswarm.io. Starting from a Microsoft Sentinel FileHash entity, runs a Defender for Endpoint advanced hunting query to find where a SHA256 was last seen, pulls the file off that device with Defender live response (GetFile), and submits it to the PolySwarm sandbox (private community by default) for detonation. Comments the verdict, score, family, ATT&CK techniques and report link back on the incident. Companion to the incident-triggered variant in this same folder.",
+    "prerequisites": [
+      "Microsoft Defender for Endpoint Plan 2, with live response and live response for servers enabled under Settings > Endpoints > Advanced features.",
+      "A PolySwarm API key with sandbox access to a private community, stored as a secret in an Azure Key Vault this subscription can reach.",
+      "A SHA256-only flow: this playbook skips MD5/SHA1 FileHash entities, since Defender's DeviceFileEvents/DeviceProcessEvents are indexed on SHA256."
+    ],
+    "postDeployment": [
+      "1. Grant this playbook's system-assigned managed identity the 'Key Vault Secrets User' role on the Key Vault named in KeyVaultName.",
+      "2. Run grant-defender-permissions.sh (in this folder) against the resource group, passing this playbook's name, to grant Machine.LiveResponse, Machine.ReadWrite.All and AdvancedQuery.Read.All on the WindowsDefenderATP API to the managed identity. NOTE: this is Machine.ReadWrite.All, not Machine.Read.All -- see README, 'A permission correction'.",
+      "3. Authorize the Microsoft Sentinel and Key Vault API connections if they show as unauthorized.",
+      "4. Assign the 'Microsoft Sentinel Responder' role on the resource group (or workspace) to this playbook's managed identity so it can comment on incidents.",
+      "5. This template auto-assigns 'Monitoring Metrics Publisher' on DcrResourceId to the managed identity when create_role_assignment is true (default). If deployed with create_role_assignment=false, grant it manually the same way as the Key Vault role in step 1, scoped to the DCR resource instead -- grant-defender-permissions.sh does not do this (it is an Azure RBAC role assignment, not a WindowsDefenderATP application permission).",
+      "6. Attach to an automation rule scoped to FileHash entities."
+    ],
+    "entities": [
+      "FileHash"
+    ],
+    "tags": [
+      "Sandbox",
+      "Detonation",
+      "Defender for Endpoint"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "PolySwarm Customer Success"
+    },
+    "lastUpdateTime": "2026-09-23T00:00:00.000Z",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "PolySwarm-Sandbox-DefenderFile-EntityTriggered",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "SolutionVersion": {
+      "type": "string",
+      "defaultValue": "3.0.0",
+      "metadata": {
+        "description": "Version string sent in the User-Agent header on every call to the PolySwarm API. Bump this when the solution version changes."
+      }
+    },
+    "Community": {
+      "type": "string",
+      "metadata": {
+        "description": "PolySwarm sandbox community slug to detonate into. No default value on purpose: this playbook refuses to fall back to the public 'default' community silently. Pass your private community slug. To explicitly submit into the public community instead, also set AllowPublicCommunity to true."
+      }
+    },
+    "AllowPublicCommunity": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Must be explicitly set to true to allow Community to resolve to 'default' (the public community). A file pulled off an endpoint and detonated publicly becomes public. Leave false unless you mean it."
+      }
+    },
+    "Provider": {
+      "type": "string",
+      "defaultValue": "triage",
+      "metadata": {
+        "description": "PolySwarm sandbox provider_slug: 'triage' or 'cape'. Live-verified 2026-09-23: both providers auto-extract a gzip archive and analyze the inner file, so this playbook submits the file straight from Defender still gzip-compressed (as a .gz) with no in-workflow decompression, and either provider is a valid choice; no restriction. See GET /v3/sandbox/provider/list for the live slug list."
+      }
+    },
+    "VmSlug": {
+      "type": "string",
+      "defaultValue": "windows11-21h2-x64",
+      "metadata": {
+        "description": "PolySwarm sandbox vm_slug (VM image) to detonate in; must be a VM the chosen Provider actually offers. Live-checked against GET /v3/sandbox/provider/list on 2026-09-23: triage offers windows11-21h2-x64, ubuntu-22.04-amd64, android-11-x64; cape offers only win-10-build-19041. The default here (windows11-21h2-x64) matches the default Provider (triage); switching Provider to 'cape' requires also setting this to 'win-10-build-19041', they are not interchangeable across providers."
+      }
+    },
+    "NetworkEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Whether the sandbox VM has outbound network access during detonation."
+      }
+    },
+    "TimeoutMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "metadata": {
+        "description": "Minutes to wait for the Defender live response action AND, separately, for the PolySwarm sandbox task, before giving up and commenting a timeout. Applied independently to each of the two polling loops."
+      }
+    },
+    "KeyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Key Vault holding the PolySwarm API key secret. Grant this playbook's managed identity the 'Key Vault Secrets User' role on the vault after deployment."
+      }
+    },
+    "KeyVaultSecretName": {
+      "type": "string",
+      "defaultValue": "PolySwarmApiKey",
+      "metadata": {
+        "description": "Name of the secret in Key Vault holding the PolySwarm API key, sent verbatim as the Authorization header (no 'Bearer ' prefix)."
+      }
+    },
+    "DefenderApiBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.securitycenter.microsoft.com",
+      "metadata": {
+        "description": "Microsoft Defender for Endpoint API base URL. Also used as the OAuth audience for the managed identity token, which must match the resource the WindowsDefenderATP app roles were granted against -- see grant-defender-permissions.sh. Do not change this to api.security.microsoft.com without also re-pointing the audience and re-checking the app role grant; see the playbook README."
+      }
+    },
+    "PolySwarmApiBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.polyswarm.network/v3",
+      "metadata": {
+        "description": "PolySwarm REST API v3 base URL."
+      }
+    },
+    "MaxFileSizeBytes": {
+      "type": "int",
+      "defaultValue": 104857600,
+      "metadata": {
+        "description": "Files larger than this (measured on the gzip-compressed bytes Defender returns, which this playbook submits to PolySwarm as-is) are not downloaded; the playbook comments the Defender live response download link instead (valid 30 minutes) rather than attempt a transfer that will fail. Default 104857600 (100 MB) is the documented Logic Apps HTTP message-size ceiling without chunking; with chunking enabled (as this playbook's HTTP actions request) Logic Apps allows up to 1 GB per action in practice, and Defender's own getfile ceiling is 3 GB, but neither of those higher numbers has been live-tested here -- raise this only after confirming chunking actually works end to end."
+      }
+    },
+    "MaliciousScoreThreshold": {
+      "type": "int",
+      "defaultValue": 7,
+      "metadata": {
+        "description": "Sandbox report score (0-10 scale, coalesce(report.malscore, report.analysis.score)) at or above which the incident comment and PolySwarmSandbox_CL row report Verdict 'malicious'. Calibrated against a known LockBit sample (CAPE malscore 8.0, Triage analysis.score 10)."
+      }
+    },
+    "SuspiciousScoreThreshold": {
+      "type": "int",
+      "defaultValue": 4,
+      "metadata": {
+        "description": "Sandbox report score at or above which (and below MaliciousScoreThreshold) Verdict is 'suspicious'. Below this, Verdict is 'benign'. A null score reports 'unknown'; a sandbox task status of KNOWN_GOOD reports 'known good' regardless of score."
+      }
+    },
+    "DceLogsIngestionEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Logs ingestion URL of the Data Collection Endpoint (DCE) that fronts the PolySwarmSandbox_CL Data Collection Rule, e.g. https://<dce-name>-<suffix>.<region>-1.ingest.monitor.azure.com. No default: workspace-specific, matches the shared DCE/DCR template's dceLogsIngestionEndpoint output."
+      }
+    },
+    "DcrImmutableId": {
+      "type": "string",
+      "metadata": {
+        "description": "Immutable ID (dcr-...) of the Data Collection Rule that accepts PolySwarmSandbox_CL rows, used in the Logs Ingestion API URL path. No default: workspace-specific, matches the shared DCE/DCR template's dcrImmutableId output. This is NOT the same value as DcrResourceId below -- see that parameter."
+      }
+    },
+    "StreamName": {
+      "type": "string",
+      "defaultValue": "Custom-PolySwarmSandboxResults",
+      "metadata": {
+        "description": "Custom stream name on the Data Collection Rule that maps incoming rows to the PolySwarmSandbox_CL table. Matches the shared DCE/DCR template's streamName output."
+      }
+    },
+    "DcrResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Full ARM resource ID of the same Data Collection Rule identified by dcrImmutableId above (/subscriptions/.../resourceGroups/.../providers/Microsoft.Insights/dataCollectionRules/<name>). A DCR's immutableId and its ARM resource ID are two different identifiers; the Logs Ingestion API URL needs the former, and the role assignment below (scope) needs the latter. No default: workspace-specific."
+      }
+    },
+    "create_role_assignment": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "If true, this template automatically assigns the Monitoring Metrics Publisher role on DcrResourceId to this playbook's managed identity. Same pattern as Recorded Future's sandbox playbooks. Set false and grant it manually (see grant-defender-permissions.sh --help) if this identity does not have rights to create role assignments at deployment time."
+      }
+    },
+    "RequireAnalystApproval": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "If true (default), sends an Office 365 Outlook approval email to ApproverEmail before retrieving any file from a device with Defender live response, and only proceeds to GetFile if the approver clicks Approve within ApprovalTimeoutHours. Protects against the residual risk of someone placing the genuine hash of a sensitive file on an incident to have this playbook exfiltrate it. Set false only if another control in your environment covers this risk."
+      }
+    },
+    "ApproverEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address the approval request is sent to when RequireAnalystApproval is true. Required in that case. The Office 365 Outlook connection (authorized post-deployment, see README) sends the approval request from its own signed-in mailbox to this address."
+      }
+    },
+    "ApprovalTimeoutHours": {
+      "type": "int",
+      "defaultValue": 4,
+      "metadata": {
+        "description": "Hours to wait for the analyst's approval response before treating the request as a timeout and stopping without retrieving the file. Only applies when RequireAnalystApproval is true."
+      }
+    },
+    "DeniedPathFragments": {
+      "type": "array",
+      "defaultValue": [
+        "\\AppData\\Local\\Google\\Chrome\\User Data",
+        "\\AppData\\Local\\Microsoft\\Edge\\User Data",
+        "\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles",
+        "\\Microsoft\\Credentials",
+        "\\Microsoft\\Protect",
+        "\\Microsoft\\Vault",
+        "\\System32\\config",
+        "\\NTDS",
+        ".kdbx",
+        "id_rsa"
+      ],
+      "metadata": {
+        "description": "Case-insensitive substrings checked against the full retrieved file path (Defender's FolderPath, which already includes the file name). Defaults cover common browser credential stores, the Windows credential/DPAPI/vault stores, the SAM/SYSTEM hives under System32\\config, NTDS.dit, KeePass databases and SSH private keys. A match stops the playbook before Defender live response GetFile runs, with an incident comment -- checked before the approval email is sent, and even when RequireAnalystApproval would otherwise have allowed it through."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+    "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyVaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyVaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('Office365ConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "PolySwarm-Sandbox-DefenderFile",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "Community": {
+              "type": "String"
+            },
+            "AllowPublicCommunity": {
+              "type": "Bool",
+              "defaultValue": false
+            },
+            "Provider": {
+              "type": "String",
+              "defaultValue": "triage"
+            },
+            "VmSlug": {
+              "type": "String",
+              "defaultValue": "windows11-21h2-x64"
+            },
+            "NetworkEnabled": {
+              "type": "Bool",
+              "defaultValue": true
+            },
+            "TimeoutMinutes": {
+              "type": "Int",
+              "defaultValue": 15
+            },
+            "KeyVaultName": {
+              "type": "String"
+            },
+            "KeyVaultSecretName": {
+              "type": "String",
+              "defaultValue": "PolySwarmApiKey"
+            },
+            "DefenderApiBaseUrl": {
+              "type": "String",
+              "defaultValue": "https://api.securitycenter.microsoft.com"
+            },
+            "PolySwarmApiBaseUrl": {
+              "type": "String",
+              "defaultValue": "https://api.polyswarm.network/v3"
+            },
+            "MaxFileSizeBytes": {
+              "type": "Int",
+              "defaultValue": 104857600
+            },
+            "MaliciousScoreThreshold": {
+              "type": "Int",
+              "defaultValue": 7
+            },
+            "SuspiciousScoreThreshold": {
+              "type": "Int",
+              "defaultValue": 4
+            },
+            "DceLogsIngestionEndpoint": {
+              "type": "String"
+            },
+            "DcrImmutableId": {
+              "type": "String"
+            },
+            "StreamName": {
+              "type": "String",
+              "defaultValue": "Custom-PolySwarmSandboxResults"
+            },
+            "RequireAnalystApproval": {
+              "type": "Bool",
+              "defaultValue": true
+            },
+            "ApproverEmail": {
+              "type": "String"
+            },
+            "ApprovalTimeoutHours": {
+              "type": "Int",
+              "defaultValue": 4
+            },
+            "DeniedPathFragments": {
+              "type": "Array",
+              "defaultValue": [
+                "\\AppData\\Local\\Google\\Chrome\\User Data",
+                "\\AppData\\Local\\Microsoft\\Edge\\User Data",
+                "\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles",
+                "\\Microsoft\\Credentials",
+                "\\Microsoft\\Protect",
+                "\\Microsoft\\Vault",
+                "\\System32\\config",
+                "\\NTDS",
+                ".kdbx",
+                "id_rsa"
+              ]
+            },
+            "SolutionVersion": {
+              "type": "string",
+              "defaultValue": "3.0.0"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_entity": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/entity/@{encodeURIComponent('FileHash')}"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_path_denied": {
+              "type": "InitializeVariable",
+              "runAfter": {},
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "PathDenied",
+                    "type": "boolean",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            "Initialize_approval_granted": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_path_denied": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ApprovalGranted",
+                    "type": "boolean",
+                    "value": "@not(parameters('RequireAnalystApproval'))"
+                  }
+                ]
+              }
+            },
+            "Initialize_action_status": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_approval_granted": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ActionStatus",
+                    "type": "string",
+                    "value": "Pending"
+                  }
+                ]
+              }
+            },
+            "Initialize_sandbox_status": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_action_status": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SandboxStatus",
+                    "type": "string",
+                    "value": "PENDING"
+                  }
+                ]
+              }
+            },
+            "If_community_is_safe_to_submit": {
+              "type": "If",
+              "runAfter": {
+                "Reset_stop_reason": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@or(not(or(equals(toLower(trim(parameters('Community'))), 'default'), equals(trim(parameters('Community')), ''))), parameters('AllowPublicCommunity'))",
+              "actions": {},
+              "else": {
+                "actions": {
+                  "Add_public_community_refused_comment": {
+                    "type": "ApiConnection",
+                    "runAfter": {},
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment",
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                        "message": "<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nRefused to submit: the Community setting resolved to the public 'default' community (or was left empty) and AllowPublicCommunity is not set to true. This playbook defaults to private-community submission by design -- a file pulled off an endpoint and detonated publicly becomes public. Pass a private community slug, or set AllowPublicCommunity=true if you really want this hash submitted publicly.</p>"
+                      }
+                    }
+                  },
+                  "Stop_at_If_community_is_safe_to_submit_else": {
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "stopReason",
+                      "value": "If_community_is_safe_to_submit:else"
+                    },
+                    "runAfter": {}
+                  },
+                  "Add_public_community_refused_comment_unless_conflict": {
+                    "type": "If",
+                    "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                    "runAfter": {
+                      "Add_public_community_refused_comment": [
+                        "Failed"
+                      ]
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "not": {
+                            "equals": [
+                              "@outputs('Add_public_community_refused_comment')?['statusCode']",
+                              409
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Add_public_community_refused_comment_retry": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nRefused to submit: the Community setting resolved to the public 'default' community (or was left empty) and AllowPublicCommunity is not set to true. This playbook defaults to private-community submission by design -- a file pulled off an endpoint and detonated publicly becomes public. Pass a private community slug, or set AllowPublicCommunity=true if you really want this hash submitted publicly.</p>"
+                          }
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {}
+                    }
+                  }
+                }
+              }
+            },
+            "Initialize_stop_reason": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "stopReason",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_sandbox_status": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Reset_stop_reason": {
+              "type": "SetVariable",
+              "inputs": {
+                "name": "stopReason",
+                "value": ""
+              },
+              "runAfter": {
+                "Initialize_stop_reason": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_hash_is_sha256": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "If_hash_is_sha256": {
+                  "type": "If",
+                  "runAfter": {},
+                  "expression": "@equals(toLower(coalesce(triggerBody()?['Entity']?['properties']?['Algorithm'], '')), 'sha256')",
+                  "actions": {},
+                  "else": {
+                    "actions": {
+                      "Add_non_sha256_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Value']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Value'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nSkipped: Defender for Endpoint's DeviceFileEvents and DeviceProcessEvents tables are indexed on SHA256 only. This entity is not a SHA256 hash, so this playbook cannot locate it on a device. Re-run against the artifact's SHA256 if one is known.</p>"
+                          }
+                        }
+                      },
+                      "Stop_at_If_hash_is_sha256_else": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "If_hash_is_sha256:else"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_non_sha256_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_non_sha256_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_non_sha256_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_non_sha256_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Value']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Value'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nSkipped: Defender for Endpoint's DeviceFileEvents and DeviceProcessEvents tables are indexed on SHA256 only. This entity is not a SHA256 hash, so this playbook cannot locate it on a device. Re-run against the artifact's SHA256 if one is known.</p>"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "If_community_is_safe_to_submit": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_hash_value_is_valid": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_validated_hash": {
+                  "type": "Compose",
+                  "runAfter": {},
+                  "inputs": "@{toLower(trim(triggerBody()?['Entity']?['properties']?['Value']))}"
+                },
+                "If_hash_value_is_valid": {
+                  "type": "If",
+                  "runAfter": {
+                    "Compose_validated_hash": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@and(equals(length(outputs('Compose_validated_hash')), 64), empty(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(outputs('Compose_validated_hash'), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''), '5', ''), '6', ''), '7', ''), '8', ''), '9', ''), 'a', ''), 'b', ''), 'c', ''), 'd', ''), 'e', ''), 'f', '')))",
+                  "actions": {},
+                  "else": {
+                    "actions": {
+                      "Add_invalid_hash_value_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Value']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Value'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '<br>\\nPolySwarm Defender detonation skipped: the file hash is not a valid SHA-256 value.</p>')}"
+                          }
+                        }
+                      },
+                      "Stop_at_If_hash_value_is_valid_else": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "If_hash_value_is_valid:else"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_invalid_hash_value_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_invalid_hash_value_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_invalid_hash_value_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_invalid_hash_value_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Value']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Value'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '<br>\\nPolySwarm Defender detonation skipped: the file hash is not a valid SHA-256 value.</p>')}"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_hash_is_sha256": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_device_found": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "If_device_found": {
+                  "type": "If",
+                  "runAfter": {
+                    "Select_latest_sighting": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@greater(length(coalesce(body('Run_advanced_hunting_query')?['Results'], json('[]'))), 0)",
+                  "actions": {},
+                  "else": {
+                    "actions": {
+                      "Add_not_found_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nNo result. This SHA256 was not found in DeviceFileEvents or DeviceProcessEvents (last seen data), so no device is known to have had this file within Defender''s hunting retention window. It cannot be pulled off a host for detonation.</p>')}"
+                          }
+                        }
+                      },
+                      "Stop_at_If_device_found_else": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "If_device_found:else"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_not_found_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_not_found_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_not_found_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_not_found_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nNo result. This SHA256 was not found in DeviceFileEvents or DeviceProcessEvents (last seen data), so no device is known to have had this file within Defender''s hunting retention window. It cannot be pulled off a host for detonation.</p>')}"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                },
+                "Get_PolySwarm_API_key": {
+                  "type": "ApiConnection",
+                  "runAfter": {},
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
+                    }
+                  },
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/secrets/@{encodeURIComponent(parameters('KeyVaultSecretName'))}/value"
+                  }
+                },
+                "Build_hunting_query": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Get_PolySwarm_API_key": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@concat('let TargetHash = \"', replace(replace(outputs('Compose_validated_hash'), '\\', ''), '\"', ''), '\"; union isfuzzy=true (DeviceFileEvents | where SHA256 =~ TargetHash | project Timestamp, DeviceId, DeviceName, FolderPath, FileName, SHA256), (DeviceProcessEvents | where SHA256 =~ TargetHash or InitiatingProcessSHA256 =~ TargetHash | project Timestamp, DeviceId, DeviceName, FolderPath = iff(SHA256 =~ TargetHash, FolderPath, InitiatingProcessFolderPath), FileName = iff(SHA256 =~ TargetHash, FileName, InitiatingProcessFileName), SHA256 = iff(SHA256 =~ TargetHash, SHA256, InitiatingProcessSHA256)) | sort by Timestamp desc | take 1')",
+                  "description": "Builds the advanced hunting query from the validated 64-character hex SHA-256 only. The value sits in a KQL double-quoted string literal, and any double quote or backslash is removed first as defense in depth (a validated hex value contains neither)."
+                },
+                "Run_advanced_hunting_query": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('DefenderApiBaseUrl')}/api/advancedqueries/run",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "@parameters('DefenderApiBaseUrl')"
+                    },
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    },
+                    "body": {
+                      "Query": "@outputs('Build_hunting_query')"
+                    }
+                  },
+                  "runAfter": {
+                    "Build_hunting_query": [
+                      "Succeeded"
+                    ]
+                  },
+                  "description": "Defender for Endpoint advanced hunting API (AdvancedQuery.Read.All). NOTE: Microsoft began retiring this API in January 2026 in favor of the Microsoft Graph security API's runHuntingQuery; see README."
+                },
+                "If_hunting_query_failed": {
+                  "type": "If",
+                  "runAfter": {
+                    "Run_advanced_hunting_query": [
+                      "Succeeded",
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "expression": {
+                    "not": {
+                      "equals": [
+                        "@outputs('Run_advanced_hunting_query')?['statusCode']",
+                        200
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "Add_hunting_failed_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nDefender advanced hunting query failed. HTTP status: ', string(coalesce(outputs('Run_advanced_hunting_query')?['statusCode'], 'no response')), '. If this is 403, confirm AdvancedQuery.Read.All is granted to this playbook''s managed identity -- see grant-defender-permissions.sh.</p>')}"
+                        }
+                      }
+                    },
+                    "Add_hunting_failed_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_hunting_failed_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_hunting_failed_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_hunting_failed_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nDefender advanced hunting query failed. HTTP status: ', string(coalesce(outputs('Run_advanced_hunting_query')?['statusCode'], 'no response')), '. If this is 403, confirm AdvancedQuery.Read.All is granted to this playbook''s managed identity -- see grant-defender-permissions.sh.</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                },
+                "Select_latest_sighting": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "If_hunting_query_failed": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@first(coalesce(body('Run_advanced_hunting_query')?['Results'], json('[]')))"
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_hash_value_is_valid": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_sighting_hash_matches": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "If_sighting_hash_matches": {
+                  "type": "If",
+                  "runAfter": {},
+                  "expression": "@equals(toLower(coalesce(outputs('Select_latest_sighting')?['SHA256'], '')), outputs('Compose_validated_hash'))",
+                  "actions": {},
+                  "else": {
+                    "actions": {
+                      "Add_hash_mismatch_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: the located sighting''s SHA256 did not match the validated input hash. This can happen with a hash collision in Defender''s hunting index or a race between events; no file was retrieved.</p>')}"
+                          }
+                        }
+                      },
+                      "Stop_at_If_sighting_hash_matches_else": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "If_sighting_hash_matches:else"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_hash_mismatch_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_hash_mismatch_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_hash_mismatch_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_hash_mismatch_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: the located sighting''s SHA256 did not match the validated input hash. This can happen with a hash collision in Defender''s hunting index or a race between events; no file was retrieved.</p>')}"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_device_found": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_path_is_denied": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_device_id": {
+                  "type": "Compose",
+                  "runAfter": {},
+                  "inputs": "@outputs('Select_latest_sighting')?['DeviceId']"
+                },
+                "Compose_file_path": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Compose_device_id": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@outputs('Select_latest_sighting')?['FolderPath']"
+                },
+                "Set_path_denied_default": {
+                  "type": "SetVariable",
+                  "runAfter": {
+                    "Compose_file_path": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "name": "PathDenied",
+                    "value": false
+                  }
+                },
+                "Check_denied_path_fragments": {
+                  "type": "Foreach",
+                  "runAfter": {
+                    "Set_path_denied_default": [
+                      "Succeeded"
+                    ]
+                  },
+                  "foreach": "@parameters('DeniedPathFragments')",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  },
+                  "actions": {
+                    "If_fragment_matches": {
+                      "type": "If",
+                      "runAfter": {},
+                      "expression": "@contains(toLower(outputs('Compose_file_path')), toLower(items('Check_denied_path_fragments')))",
+                      "actions": {
+                        "Set_path_denied": {
+                          "type": "SetVariable",
+                          "runAfter": {},
+                          "inputs": {
+                            "name": "PathDenied",
+                            "value": true
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  }
+                },
+                "If_path_is_denied": {
+                  "type": "If",
+                  "runAfter": {
+                    "Check_denied_path_fragments": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@equals(variables('PathDenied'), true)",
+                  "actions": {
+                    "Add_denied_path_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: the located file path is in a protected location (matches a denied path fragment) and will not be retrieved for sandbox detonation. Device: ', outputs('Compose_device_id'), ' | Path: ', replace(replace(replace(replace(string(outputs('Compose_file_path')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</p>')}"
+                        }
+                      }
+                    },
+                    "Stop_at_If_path_is_denied_then": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "stopReason",
+                        "value": "If_path_is_denied:then"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_denied_path_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_denied_path_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_denied_path_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_denied_path_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: the located file path is in a protected location (matches a denied path fragment) and will not be retrieved for sandbox detonation. Device: ', outputs('Compose_device_id'), ' | Path: ', replace(replace(replace(replace(string(outputs('Compose_file_path')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_sighting_hash_matches": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_approval_granted": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Set_approval_granted_default": {
+                  "type": "SetVariable",
+                  "runAfter": {},
+                  "inputs": {
+                    "name": "ApprovalGranted",
+                    "value": "@not(parameters('RequireAnalystApproval'))"
+                  }
+                },
+                "If_approval_required": {
+                  "type": "If",
+                  "runAfter": {
+                    "Set_approval_granted_default": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@equals(parameters('RequireAnalystApproval'), true)",
+                  "actions": {
+                    "Send_approval_email": {
+                      "type": "ApiConnectionWebhook",
+                      "runAfter": {},
+                      "limit": {
+                        "timeout": "@{concat('PT', string(parameters('ApprovalTimeoutHours')), 'H')}"
+                      },
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['office365']['connectionId']"
+                          }
+                        },
+                        "path": "/approvalmail/$subscriptions",
+                        "body": {
+                          "Message": {
+                            "To": "@parameters('ApproverEmail')",
+                            "Subject": "@{concat('PolySwarm Defender detonation approval needed, incident ', string(triggerBody()?['IncidentArmID']))}",
+                            "Options": "Approve, Reject",
+                            "Body": "@{concat('<p>Approve retrieval of a file from a device for PolySwarm sandbox detonation.</p><p>Incident: ', string(triggerBody()?['IncidentArmID']), '<br>Hash: ', outputs('Compose_validated_hash'), '<br>Device: ', replace(replace(replace(replace(string(coalesce(outputs('Select_latest_sighting')?['DeviceName'], outputs('Compose_device_id'))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '<br>Path: ', replace(replace(replace(replace(string(outputs('Compose_file_path')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</p><p>Approve to retrieve and detonate the file. Reject, or do not respond within the timeout window, and this playbook stops without retrieving anything.</p>')}"
+                          }
+                        }
+                      },
+                      "description": "Office 365 Outlook 'Send approval email', waits for the analyst's response (Approve/Reject) or ApprovalTimeoutHours, whichever comes first."
+                    },
+                    "Set_approval_granted": {
+                      "type": "SetVariable",
+                      "runAfter": {
+                        "Send_approval_email": [
+                          "Succeeded",
+                          "TimedOut",
+                          "Failed"
+                        ]
+                      },
+                      "inputs": {
+                        "name": "ApprovalGranted",
+                        "value": "@and(equals(coalesce(actions('Send_approval_email')?['status'], ''), 'Succeeded'), equals(coalesce(body('Send_approval_email')?['SelectedOption'], ''), 'Approve'))"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                },
+                "If_approval_granted": {
+                  "type": "If",
+                  "runAfter": {
+                    "If_approval_required": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@equals(variables('ApprovalGranted'), true)",
+                  "actions": {},
+                  "else": {
+                    "actions": {
+                      "Add_approval_not_granted_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: file retrieval was not approved (rejected, or no response within ', string(parameters('ApprovalTimeoutHours')), ' hour(s)). Device: ', outputs('Compose_device_id'), ' | Path: ', replace(replace(replace(replace(string(outputs('Compose_file_path')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '. No file was retrieved.</p>')}"
+                          }
+                        }
+                      },
+                      "Stop_at_If_approval_granted_else": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "If_approval_granted:else"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_approval_not_granted_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_approval_not_granted_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_approval_not_granted_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_approval_not_granted_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\\nHash: ', outputs('Compose_validated_hash'), '<br>\\nStopped: file retrieval was not approved (rejected, or no response within ', string(parameters('ApprovalTimeoutHours')), ' hour(s)). Device: ', outputs('Compose_device_id'), ' | Path: ', replace(replace(replace(replace(string(outputs('Compose_file_path')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '. No file was retrieved.</p>')}"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_path_is_denied": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_live_response_not_started": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Run_live_response_GetFile": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('DefenderApiBaseUrl')}/api/machines/@{encodeURIComponent(outputs('Compose_device_id'))}/runliveresponse",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "@parameters('DefenderApiBaseUrl')"
+                    },
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    },
+                    "body": {
+                      "Commands": [
+                        {
+                          "type": "GetFile",
+                          "params": [
+                            {
+                              "key": "Path",
+                              "value": "@outputs('Compose_file_path')"
+                            }
+                          ]
+                        }
+                      ],
+                      "Comment": "@{concat('PolySwarm Sentinel playbook: retrieving file for sandbox detonation, incident ', string(triggerBody()?['IncidentArmID']))}"
+                    }
+                  },
+                  "runAfter": {},
+                  "description": "Machine.LiveResponse. 10 calls/min per tenant, 50 concurrent sessions; queued up to 2 hours if the device is offline."
+                },
+                "If_live_response_not_started": {
+                  "type": "If",
+                  "runAfter": {
+                    "Run_live_response_GetFile": [
+                      "Succeeded",
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "expression": {
+                    "not": {
+                      "equals": [
+                        "@outputs('Run_live_response_GetFile')?['statusCode']",
+                        201
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "Add_liveresponse_not_started_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCould not start live response on device ', outputs('Compose_device_id'), '. HTTP status: ', string(coalesce(outputs('Run_live_response_GetFile')?['statusCode'], 'no response')), '. A 400 with ActiveRequestAlreadyExists means a live response session is already running on this device; try again once it finishes. Confirm live response is enabled (Advanced features) and Machine.LiveResponse is granted.</p>')}"
+                        }
+                      }
+                    },
+                    "Stop_at_If_live_response_not_started_then": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "stopReason",
+                        "value": "If_live_response_not_started:then"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_liveresponse_not_started_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_liveresponse_not_started_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_liveresponse_not_started_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_liveresponse_not_started_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCould not start live response on device ', outputs('Compose_device_id'), '. HTTP status: ', string(coalesce(outputs('Run_live_response_GetFile')?['statusCode'], 'no response')), '. A 400 with ActiveRequestAlreadyExists means a live response session is already running on this device; try again once it finishes. Confirm live response is enabled (Advanced features) and Machine.LiveResponse is granted.</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_approval_granted": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_Switch_on_final_action_status": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_machine_action_id": {
+                  "type": "Compose",
+                  "runAfter": {},
+                  "inputs": "@body('Run_live_response_GetFile')?['id']"
+                },
+                "Set_action_status_default": {
+                  "type": "SetVariable",
+                  "runAfter": {
+                    "Compose_machine_action_id": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "name": "ActionStatus",
+                    "value": "Pending"
+                  }
+                },
+                "Until_live_response_terminal": {
+                  "type": "Until",
+                  "runAfter": {
+                    "Set_action_status_default": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@or(equals(variables('ActionStatus'), 'Succeeded'), equals(variables('ActionStatus'), 'Failed'), equals(variables('ActionStatus'), 'TimedOut'), equals(variables('ActionStatus'), 'Cancelled'))",
+                  "limit": {
+                    "count": 240,
+                    "timeout": "@{concat('PT', string(parameters('TimeoutMinutes')), 'M')}"
+                  },
+                  "actions": {
+                    "Delay_before_poll": {
+                      "type": "Wait",
+                      "runAfter": {},
+                      "inputs": {
+                        "interval": {
+                          "count": 30,
+                          "unit": "Second"
+                        }
+                      }
+                    },
+                    "Get_machine_action": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{parameters('DefenderApiBaseUrl')}/api/machineactions/@{encodeURIComponent(outputs('Compose_machine_action_id'))}",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "@parameters('DefenderApiBaseUrl')"
+                        },
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 3,
+                          "interval": "PT10S"
+                        }
+                      },
+                      "runAfter": {
+                        "Delay_before_poll": [
+                          "Succeeded"
+                        ]
+                      },
+                      "description": "Machine.ReadWrite.All is required here per Microsoft's current docs (get-machineaction-object), not Machine.Read.All -- see README."
+                    },
+                    "Set_action_status": {
+                      "type": "SetVariable",
+                      "runAfter": {
+                        "Get_machine_action": [
+                          "Succeeded",
+                          "Failed",
+                          "TimedOut"
+                        ]
+                      },
+                      "inputs": {
+                        "name": "ActionStatus",
+                        "value": "@coalesce(body('Get_machine_action')?['status'], 'Unknown')"
+                      }
+                    }
+                  }
+                },
+                "Switch_on_final_action_status": {
+                  "type": "Switch",
+                  "runAfter": {
+                    "Until_live_response_terminal": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@variables('ActionStatus')",
+                  "cases": {
+                    "Case_Succeeded": {
+                      "case": "Succeeded",
+                      "actions": {}
+                    },
+                    "Case_Failed": {
+                      "case": "Failed",
+                      "actions": {
+                        "Add_live_response_failed_comment": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' ended with status Failed. Sandbox detonation was not performed.</p>')}"
+                            }
+                          }
+                        },
+                        "Stop_at_Switch_on_final_action_status_Case_Failed": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "stopReason",
+                            "value": "Switch_on_final_action_status:Case_Failed"
+                          },
+                          "runAfter": {}
+                        },
+                        "Add_live_response_failed_comment_unless_conflict": {
+                          "type": "If",
+                          "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                          "runAfter": {
+                            "Add_live_response_failed_comment": [
+                              "Failed"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@outputs('Add_live_response_failed_comment')?['statusCode']",
+                                    409
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Add_live_response_failed_comment_retry": {
+                              "type": "ApiConnection",
+                              "runAfter": {},
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment",
+                                "body": {
+                                  "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                  "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' ended with status Failed. Sandbox detonation was not performed.</p>')}"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          }
+                        }
+                      }
+                    },
+                    "Case_TimedOut": {
+                      "case": "TimedOut",
+                      "actions": {
+                        "Add_live_response_timedout_comment": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' timed out on Defender''s side. Sandbox detonation was not performed.</p>')}"
+                            }
+                          }
+                        },
+                        "Stop_at_Switch_on_final_action_status_Case_TimedOut": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "stopReason",
+                            "value": "Switch_on_final_action_status:Case_TimedOut"
+                          },
+                          "runAfter": {}
+                        },
+                        "Add_live_response_timedout_comment_unless_conflict": {
+                          "type": "If",
+                          "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                          "runAfter": {
+                            "Add_live_response_timedout_comment": [
+                              "Failed"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@outputs('Add_live_response_timedout_comment')?['statusCode']",
+                                    409
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Add_live_response_timedout_comment_retry": {
+                              "type": "ApiConnection",
+                              "runAfter": {},
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment",
+                                "body": {
+                                  "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                  "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' timed out on Defender''s side. Sandbox detonation was not performed.</p>')}"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          }
+                        }
+                      }
+                    },
+                    "Case_Cancelled": {
+                      "case": "Cancelled",
+                      "actions": {
+                        "Add_live_response_cancelled_comment": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' was cancelled. Sandbox detonation was not performed.</p>')}"
+                            }
+                          }
+                        },
+                        "Stop_at_Switch_on_final_action_status_Case_Cancelled": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "stopReason",
+                            "value": "Switch_on_final_action_status:Case_Cancelled"
+                          },
+                          "runAfter": {}
+                        },
+                        "Add_live_response_cancelled_comment_unless_conflict": {
+                          "type": "If",
+                          "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                          "runAfter": {
+                            "Add_live_response_cancelled_comment": [
+                              "Failed"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@outputs('Add_live_response_cancelled_comment')?['statusCode']",
+                                    409
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Add_live_response_cancelled_comment_retry": {
+                              "type": "ApiConnection",
+                              "runAfter": {},
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment",
+                                "body": {
+                                  "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                  "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' was cancelled. Sandbox detonation was not performed.</p>')}"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "default": {
+                    "actions": {
+                      "Add_device_offline_comment": {
+                        "type": "ApiConnection",
+                        "runAfter": {},
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' was still ', variables('ActionStatus'), ' after waiting ', string(parameters('TimeoutMinutes')), ' minutes -- the device is most likely offline or unresponsive. Defender queues live response for up to 2 hours; the action may still complete later. Pending action id: ', outputs('Compose_machine_action_id'), '</p>')}"
+                          }
+                        }
+                      },
+                      "Stop_at_Switch_on_final_action_status_default": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "stopReason",
+                          "value": "Switch_on_final_action_status:default"
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_device_offline_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_device_offline_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_device_offline_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_device_offline_comment_retry": {
+                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nLive response action ', outputs('Compose_machine_action_id'), ' on device ', outputs('Compose_device_id'), ' was still ', variables('ActionStatus'), ' after waiting ', string(parameters('TimeoutMinutes')), ' minutes -- the device is most likely offline or unresponsive. Defender queues live response for up to 2 hours; the action may still complete later. Pending action id: ', outputs('Compose_machine_action_id'), '</p>')}"
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_live_response_not_started": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_file_too_large": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Get_live_response_download_link": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{parameters('DefenderApiBaseUrl')}/api/machineactions/@{encodeURIComponent(outputs('Compose_machine_action_id'))}/GetLiveResponseResultDownloadLink(index=0)",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "@parameters('DefenderApiBaseUrl')"
+                    },
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "runAfter": {},
+                  "description": "Machine.ReadWrite.All. Link is valid 30 minutes.",
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "outputs"
+                      ]
+                    }
+                  }
+                },
+                "Compose_download_link": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Get_live_response_download_link": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@body('Get_live_response_download_link')?['value']"
+                },
+                "Check_file_size": {
+                  "type": "Http",
+                  "runAfter": {
+                    "Compose_download_link": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "method": "HEAD",
+                    "uri": "@outputs('Compose_download_link')",
+                    "retryPolicy": {
+                      "type": "none"
+                    }
+                  }
+                },
+                "Compose_content_length": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Check_file_size": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "inputs": "@int(coalesce(outputs('Check_file_size')?['headers']?['Content-Length'], '0'))"
+                },
+                "If_file_too_large": {
+                  "type": "If",
+                  "runAfter": {
+                    "Compose_content_length": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "greater": [
+                      "@outputs('Compose_content_length')",
+                      "@parameters('MaxFileSizeBytes')"
+                    ]
+                  },
+                  "actions": {
+                    "Add_too_large_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCollected file is ', string(outputs('Compose_content_length')), ' bytes, over this playbook''s ', string(parameters('MaxFileSizeBytes')), '-byte limit, so it was not downloaded or submitted. The file was collected via Defender live response (action id ', outputs('Compose_machine_action_id'), '); retrieve it from the Microsoft Defender portal device timeline for this action rather than through this playbook.</p>')}"
+                        }
+                      }
+                    },
+                    "Stop_at_If_file_too_large_then": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "stopReason",
+                        "value": "If_file_too_large:then"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_too_large_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_too_large_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_too_large_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_too_large_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCollected file is ', string(outputs('Compose_content_length')), ' bytes, over this playbook''s ', string(parameters('MaxFileSizeBytes')), '-byte limit, so it was not downloaded or submitted. The file was collected via Defender live response (action id ', outputs('Compose_machine_action_id'), '); retrieve it from the Microsoft Defender portal device timeline for this action rather than through this playbook.</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_Switch_on_final_action_status": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_create_failed": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Download_collected_file": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@outputs('Compose_download_link')",
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 2,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "contentTransfer": {
+                      "transferMode": "Chunked"
+                    },
+                    "secureData": {
+                      "properties": [
+                        "outputs"
+                      ]
+                    }
+                  },
+                  "description": "Defender live response GetFile results are gzip-compressed. This playbook does not decompress them: live-tested 2026-09-23 by gzipping an EICAR test file and submitting the .gz as-is through this same three-step flow to both sandbox providers -- CAPE (via cape_sandbox_v2) and Triage -- and both auto-extracted the archive and analyzed the inner file (CAPE: YARA hit 'SUSP_Just_EICAR' on a dropped file at guest path '...\\eicar.com.txt.gz\\eicar.com.txt', matching the known EICAR SHA256; Triage: YARA hit 'eicar_test_file' at 'static1/unpack001/eicar.com.txt', signature 'EICAR Anti-Malware test file'). So the gzip bytes go straight to PolySwarm unmodified; no in-workflow decompression, no Integration Account, no Execute JavaScript Code action needed."
+                },
+                "Create_sandbox_task": {
+                  "type": "Http",
+                  "runAfter": {
+                    "Download_collected_file": [
+                      "Succeeded"
+                    ]
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
+                    }
+                  },
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask/instance",
+                    "headers": {
+                      "Authorization": "@body('Get_PolySwarm_API_key')?['value']",
+                      "Accept": "application/json",
+                      "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-DefenderFile-Entity)')"
+                    },
+                    "body": {
+                      "artifact_name": "@{concat(outputs('Select_latest_sighting')?['FileName'], '.gz')}",
+                      "artifact_type": "FILE",
+                      "community": "@parameters('Community')",
+                      "provider_slug": "@parameters('Provider')",
+                      "vm_slug": "@parameters('VmSlug')",
+                      "network_enabled": "@parameters('NetworkEnabled')"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "description": "Live-verified 2026-09-23 with an EICAR submission against the real API: returns HTTP 200 (not 201) with the task object -- id, upload_url, etc. -- at the response's top level, no 'result' wrapper."
+                },
+                "If_create_failed": {
+                  "type": "If",
+                  "runAfter": {
+                    "Create_sandbox_task": [
+                      "Succeeded",
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "expression": {
+                    "not": {
+                      "equals": [
+                        "@outputs('Create_sandbox_task')?['statusCode']",
+                        200
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "Add_create_failed_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nPolySwarm rejected the sandbox task creation. HTTP status: ', string(coalesce(outputs('Create_sandbox_task')?['statusCode'], 'no response')), '. A 404/400 community error usually means the private community does not exist or this key cannot see it.</p>')}"
+                        }
+                      }
+                    },
+                    "Stop_at_If_create_failed_then": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "stopReason",
+                        "value": "If_create_failed:then"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_create_failed_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_create_failed_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_create_failed_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_create_failed_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nPolySwarm rejected the sandbox task creation. HTTP status: ', string(coalesce(outputs('Create_sandbox_task')?['statusCode'], 'no response')), '. A 404/400 community error usually means the private community does not exist or this key cannot see it.</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_file_too_large": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Continue_to_If_finalize_succeeded": {
+              "type": "If",
+              "description": "Runs the next step only if no earlier check stopped this file. Sequential stages keep the playbook within the Logic Apps nesting limit.",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('stopReason')",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_task_id": {
+                  "type": "Compose",
+                  "runAfter": {},
+                  "inputs": "@body('Create_sandbox_task')?['id']"
+                },
+                "Compose_upload_url": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Compose_task_id": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@body('Create_sandbox_task')?['upload_url']"
+                },
+                "Upload_file_to_sandbox": {
+                  "type": "Http",
+                  "runAfter": {
+                    "Compose_upload_url": [
+                      "Succeeded"
+                    ]
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs"
+                      ]
+                    },
+                    "contentTransfer": {
+                      "transferMode": "Chunked"
+                    }
+                  },
+                  "inputs": {
+                    "method": "PUT",
+                    "uri": "@outputs('Compose_upload_url')",
+                    "body": "@body('Download_collected_file')",
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 2,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "description": "PUT to the pre-signed S3 URL from Create_sandbox_task. No PolySwarm Authorization header here by design -- the upload_url is pre-authenticated. Body passes Download_collected_file's binary output object straight through ($content/$content-type), not a bare base64 string, so Logic Apps sends the actual decoded bytes rather than base64 text as the payload."
+                },
+                "Finalize_sandbox_task": {
+                  "type": "Http",
+                  "runAfter": {
+                    "Upload_file_to_sandbox": [
+                      "Succeeded"
+                    ]
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
+                    }
+                  },
+                  "inputs": {
+                    "method": "PUT",
+                    "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask/instance",
+                    "queries": {
+                      "id": "@string(outputs('Compose_task_id'))"
+                    },
+                    "headers": {
+                      "Authorization": "@body('Get_PolySwarm_API_key')?['value']",
+                      "Accept": "application/json",
+                      "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-DefenderFile-Entity)')"
+                    },
+                    "body": {
+                      "community": "@parameters('Community')"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "description": "Live-verified 2026-09-23: returns HTTP 200 with status PENDING immediately after finalize (uppercase status strings; task object at top level, no 'result' wrapper)."
+                },
+                "If_finalize_failed": {
+                  "type": "If",
+                  "runAfter": {
+                    "Finalize_sandbox_task": [
+                      "Succeeded",
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "expression": {
+                    "not": {
+                      "equals": [
+                        "@outputs('Finalize_sandbox_task')?['statusCode']",
+                        200
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "Add_upload_failed_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nFile upload or finalize to PolySwarm sandbox task ', string(outputs('Compose_task_id')), ' failed after the file was successfully collected from the device.</p>')}"
+                        }
+                      }
+                    },
+                    "Add_upload_failed_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_upload_failed_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_upload_failed_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_upload_failed_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nFile upload or finalize to PolySwarm sandbox task ', string(outputs('Compose_task_id')), ' failed after the file was successfully collected from the device.</p>')}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                },
+                "If_finalize_succeeded": {
+                  "type": "If",
+                  "runAfter": {
+                    "If_finalize_failed": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "equals": [
+                      "@outputs('Finalize_sandbox_task')?['statusCode']",
+                      200
+                    ]
+                  },
+                  "actions": {
+                    "Set_sandbox_status_default": {
+                      "type": "SetVariable",
+                      "runAfter": {},
+                      "inputs": {
+                        "name": "SandboxStatus",
+                        "value": "PENDING"
+                      }
+                    },
+                    "Until_sandbox_task_terminal": {
+                      "type": "Until",
+                      "runAfter": {
+                        "Set_sandbox_status_default": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": "@or(equals(toUpper(variables('SandboxStatus')), 'SUCCEEDED'), equals(toUpper(variables('SandboxStatus')), 'COMPLETE'), equals(toUpper(variables('SandboxStatus')), 'FAILED'), equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'), equals(toUpper(variables('SandboxStatus')), 'NOT_FOUND'))",
+                      "limit": {
+                        "count": 240,
+                        "timeout": "@{concat('PT', string(parameters('TimeoutMinutes')), 'M')}"
+                      },
+                      "actions": {
+                        "Delay_before_sandbox_poll": {
+                          "type": "Wait",
+                          "runAfter": {},
+                          "inputs": {
+                            "interval": {
+                              "count": 15,
+                              "unit": "Second"
+                            }
+                          }
+                        },
+                        "Get_sandbox_task_status": {
+                          "type": "Http",
+                          "runAfter": {
+                            "Delay_before_sandbox_poll": [
+                              "Succeeded"
+                            ]
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs",
+                                "outputs"
+                              ]
+                            }
+                          },
+                          "description": "Query param is 'sandbox_task_id', not 'id' -- the polyswarm_api SDK's SandboxTask.get() sends sandbox_task_id for this bare /sandbox/sandboxtask GET. The create/finalize calls above use the '/instance' suffixed endpoint, which takes 'id' instead. Live-verified 2026-09-23 (two EICAR/.gz submissions, CAPE and Triage): both polled successfully to SUCCEEDED with this exact query param and returned populated 'report' objects.",
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask",
+                            "queries": {
+                              "sandbox_task_id": "@string(outputs('Compose_task_id'))",
+                              "community": "@parameters('Community')"
+                            },
+                            "headers": {
+                              "Authorization": "@body('Get_PolySwarm_API_key')?['value']",
+                              "Accept": "application/json",
+                              "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-DefenderFile-Entity)')"
+                            }
+                          }
+                        },
+                        "Set_sandbox_status": {
+                          "type": "SetVariable",
+                          "runAfter": {
+                            "Get_sandbox_task_status": [
+                              "Succeeded",
+                              "Failed",
+                              "TimedOut"
+                            ]
+                          },
+                          "inputs": {
+                            "name": "SandboxStatus",
+                            "value": "@if(equals(outputs('Get_sandbox_task_status')?['statusCode'], 204), 'NOT_FOUND', coalesce(body('Get_sandbox_task_status')?['status'], 'PENDING'))"
+                          },
+                          "description": "HTTP 204 with an empty body means PolySwarm has no such task (not found). It is handled explicitly as NOT_FOUND, which ends the poll loop, and the empty body is never read."
+                        }
+                      }
+                    },
+                    "Add_verdict_comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {
+                        "Until_sandbox_task_terminal": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                          "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCommunity: ', parameters('Community'), ' | Provider: ', parameters('Provider'), '<br>\n', if(equals(toUpper(variables('SandboxStatus')), 'NOT_FOUND'), concat('PolySwarm returned no result (HTTP 204, not found) for sandbox task ', string(outputs('Compose_task_id')), '. The task may have been removed, or the community name does not match the one it was created in. No verdict is available.'), if(equals(toUpper(variables('SandboxStatus')), 'FAILED'), concat('Sandbox task ', string(outputs('Compose_task_id')), ' failed.'), if(not(or(equals(toUpper(variables('SandboxStatus')), 'SUCCEEDED'), equals(toUpper(variables('SandboxStatus')), 'COMPLETE'), equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'))), concat('Sandbox task ', string(outputs('Compose_task_id')), ' did not complete within ', string(parameters('TimeoutMinutes')), ' minutes (last status ', variables('SandboxStatus'), '). It may still finish; check the report link once it does.'), concat('Verdict: ', if(equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'), 'known good', if(equals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), null), 'unknown', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('MaliciousScoreThreshold')), 'malicious', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('SuspiciousScoreThreshold')), 'suspicious', 'benign')))), ' (derived from score/status thresholds, not an API field -- see this action''s comment) | Score: ', coalesce(string(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score'])), 'n/a'), '<br>\n', 'Family: ', if(empty(replace(replace(replace(replace(string(join(coalesce(body('Get_sandbox_task_status')?['report']?['malware_family'], json('[]')), ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')), 'n/a', replace(replace(replace(replace(string(join(coalesce(body('Get_sandbox_task_status')?['report']?['malware_family'], json('[]')), ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')), '<br>\n', 'MITRE ATT&amp;CK: ', join(coalesce(body('Get_sandbox_task_status')?['report']?['ttp'], json('[]')), ', '), '<br>\n', 'Report: ', concat('https://polyswarm.network/sandbox/', string(outputs('Compose_task_id'))))))))}"
+                        }
+                      }
+                    },
+                    "Send_result_to_PolySwarmSandbox_CL": {
+                      "type": "Http",
+                      "runAfter": {
+                        "Until_sandbox_task_terminal": [
+                          "Succeeded"
+                        ]
+                      },
+                      "description": "Writes one row to PolySwarmSandbox_CL via the Azure Monitor Logs Ingestion API, regardless of whether the sandbox task succeeded, failed, or this playbook's own polling timed out waiting on it (SandboxStatus reflects whichever happened). Best-effort: failure here does not block or alter the incident comment above, which remains the primary signal. CompletedAt is approximated as the time this playbook observed the terminal status (utcNow()), since the sandbox task object has no explicit completion timestamp field among the ones confirmed live on 2026-09-23. Needs 'Monitoring Metrics Publisher' on the target DCR for this playbook's managed identity -- see grant-defender-permissions.sh.",
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "outputs"
+                          ]
+                        }
+                      },
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('DceLogsIngestionEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com"
+                        },
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": [
+                          {
+                            "TimeGenerated": "@{utcNow()}",
+                            "TaskId": "@string(outputs('Compose_task_id'))",
+                            "ArtifactType": "FILE",
+                            "Sha256": "@{outputs('Compose_validated_hash')}",
+                            "Url": "",
+                            "FileName": "@{outputs('Select_latest_sighting')?['FileName']}",
+                            "Source": "DefenderFile",
+                            "Provider": "@{parameters('Provider')}",
+                            "Community": "@{parameters('Community')}",
+                            "Verdict": "@{if(equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'), 'known good', if(equals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), null), 'unknown', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('MaliciousScoreThreshold')), 'malicious', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('SuspiciousScoreThreshold')), 'suspicious', 'benign'))))}",
+                            "Score": "@coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score'])",
+                            "Family": "@{join(coalesce(body('Get_sandbox_task_status')?['report']?['malware_family'], json('[]')), ', ')}",
+                            "Techniques": "@coalesce(body('Get_sandbox_task_status')?['report']?['ttp'], json('[]'))",
+                            "ReportUrl": "@{concat('https://polyswarm.network/sandbox/', string(outputs('Compose_task_id')))}",
+                            "CreatedAt": "@{coalesce(body('Get_sandbox_task_status')?['created'], utcNow())}",
+                            "CompletedAt": "@{utcNow()}",
+                            "IncidentArmId": "@{triggerBody()?['IncidentArmID']}"
+                          }
+                        ],
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 3,
+                          "interval": "PT10S"
+                        }
+                      }
+                    },
+                    "Add_verdict_comment_unless_conflict": {
+                      "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_verdict_comment": [
+                          "Failed"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_verdict_comment')?['statusCode']",
+                                409
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_verdict_comment_retry": {
+                          "type": "ApiConnection",
+                          "runAfter": {},
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                              "message": "@{concat('<p><strong>PolySwarm sandbox (Defender file detonation)</strong><br>\nHash: ', outputs('Compose_validated_hash'), '<br>\nCommunity: ', parameters('Community'), ' | Provider: ', parameters('Provider'), '<br>\n', if(equals(toUpper(variables('SandboxStatus')), 'NOT_FOUND'), concat('PolySwarm returned no result (HTTP 204, not found) for sandbox task ', string(outputs('Compose_task_id')), '. The task may have been removed, or the community name does not match the one it was created in. No verdict is available.'), if(equals(toUpper(variables('SandboxStatus')), 'FAILED'), concat('Sandbox task ', string(outputs('Compose_task_id')), ' failed.'), if(not(or(equals(toUpper(variables('SandboxStatus')), 'SUCCEEDED'), equals(toUpper(variables('SandboxStatus')), 'COMPLETE'), equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'))), concat('Sandbox task ', string(outputs('Compose_task_id')), ' did not complete within ', string(parameters('TimeoutMinutes')), ' minutes (last status ', variables('SandboxStatus'), '). It may still finish; check the report link once it does.'), concat('Verdict: ', if(equals(toUpper(variables('SandboxStatus')), 'KNOWN_GOOD'), 'known good', if(equals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), null), 'unknown', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('MaliciousScoreThreshold')), 'malicious', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score']), parameters('SuspiciousScoreThreshold')), 'suspicious', 'benign')))), ' (derived from score/status thresholds, not an API field -- see this action''s comment) | Score: ', coalesce(string(coalesce(body('Get_sandbox_task_status')?['report']?['malscore'], body('Get_sandbox_task_status')?['report']?['analysis']?['score'])), 'n/a'), '<br>\n', 'Family: ', if(empty(replace(replace(replace(replace(string(join(coalesce(body('Get_sandbox_task_status')?['report']?['malware_family'], json('[]')), ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')), 'n/a', replace(replace(replace(replace(string(join(coalesce(body('Get_sandbox_task_status')?['report']?['malware_family'], json('[]')), ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')), '<br>\n', 'MITRE ATT&amp;CK: ', join(coalesce(body('Get_sandbox_task_status')?['report']?['ttp'], json('[]')), ', '), '<br>\n', 'Report: ', concat('https://polyswarm.network/sandbox/', string(outputs('Compose_task_id'))))))))}"
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Continue_to_If_create_failed": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "connectionName": "[variables('KeyVaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "connectionName": "[variables('Office365ConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+              }
+            }
+          },
+          "Community": {
+            "value": "[parameters('Community')]"
+          },
+          "AllowPublicCommunity": {
+            "value": "[parameters('AllowPublicCommunity')]"
+          },
+          "Provider": {
+            "value": "[parameters('Provider')]"
+          },
+          "VmSlug": {
+            "value": "[parameters('VmSlug')]"
+          },
+          "NetworkEnabled": {
+            "value": "[parameters('NetworkEnabled')]"
+          },
+          "TimeoutMinutes": {
+            "value": "[parameters('TimeoutMinutes')]"
+          },
+          "KeyVaultName": {
+            "value": "[parameters('KeyVaultName')]"
+          },
+          "KeyVaultSecretName": {
+            "value": "[parameters('KeyVaultSecretName')]"
+          },
+          "DefenderApiBaseUrl": {
+            "value": "[parameters('DefenderApiBaseUrl')]"
+          },
+          "PolySwarmApiBaseUrl": {
+            "value": "[parameters('PolySwarmApiBaseUrl')]"
+          },
+          "MaxFileSizeBytes": {
+            "value": "[parameters('MaxFileSizeBytes')]"
+          },
+          "MaliciousScoreThreshold": {
+            "value": "[parameters('MaliciousScoreThreshold')]"
+          },
+          "SuspiciousScoreThreshold": {
+            "value": "[parameters('SuspiciousScoreThreshold')]"
+          },
+          "DceLogsIngestionEndpoint": {
+            "value": "[parameters('DceLogsIngestionEndpoint')]"
+          },
+          "DcrImmutableId": {
+            "value": "[parameters('DcrImmutableId')]"
+          },
+          "StreamName": {
+            "value": "[parameters('StreamName')]"
+          },
+          "RequireAnalystApproval": {
+            "value": "[parameters('RequireAnalystApproval')]"
+          },
+          "ApproverEmail": {
+            "value": "[parameters('ApproverEmail')]"
+          },
+          "ApprovalTimeoutHours": {
+            "value": "[parameters('ApprovalTimeoutHours')]"
+          },
+          "DeniedPathFragments": {
+            "value": "[parameters('DeniedPathFragments')]"
+          },
+          "SolutionVersion": {
+            "value": "[parameters('SolutionVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(parameters('DcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+      "scope": "[parameters('DcrResourceId')]",
+      "condition": "[parameters('create_role_assignment')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "playbookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]"
+    }
+  }
+}

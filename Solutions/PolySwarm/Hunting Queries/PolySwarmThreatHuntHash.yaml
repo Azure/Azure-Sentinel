@@ -1,0 +1,52 @@
+id: b3330e16-636e-4f74-8080-848d0d3bf2a4
+name: PolySwarm - Threat Hunting Hash
+description: |
+  'PolySwarm file-hash correlation. Joins active PolySwarm hash indicators against
+  observed file hashes on SHA-256, SHA-1 and MD5.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+tags:
+  - PolySwarm
+query: |
+  _Im_FileEvent
+  | extend HashPairs = pack_array(
+      pack('t', 'SHA256', 'v', tolower(TargetFileSHA256)),
+      pack('t', 'SHA1', 'v', tolower(TargetFileSHA1)),
+      pack('t', 'MD5', 'v', tolower(TargetFileMD5)))
+  | mv-expand HashPairs
+  | extend Hash = tostring(HashPairs.v), HashType = tostring(HashPairs.t)
+  | where isnotempty(Hash)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey in ("file:hashes.'SHA-256'", "file:hashes.SHA-256", "file:hashes.'SHA-1'", "file:hashes.SHA-1", "file:hashes.'MD5'", "file:hashes.MD5")
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "PolySwarm"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  | extend ObservableValue = tolower(ObservableValue)
+  ) on $left.Hash == $right.ObservableValue
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | project Hash, HashType, Confidence, Family, Permalink
+  | extend FileHash_0_Value = Hash
+  | extend FileHash_0_Algorithm = HashType
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashType
+version: 1.0.1
