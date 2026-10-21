@@ -70,7 +70,8 @@ function renameParserBindings(query, reservedNames) {
     if (!Bridge.is(node, kusto.Syntax.LetStatement) || !reserved.has(node.Name.SimpleName)) continue;
     const symbol = node.Name.ReferencedSymbol;
     if (!symbol) throw new Error(`Cannot resolve local parser binding '${node.Name.SimpleName}'.`);
-    const base = `__xdr_inline_${node.Name.SimpleName.replace(/[^A-Za-z0-9_]/g, '_')}`;
+    // Graph Custom Detections reject let names that start with an underscore.
+    const base = `XdrInline${node.Name.SimpleName.replace(/[^A-Za-z0-9]/g, '')}`;
     let target = base;
     for (let suffix = 2; occupied.has(target); suffix++) target = `${base}_${suffix}`;
     occupied.add(target);
@@ -143,7 +144,7 @@ function renameParserBindings(query, reservedNames) {
   return { query: rewritten, renames };
 }
 
-module.exports = { renameParserBindings };
+module.exports = { renameParserBindings, loadLanguage, descendants, items };
 
 if (require.main === module) {
   try {

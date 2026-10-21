@@ -1425,7 +1425,8 @@ Conversion automatically renames local `let` bindings that match a solution pars
 normalization before building both the CD installation and its registration, including
 when it receives previously authored detection YAML.
 
-Names use `__xdr_inline_<original>` with a numeric suffix when necessary. Microsoft's
+Names use `XdrInline<original>` (Graph Custom Detections reject names that start with an
+underscore) with a numeric suffix when necessary. Microsoft's
 KQL parser and semantic binder identify the declaration and its references, including
 nested scopes. This is not a text replacement: columns, strings, comments, parameters
 that shadow the binding, and native parser YAML remain unchanged. Repeated runs are
@@ -1436,6 +1437,28 @@ It fails explicitly when a safe rewrite cannot be verified, including wildcard-s
 bindings, `union withsource`, and implicit output-column name changes. Use explicit inputs
 and column aliases in these cases. Missing tooling is a setup error, not permission to
 skip normalization.
+
+### Solution parser inlining
+
+Graph refuses to enable a Custom Detection whose query calls a Sentinel workspace function
+(parser). Conversion therefore inlines every solution-local parser
+(`Solutions/<solution>/Parsers/**/*.yaml`, matched by `FunctionAlias`/`FunctionName`) that the
+Sentinel rule references: it prepends `let XdrInline<Alias> = view() { <FunctionQuery> };`
+(or `let XdrInline<Alias> = (<name>:<type>=<default>, ...) { ... };` when the parser has
+`FunctionParams`, keeping call syntax) and renames the references with the KQL binder
+(`kql/rename-free-references.cjs`), never by text replacement. Parsers that reference other
+solution parsers are inlined in dependency order; cycles and tabular parameters are reported as
+a conversion error. Names never start with an underscore (Graph rejects them) and get a digit
+suffix on collision. The Sentinel Analytic Rule is not changed.
+
+Each inlined parser is recorded in `contentProvenance.conversion.inlinedParsers` (`alias`,
+`inlineName`, `path`, `functionQuerySha256`) and as an informational conversion note. Required
+workloads come from the underlying tables, so the parser alias no longer needs a mapping.
+Built-in ASIM functions (`_ASim_*`, `_Im_*`) are not inlined: the repository has the ASIM parsers
+under `Parsers/ASim*`, but they are large source-specific unions and Graph query size limits make
+generic inlining unsafe; they remain a documented limitation. Opt out per run with
+`inlineSolutionParsers: false` in `migration-config.yaml`. Reconvert with `--overwrite` to
+apply this to existing detections.
 
 This offline check uses the parsers shipped in the solution, including nested `.yaml`
 and `.yml` files. It does not discover unrelated functions installed in a target tenant,
@@ -3692,6 +3715,7 @@ functionMappings:
 columnMappings:
   LegacyTable_CL:
     UserName: AccountUpn
+inlineSolutionParsers: true # default; false keeps solution parser calls as-is
 ```
 
 Mappings are applied token-by-token. Time-column handling is table-aware:
