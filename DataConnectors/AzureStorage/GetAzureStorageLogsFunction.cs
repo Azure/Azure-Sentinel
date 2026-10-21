@@ -136,16 +136,13 @@ namespace HoneyBucketLogParser
                 var logAnalyticsKey = Environment.GetEnvironmentVariable("LogAnalyticsKey");
                 var logAnalyticsWorkspace = Environment.GetEnvironmentVariable("LogAnalyticsWorkspace");
 
-                log.LogInformation("BlobStorageConnectionString " + blobStorageConnectionString);
-                log.LogInformation("BlobStorageAccountKeys " + blobStorageKeys);
-                log.LogInformation("LogAnalyticsKey " + logAnalyticsKey);
                 log.LogInformation("LogAnalyticsWorkspace " + logAnalyticsWorkspace);
 
                 foreach (var setting in new string[] { logAnalyticsWorkspace, logAnalyticsKey, blobStorageKeys, blobStorageConnectionString })
                 {
                     if (string.IsNullOrWhiteSpace(setting) || setting.StartsWith("http") || setting.StartsWith("@Microsoft.KeyVault"))
                     {
-                        log.LogError("Invalid setting detected " + setting);
+                        log.LogError("Invalid application setting detected.");
                         log.LogError("Please see https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references");
                         throw new InvalidOperationException("Invalid setting");
                     }
