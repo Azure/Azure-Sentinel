@@ -300,14 +300,14 @@ def graph_detection_payload(
 
 
 def _normalize_graph_tactics(tactics: Any) -> Any:
-    """Drop the empty ``subTechniques`` list that live Graph adds on readback."""
+    """Drop empty ``techniques``/``subTechniques`` lists that live Graph adds on readback."""
     if isinstance(tactics, list):
         return [_normalize_graph_tactics(item) for item in tactics]
     if isinstance(tactics, dict):
         return {
             key: _normalize_graph_tactics(value)
             for key, value in tactics.items()
-            if not (key == "subTechniques" and value in ([], None))
+            if not (key in {"techniques", "subTechniques"} and value in ([], None))
         }
     return tactics
 

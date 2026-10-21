@@ -1082,6 +1082,17 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(result["results"][0]["tacticProjectionVerified"])
         self.assertTrue(result["results"][0]["contentProvenanceVerified"])
 
+    def test_readback_normalization_treats_missing_and_empty_techniques_as_equal(self):
+        from solution_manager.qualification.deployment import _normalize_graph_tactics
+
+        authored = [{"tactic": "Execution"}]
+        graph = [{"tactic": "Execution", "techniques": [], "subTechniques": []}]
+        self.assertEqual(_normalize_graph_tactics(authored), _normalize_graph_tactics(graph))
+        self.assertNotEqual(
+            _normalize_graph_tactics(authored),
+            _normalize_graph_tactics([{"tactic": "Execution", "techniques": [{"technique": "T1059"}]}]),
+        )
+
     def test_deploy_readback_still_rejects_real_tactic_and_status_drift(self):
         def drift(readback):
             readback["status"] = "disabled"
