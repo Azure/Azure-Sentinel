@@ -19,6 +19,13 @@ description: |
   truncated response, or no visible anomaly at all if the fatal error is
   only logged) is itself unconfirmed - this rule does not assume a
   specific response-status fingerprint, only repetition.
+
+  2026-10-21 second fix, same day: the query below still matched only a
+  literal duplicated "Content-Disposition" string, same bug as
+  phpup2026-UploadProgressOversizedPost.yaml (see that rule's
+  description for why this is under-inclusive against a real
+  reproduction). Fixed the same way: generic "any header name repeated"
+  check before the burst aggregation.
   References:
   - https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
   - https://github.com/rjmendez/phpup-2026'
@@ -44,8 +51,12 @@ query: |
   AzureDiagnostics
   | where Category in ("ApplicationGatewayAccessLog", "FrontDoorAccessLog")
   | where requestBody_s has "multipart/form-data"
-  | extend CDCount = countof(requestBody_s, "Content-Disposition")
-  | where CDCount >= 2
+  | extend HeaderNames = extract_all(@"\r\n([!-9;-~]+):", requestBody_s)
+  | mv-expand HeaderName = HeaderNames to typeof(string)
+  | summarize HeaderOccurrences = count()
+      by TimeGenerated, clientIP_s, host_s, requestUri_s, HeaderName
+  | where HeaderOccurrences >= 2
+  | summarize dummy = 1 by TimeGenerated, clientIP_s, host_s, requestUri_s
   | summarize
       Hits      = count(),
       Targets   = make_set(requestUri_s, 5),
@@ -70,7 +81,7 @@ entityMappings:
         columnName: HostName
       - identifier: DnsDomain
         columnName: HostNameDomain
-version: 2.0.0
+version: 2.1.0
 kind: Scheduled
 metadata:
     source:
