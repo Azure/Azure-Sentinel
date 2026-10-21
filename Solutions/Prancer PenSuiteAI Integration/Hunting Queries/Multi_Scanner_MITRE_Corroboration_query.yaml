@@ -1,0 +1,44 @@
+id: 85d59d65-23af-42bf-bb4d-01cd4385ff59
+name: Multi-scanner MITRE technique corroboration
+description: |
+  Correlates MitreIds across different ScanTypes for the same ConfigId within a rolling 14-day window,
+  surfacing independent corroborating evidence of a plausible attack path built purely from SAST/SCA/CSPM
+  agreement. Requires no SwarmHack data at all, so it has standalone value for customers who haven't
+  licensed the SwarmHack module.
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1595
+query: |
+  // isnotempty(MitreIds)/isnotempty(ConfigId) and the TimeGenerated window filter run before
+  // parse_json/mv-expand to keep the per-technique expansion small.
+  let LookbackWindow = 14d;
+  let MinDistinctScanTypes = 2;
+  PrancerFindings
+  | where TimeGenerated > ago(LookbackWindow)
+  | where isnotempty(MitreIds)
+  | where isnotempty(ConfigId)
+  | extend MitreIdArray = parse_json(MitreIds)
+  | mv-expand MitreId = MitreIdArray to typeof(string)
+  | where isnotempty(MitreId)
+  | summarize
+      ScanTypesObserving = make_set(ScanType, 20),
+      DeviceProductsObserving = make_set(DeviceProduct, 20),
+      DistinctScanTypeCount = dcount(ScanType),
+      CorroboratingFindingIds = make_set(FindingId, 50),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+    by ConfigId, MitreId
+  | where DistinctScanTypeCount >= MinDistinctScanTypes
+  | project ConfigId, MitreId, DistinctScanTypeCount, ScanTypesObserving, DeviceProductsObserving,
+             CorroboratingFindingIds, FirstSeen, LastSeen
+  | order by DistinctScanTypeCount desc
+customDetails:
+  ConfigId: ConfigId
+  MitreId: MitreId
+  DistinctScanTypeCount: DistinctScanTypeCount
+version: 1.0.0
