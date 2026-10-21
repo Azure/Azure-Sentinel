@@ -225,12 +225,128 @@ Create the same resources by hand, in the bucket's region and in this order. Rep
 | Messages deleted, no rows after 30 minutes | Rows rejected by the data collection rule | Enable diagnostic settings on `DatabricksAuditLogs-DCR` and check `DCRLogErrors` |
 | Messages in the `-dlq` queue | A file failed five reads | Poll the `-dlq` queue to see the file; fix the cause, then **Start DLQ redrive** |
 
+## Troubleshooting commands
+
+Use these when the setup looks right but rows do not arrive, or to find when something stopped. Run the AWS commands in CloudShell in the bucket's region. They only read. Set the names first; leave `P` empty if the `workspaceId=` folders are at the top of the bucket:
+
+```bash
+B=<bucket>; Q=MicrosoftSentinelDatabricksAuditSqs; P=audit-logs/
+```
+
+**1. Are Databricks files arriving?** Newest files in one workspace folder (times are UTC):
+
+```bash
+aws s3 ls "s3://$B/${P}workspaceId=<workspace id>/" --recursive | sort | tail -5
+```
+
+Recent `.json` files of a few KB to a few hundred KB are normal. Nothing recent means Databricks log delivery has stopped, which is outside the connector. To count every object in the bucket, run `aws s3 ls "s3://$B/" --recursive --summarize | tail -3`; on a large bucket this takes minutes.
+
+**2. The notification as S3 holds it.**
+
+```bash
+aws s3api get-bucket-notification-configuration --bucket "$B"
+```
+
+The prefix must equal the stack output `NotificationPrefix`: `workspaceId%3D` when there is no prefix, never `workspaceId=`. The destination must be the queue from the `DatabricksAuditLogsResources.json` stack.
+
+**3. Did S3 send events, and did Microsoft Sentinel read them?** Hourly sums for the last 24 hours:
+
+```bash
+for M in NumberOfMessagesSent NumberOfMessagesReceived NumberOfMessagesDeleted NumberOfEmptyReceives; do
+  echo "== $M"
+  aws cloudwatch get-metric-statistics --namespace AWS/SQS --metric-name $M \
+    --dimensions Name=QueueName,Value=$Q --statistics Sum --period 3600 \
+    --start-time $(date -u -d '-24 hours' +%FT%TZ) --end-time $(date -u +%FT%TZ) \
+    --query 'sort_by(Datapoints,&Timestamp)[].[Timestamp,Sum]' --output text
+done
+```
+
+Sent 0 while files arrive: the notification does not match. Sent above 0 and Received 0: the collector is not reading the queue. Received above 0 and Deleted 0: the role cannot read the files (dead-letter queue grows). All three above 0: check the Azure side. Each line covers the hour that starts at its timestamp. The metrics lag 5 to 10 minutes. Empty receives of about 36 an hour mean the collector is polling.
+
+**4. When did events start or stop?** Only the hours with messages, over the last 7 days:
+
+```bash
+aws cloudwatch get-metric-statistics --namespace AWS/SQS --metric-name NumberOfMessagesSent \
+  --dimensions Name=QueueName,Value=$Q --statistics Sum --period 3600 \
+  --start-time $(date -u -d '-7 days' +%FT%TZ) --end-time $(date -u +%FT%TZ) \
+  --query 'sort_by(Datapoints,&Timestamp)[?Sum>`0`].[Timestamp,Sum]' --output text
+```
+
+A single message right after a notification change is the `s3:TestEvent`.
+
+**5. What changed the notification, and to what?** CloudTrail keeps 90 days. This prints the time, bucket and filters of each change, without user names:
+
+```bash
+aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=PutBucketNotification \
+  --start-time $(date -u -d '-30 days' +%FT%TZ) --query 'Events[].CloudTrailEvent' --output json \
+  | jq -r '.[] | fromjson | "\(.eventTime) \(.requestParameters.bucketName)\n\(.requestParameters.NotificationConfiguration // .requestParameters | tostring)\n"'
+```
+
+If events in step 4 stop at the time of a change, that change is the cause. For the queue or bucket policy, run it again with `SetQueueAttributes` or `PutBucketPolicy` as the event name.
+
+**6. How a file was written.** Use a key from step 1:
+
+```bash
+aws s3api head-object --bucket "$B" --key "<key>" --query '{Modified:LastModified,Replication:ReplicationStatus,SSE:ServerSideEncryption}'
+```
+
+An empty `Replication` means Databricks wrote the file directly. `REPLICA` means S3 replication copied it from another bucket. `SSE` `aws:kms` with a customer managed key needs `KmsKeyArn` in the `DatabricksAuditLogsResources.json` stack.
+
+**7. File format.** This prints the first bytes and the field names, not the log values:
+
+```bash
+F="<key>"
+aws s3 cp "s3://$B/$F" - | head -c 16 | od -An -tx1 -c
+aws s3 cp "s3://$B/$F" - | head -1 | python3 -c "import sys,json; print(sorted(json.loads(sys.stdin.read()).keys()))"
+```
+
+The first byte must be `7b` (`{`): one JSON object per line, uncompressed. `1f 8b` is gzip and `5b` (`[`) is a JSON array; the data collection rule accepts neither. The field names must include `timestamp`, `version`, `serviceName`, `actionName`, `requestId` and `userIdentity`.
+
+**8. Microsoft Sentinel side.** Rows per workspace with the ingestion window and missing fields. Every workspace that delivers should appear; `0` holds account-level events:
+
+```kusto
+DatabricksAudit_CL
+| where ingestion_time() > ago(2d)
+| summarize Rows = count(), FirstIngested = min(ingestion_time()), LastIngested = max(ingestion_time()), LatestEvent = max(EventTime),
+            NoEventTime = countif(isnull(EventTime)), NoService = countif(isempty(ServiceName)),
+            NoAction = countif(isempty(ActionName)), NoRequestId = countif(isempty(RequestId))
+  by WorkspaceId
+| order by Rows desc
+```
+
+Rows per hour of ingestion; a gap shows when ingestion stopped or started:
+
+```kusto
+DatabricksAudit_CL
+| where ingestion_time() > ago(7d)
+| summarize Rows = count(), Workspaces = dcount(WorkspaceId), LatestEvent = max(EventTime) by Hour = bin(ingestion_time(), 1h)
+| order by Hour asc
+```
+
+**9. Test file.** Checks S3, the queue, the collector and the table without waiting for Databricks:
+
+```bash
+T=$(date -u +%s%3N); D=$(date -u +%F)
+printf '{"version":"2.0","timestamp":%s,"workspaceId":"0","serviceName":"sentinelTest","actionName":"connectorTest","requestId":"sentinel-test-%s","requestParams":{},"response":{"statusCode":200},"userIdentity":{"email":"sentinel-test"},"sourceIPAddress":"127.0.0.1","userAgent":"sentinel-test"}\n' $T $T > test.json
+aws s3 cp test.json "s3://$B/${P}workspaceId=0/date=$D/sentinel-test-$T.json"
+```
+
+Step 3 should show one message sent within 10 minutes, and `DatabricksAudit_CL | where ServiceName == "sentinelTest"` one row within about 20 minutes.
+
+Things that mislead:
+
+- The queue list in the SQS console shows 0 messages both when nothing arrives and when everything is read, because Microsoft Sentinel deletes each message within minutes. Use step 3.
+- The `s3:TestEvent` is sent whatever the prefix, so it does not show that the prefix matches the files. The test file in step 9 does.
+- `SentinelHealth` returns nothing until health monitoring is turned on (step 2).
+- `DCRLogErrors` records errors only from the time its diagnostic setting is added.
+- CloudTrail and `aws sts` output carries user names and access key IDs. The commands above leave them out; remove them from anything you share.
+
 ## Operations
 
 - **Daily check**: the first validation query above; save it as a scheduled analytics rule if you want an alert.
 - **Collector changes**: a collector cannot be edited. To change the Role ARN or Queue URL, delete it on the connector page and add it again.
 - **Another bucket or Databricks account**: deploy `DatabricksAuditLogsResources.json` again with a different stack, role and queue name, add a notification on that bucket, and add a second collector.
-- **Loading history**: only files created after the notification exists are read. Upload older files again under the prefix (or `workspaceId=`) with new names to ingest them.
+- **Loading history**: only files created after the notification exists are read. Upload older files again under the prefix (or under `workspaceId=` folders at the top of the bucket) with new names to ingest them.
 - **Removal**: delete the collector, then the solution in the content hub, the S3 event notification, and the `MicrosoftSentinel-DatabricksAudit` stack. Keep the identity provider if other Microsoft Sentinel AWS connectors use it.
 
 ## Known limits
