@@ -1,0 +1,85 @@
+name: NPF Pull Request Labeler
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - master
+    paths:
+      - "Solutions/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label-npf-pr:
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    name: Label NPF Migration, Validation, and Qualification PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PR files and apply NPF labels
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            const activePaths = files
+              .filter(f => f.status !== 'removed')
+              .map(f => f.filename);
+
+            const hasXdrContent = activePaths.some(p =>
+              /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
+            );
+            const hasValidationEvidence = activePaths.some(p =>
+              /^Solutions\/[^/]+\/Evidence\/(pr-qualification\/pr-qualification-result\.json|workflow-state\.json|decision-manifest\.json)$/.test(p)
+            );
+            const hasQualificationEvidence = activePaths.some(p =>
+              /^Solutions\/[^/]+\/Evidence\/(qualification-evidence\.json|receipts\/(alert-parity-live|workbook-queries-live|arm-deployment-readback|graph-detection-deployment)\.json)$/.test(p)
+            );
+
+            const desired = new Set();
+            if (hasXdrContent) {
+              desired.add('Solution');
+              desired.add('XDR');
+              desired.add('Migration');
+            }
+            if (hasValidationEvidence) {
+              desired.add('Solution');
+              desired.add('Validation');
+            }
+            if (hasQualificationEvidence) {
+              desired.add('Solution');
+              desired.add('Qualification');
+            }
+
+            if (desired.size === 0) {
+              core.info('No NPF Migration, Validation, or Qualification artifacts detected.');
+              return;
+            }
+
+            const existing = new Set(
+              (context.payload.pull_request?.labels || []).map(l => l.name)
+            );
+            const labelsToAdd = [...desired].filter(l => !existing.has(l));
+
+            if (labelsToAdd.length === 0) {
+              core.info(`All applicable NPF labels already present: ${[...desired].join(', ')}`);
+              return;
+            }
+
+            core.info(`Adding NPF labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labelsToAdd
+            });
