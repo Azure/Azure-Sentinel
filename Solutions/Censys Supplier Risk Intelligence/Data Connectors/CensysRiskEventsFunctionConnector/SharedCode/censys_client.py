@@ -1,4 +1,4 @@
-"""Client for the Censys Supply Chain risk-events API."""
+"""Client for the Censys supply chain API (risk events and suppliers)."""
 import time
 from typing import Dict, Iterator, List, Optional
 
@@ -10,7 +10,7 @@ from .logger import applogger
 
 
 class CensysClient:
-    """Reads risk events page by page, following the Censys cursor rules."""
+    """Reads risk events and suppliers page by page, following the Censys cursor rules."""
 
     def __init__(self, api_token: str, organization_id: str, deadline: Optional[float] = None,
                  hard_deadline: Optional[float] = None, session: Optional[requests.Session] = None):
@@ -22,11 +22,15 @@ class CensysClient:
         self.deadline = deadline
         self.hard_deadline = hard_deadline
         self.organization_id = organization_id
-        self.url = consts.API_BASE_URL + consts.RISK_EVENTS_PATH
         self.session = session or requests.Session()
-        self.session.headers.update({"Authorization": f"Bearer {api_token}", "Accept": "application/json"})
+        self.session.headers.update({
+            "Authorization": f"Bearer {api_token}",
+            "Accept": "application/json",
+            "User-Agent": consts.USER_AGENT,
+        })
 
     def _check_budget(self) -> None:
+        """Stop the run when the time budget is used up, so that no new API call is started."""
         if self.deadline is not None and time.time() >= self.deadline:
             raise CensysTimeBudgetReached("Time budget reached, no further Censys API call is started.")
 
@@ -37,12 +41,13 @@ class CensysClient:
         time.sleep(seconds)
 
     def _timeout(self) -> float:
+        """Return the timeout of one request, which never lets the request run past the hard limit."""
         if self.hard_deadline is None:
             return consts.REQUEST_TIMEOUT
         return max(1.0, min(consts.REQUEST_TIMEOUT, self.hard_deadline - time.time()))
 
     def get_page(self, params: Dict[str, str], path: Optional[str] = None) -> dict:
-        """GET one page, retrying throttling and transient server errors, within the time budget."""
+        """GET one page, retrying throttling and transient server errors within the time budget."""
         path = path or consts.RISK_EVENTS_PATH
         url = consts.API_BASE_URL + path
         for attempt in range(1, consts.MAX_RETRIES + 1):
@@ -55,22 +60,13 @@ class CensysClient:
                 continue
             status = resp.status_code
             if status == 200:
-                try:
-                    body = resp.json()
-                except ValueError:
-                    raise CensysException(f"Censys returned HTTP 200 with a body that is not valid JSON: {resp.text[:200]}")
-                result = (body or {}).get("result") or {}
-                shown = {k: ("<set>" if k == "page_token" else v) for k, v in params.items()}
-                items = result.get("risk_events") if path == consts.RISK_EVENTS_PATH else result.get("suppliers")
-                what = "events" if path == consts.RISK_EVENTS_PATH else "suppliers"
-                applogger.info(f"{consts.LOG_PREFIX} get_page: API call GET {path} params={shown} -> HTTP 200, "
-                               f"{len(items or [])} {what}, next_page_token={'yes' if result.get('next_page_token') else 'no'}")
-                return body
+                return self._read_response(resp, path, params)
             if status in (401, 403):
-                raise CensysAuthError(f"Censys API rejected the request (HTTP {status}). Check the CensysApiToken and OrganizationId settings: "
-                                      f"{resp.text[:300]}")
+                raise CensysAuthError(f"Censys API rejected the request (HTTP {status}). "
+                                      f"Check the CensysApiToken and OrganizationId settings: {resp.text[:300]}")
             if status == 404:
-                raise CensysException("Censys returned 404: the organization has no default supply chain. Check the OrganizationId setting.")
+                raise CensysException("Censys returned 404: the organization has no default supply chain. "
+                                      "Check the OrganizationId setting.")
             if status == 410:
                 raise CensysCursorExpired("The checkpoint is older than the Censys retention window (HTTP 410).")
             if status in (429, 500, 502, 503, 504):
@@ -78,17 +74,35 @@ class CensysClient:
                     wait = int(resp.headers.get("Retry-After", ""))
                 except ValueError:
                     wait = 2 ** attempt
-                applogger.warning(f"{consts.LOG_PREFIX} get_page: HTTP {status}, retrying in {min(wait, 60)}s (attempt {attempt})")
+                applogger.warning(f"{consts.LOG_PREFIX} get_page: HTTP {status}, "
+                                  f"retrying in {min(wait, 60)}s (attempt {attempt})")
                 self._wait(min(wait, 60))
                 continue
             raise CensysException(f"Censys API error (HTTP {status}): {resp.text[:300]}")
         raise CensysException(f"Censys API still failing after {consts.MAX_RETRIES} attempts.")
 
+    @staticmethod
+    def _read_response(resp: requests.Response, path: str, params: Dict[str, str]) -> dict:
+        """Parse a successful response and log a short summary of the call."""
+        try:
+            body = resp.json()
+        except ValueError:
+            raise CensysException(f"Censys returned HTTP 200 with a body that is not valid JSON: {resp.text[:200]}")
+        result = (body or {}).get("result") or {}
+        is_events = path == consts.RISK_EVENTS_PATH
+        count = len((result.get("risk_events") if is_events else result.get("suppliers")) or [])
+        has_next = "yes" if result.get("next_page_token") else "no"
+        applogger.info(f"{consts.LOG_PREFIX} get_page: API call GET {path} -> HTTP 200, "
+                       f"{count} {'events' if is_events else 'suppliers'}, next_page_token={has_next}")
+        shown = {k: ("<set>" if k == "page_token" else v) for k, v in params.items()}
+        applogger.debug(f"{consts.LOG_PREFIX} get_page: request parameters {shown}")
+        return body
+
     def iter_pages(self, inserted_after_time: str, inserted_after_event_id: Optional[str],
                    filters: Dict[str, str]) -> Iterator[List[dict]]:
         """Yield each page of events, oldest first, until the last page (no next_page_token).
 
-        Every request of one read keeps the same inserted_after_time / inserted_after_event_id, as the API
+        Every request of one read keeps the same inserted_after_time and inserted_after_event_id, as the API
         requires when page_token is used.
         """
         base = {
@@ -114,7 +128,11 @@ class CensysClient:
 
     def iter_suppliers(self) -> Iterator[List[dict]]:
         """Yield each page of suppliers of the default supply chain until the last page (no next_page_token)."""
-        base = {"organization_id": self.organization_id, "page_size": consts.SUPPLIERS_PAGE_SIZE, "order_by": "created_at_asc"}
+        base = {
+            "organization_id": self.organization_id,
+            "page_size": consts.SUPPLIERS_PAGE_SIZE,
+            "order_by": "created_at_asc",
+        }
         page_token, seen = None, set()
         while True:
             params = dict(base)

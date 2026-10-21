@@ -1,4 +1,7 @@
-"""Validation of the Function App settings. Every problem is logged with the name of the setting, then the run stops with one error."""
+"""Validation of the Function App settings.
+
+Every problem is logged with the name of the setting, then the run stops with one error.
+"""
 import datetime
 import re
 from dataclasses import dataclass, field
@@ -44,16 +47,22 @@ class Settings:
 
 
 class _Problems:
+    """The settings that failed the validation. Each problem is logged when it is added."""
+
     def __init__(self):
+        """Start with no problems."""
         self.settings: List[str] = []
 
     def add(self, setting: str, message: str) -> None:
+        """Log the problem with the name of the setting and remember the setting."""
         applogger.error(f"{consts.LOG_PREFIX} validate_settings: setting '{setting}' {message}")
         self.settings.append(setting)
 
     def raise_if_any(self) -> None:
+        """Stop the run with one error that lists all the settings with a problem."""
         if self.settings:
-            raise CensysException(f"Invalid settings: {', '.join(self.settings)}. See the previous error logs for the details.")
+            raise CensysException(f"Invalid settings: {', '.join(self.settings)}. "
+                                  "See the previous error logs for the details.")
 
 
 def _value(raw: Optional[str], name: str) -> str:
@@ -63,6 +72,7 @@ def _value(raw: Optional[str], name: str) -> str:
 
 
 def _items(raw: str, separator: str = ",") -> List[str]:
+    """Split a list setting on the separator, trim each item, and drop empty items and duplicates."""
     items = []
     for item in raw.replace("\n", separator).split(separator):
         item = item.strip()
@@ -78,7 +88,8 @@ def parse_start_time(raw: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
         return consts.DEFAULT_START_TIME, None
     match = _RFC3339.match(value)
     if not match:
-        return None, f"must be a UTC time with date and time, for example {_START_TIME_EXAMPLE}, but is '{value}'."
+        return None, (f"must be a UTC time with date and time, for example {_START_TIME_EXAMPLE}, "
+                      f"but is '{value}'.")
     year, month, day, hour, minute, second = (int(match.group(i)) for i in range(1, 7))
     micro = int((match.group(7) or "0")[:6].ljust(6, "0"))
     zone = match.group(8)
@@ -97,6 +108,7 @@ def parse_start_time(raw: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _choice_list(raw: str, name: str, allowed: Tuple[str, ...], upper: bool, problems: _Problems) -> List[str]:
+    """Return the values of a list setting that only accepts the allowed values, and report the other values."""
     values = []
     for item in _items(_value(raw, name)):
         item = item.upper() if upper else item.lower()
@@ -120,7 +132,8 @@ def load_common(problems: Optional[_Problems] = None) -> Tuple[str, str, str]:
     if not org:
         problems.add("OrganizationId", "is not set. Enter the UUID of your Censys organization.")
     elif not _UUID.match(org):
-        problems.add("OrganizationId", f"must be a UUID, for example 00000000-0000-0000-0000-000000000000, but is '{org}'.")
+        problems.add("OrganizationId",
+                     f"must be a UUID, for example 00000000-0000-0000-0000-000000000000, but is '{org}'.")
     if not storage:
         problems.add("AzureWebJobsStorage", "is not set.")
     if own:
@@ -129,7 +142,10 @@ def load_common(problems: Optional[_Problems] = None) -> Tuple[str, str, str]:
 
 
 def load_settings() -> Settings:
-    """Validate every setting of the main function and return the cleaned values. Raises one CensysException listing the settings."""
+    """Validate every setting of the main function and return the cleaned values.
+
+    Raises one CensysException that lists all the settings with a problem.
+    """
     problems = _Problems()
     token, org, storage = load_common(problems)
     endpoint = (consts.DATA_COLLECTION_ENDPOINT or "").strip()
@@ -155,14 +171,17 @@ def load_settings() -> Settings:
         problems.add("RiskTypeIds", f"has {len(risk_type_ids)} values, at most {consts.MAX_RISK_TYPE_IDS} are allowed.")
     too_long = [r[:20] + "..." for r in risk_type_ids if len(r) > consts.MAX_RISK_TYPE_ID_LENGTH]
     if too_long:
-        problems.add("RiskTypeIds", f"has values longer than {consts.MAX_RISK_TYPE_ID_LENGTH} characters: {too_long}.")
+        problems.add("RiskTypeIds",
+                     f"has values longer than {consts.MAX_RISK_TYPE_ID_LENGTH} characters: {too_long}.")
 
     raw_names = (consts.SUPPLIER_NAMES or "").strip()
     if len(raw_names) > consts.MAX_SUPPLIER_NAMES_LENGTH:
-        problems.add("SupplierNames", f"has {len(raw_names)} characters, at most {consts.MAX_SUPPLIER_NAMES_LENGTH} are allowed.")
+        problems.add("SupplierNames",
+                     f"has {len(raw_names)} characters, at most {consts.MAX_SUPPLIER_NAMES_LENGTH} are allowed.")
     supplier_names = parse_names(raw_names)
 
     problems.raise_if_any()
-    return Settings(api_token=token, organization_id=org, storage_connection=storage, data_collection_endpoint=endpoint,
-                    data_collection_rule_id=rule, start_time=start_time, supplier_names=supplier_names, risk_type_ids=risk_type_ids,
-                    change_types=change_types, severity=severity, rapid_response=rapid or None)
+    return Settings(api_token=token, organization_id=org, storage_connection=storage,
+                    data_collection_endpoint=endpoint, data_collection_rule_id=rule, start_time=start_time,
+                    supplier_names=supplier_names, risk_type_ids=risk_type_ids, change_types=change_types,
+                    severity=severity, rapid_response=rapid or None)

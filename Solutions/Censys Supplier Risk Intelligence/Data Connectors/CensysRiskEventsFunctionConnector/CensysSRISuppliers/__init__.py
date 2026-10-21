@@ -1,4 +1,7 @@
-"""Timer triggered function: keep the supplier names and ids in a storage table. Nothing is sent to Microsoft Sentinel."""
+"""Timer triggered function: keep the supplier names and ids in a storage table.
+
+Nothing is sent to Microsoft Sentinel.
+"""
 import time
 
 import azure.functions as func
@@ -18,7 +21,8 @@ def sync_suppliers(start: float) -> int:
     client = CensysClient(token, organization_id, deadline=start + consts.MAX_RUN_SECONDS,
                           hard_deadline=start + consts.HARD_LIMIT_SECONDS)
     stored, removed = store.sync(client.iter_suppliers())
-    applogger.info(f"{consts.LOG_PREFIX} sync_suppliers: suppliers table updated, {stored} suppliers stored, {removed} removed")
+    applogger.info(f"{consts.LOG_PREFIX} sync_suppliers: suppliers table updated, "
+                   f"{stored} suppliers stored, {removed} removed")
     return stored
 
 
@@ -31,4 +35,5 @@ def main(mytimer: func.TimerRequest) -> None:
     except CensysException as err:
         applogger.error(f"{consts.LOG_PREFIX} main: suppliers sync failed: {err}")
         raise
-    applogger.info(f"{consts.LOG_PREFIX} main: suppliers sync finished, {stored} suppliers in {int(time.time() - start)} sec")
+    applogger.info(f"{consts.LOG_PREFIX} main: suppliers sync finished, "
+                   f"{stored} suppliers in {int(time.time() - start)} sec")

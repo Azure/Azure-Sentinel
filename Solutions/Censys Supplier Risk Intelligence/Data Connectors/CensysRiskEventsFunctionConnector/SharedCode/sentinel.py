@@ -1,4 +1,4 @@
-"""Send events to Microsoft Sentinel through the Logs Ingestion API and the existing data collection rule."""
+"""Send events to Microsoft Sentinel through the Logs Ingestion API and the data collection rule."""
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.identity import AzureAuthorityHosts, DefaultAzureCredential
 from azure.monitor.ingestion import LogsIngestionClient
@@ -12,7 +12,11 @@ class SentinelIngestor:
     """Uploads risk events to the data collection rule stream."""
 
     def __init__(self, endpoint: str, rule_id: str, stream_name: str, scope: str):
-        """Create the ingestion client. DefaultAzureCredential uses the Function App managed identity."""
+        """Create the ingestion client.
+
+        DefaultAzureCredential uses the Microsoft Entra app set in the AZURE_CLIENT_ID, AZURE_CLIENT_SECRET and
+        AZURE_TENANT_ID settings.
+        """
         self.rule_id = rule_id
         self.stream_name = stream_name
         if ".us" in scope:
@@ -22,7 +26,10 @@ class SentinelIngestor:
         self.client = LogsIngestionClient(endpoint, credential=credential, credential_scopes=[scope])
 
     def upload(self, events: list) -> None:
-        """Upload one page of events. Raises when any part of the upload fails, so the checkpoint is not advanced."""
+        """Upload one page of events.
+
+        Raises an error when any part of the upload fails, so the checkpoint does not move.
+        """
         logs = [{field: event.get(field) for field in consts.EVENT_FIELDS} for event in events]
         try:
             self.client.upload(rule_id=self.rule_id, stream_name=self.stream_name, logs=logs)

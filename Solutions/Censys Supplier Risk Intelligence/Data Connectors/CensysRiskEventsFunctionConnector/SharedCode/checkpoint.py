@@ -14,8 +14,9 @@ from .logger import applogger
 def checkpoint_key(*parts: str) -> str:
     """Build a stable row key from the settings that define what is collected.
 
-    A different organization, supplier list or filter set gets its own checkpoint, so changing
-    the configuration never skips events.
+    A different organization or filter set (change types, severity, rapid response, risk type IDs) gets its own
+    checkpoint, so changing one of them never skips events. The suppliers are not part of the key: changing the
+    supplier names continues from the current checkpoint.
     """
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
 
@@ -30,7 +31,8 @@ class CheckpointManager:
             service = TableServiceClient.from_connection_string(conn_str=connection_string)
             self.table = service.create_table_if_not_exists(table_name)
         except Exception as err:
-            applogger.error(f"{LOG_PREFIX} CheckpointManager.__init__: error accessing checkpoint table {table_name}: {err}")
+            applogger.error(f"{LOG_PREFIX} CheckpointManager.__init__: error accessing checkpoint table "
+                            f"{table_name}: {err}")
             raise CensysException(f"Error accessing checkpoint table {table_name}: {err}")
 
     def get(self, row_key: str) -> Optional[Tuple[str, str]]:
