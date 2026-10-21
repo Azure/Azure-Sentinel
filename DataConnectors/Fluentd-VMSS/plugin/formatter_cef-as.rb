@@ -29,13 +29,29 @@ module Fluent
       desc 'The parameter to enable writing to new lines'
       config_param :add_newline, :bool, default: true
 
+      def escape_cef_header(value)
+        value.to_s
+             .gsub('\\', '\\\\\\\\')
+             .gsub('|', '\|')
+             .gsub("\r", '\\r')
+             .gsub("\n", '\\n')
+      end
+
+      def escape_cef_value(value)
+        value.to_s
+             .gsub('\\', '\\\\\\\\')
+             .gsub('=', '\\=')
+             .gsub("\r", '\\r')
+             .gsub("\n", '\\n')
+      end
+
       def format(tag, time, record)
-        formatted = "CEF:0|" << record['cef_device_vendor'] << "|" << record['cef_device_product'] << "|" << record['cef_device_version'] << "|" << record['cef_device_event_class_id'] << "|" << record['cef_name'] << "|" << record['cef_severity'] << "|"
+        formatted = "CEF:0|" << escape_cef_header(record['cef_device_vendor']) << "|" << escape_cef_header(record['cef_device_product']) << "|" << escape_cef_header(record['cef_device_version']) << "|" << escape_cef_header(record['cef_device_event_class_id']) << "|" << escape_cef_header(record['cef_name']) << "|" << escape_cef_header(record['cef_severity']) << "|"
         @keys.map{|k|
           if record[k].nil?
             #dont add
           else
-            formatted << k << "=" << record[k].to_s << @delimiter
+            formatted << k << "=" << escape_cef_value(record[k]) << @delimiter
           end
         }
         formatted << "\n".freeze if @add_newline
