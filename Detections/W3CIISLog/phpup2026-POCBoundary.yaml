@@ -1,0 +1,69 @@
+id: 0771a96d-e679-4592-b739-ed4fb4c28fae
+name: PHP Session Upload Progress UAF - POC Multipart Boundary (CVE-2026-109618/109619)
+description: |
+  'Detects the hardcoded multipart boundaries "B7kQpoc618" and "B7kQpoc619" used
+  by the php-up-2026 POC tools for CVE-2026-109618 and CVE-2026-109619, a heap UAF
+  in PHP session.upload_progress (CVSS 9.2, unauthenticated RCE). These boundary
+  strings appear in the URI query string when the Content-Type header is logged.
+  References:
+  - http://jackalsyn.com/posts/phpupAssets/php-up-2026.tar.gz
+  - https://github.com/rjmendez/phpup-2026'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2026-109618
+  - CVE-2026-109619
+  - phpup-2026
+query: |
+  W3CIISLog
+  | where csMethod == "POST"
+  | where csUriStem has_any ("B7kQpoc618", "B7kQpoc619")
+       or csUriQuery has_any ("B7kQpoc618", "B7kQpoc619")
+  | extend
+      HostName = tostring(split(Computer, ".")[0]),
+      DomainIndex = toint(indexof(Computer, "."))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project TimeGenerated, cIP, csHost, csUriStem, csUriQuery,
+            csMethod, scStatus, csBytes, Computer, HostName, HostNameDomain, _ResourceId
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: cIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: csUriStem
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: rjmendez
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
