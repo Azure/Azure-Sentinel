@@ -1,0 +1,63 @@
+id: 3eb13794-d9a5-44c0-a633-09ee5a5dd6b5
+name: Netcraft Domain Detection - High risk result
+description: |
+  Identifies newly reported Domain Detection results (`ChangeType == "new"`) with `Risk.category` of highest or high.
+  Uses NetcraftDomainDetection_Latest so updates for the same DomainResultId do not re-alert unless
+  they appear as a new result in the window.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftDomainDetection_CL
+queryFrequency: 15m
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+relevantTechniques:
+  - T1583
+  - T1566
+query: |
+  NetcraftDomainDetection_Latest
+  | where IngestedAt > ago(15m)
+  | where ChangeType == "new"
+  | extend
+      DNSDomain = Hostname,
+      RiskCategory = tostring(Risk.category)
+  | where RiskCategory in ("highest", "high")
+  | project
+      TimeGenerated,
+      EventId,
+      DomainResultId,
+      Subject,
+      Hostname,
+      DNSDomain,
+      Risk,
+      RiskCategory,
+      ChangeType,
+      CloudEventType,
+      Tags,
+      IpAddresses,
+      Registrar,
+      Domain,
+      AreaId
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNSDomain
+customDetails:
+  DomainResultId: DomainResultId
+  RiskCategory: RiskCategory
+  ChangeType: ChangeType
+  Registrar: Registrar
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Netcraft Domain Detection - {{RiskCategory}} risk ({{Hostname}})"
+  alertDescriptionFormat: "New Domain Detection result {{DomainResultId}} for {{Hostname}} reported risk {{RiskCategory}}. See the ChangeType custom detail for the change that triggered it."
+kind: Scheduled
+version: 1.0.0
