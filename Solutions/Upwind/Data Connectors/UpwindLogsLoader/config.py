@@ -162,6 +162,14 @@ def load_configuration() -> ConfigStore:
         upwind_auth_url=os.getenv("UPWIND_AUTH_URL", "https://auth.upwind.io/oauth/token"),
         upwind_api_base_url=os.getenv("UPWIND_API_BASE_URL", "https://api.upwind.io"),
         upwind_page_size=_parse_int_env("UPWIND_PAGE_SIZE", "100"),
+        # The catalog and configuration findings endpoints accept larger pages
+        # than the shared UPWIND_PAGE_SIZE (capped at 100 by threat stories);
+        # fewer requests per run keep large orgs inside the time budget and
+        # the rate limit.
+        upwind_catalog_page_size=_parse_int_env("UPWIND_CATALOG_PAGE_SIZE", "200"),
+        upwind_config_findings_page_size=_parse_int_env(
+            "UPWIND_CONFIG_FINDINGS_PAGE_SIZE", "1000"
+        ),
         upwind_max_retries=_parse_int_env("UPWIND_MAX_RETRIES", "5"),
         upwind_initial_backoff_seconds=_parse_int_env("UPWIND_INITIAL_BACKOFF_SECONDS", "1"),
         upwind_max_backoff_seconds=_parse_int_env("UPWIND_MAX_BACKOFF_SECONDS", "60"),
@@ -216,11 +224,14 @@ def load_configuration() -> ConfigStore:
         )
 
     logging.info(
-        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s, lookback_minutes=%s, "
+        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s (catalog=%s, "
+        "config_findings=%s), lookback_minutes=%s, "
         "min_severity(vuln=%s, detections=%s, events=%s, stories=%s, config=%s)",
         config.get("azure_dce_endpoint"),
         config.get("upwind_org_id"),
         config.get("upwind_page_size"),
+        config.get("upwind_catalog_page_size"),
+        config.get("upwind_config_findings_page_size"),
         config.get("upwind_lookback_minutes"),
         config.get("upwind_min_severity_vulnerability") or "all",
         config.get("upwind_min_severity_threat_detections") or "all",

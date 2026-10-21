@@ -17,6 +17,12 @@ _COLUMN_RENAME_MAP = {"title": "title_text"}
 class UpwindConfigurationFindingsClient(UpwindClient):
     """Client for the Upwind configuration findings API."""
 
+    def __init__(self, config, time_budget=None):
+        super().__init__(config, time_budget)
+        # The configuration findings search endpoint accepts up to 1000 items
+        # per page.
+        self.page_size = config.get("upwind_config_findings_page_size", self.page_size)
+
     def fetch_configuration_findings(
         self, window_start: datetime, window_end: datetime, on_page
     ) -> int:
