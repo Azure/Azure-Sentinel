@@ -27,6 +27,7 @@ SPEC.loader.exec_module(WORKFLOW)
 def target(
     target_id,
     *,
+    source_table="Contoso_CL",
     target_table="ASimAuthenticationEventLogs",
     fixture="Sample Data/ASIM/Contoso_Contoso_Authentication_"
     "Contoso_CL_IngestedLogs.csv",
@@ -50,7 +51,7 @@ def target(
         "schema": "Authentication",
         "schemaVersion": "1.0.0",
         "product": "Contoso",
-        "sourceRawTable": "Contoso_CL",
+        "sourceRawTable": source_table,
         "targetASIMTable": target_table,
         "fixturePath": fixture,
         "fixtureStatus": "resolved",
@@ -74,7 +75,7 @@ class MatrixTests(unittest.TestCase):
         path.write_bytes(b"x" * size)
         return path
 
-    def test_allocates_slots_per_target_table(self):
+    def test_allocates_unique_slots_across_source_and_target_conflicts(self):
         fixture = (
             "Sample Data/ASIM/Contoso_Contoso_Authentication_"
             "Contoso_CL_IngestedLogs.csv"
@@ -83,8 +84,12 @@ class MatrixTests(unittest.TestCase):
         manifest = {
             "version": 2,
             "targets": [
-                target("parser-b", fixture=fixture),
                 target("parser-a", fixture=fixture),
+                target(
+                    "parser-b",
+                    source_table="Other_CL",
+                    fixture=fixture,
+                ),
                 target(
                     "parser-c",
                     fixture=fixture,
@@ -105,9 +110,13 @@ class MatrixTests(unittest.TestCase):
         }
         self.assertEqual(0, by_id["parser-a"]["targetSlot"])
         self.assertEqual(1, by_id["parser-b"]["targetSlot"])
-        self.assertEqual(2, by_id["parser-a"]["targetCount"])
-        self.assertEqual(0, by_id["parser-c"]["targetSlot"])
-        self.assertEqual(1, by_id["parser-c"]["targetCount"])
+        self.assertEqual(2, by_id["parser-c"]["targetSlot"])
+        self.assertTrue(
+            all(
+                item["targetCount"] == 3
+                for item in by_id.values()
+            )
+        )
 
     def test_marks_oversized_fixture_as_discovery_error(self):
         fixture = (

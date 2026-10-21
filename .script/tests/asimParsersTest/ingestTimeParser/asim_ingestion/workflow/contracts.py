@@ -192,24 +192,13 @@ def build_matrix_manifest(
             _require_identifier(target_table, "targetASIMTable")
         targets.append(target)
 
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for target in targets:
-        group = str(
-            target.get("targetASIMTable")
-            or f"invalid-{target['targetId']}"
-        )
-        groups.setdefault(group, []).append(target)
-    for group_targets in groups.values():
-        ordered = sorted(
-            group_targets, key=lambda target: target["targetId"]
-        )
-        for slot, target in enumerate(ordered):
-            target["targetSlot"] = slot
-            target["targetCount"] = len(ordered)
-
     ordered_targets = sorted(
         targets, key=lambda target: target["targetId"]
     )
+    for slot, target in enumerate(ordered_targets):
+        target["targetSlot"] = slot
+        target["targetCount"] = len(ordered_targets)
+
     output = dict(manifest)
     output["workflowVersion"] = WORKFLOW_RESULT_VERSION
     output["targets"] = ordered_targets
