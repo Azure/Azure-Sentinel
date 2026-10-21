@@ -1,0 +1,81 @@
+id: 56cda6d3-8402-4d6c-a2e7-f72b1efed280
+name: PHP Session Upload Progress UAF - Shell Spawned by PHP Process (CVE-2026-109618/109619)
+description: |
+  'Detects a shell or recon tool spawned directly under a PHP worker process
+  (php-fpm, lsphp, php) — the post-exploitation indicator for successful RCE via
+  CVE-2026-109618 or CVE-2026-109619 (PHP session.upload_progress heap UAF,
+  CVSS 9.2). Exploitation steers zend_call_function to system(), which spawns a
+  child process under the PHP worker account (www-data, nobody, or equivalent).
+  References:
+  - http://jackalsyn.com/posts/phpupAssets/php-up-2026.tar.gz
+  - https://github.com/rjmendez/phpup-2026'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1190
+  - T1059
+  - T1059.004
+tags:
+  - CVE-2026-109618
+  - CVE-2026-109619
+  - phpup-2026
+query: |
+  DeviceProcessEvents
+  | where InitiatingProcessFileName has_any (
+      "php-fpm", "php", "lsphp", "php8", "php7", "php5"
+    )
+  | where FileName has_any ("sh", "bash", "dash", "zsh", "python", "python3",
+      "perl", "ruby", "curl", "wget", "nc", "ncat", "nmap", "whoami", "id")
+       or ProcessCommandLine has_any (
+           "/bin/sh", "/bin/bash", "bash -i", "python -c", "python3 -c",
+           "exec(", "eval(", "base64 -d", "curl ", "wget "
+         )
+  | extend
+      AccountDomain = tostring(split(AccountName, "\\")[0]),
+      AccountUser   = tostring(split(AccountName, "\\")[1])
+  | project TimeGenerated, DeviceName, AccountName, AccountDomain, AccountUser,
+            InitiatingProcessFileName, InitiatingProcessCommandLine,
+            FileName, ProcessCommandLine, FolderPath, MD5, SHA256
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountUser
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: SHA256
+      - identifier: Value
+        columnName: SHA256
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: rjmendez
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
