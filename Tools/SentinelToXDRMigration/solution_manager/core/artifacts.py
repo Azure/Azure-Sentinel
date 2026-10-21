@@ -49,6 +49,11 @@ def reset_run_selection(token) -> None:
 
 @contextmanager
 def using_run(solution: str | Path, run_id: str | None):
+    # A missing run_id must not discard an explicit selection made by an outer caller
+    # (e.g. the CLI --run-id); otherwise nested helpers resolve a different run.
+    if not run_id:
+        yield
+        return
     token = select_run(solution, run_id)
     try:
         yield
