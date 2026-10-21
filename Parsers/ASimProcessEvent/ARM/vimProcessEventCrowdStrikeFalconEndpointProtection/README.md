@@ -4,18 +4,6 @@ ARM template for ASIM ProcessEvent schema parser for CrowdStrike Falcon Endpoint
 
 Normalizes CrowdStrike_Process_Events_CL process creation, synthetic process observations,
 process termination, and termination requests to ASIM ProcessEvent 1.0.0.
-Supports time, event type, command line, process image, username, device, and hash filters.
-Uses event_simpleName when present and recognized versioned name values otherwise.
-Excludes unidentified events, file operations, module loads, and process injection.
-Native OS process IDs are mapped only when attributable to the corresponding role.
-Unavailable identities remain empty; Falcon correlation IDs are not relabeled as OS PIDs.
-Termination requests have EventResult NA because successful termination is not established.
-The source does not identify the acting process's parent or provide a hostname column;
-nonempty parent-process or hostname filters therefore return no rows for this source schema.
-Set pack=true to preserve raw source fields in AdditionalFields, including fields without
-standard ProcessEvent equivalents. Empty source values are omitted from the packed bag.
-Vendor field documentation requires authentication; the public references cover the product
-and process-event context, not a complete authoritative field dictionary.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
