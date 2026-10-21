@@ -39,8 +39,8 @@ function Assert-V31ReleaseVersion {
 
     if (-not $v31VersionPolicy) { return }
 
-    $minimum = if ($ContentKind -eq 'Solution') { [version]'3.2.0.0' } elseif ($ContentKind -eq 'CustomDetection') { [version]'3.1.0.0' } else { [version]'0.0.0.0' }
-    $range = if ($ContentKind -eq 'Solution') { '>= 3.2.0 and < 4.0.0' } elseif ($ContentKind -eq 'CustomDetection') { '>= 3.1.0 and < 4.0.0' } else { '< 4.0.0' }
+    $minimum = if ($ContentKind -eq 'Solution') { [version]'3.2.2.0' } elseif ($ContentKind -eq 'CustomDetection') { [version]'3.1.0.0' } else { [version]'0.0.0.0' }
+    $range = if ($ContentKind -eq 'Solution') { '>= 3.2.2 and < 4.0.0' } elseif ($ContentKind -eq 'CustomDetection') { '>= 3.1.0 and < 4.0.0' } else { '< 4.0.0' }
     $parsed = $null
     $valid = $Version -cmatch '\A[0-9]+\.[0-9]+(?:\.[0-9]+){0,2}\z' -and
         [version]::TryParse($Version, [ref]$parsed)
@@ -86,11 +86,13 @@ function Assert-V31TargetVersion {
     param([AllowNull()][AllowEmptyString()][string]$Version)
 
     if ($Version -cnotmatch '\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z') {
-        throw "V3.1 target version '$Version' must be canonical major.minor.patch in the range >= 3.2.0 and < 4.0.0."
+        throw "V3.1 target version '$Version' must be canonical major.minor.patch in the range >= 3.2.2 and < 4.0.0."
     }
     $parts = $Version.Split(".")
-    if ($parts[0] -cne "3" -or [System.Numerics.BigInteger]::Parse($parts[1]) -lt 2) {
-        throw "V3.1 target version '$Version' must be in the range >= 3.2.0 and < 4.0.0."
+    $minor = [System.Numerics.BigInteger]::Parse($parts[1])
+    $patch = [System.Numerics.BigInteger]::Parse($parts[2])
+    if (-not ($parts[0] -ceq "3" -and ($minor -gt 2 -or ($minor -eq 2 -and $patch -ge 2)))) {
+        throw "V3.1 target version '$Version' must be in the range >= 3.2.2 and < 4.0.0."
     }
 }
 

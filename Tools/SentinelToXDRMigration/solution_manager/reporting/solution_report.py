@@ -118,6 +118,12 @@ def _build_flow_evidence(root: Path, reports: Path, workflow: dict[str, Any], ar
         add("mockIngestion", reference)
     if artifacts.get("qualificationDcrPreflight"):
         add("preflight", artifacts["qualificationDcrPreflight"])
+    if artifacts.get("qualificationPreflightPacket"):
+        add("preflight", artifacts["qualificationPreflightPacket"])
+        add("setup", artifacts["qualificationPreflightPacket"])
+    if artifacts.get("qualificationPipelineState"):
+        for qual_stage in ("setup", "preflight", "deployment", "mockIngestion", "queryValidation", "packageAcceptance"):
+            add(qual_stage, artifacts["qualificationPipelineState"])
     if artifacts.get("qualificationTarget"):
         add("setup", artifacts["qualificationTarget"])
     for field in ("mainTemplate", "createUiDefinition", "testParameters", "zip"):
@@ -2011,6 +2017,47 @@ def build_solution_report(
     report["artifacts"]["qualificationTarget"] = (
         str(target_reference) if target_link.get("available") is True else None
     )
+    preflight_packet_reference = reports / "qualification-preflight-packet.json"
+    preflight_packet_link = _local_flow_evidence_link(root, reports, str(preflight_packet_reference))
+    report["artifacts"]["qualificationPreflightPacket"] = (
+        str(preflight_packet_reference) if preflight_packet_link.get("available") is True else None
+    )
+    pipeline_state_reference = reports / "qualification-pipeline-state.json"
+    pipeline_state_link = _local_flow_evidence_link(root, reports, str(pipeline_state_reference))
+    report["artifacts"]["qualificationPipelineState"] = (
+        str(pipeline_state_reference) if pipeline_state_link.get("available") is True else None
+    )
+    pipeline_state = _read_run_json(root, reports, "qualification-pipeline-state.json")
+    if pipeline_state:
+        qual_stages = (
+            pipeline_state.get("qualificationStages")
+            if isinstance(pipeline_state.get("qualificationStages"), dict)
+            else {}
+        )
+        report["qualificationPipeline"] = {
+            "status": pipeline_state.get("status"),
+            "preflightPassed": bool(pipeline_state.get("preflightPassed")),
+            "deploymentVerified": bool(pipeline_state.get("deploymentVerified")),
+            "mockIngestionVerified": bool(pipeline_state.get("mockIngestionVerified")),
+            "ruleParityVerified": pipeline_state.get("ruleParityVerified"),
+            "functionalQualificationVerified": bool(pipeline_state.get("functionalQualificationVerified")),
+            "promotionGate": _safe_plan_value(pipeline_state.get("promotionGate") or {}),
+            "qualificationStages": _safe_plan_value(qual_stages),
+            "workbookContractResult": _safe_plan_value(pipeline_state.get("workbookContractResult") or {}),
+            "updatedAt": pipeline_state.get("updatedAt"),
+        }
+    from solution_manager.reporting.decision_manifest import build_sanitized_decision_manifest
+
+    decision_manifest = build_sanitized_decision_manifest(root)
+    report["decisionManifestSummary"] = {
+        "schemaVersion": decision_manifest["schemaVersion"],
+        "decisionCount": len(decision_manifest["decisions"]),
+        "totalDecisions": len(decision_manifest["decisions"]),
+        "count": len(decision_manifest["decisions"]),
+        "manifestSha256": decision_manifest["manifestSha256"],
+        "sanitizedVerified": True,
+        "scopes": sorted({item["scope"] for item in decision_manifest["decisions"]}),
+    }
     report["flowEvidence"] = _build_flow_evidence(
         root, reports, report["workflow"], report["artifacts"], packaging
     )

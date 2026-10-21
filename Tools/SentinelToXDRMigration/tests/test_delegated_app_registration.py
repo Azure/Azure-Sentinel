@@ -2346,6 +2346,71 @@ class DelegatedAppRegistrationTests(unittest.TestCase):
             )
             self.assertNotIn("customDetection", private.get("graphClientIds", {}))
 
+    def test_bundled_graph_scope_templates_exist_and_offer_builds_remediation(self) -> None:
+        from solution_manager.qualification.delegated_app_registration import (
+            GRAPH_SCOPE_ARM_TEMPLATE_PATH,
+            GRAPH_SCOPE_BICEP_TEMPLATE_PATH,
+            build_missing_graph_scope_arm_offer,
+        )
+
+        self.assertTrue(GRAPH_SCOPE_ARM_TEMPLATE_PATH.is_file())
+        self.assertTrue(GRAPH_SCOPE_BICEP_TEMPLATE_PATH.is_file())
+
+        arm_payload = json.loads(
+            GRAPH_SCOPE_ARM_TEMPLATE_PATH.read_text(encoding="utf-8")
+        )
+        self.assertEqual(arm_payload.get("languageVersion"), "2.0")
+        self.assertEqual(
+            arm_payload.get("imports", {}).get("MicrosoftGraph", {}),
+            {"provider": "MicrosoftGraph", "version": "1.0.0"},
+        )
+        bicep_text = GRAPH_SCOPE_BICEP_TEMPLATE_PATH.read_text(encoding="utf-8")
+        self.assertIn("microsoftgraph/v1.0:1.0.0", bicep_text)
+        self.assertIn("Microsoft.Graph/oauth2PermissionGrants@v1.0", bicep_text)
+
+        offer = build_missing_graph_scope_arm_offer(
+            missing_scopes=["CustomDetection.ReadWrite.All", "ThreatHunting.Read.All"],
+            resource_group="rg-sentinel-qual",
+            subscription_id="00000000-0000-0000-0000-000000000099",
+            app_unique_name="Sentinel-XDR-CustomDetection",
+            grant_to_azure_cli=True,
+        )
+        self.assertEqual(offer["status"], "arm_template_remediation_available")
+        self.assertTrue(offer["requiresExplicitApproval"])
+        self.assertEqual(
+            offer["missingScopes"],
+            ["CustomDetection.ReadWrite.All", "ThreatHunting.Read.All"],
+        )
+        self.assertEqual(offer["armTemplatePath"], str(GRAPH_SCOPE_ARM_TEMPLATE_PATH))
+        self.assertEqual(offer["bicepTemplatePath"], str(GRAPH_SCOPE_BICEP_TEMPLATE_PATH))
+        self.assertEqual(
+            offer["resourcesCreated"],
+            [
+                "Microsoft.Graph/applications@v1.0",
+                "Microsoft.Graph/servicePrincipals@v1.0",
+                "Microsoft.Graph/oauth2PermissionGrants@v1.0",
+            ],
+        )
+        self.assertIn("az deployment group create", offer["deploymentCommand"])
+        self.assertIn("--template-file", offer["deploymentCommand"])
+        self.assertIn('appUniqueName="Sentinel-XDR-CustomDetection"', offer["deploymentCommand"])
+        self.assertIn("grantToAzureCli=true", offer["deploymentCommand"])
+        self.assertIn("grant-graph-hunting-scopes.arm.json", offer["approvalPrompt"])
+        self.assertIn("ThreatHunting.Read.All", offer["approvalPrompt"])
+        self.assertIn("CustomDetection.ReadWrite.All", offer["approvalPrompt"])
+
+        default_offer = build_missing_graph_scope_arm_offer(
+            missing_scopes=["ThreatHunting.Read.All"],
+            resource_group="rg-sentinel-qual",
+        )
+        self.assertIn("grantToAzureCli=false", default_offer["deploymentCommand"])
+
+        with self.assertRaises(ValueError):
+            build_missing_graph_scope_arm_offer(
+                missing_scopes=["Directory.ReadWrite.All"],
+                resource_group="rg-sentinel-qual",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

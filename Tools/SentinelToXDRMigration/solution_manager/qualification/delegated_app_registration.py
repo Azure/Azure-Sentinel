@@ -59,9 +59,99 @@ OWNED_APP_READ_SCOPE = "https://graph.microsoft.com/User.Read"
 BOOTSTRAP_SCOPES = (BOOTSTRAP_SCOPE, OWNED_APP_READ_SCOPE)
 BOOTSTRAP_AUTH_RECORD_NAME = "app-registration-auth-record.json"
 BOOTSTRAP_TOKEN_CACHE_NAME = "sentinel_xdr_migration_app_registration"
+GRAPH_SCOPE_ARM_TEMPLATE_PATH = (
+    Path(__file__).resolve().parent / "templates" / "grant-graph-hunting-scopes.arm.json"
+)
+GRAPH_SCOPE_BICEP_TEMPLATE_PATH = (
+    Path(__file__).resolve().parent / "templates" / "grant-graph-hunting-scopes.bicep"
+)
 
 TokenProvider = Callable[[Path, str], str]
 GraphRequest = Callable[..., tuple[int, dict[str, Any]]]
+
+
+ALLOWED_REMEDIATION_SCOPES = frozenset({
+    "User.Read",
+    THREAT_HUNTING_SCOPE,
+    CUSTOM_DETECTION_SCOPE,
+})
+
+
+def build_missing_graph_scope_arm_offer(
+    *,
+    missing_scopes: list[str] | tuple[str, ...],
+    resource_group: str = "<resource-group>",
+    subscription_id: str | None = None,
+    app_unique_name: str = APP_DISPLAY_NAME,
+    grant_to_azure_cli: bool = False,
+    consent_type: str = "AllPrincipals",
+    principal_id: str | None = None,
+) -> dict[str, Any]:
+    """Build a structured Microsoft Graph Bicep/ARM remediation offer when hunting/detection scopes are missing."""
+    normalized_missing = sorted(
+        {
+            str(scope).strip()
+            for scope in (missing_scopes or ())
+            if str(scope).strip()
+        }
+    )
+    disallowed = [s for s in normalized_missing if s not in ALLOWED_REMEDIATION_SCOPES]
+    if disallowed:
+        raise ValueError(
+            f"Unsupported Microsoft Graph remediation scope(s): {', '.join(disallowed)}. "
+            f"Allowed scopes: {', '.join(sorted(ALLOWED_REMEDIATION_SCOPES))}."
+        )
+    if consent_type not in {"Principal", "AllPrincipals"}:
+        raise ValueError(f"Unsupported consent_type '{consent_type}'; expected 'Principal' or 'AllPrincipals'.")
+    if consent_type == "Principal" and not (principal_id and str(principal_id).strip()):
+        raise ValueError("principal_id is required when consent_type is 'Principal'.")
+
+    relevant_missing = any(
+        scope in {THREAT_HUNTING_SCOPE, CUSTOM_DETECTION_SCOPE}
+        for scope in normalized_missing
+    )
+    arm_path_str = str(GRAPH_SCOPE_ARM_TEMPLATE_PATH)
+    bicep_path_str = str(GRAPH_SCOPE_BICEP_TEMPLATE_PATH)
+    sub_arg = f' --subscription "{subscription_id}"' if subscription_id else ""
+    cli_flag = "true" if grant_to_azure_cli else "false"
+    principal_args = (
+        f' consentType=Principal principalId="{principal_id.strip()}"'
+        if consent_type == "Principal" and principal_id
+        else ""
+    )
+    deployment_command = (
+        f"az deployment group create{sub_arg} "
+        f'--resource-group "{resource_group}" '
+        f'--template-file "{arm_path_str}" '
+        f'--parameters appUniqueName="{app_unique_name}" grantToAzureCli={cli_flag}{principal_args}'
+    )
+    scopes_display = ", ".join(normalized_missing) if normalized_missing else (
+        f"{THREAT_HUNTING_SCOPE}, {CUSTOM_DETECTION_SCOPE}"
+    )
+    approval_prompt = (
+        f"Required Microsoft Graph delegated scope(s) ({scopes_display}) are missing. "
+        f"Would you like the agent to deploy `{GRAPH_SCOPE_ARM_TEMPLATE_PATH.name}` "
+        f"to grant tenant-wide delegated scopes (`User.Read`, "
+        f"`{THREAT_HUNTING_SCOPE}`, `{CUSTOM_DETECTION_SCOPE}`)?"
+    )
+    return {
+        "status": (
+            "arm_template_remediation_available"
+            if (relevant_missing or normalized_missing)
+            else "no_remediation_needed"
+        ),
+        "requiresExplicitApproval": True,
+        "missingScopes": normalized_missing,
+        "armTemplatePath": arm_path_str,
+        "bicepTemplatePath": bicep_path_str,
+        "resourcesCreated": [
+            "Microsoft.Graph/applications@v1.0",
+            "Microsoft.Graph/servicePrincipals@v1.0",
+            "Microsoft.Graph/oauth2PermissionGrants@v1.0",
+        ],
+        "deploymentCommand": deployment_command,
+        "approvalPrompt": approval_prompt,
+    }
 
 
 def setup_app_registration_authentication(

@@ -54,6 +54,12 @@ from solution_manager.qualification.runtime_consent import (
     runtime_query_consent_status,
 )
 from solution_manager.reporting.solution_report import build_solution_report
+from solution_manager.qualification.pr_check_runner import (
+    evaluate_solution_pr_qualification,
+)
+from solution_manager.reporting.pr_qualification_report import (
+    write_pr_qualification_reports,
+)
 from solution_manager.core.target_context import diagnose_target, repair_target, require_locked_target
 from solution_manager.core.target_config import resolve_qualification_target
 from solution_manager.core.workflow import (
@@ -706,7 +712,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     package_v3_1.add_argument(
         "--target-version",
-        help="Explicit canonical V3.1 solution version (>=3.2.0 and <4.0.0); use with --version-bump none.",
+        help="Explicit canonical V3.1 solution version (>=3.2.2 and <4.0.0); use with --version-bump none.",
     )
     package_v3_1.add_argument(
         "--legacy-baseline-evidence",
@@ -734,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
     package_release.add_argument("--version-bump", choices=["patch", "minor", "major"])
     package_release.add_argument(
         "--target-version",
-        help="Explicit canonical V3.1 solution version (>=3.2.0 and <4.0.0), instead of a version bump.",
+        help="Explicit canonical V3.1 solution version (>=3.2.2 and <4.0.0), instead of a version bump.",
     )
     package_release.add_argument(
         "--expected-package-input-sha256",
@@ -831,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     workflow_init.add_argument(
         "--target-version",
-        help="Persist an explicit canonical V3.1 solution version (>=3.2.0 and <4.0.0); use with --version-bump none.",
+        help="Persist an explicit canonical V3.1 solution version (>=3.2.2 and <4.0.0); use with --version-bump none.",
     )
     workflow_init.add_argument(
         "--workflow-profile",
@@ -1140,6 +1146,57 @@ def main(argv: list[str] | None = None) -> int:
 
     runs_parser = subparsers.add_parser("workflow-runs", help="List run IDs without selecting or modifying state.")
     runs_parser.add_argument("--solution", required=True)
+    pr_qualify_parser = subparsers.add_parser(
+        "pr-qualify",
+        help="Evaluate PR Validation, Qualification, and Migration checklists and generate HTML/Markdown reports.",
+    )
+    pr_qualify_parser.add_argument(
+        "--solution",
+        required=True,
+        help="Path to solution directory (e.g., Solutions/Azure DDoS Protection).",
+    )
+    pr_qualify_parser.add_argument(
+        "--mode",
+        choices=["validation", "qualification", "full"],
+        default="full",
+        help="Evaluation mode: validation, qualification, or full (default: full).",
+    )
+    pr_qualify_mig_group = pr_qualify_parser.add_mutually_exclusive_group()
+    pr_qualify_mig_group.add_argument(
+        "--is-migration",
+        dest="is_migration",
+        action="store_true",
+        default=None,
+        help="Force migration checklist evaluation on.",
+    )
+    pr_qualify_mig_group.add_argument(
+        "--no-migration",
+        "--no-is-migration",
+        dest="is_migration",
+        action="store_false",
+        default=None,
+        help="Force migration checklist evaluation off (general solution qualification).",
+    )
+    pr_qualify_parser.add_argument(
+        "--output-dir",
+        help="Output directory for PR qualification reports (default: <solution>/Evidence/pr-qualification).",
+    )
+    pr_qualify_parser.add_argument(
+        "--waivers-file",
+        help="Path to JSON file mapping check IDs to {authorJustification, supportingEvidenceRef, knownLimitationCategory}.",
+    )
+    pr_qualify_parser.add_argument(
+        "--acknowledged-exclusions-file",
+        help="Path to JSON file with list of excluded paths.",
+    )
+    pr_qualify_parser.add_argument(
+        "--evidence-dir",
+        help="Path to qualification evidence directory or JSON file.",
+    )
+    pr_qualify_parser.add_argument(
+        "--target-version",
+        help="Optional target version override for testing/previewing at >= 3.2.2.",
+    )
     from solution_manager.qualification.workbook_qualification_cli import (
         register_workbook_qualification_commands, dispatch_workbook_qualification,
     )
@@ -1210,6 +1267,7 @@ def main(argv: list[str] | None = None) -> int:
             "verify-delegated-app-permission-update",
             "workbook-dependency-plan",
             "workbook-review",
+            "pr-qualify",
         }
         if getattr(args, "solution", None) and args.command not in isolated_permission_commands:
             selection = select_run(args.solution, args.run_id)
@@ -1281,6 +1339,53 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "workflow-runs":
             result = {"runs": list_runs(args.solution)}
+        elif args.command == "pr-qualify":
+            sol_root = Path(args.solution).expanduser().resolve()
+            out_dir = (
+                Path(args.output_dir).expanduser().resolve()
+                if args.output_dir
+                else sol_root / "Evidence" / "pr-qualification"
+            )
+            report_data = evaluate_solution_pr_qualification(
+                sol_root,
+                mode=args.mode,
+                is_migration=args.is_migration,
+                waivers_file=args.waivers_file,
+                acknowledged_exclusions_file=args.acknowledged_exclusions_file,
+                evidence_dir=args.evidence_dir,
+                target_version=args.target_version,
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            result_json_path = out_dir / "pr-qualification-result.json"
+            result_json_path.write_text(
+                json.dumps(report_data, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            written_reports = write_pr_qualification_reports(
+                report_data,
+                out_dir,
+                solution_root=sol_root,
+            )
+            result = {
+                "solutionName": report_data["solutionName"],
+                "solutionVersion": report_data["solutionVersion"],
+                "mode": report_data["mode"],
+                "isMigration": report_data["isMigration"],
+                "validationStatus": report_data["validationStatus"],
+                "qualificationStatus": report_data["qualificationStatus"],
+                "migrationStatus": report_data["migrationStatus"],
+                "overallVerdict": report_data["overallVerdict"],
+                "summary": report_data["summary"],
+                "outputDir": str(out_dir),
+                "resultJsonPath": str(result_json_path),
+                "htmlReportPath": str(written_reports["html"]),
+                "markdownSummaryPath": str(written_reports["markdown"]),
+                "outputPaths": {
+                    "resultJson": str(result_json_path),
+                    "htmlReport": str(written_reports["html"]),
+                    "markdownSummary": str(written_reports["markdown"]),
+                },
+            }
         elif args.command == "export-evidence":
             if args.include_authoring_contract and not args.run_id:
                 raise ValueError(

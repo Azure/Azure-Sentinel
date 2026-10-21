@@ -144,7 +144,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "Name": "SampleSolution",
             "Author": "Microsoft - support@microsoft.com",
             "Description": "Sample hybrid Sentinel + Defender XDR solution.",
-            "Version": "3.2.1",
+            "Version": "3.2.2",
             "BasePath": str(self.solution),
             "Metadata": "SolutionMetadata.json",
             "Analytic Rules": ["Analytic Rules/SampleRule.yaml"],
@@ -241,7 +241,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "variables": {
                 "solutionId": "azuresentinel.azure-sentinel-solution-samplesolution",
                 "_solutionId": "[variables('solutionId')]",
-                "_solutionVersion": "3.2.1",
+                "_solutionVersion": "3.2.2",
                 "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
                 "uiuk": "sample-uiuk",
             },
@@ -302,7 +302,7 @@ class LocalValidationXdrTests(unittest.TestCase):
                     "location": "[parameters('workspace-location')]",
                     "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
                     "properties": {
-                        "version": "3.2.1",
+                        "version": "3.2.2",
                         "contentId": "[variables('_solutionId')]",
                         "contentProductId": "sample-pkg",
                         "displayName": "SampleSolution",
@@ -666,7 +666,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             json.dumps({"workspace": {"value": "ws"}}, indent=2),
             encoding="utf-8",
         )
-        zip_path = package_dir / "3.2.1.zip"
+        zip_path = package_dir / "3.2.2.zip"
         with zipfile.ZipFile(zip_path, "w") as archive:
             archive.write(package_dir / "mainTemplate.json", "mainTemplate.json")
             archive.write(package_dir / "createUiDefinition.json", "createUiDefinition.json")
@@ -677,7 +677,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "mainTemplate": "Package/mainTemplate.json",
             "createUiDefinition": "Package/createUiDefinition.json",
             "testParameters": "Package/testParameters.json",
-            "zip": "Package/3.2.1.zip",
+            "zip": "Package/3.2.2.zip",
         }
         pkg_hashes = {
             name: hashlib.sha256((self.solution / rel).read_bytes()).hexdigest()
@@ -688,7 +688,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "packager": "V3.1",
             "workflowRunId": "test-xdr-local-val-run",
             "packageAttemptId": "attempt-1",
-            "version": "3.2.1",
+            "version": "3.2.2",
             "armValidationMethod": "lab-deployment",
             "packageInputs": {
                 "after": {**identity, "files": package_input_file_hashes(self.solution)}
@@ -713,7 +713,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             key=lambda item: item["path"],
         )
         package_identity = {
-            "version": "3.2.1",
+            "version": "3.2.2",
             "packageInputSha256": identity["sha256"],
             "packageContentSha256": _canonical_sha256(package_files),
             "packageReportSha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),

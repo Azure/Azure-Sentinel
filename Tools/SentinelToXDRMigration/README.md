@@ -2082,7 +2082,7 @@ evidence.
 An explicit target version may be selected instead of a bump when the release
 must move directly to a particular supported V3.1 version. Targets must be
 canonical numeric `major.minor.patch` versions in the inclusive range
-`>=3.2.0` and `<4.0.0` (for example, `3.999.999`); the target does not have to
+`>= 3.2.2 and < 4.0.0` (for example, `3.999.999`); the target does not have to
 be the next consecutive version. Select the exact target at initialization, or
 bind it to the current package-input hash when planning a later release. Use
 `--version-bump none` with `--target-version`; a non-`none` bump and target
@@ -2093,12 +2093,12 @@ sentinel-xdr-migration workflow-init `
   --solution "Solutions\<solution>" `
   --workflow-profile authoring `
   --version-bump none `
-  --target-version 3.2.1
+  --target-version 3.2.2
 
 sentinel-xdr-migration package-v3-1 `
   --solution "Solutions\<solution>" `
   --version-bump none `
-  --target-version 3.2.1
+  --target-version 3.2.2
 ```
 
 For a later release after inputs change, use
@@ -2169,7 +2169,7 @@ exactly, stop rather than infer missing file hashes or changed paths.
 sentinel-xdr-migration workflow-plan-same-version-content-rebuild `
   --solution "Solutions\<solution>" `
   --run-id "<run-id>" `
-  --target-version 3.2.1 `
+  --target-version 3.2.2 `
   --expected-package-input-sha256 "<current-package-input-sha256>" `
   --changed-input "XDR Detections\<rule>.yaml"
 
@@ -2190,7 +2190,7 @@ permitted:
 sentinel-xdr-migration workflow-plan-same-version-content-rebuild `
   --solution "Solutions\<solution>" `
   --run-id "<run-id>" `
-  --target-version 3.2.1 `
+  --target-version 3.2.2 `
   --expected-package-input-sha256 "<current-package-input-sha256>" `
   --changed-input "XDR Detections\<rule>.yaml" `
   --failed-candidate-evidence "Logs\sentinel-xdr-migration\<run-id>\packaging-arm-ttk-failure-handoff.json" `
@@ -2209,7 +2209,7 @@ to the plan command and, for a pre-existing plan, to every package attempt:
 sentinel-xdr-migration workflow-plan-same-version-content-rebuild `
   --solution "Solutions\<solution>" `
   --run-id "<run-id>" `
-  --target-version 3.2.1 `
+  --target-version 3.2.2 `
   --expected-package-input-sha256 "<current-package-input-sha256>" `
   --changed-input "XDR Detections\<rule>.yaml" `
   --legacy-baseline-evidence "Logs\sentinel-xdr-migration\<run-id>\same-version-content-rebuild\receipt-current-input-comparison.json"
@@ -2315,7 +2315,7 @@ unbound report eligible. Current source structure accepts both Scheduled and
 NRT kinds with their corresponding required/forbidden scheduling fields.
 
 Package-version selection is unchanged, but V3.1 rejects effective solution
-release versions outside `[3.2.0, 4.0.0)`, independent XDR Custom Detection
+release versions outside `[3.2.2, 4.0.0)` (`>= 3.2.2 and < 4.0.0`), independent XDR Custom Detection
 release versions outside `[3.1.0, 4.0.0)`,
 and other content-item release versions `>= 4.0.0`. Explicit bumps that select
 an out-of-range version fail without overwriting package files or persisting
@@ -3598,6 +3598,82 @@ The approved registration payload does not enable the fallback public-client
 flow used for device-code authentication. Browser authentication is required
 for this Custom Detection app. Consent remains a separate administrator
 action.
+
+#### Remediation for Missing Graph Scopes via Microsoft Graph Bicep/ARM Template (`grant-graph-hunting-scopes.arm.json`)
+
+When preflight or token diagnostics detect that `ThreatHunting.Read.All` or
+`CustomDetection.ReadWrite.All` is missing, the toolkit provides
+`build_missing_graph_scope_arm_offer` in
+`solution_manager.qualification.delegated_app_registration` along with bundled
+templates under `solution_manager/qualification/templates/`:
+
+- `grant-graph-hunting-scopes.bicep` (`extension 'br:mcr.microsoft.com/bicep/extensions/microsoftgraph/v1.0:1.0.0'`)
+- `grant-graph-hunting-scopes.arm.json` (`languageVersion: "2.0"`, `MicrosoftGraph@1.0.0`)
+
+The structured remediation offer (`status: "arm_template_remediation_available"`,
+`requiresExplicitApproval: True`) declares the exact resources created:
+
+- `Microsoft.Graph/applications@v1.0`
+- `Microsoft.Graph/servicePrincipals@v1.0`
+- `Microsoft.Graph/oauth2PermissionGrants@v1.0`
+
+After presenting `approvalPrompt` and receiving explicit user approval, the
+agent deploys `grant-graph-hunting-scopes.arm.json` using the generated
+`deploymentCommand`:
+
+```powershell
+az deployment group create `
+  --resource-group "<resource-group>" `
+  --template-file "Tools/SentinelToXDRMigration/solution_manager/qualification/templates/grant-graph-hunting-scopes.arm.json" `
+  --parameters appUniqueName="Sentinel-XDR-CustomDetection" grantToAzureCli=true
+```
+
+This provisions or updates the delegated public client application and grants
+tenant-wide delegated scopes (`User.Read`, `ThreatHunting.Read.All`,
+`CustomDetection.ReadWrite.All`) for both the custom app and, when
+`grantToAzureCli=true`, the Microsoft Azure CLI service principal.
+
+### Deterministic `SecurityAlert` & `SecurityIncident` $\rightarrow$ `AlertInfo` + `AlertEvidence` Mappings
+
+`convert_security_alert_incident_query` deterministically rewrites
+`SecurityAlert` and `SecurityIncident` queries to `AlertInfo` and joins
+`AlertEvidence` (`| join kind=leftouter AlertEvidence on AlertId`) whenever
+entity or evidence columns are referenced:
+
+| Source Table | Source Column | Target `AlertInfo` / `AlertEvidence` Expression |
+| --- | --- | --- |
+| `SecurityAlert`, `SecurityIncident` | `TimeGenerated` | `Timestamp` |
+| `SecurityAlert` | `SystemAlertId` | `AlertId` |
+| `SecurityAlert` | `AlertName`, `DisplayName`, `Description` | `Title` |
+| `SecurityAlert` | `AlertSeverity` | `Severity` |
+| `SecurityAlert`, `SecurityIncident` | `ProviderName` | `DetectionSource` |
+| `SecurityAlert` | `ProductName` | `ServiceSource` |
+| `SecurityAlert` | `Tactics` | `AttackTechniques` (or `Category` for MITRE tactic predicates) |
+| `SecurityAlert`, `SecurityIncident` | `Entities` | `AdditionalFields` (joins `AlertEvidence on AlertId`) |
+| `SecurityIncident` | `IncidentNumber` | `AlertId` |
+| `SecurityIncident` | `IncidentName` | `Title` |
+| `SecurityIncident` | `Status` | `column_ifexists("Status", "Active")` |
+| `SecurityIncident` | `AlertIds` | `pack_array(AlertId)` |
+| `SecurityAlert`, `SecurityIncident` | `CompromisedEntity`, `HostName` | `DeviceName` (joins `AlertEvidence on AlertId`) |
+| `SecurityAlert`, `SecurityIncident` | `IPAddress` | `RemoteIP` (joins `AlertEvidence on AlertId`) |
+| `SecurityAlert`, `SecurityIncident` | `UserPrincipalName` | `AccountUpn` (joins `AlertEvidence on AlertId`) |
+| `SecurityAlert`, `SecurityIncident` | `ResourceId`, `AzureResourceId`, `ResourceID` | `coalesce(tostring(column_ifexists("ResourceID", "")), tostring(column_ifexists("AzureResourceId", "")))` |
+| `SecurityAlert`, `SecurityIncident` | `ResourceType`, `AzureResourceType` | `coalesce(tostring(column_ifexists("ResourceType", "")), tostring(column_ifexists("AzureResourceType", "")))` |
+| `SecurityAlert`, `SecurityIncident` | `SubscriptionId`, `AzureSubscriptionId` | `coalesce(tostring(column_ifexists("SubscriptionId", "")), tostring(column_ifexists("AzureSubscriptionId", "")))` |
+
+#### Cross-Surface `AlertEvidence` Schema Divergence
+
+`AlertEvidence` exposes different Azure resource column names across query
+surfaces:
+
+- **Defender XDR Advanced Hunting (`AlertEvidence`):** `ResourceID`, `ResourceType`, `SubscriptionId`, `CloudResource` ([Defender XDR `AlertEvidence` schema](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertevidence-table))
+- **Azure Monitor / Microsoft Sentinel Log Analytics (`AlertEvidence`):** `AzureResourceId`, `AzureResourceType`, `AzureSubscriptionId`, `CloudResource` ([Azure Monitor `AlertEvidence` reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/alertevidence))
+- **Defender XDR `AlertInfo`:** [Defender XDR `AlertInfo` schema](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertinfo-table)
+
+To ensure converted queries execute identically on both surfaces without runtime
+column resolution failures, `ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS` emits
+`coalesce(tostring(column_ifexists(...)))` compatibility aliases whenever any of
+those resource columns are referenced.
 
 Use `--overwrite` to replace previously generated files. Without it, the
 converter refuses to overwrite a file whose content differs.

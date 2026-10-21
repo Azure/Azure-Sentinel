@@ -94,7 +94,7 @@ def is_preserved_provider_surface(surface: dict | None) -> bool:
     qt = surface.get("queryType")
     rt = (surface.get("resourceType") or "").strip().lower()
     node = surface.get("node")
-    raw = node.get("query") if isinstance(node, dict) else None
+    raw = node.get("query") if isinstance(node, dict) else (surface.get("sourceKql") or surface.get("queryKql"))
     return (
         qt == 1
         and rt == ARG_RESOURCE_TYPE
@@ -136,9 +136,14 @@ def _scope_parameters(doc, protected=()):
 
     def eligible(name):
         p = params[name]
-        # A type-5 parameter may be a KQL-backed Computer filter, not a workspace.
-        qt = surfaces.get(id(p), {}).get("queryType")
-        return not (p.get("query") and qt in (0, None, AH)) and p.get("type") != 4
+        # A type-5 parameter may be a KQL-backed Computer filter or preserved ARG resource picker, not a workspace.
+        surface = surfaces.get(id(p))
+        qt = surface.get("queryType") if surface else None
+        return (
+            not (p.get("query") and qt in (0, None, AH))
+            and not (p.get("type") == 5 and is_preserved_provider_surface(surface))
+            and p.get("type") != 4
+        )
 
     candidates = {
         name for name, p in params.items()
@@ -427,10 +432,17 @@ def _quoted_calls_and_table_sources(query: str) -> tuple[set[str], set[str]]:
     return calls, bare
 
 
+def _local_tabular_vars(code: str) -> set[str]:
+    return (
+        set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=", code))
+        | set(re.findall(r"\|\s*as\b(?:\s+hint\.[\w.]+\s*=\s*[\w.*-]+)*\s+([A-Za-z_]\w*)", code, re.IGNORECASE))
+    )
+
+
 def union_source_names(query: str) -> set[str]:
     """Heuristic operands, not proof of a table or saved-function dependency."""
     code = _stripped_code(query)
-    locals = set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=", code))
+    locals = _local_tabular_vars(code)
     return {name for name, _ in _union_operands(code)} - locals
 
 
@@ -480,7 +492,7 @@ def _bare_source_identifiers(code: str) -> set[str]:
         for ident in re.findall(r"(?<![.\w])([A-Za-z_]\w*)\b(?!\s*\()", op.group(1)):
             bare.add(ident)
     bare.update(name for name, is_call in _union_operands(code) if not is_call)
-    local_vars = set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=", code))
+    local_vars = _local_tabular_vars(code)
     return {
         name for name in (bare - _BUILTINS - _STATEMENT_PREFIXES - local_vars)
         if not is_standard_builtin_asim_parser(name)
@@ -567,7 +579,7 @@ def opaque_functions(query: str, *, include_bare: bool = True) -> set[str]:
     calls.update(name for name, is_call in _union_operands(code) if is_call)
     calls.update(quoted_calls)
     local_funcs = set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=\s*(?:view\s*)?\(", code))
-    local_vars = set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=", code))
+    local_vars = _local_tabular_vars(code)
     result = calls - _BUILTINS - _STATEMENT_PREFIXES - local_funcs - local_vars
     result |= _parameter_source_or_call_tokens(query)
     if include_bare:
@@ -580,7 +592,9 @@ def opaque_functions(query: str, *, include_bare: bool = True) -> set[str]:
 
 def convert_workbook(source: dict, resolutions: dict | None = None,
                      tables: list[str] | None = None,
-                     allowed_workspace_functions=()) -> dict:
+                     allowed_workspace_functions=(),
+                     *,
+                     preserve_sentinel_tables: bool = False) -> dict:
     """Return an intact review draft and report. Never resolves or executes live.
 
     resolutions maps original query pointers to {querySha256, tables, evidence}.
@@ -594,6 +608,7 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
     entries, removed, retained_scope = _scope_parameters(doc)
     removed_prefixes = [path + "/" for path, p in entries if p["name"] in removed]
     issues, reports, gates = [], [], set()
+    provenance_notes: list[str] = []
 
     def issue(path, code, message):
         issues.append({"path": path, "code": code, "message": message})
@@ -691,6 +706,12 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
             continue
         resolved = tables
         entry["resolutionEvidence"] = "caller-reviewed tables" if tables is not None else None
+        if resolved is None and evidence is None and not preserve_sentinel_tables:
+            bare_sources = _bare_source_identifiers(code)
+            alert_tables = {"SecurityAlert", "SecurityIncident", "AlertInfo", "AlertEvidence"}
+            if bare_sources and bare_sources <= alert_tables and not opaque:
+                resolved = sorted(bare_sources)
+                entry["resolutionEvidence"] = "deterministic SecurityAlert/SecurityIncident to AlertInfo/AlertEvidence migration"
         if evidence is not None:
             if (not isinstance(evidence, dict)
                     or evidence.get("querySha256") != query_hash(original["node"]["query"])
@@ -711,8 +732,15 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
                       "Supply underlying source tables separately from workspace function aliases.")
                 continue
         contract = migrator.convert(raw, tables=resolved, source_id=path,
-                                    artifact_type="workbook", resolve=False)
+                                    artifact_type="workbook", resolve=False,
+                                    preserve_sentinel_tables=preserve_sentinel_tables)
         entry["conversion"] = contract
+        if contract.get("notes"):
+            entry["notes"] = list(contract["notes"])
+            entry["provenanceNotes"] = list(contract["notes"])
+            for note in contract["notes"]:
+                if note not in provenance_notes:
+                    provenance_notes.append(note)
         if "Watchlist" in contract["resolvedTables"]:
             entry["referenceInputs"] = ["Watchlist"]
         entry["status"] = contract["status"]
@@ -852,15 +880,19 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
     output_paths = {id(s["node"]): s["path"] for s in query_surfaces(doc)}
     for surface, entry in zip(surfaces, reports):
         entry["outputPath"] = output_paths.get(id(surface["node"]))
+    report_payload = {
+        "status": "blocked" if issues else ("needs-validation" if gates else "converted"),
+        "queries": reports,
+        "removedParameters": [{"name": p["name"], "sourcePath": path}
+                              for path, p in entries if p["name"] in removed],
+        "issues": issues,
+        "gates": [{"code": gate, "status": "unverified"} for gate in sorted(gates)],
+        "validation": {"localStructureOnly": True, "runtime": "not-run", "ui": "not-run"},
+    }
+    if provenance_notes:
+        report_payload["notes"] = list(provenance_notes)
+        report_payload["provenanceNotes"] = list(provenance_notes)
     return {
         "workbook": doc,
-        "report": {
-            "status": "blocked" if issues else ("needs-validation" if gates else "converted"),
-            "queries": reports,
-            "removedParameters": [{"name": p["name"], "sourcePath": path}
-                                  for path, p in entries if p["name"] in removed],
-            "issues": issues,
-            "gates": [{"code": gate, "status": "unverified"} for gate in sorted(gates)],
-            "validation": {"localStructureOnly": True, "runtime": "not-run", "ui": "not-run"},
-        },
+        "report": report_payload,
     }
