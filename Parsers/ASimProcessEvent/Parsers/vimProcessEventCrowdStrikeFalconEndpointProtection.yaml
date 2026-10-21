@@ -19,6 +19,7 @@ References:
 Description: |
   Normalizes CrowdStrike_Process_Events_CL process creation, synthetic process observations,
   process termination, and termination requests to ASIM ProcessEvent 1.0.0.
+  Retains raw source fields in AdditionalFields for every normalized event.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: vimProcessEventCrowdStrikeFalconEndpointProtection
 EquivalentBuiltInParser: _Im_ProcessEvent_CrowdStrikeFalconEndpointProtection
@@ -68,9 +69,6 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-  - Name: pack
-    Type: bool
-    Default: false
 ParserQuery: |
   let parser = (
       starttime:datetime=datetime(null),
@@ -87,8 +85,7 @@ ParserQuery: |
       dvchostname_has_any:dynamic=dynamic([]),
       hashes_has_any:dynamic=dynamic([]),
       eventtype:string="*",
-      disabled:bool=false,
-      pack:bool=false
+      disabled:bool=false
   ) {
       // Falcon correlation IDs are not native OS PIDs; preserve them in AdditionalFields.
       CrowdStrike_Process_Events_CL
@@ -102,9 +99,7 @@ ParserQuery: |
                   tostring(split(name, "V")[0]) in ("SyntheticProcessRollup2", "SyntheticProcessRollup2Lin", "SyntheticProcessRollup2Mac"), "SyntheticProcessRollup2",
                   tostring(split(name, "V")[0]) in ("EndOfProcess", "EndOfProcessLin", "EndOfProcessMac"), "EndOfProcess",
                   tostring(split(name, "V")[0]) in ("TerminateProcess", "TerminateProcessLin", "TerminateProcessMac"), "TerminateProcess", "")),
-          _SourceFields = iff(pack,
-              bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"]))),
-              dynamic({}))
+          _SourceFields = bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"])))
       | where isnotempty(_SourceType)
       | extend
           _IsCreate = _SourceType in ("ProcessRollup2", "SyntheticProcessRollup2"),
@@ -241,5 +236,5 @@ ParserQuery: |
       parentprocess_has_any=parentprocess_has_any, targetusername_has=targetusername_has,
       actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
       dvchostname_has_any=dvchostname_has_any, hashes_has_any=hashes_has_any,
-      eventtype=eventtype, disabled=disabled, pack=pack
+      eventtype=eventtype, disabled=disabled
   )
