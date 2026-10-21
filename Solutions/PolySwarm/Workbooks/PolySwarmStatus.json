@@ -1,0 +1,220 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## PolySwarm status\n\nThis page reads only tables in your own workspace. It never calls PolySwarm and needs no credential. A tile that says nothing has arrived yet is normal on a new install: each one fills as its source starts producing data.",
+        "style": "info"
+      },
+      "name": "intro"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "param-workspace",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "type": 5,
+            "isRequired": true,
+            "isGlobal": true,
+            "multiSelect": false,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\n| project id, name",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::1"
+              ],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": "value::1"
+          },
+          {
+            "id": "param-timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true ThreatIntelIndicators, (datatable(TimeGenerated:datetime, SourceSystem:string, LastUpdateMethod:string)[])\n| where TimeGenerated {TimeRange}\n| where SourceSystem == 'PolySwarm' and LastUpdateMethod == 'PolySwarm hunting'\n| summarize Indicators = count() by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Hunting connector: indicators per hour",
+        "noDataMessage": "No hunt results yet. This fills when one of your PolySwarm hunts matches a file. That is normal for a new connection.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "hunting-over-time",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true ThreatIntelIndicators, (datatable(TimeGenerated:datetime, SourceSystem:string, LastUpdateMethod:string)[])\n| where TimeGenerated {TimeRange}\n| where SourceSystem == 'PolySwarm' and LastUpdateMethod == 'PolySwarm curated feed'\n| summarize Indicators = count() by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Curated feed connector: indicators per hour",
+        "noDataMessage": "No feed indicators yet. This fills after the first poll, within an hour of connecting.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "feed-over-time",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true ThreatIntelIndicators, (datatable(TimeGenerated:datetime, SourceSystem:string, LastUpdateMethod:string)[])\n| where SourceSystem == 'PolySwarm'\n| extend Connector = case(LastUpdateMethod == 'PolySwarm hunting', 'Hunting connector', LastUpdateMethod == 'PolySwarm curated feed', 'Curated feed connector', 'Other')\n| summarize ['Last row received'] = max(TimeGenerated), ['Rows in workspace'] = count() by Connector",
+        "size": 0,
+        "title": "Last indicator received, by connector",
+        "noDataMessage": "No rows received from either connector yet. This is normal before a connector is configured and its first poll has run.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "name": "last-row"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true SentinelHealth, (datatable(TimeGenerated:datetime, SentinelResourceType:string, SentinelResourceName:string, Status:string, Description:string)[])\n| where TimeGenerated {TimeRange}\n| where SentinelResourceType == 'Data connector' and SentinelResourceName has 'PolySwarm'\n| project TimeGenerated, Connector = SentinelResourceName, Status, Description\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Connector health records",
+        "noDataMessage": "No health records for the PolySwarm connectors yet. Records appear after health monitoring is turned on for the workspace and a connector has run.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "name": "health"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true PolySwarmSandbox_CL, (datatable(TimeGenerated:datetime, Verdict:string)[])\n| where TimeGenerated {TimeRange}\n| summarize Detonations = count() by Verdict",
+        "size": 0,
+        "title": "Sandbox detonations by verdict",
+        "noDataMessage": "No detonations yet. This fills after a PolySwarm sandbox playbook completes its first detonation.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "piechart"
+      },
+      "name": "detonations"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true SecurityAlert, (datatable(TimeGenerated:datetime, AlertName:string, AlertSeverity:string, Status:string)[])\n| where TimeGenerated {TimeRange}\n| where AlertName in~ ('PolySwarm high-confidence hunt hit', 'PolySwarm malicious file observed', 'PolySwarm sandbox detonation malicious')\n| summarize Alerts = count(), ['Last alert'] = max(TimeGenerated) by AlertName, AlertSeverity",
+        "size": 0,
+        "title": "Alerts from the PolySwarm analytics rules",
+        "noDataMessage": "No alerts from the PolySwarm rules yet. The rules ship switched off; this fills after you turn one on and it matches.",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "name": "alerts"
+    }
+  ],
+  "fromTemplateId": "sentinel-PolySwarmStatusWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

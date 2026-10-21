@@ -1,0 +1,1383 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "PolySwarm - Sandbox URL Detonation - Entity Triggered",
+    "description": "Entity-trigger variant of PolySwarm-Sandbox-Url. An analyst runs this directly from a Url entity on an incident (Sentinel entity blade 'Run playbook'), rather than on the whole incident. Same sandbox flow, Key Vault key, community guard and incident comment as the incident-triggered variant. Refuses to submit private, loopback, link-local, reserved, single-label and IPv6 hosts, and non-http(s) schemes: a URL that points at an internal address would disclose internal host names to a third party. DNS names that resolve to private addresses are not detected (no resolver in Logic Apps).",
+    "lastUpdateTime": "2026-09-23T00:00:00.000Z",
+    "prerequisites": [
+      "A PolySwarm API key with sandbox access, stored as a secret in an Azure Key Vault.",
+      "The private PolySwarm community you want detonations to land in. Get one at https://polyswarm.network/account/api-keys; ask PolySwarm Customer Success for a private community if you do not have one yet.",
+      "The PolySwarmSandbox_CL Data Collection Endpoint and Data Collection Rule deployed (Data Connectors folder - not owned by this playbook). This playbook is the only writer to that table: it POSTs one row per detonation attempt (including timeouts) via the Logs Ingestion API, since PolySwarm's own sandbox task list API does not carry verdicts."
+    ],
+    "postDeployment": [
+      "1. Assign the 'Microsoft Sentinel Responder' role on the resource group (or workspace) to this playbook's system-assigned managed identity.",
+      "2. Assign the 'Key Vault Secrets User' role on the Key Vault (named by the KeyVaultName parameter) to the same managed identity.",
+      "3. The 'Monitoring Metrics Publisher' role on the Data Collection Rule (DcrResourceId) is assigned automatically at deployment when create_role_assignment is true (default) and the deploying principal can grant RBAC roles on that DCR; otherwise set create_role_assignment to false and assign the role manually.",
+      "4. Authorize the Microsoft Sentinel and Azure Key Vault API connections if they show as unauthorized.",
+      "5. From an incident's entity blade, select a Url entity and choose 'Run playbook' to invoke this directly. Not attached via an automation rule (Sentinel entity triggers are analyst-invoked, not automation-rule-invoked)."
+    ],
+    "entities": [
+      "Url"
+    ],
+    "tags": [
+      "Enrichment",
+      "Sandbox"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "PolySwarm Customer Success"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      },
+      "defaultValue": "PolySwarm-Sandbox-Url-EntityTriggered"
+    },
+    "SolutionVersion": {
+      "type": "string",
+      "defaultValue": "3.0.0",
+      "metadata": {
+        "description": "Version string sent in the User-Agent header on every call to the PolySwarm API. Bump this when the solution version changes."
+      }
+    },
+    "Community": {
+      "type": "string",
+      "metadata": {
+        "description": "REQUIRED. Your PolySwarm private community name (for example a name your PolySwarm account admin gave you, not 'public' or 'default'). There is no default value on purpose: this playbook refuses to silently fall back to the public community. An attachment or URL submitted to the public community is visible to every other member of that community. To submit to the public community anyway, you must also set AllowPublicCommunity to true and pass 'public' here."
+      }
+    },
+    "AllowPublicCommunity": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Set true only to explicitly allow a submission to the public community when Community is 'public' (or 'default'). Default false: the playbook terminates with no submission if Community resolves to the public community and this is false."
+      }
+    },
+    "Provider": {
+      "type": "string",
+      "defaultValue": "triage",
+      "allowedValues": [
+        "cape",
+        "triage"
+      ],
+      "metadata": {
+        "description": "Sandbox provider slug, verified live against GET /sandbox/provider/list on 2026-09-23: 'cape' (tool cape_sandbox_v2) or 'triage' (tool triage_sandbox_v0). Re-check that endpoint before deploying - PolySwarm can add or retire providers, and the two report different score scales (triage: analysis.score 0-10; cape: malscore 0-1)."
+      }
+    },
+    "VmSlug": {
+      "type": "string",
+      "defaultValue": "windows11-21h2-x64",
+      "metadata": {
+        "description": "VM image slug for the chosen Provider, verified live 2026-09-23 against GET /sandbox/provider/list. Triage: android-11-x64 (FILE only), ubuntu-22.04-amd64, windows11-21h2-x64 (default; FILE and URL). Cape: win-10-build-19041 (FILE and URL). Must support the artifact type this playbook submits, or task creation fails."
+      }
+    },
+    "NetworkEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Allow the sample outbound network access during detonation."
+      }
+    },
+    "TimeoutMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "metadata": {
+        "description": "Minutes to poll the sandbox task before giving up and commenting a timeout with the task id and report link. Verified live timings: a triage URL detonation completed in under 3 minutes; a cape URL detonation took about 4.5 minutes. A file matching PolySwarm's known-good allowlist (observed live for the EICAR test file) returns immediately with no real detonation."
+      }
+    },
+    "KeyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Key Vault holding the PolySwarm API key. The playbook's managed identity needs the 'Key Vault Secrets User' role on this vault - grant it after deployment (see postDeployment)."
+      }
+    },
+    "KeyVaultSecretName": {
+      "type": "string",
+      "defaultValue": "PolySwarmApiKey",
+      "metadata": {
+        "description": "Name of the Key Vault secret holding the PolySwarm API key."
+      }
+    },
+    "PolySwarmApiBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.polyswarm.network/v3",
+      "metadata": {
+        "description": "PolySwarm REST API v3 base URL."
+      }
+    },
+    "MaliciousScoreThreshold": {
+      "type": "string",
+      "defaultValue": "7",
+      "metadata": {
+        "description": "Score at or above which the comment and PolySwarmSandbox_CL row report 'malicious'. Both providers were verified live to report on the same 0-10 scale (a live LockBit sample: cape_sandbox_v2.malscore 8.0, triage analysis.score 10 - an earlier draft wrongly assumed cape used a 0-1 scale from a benign URL's low malscore; corrected). Score = coalesce(report.malscore, report.analysis.score). A string because ARM templates have no float parameter type."
+      }
+    },
+    "SuspiciousScoreThreshold": {
+      "type": "string",
+      "defaultValue": "4",
+      "metadata": {
+        "description": "Score at or above which (and below MaliciousScoreThreshold) the comment and PolySwarmSandbox_CL row report 'suspicious'. Below this, 'benign'. A null score (no report - FAILED or a timeout) reports 'unknown'; a KNOWN_GOOD status reports 'known good' regardless of score."
+      }
+    },
+    "DceLogsIngestionEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Data Collection Endpoint URL for the PolySwarmSandbox_CL Log Analytics table's Logs Ingestion API pipeline (Microsoft.Insights/dataCollectionEndpoints resource's logsIngestion endpoint). Matches the 'dceLogsIngestionEndpoint' output of the Data Connectors infrastructure template that owns this table and its DCE/DCR - deploy that template first (not owned by this playbook)."
+      }
+    },
+    "DcrImmutableId": {
+      "type": "string",
+      "metadata": {
+        "description": "Immutable id of the Data Collection Rule that transforms and routes rows into PolySwarmSandbox_CL, used in the Logs Ingestion API URL. Matches that template's 'dcrImmutableId' output. NOT the same value as DcrResourceId below - an immutable id is not a usable ARM resource id for RBAC scoping."
+      }
+    },
+    "StreamName": {
+      "type": "string",
+      "defaultValue": "Custom-PolySwarmSandboxResults",
+      "metadata": {
+        "description": "DCR stream name for the PolySwarmSandbox_CL table. Matches that template's 'streamName' output."
+      }
+    },
+    "DcrResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The Data Collection Rule's full ARM resource id (NOT its immutable id - two different identifiers for the same object; DcrImmutableId above is for the Logs Ingestion API URL, this is for RBAC scoping the role assignment below). Matches the Data Connectors template's 'dcrResourceId' output. Also used by PolySwarm-Sandbox-DefenderFile for the same role assignment."
+      }
+    },
+    "create_role_assignment": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "If true (default), automatically assigns the Monitoring Metrics Publisher role on the DCR (DcrResourceId) to this playbook's managed identity, matching the Recorded Future Sandbox_StorageAccount reference pattern. Requires Owner or User Access Administrator on the DCR's scope to deploy; set false and grant the role manually if the deploying principal lacks that."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+    "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+    "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyVaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyVaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('KeyVaultName')]"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "PolySwarm-Sandbox-Url-EntityTriggered",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "Community": {
+              "type": "string"
+            },
+            "AllowPublicCommunity": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "Provider": {
+              "type": "string",
+              "defaultValue": "triage"
+            },
+            "VmSlug": {
+              "type": "string",
+              "defaultValue": "windows11-21h2-x64"
+            },
+            "NetworkEnabled": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "TimeoutMinutes": {
+              "type": "int",
+              "defaultValue": 15
+            },
+            "KeyVaultName": {
+              "type": "string"
+            },
+            "KeyVaultSecretName": {
+              "type": "string",
+              "defaultValue": "PolySwarmApiKey"
+            },
+            "PolySwarmApiBaseUrl": {
+              "type": "string",
+              "defaultValue": "https://api.polyswarm.network/v3"
+            },
+            "MaliciousScoreThreshold": {
+              "type": "string",
+              "defaultValue": "7"
+            },
+            "SuspiciousScoreThreshold": {
+              "type": "string",
+              "defaultValue": "4"
+            },
+            "DceLogsIngestionEndpoint": {
+              "type": "string"
+            },
+            "DcrImmutableId": {
+              "type": "string"
+            },
+            "StreamName": {
+              "type": "string",
+              "defaultValue": "Custom-PolySwarmSandboxResults"
+            },
+            "SolutionVersion": {
+              "type": "string",
+              "defaultValue": "3.0.0"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_entity": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/entity/@{encodeURIComponent('UrlEntity')}"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_sandbox_status": {
+              "type": "InitializeVariable",
+              "description": "Top-level initialization required by Logic Apps (InitializeVariable is not allowed inside a scope). Reset to the same value at the point in the flow where the task's real starting status is known - see Reset_sandbox_status.",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "sandboxStatus",
+                    "type": "string",
+                    "value": "PENDING"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "If_incident_context_present": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@triggerBody()?['IncidentArmID']",
+                        "@null"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Compose_url_normalized": {
+                  "type": "Compose",
+                  "inputs": "@replace(trim(string(coalesce(triggerBody()?['Entity']?['properties']?['Url'], ''))), '\\', '/')",
+                  "runAfter": {},
+                  "description": "Delta 8 gate, step 1. The URL is parsed with string operations only (no network, no DNS) so a private, loopback, link-local, reserved or single-label host is never sent to PolySwarm: submitting an internal address would disclose internal host names to a third party. DNS names that resolve to private addresses are not detected, Logic Apps has no resolver."
+                },
+                "Compose_url_scheme": {
+                  "type": "Compose",
+                  "inputs": "@if(contains(outputs('Compose_url_normalized'), '://'), toLower(first(split(outputs('Compose_url_normalized'), '://'))), 'http')",
+                  "runAfter": {
+                    "Compose_url_normalized": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_rest": {
+                  "type": "Compose",
+                  "inputs": "@if(contains(outputs('Compose_url_normalized'), '://'), substring(outputs('Compose_url_normalized'), min(add(indexOf(outputs('Compose_url_normalized'), '://'), 3), length(outputs('Compose_url_normalized')))), outputs('Compose_url_normalized'))",
+                  "runAfter": {
+                    "Compose_url_scheme": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_host_and_port": {
+                  "type": "Compose",
+                  "inputs": "@last(split(first(split(first(split(first(split(outputs('Compose_url_rest'), '/')), '?')), '#')), '@'))",
+                  "runAfter": {
+                    "Compose_url_rest": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_host_raw": {
+                  "type": "Compose",
+                  "inputs": "@if(or(contains(outputs('Compose_url_host_and_port'), '['), not(equals(length(split(outputs('Compose_url_host_and_port'), ':')), 2))), outputs('Compose_url_host_and_port'), first(split(outputs('Compose_url_host_and_port'), ':')))",
+                  "runAfter": {
+                    "Compose_url_host_and_port": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_host": {
+                  "type": "Compose",
+                  "inputs": "@toLower(if(endsWith(outputs('Compose_url_host_raw'), '.'), substring(outputs('Compose_url_host_raw'), 0, max(0, sub(length(outputs('Compose_url_host_raw')), 1))), outputs('Compose_url_host_raw')))",
+                  "runAfter": {
+                    "Compose_url_host_raw": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_host_labels": {
+                  "type": "Compose",
+                  "inputs": "@split(outputs('Compose_url_host'), '.')",
+                  "runAfter": {
+                    "Compose_url_host": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_ipv4_valid_shape": {
+                  "type": "Compose",
+                  "inputs": "@and(equals(length(outputs('Compose_url_host_labels')), 4), empty(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(outputs('Compose_url_host'), '.', ''), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''), '5', ''), '6', ''), '7', ''), '8', ''), '9', '')), and(greater(length(coalesce(outputs('Compose_url_host_labels')?[0], '')), 0), lessOrEquals(length(coalesce(outputs('Compose_url_host_labels')?[0], '')), 3), or(equals(length(coalesce(outputs('Compose_url_host_labels')?[0], '')), 1), not(startsWith(coalesce(outputs('Compose_url_host_labels')?[0], ''), '0')))), and(greater(length(coalesce(outputs('Compose_url_host_labels')?[1], '')), 0), lessOrEquals(length(coalesce(outputs('Compose_url_host_labels')?[1], '')), 3), or(equals(length(coalesce(outputs('Compose_url_host_labels')?[1], '')), 1), not(startsWith(coalesce(outputs('Compose_url_host_labels')?[1], ''), '0')))), and(greater(length(coalesce(outputs('Compose_url_host_labels')?[2], '')), 0), lessOrEquals(length(coalesce(outputs('Compose_url_host_labels')?[2], '')), 3), or(equals(length(coalesce(outputs('Compose_url_host_labels')?[2], '')), 1), not(startsWith(coalesce(outputs('Compose_url_host_labels')?[2], ''), '0')))), and(greater(length(coalesce(outputs('Compose_url_host_labels')?[3], '')), 0), lessOrEquals(length(coalesce(outputs('Compose_url_host_labels')?[3], '')), 3), or(equals(length(coalesce(outputs('Compose_url_host_labels')?[3], '')), 1), not(startsWith(coalesce(outputs('Compose_url_host_labels')?[3], ''), '0')))))",
+                  "runAfter": {
+                    "Compose_url_host_labels": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_last_label_numeric": {
+                  "type": "Compose",
+                  "inputs": "@and(not(empty(last(outputs('Compose_url_host_labels')))), or(empty(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(last(outputs('Compose_url_host_labels')), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''), '5', ''), '6', ''), '7', ''), '8', ''), '9', '')), startsWith(last(outputs('Compose_url_host_labels')), '0x')))",
+                  "runAfter": {
+                    "Compose_url_ipv4_valid_shape": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_ipv4_octets": {
+                  "type": "Compose",
+                  "inputs": "@if(outputs('Compose_url_ipv4_valid_shape'), createArray(int(if(outputs('Compose_url_ipv4_valid_shape'), coalesce(outputs('Compose_url_host_labels')?[0], ''), '0')), int(if(outputs('Compose_url_ipv4_valid_shape'), coalesce(outputs('Compose_url_host_labels')?[1], ''), '0')), int(if(outputs('Compose_url_ipv4_valid_shape'), coalesce(outputs('Compose_url_host_labels')?[2], ''), '0')), int(if(outputs('Compose_url_ipv4_valid_shape'), coalesce(outputs('Compose_url_host_labels')?[3], ''), '0'))), createArray(1, 1, 1, 1))",
+                  "runAfter": {
+                    "Compose_url_last_label_numeric": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Compose_url_host_refusal": {
+                  "type": "Compose",
+                  "inputs": "@if(not(or(equals(outputs('Compose_url_scheme'), 'http'), equals(outputs('Compose_url_scheme'), 'https'))), 'a URL scheme other than http or https', if(or(empty(outputs('Compose_url_host')), startsWith(outputs('Compose_url_host'), '.'), contains(outputs('Compose_url_host'), '..'), contains(outputs('Compose_url_host'), '%'), contains(outputs('Compose_url_host'), ' ')), 'a malformed host name', if(or(contains(outputs('Compose_url_host'), ':'), contains(outputs('Compose_url_host'), '['), contains(outputs('Compose_url_host'), ']')), 'an IPv6 literal', if(or(equals(outputs('Compose_url_host'), 'localhost'), endsWith(outputs('Compose_url_host'), '.localhost')), 'localhost', if(not(contains(outputs('Compose_url_host'), '.')), 'a single-label host name', if(or(endsWith(outputs('Compose_url_host'), '.local'), endsWith(outputs('Compose_url_host'), '.internal'), endsWith(outputs('Compose_url_host'), '.lan'), endsWith(outputs('Compose_url_host'), '.corp'), endsWith(outputs('Compose_url_host'), '.home'), endsWith(outputs('Compose_url_host'), '.home.arpa'), endsWith(outputs('Compose_url_host'), '.intranet'), equals(outputs('Compose_url_host'), 'home.arpa')), 'an internal-only host name suffix', if(outputs('Compose_url_last_label_numeric'), if(not(outputs('Compose_url_ipv4_valid_shape')), 'a malformed numeric host', if(greater(max(outputs('Compose_url_ipv4_octets')), 255), 'a malformed numeric host', if(or(equals(outputs('Compose_url_ipv4_octets')[0], 0), equals(outputs('Compose_url_ipv4_octets')[0], 10), equals(outputs('Compose_url_ipv4_octets')[0], 127), greaterOrEquals(outputs('Compose_url_ipv4_octets')[0], 224), and(equals(outputs('Compose_url_ipv4_octets')[0], 100), greaterOrEquals(outputs('Compose_url_ipv4_octets')[1], 64), lessOrEquals(outputs('Compose_url_ipv4_octets')[1], 127)), and(equals(outputs('Compose_url_ipv4_octets')[0], 169), equals(outputs('Compose_url_ipv4_octets')[1], 254)), and(equals(outputs('Compose_url_ipv4_octets')[0], 172), greaterOrEquals(outputs('Compose_url_ipv4_octets')[1], 16), lessOrEquals(outputs('Compose_url_ipv4_octets')[1], 31)), and(equals(outputs('Compose_url_ipv4_octets')[0], 192), equals(outputs('Compose_url_ipv4_octets')[1], 168)), and(equals(outputs('Compose_url_ipv4_octets')[0], 192), equals(outputs('Compose_url_ipv4_octets')[1], 0), equals(outputs('Compose_url_ipv4_octets')[2], 0)), and(equals(outputs('Compose_url_ipv4_octets')[0], 198), or(equals(outputs('Compose_url_ipv4_octets')[1], 18), equals(outputs('Compose_url_ipv4_octets')[1], 19)))), 'a private or reserved IPv4 address', ''))), '')))))))",
+                  "runAfter": {
+                    "Compose_url_ipv4_octets": [
+                      "Succeeded"
+                    ]
+                  },
+                  "description": "Empty string means the host may be submitted. Otherwise the text names why it was refused. Refused: localhost, single-label hosts, .local .internal .lan .corp .home .home.arpa .intranet, IPv4 in 0/8 10/8 100.64/10 127/8 169.254/16 172.16/12 192.168/16 192.0.0/24 198.18/15 and 224 and above, malformed numeric hosts, any IPv6 literal, any scheme other than http or https."
+                },
+                "If_url_host_allowed": {
+                  "type": "If",
+                  "description": "Refusal gate. Every PolySwarm call for this URL lives inside the true branch, so a refused URL never reaches Key Vault or PolySwarm.",
+                  "expression": {
+                    "equals": [
+                      "@outputs('Compose_url_host_refusal')",
+                      ""
+                    ]
+                  },
+                  "actions": {
+                    "Get_PolySwarm_API_key": {
+                      "type": "ApiConnection",
+                      "description": "Reads the PolySwarm API key from Key Vault via the playbook's managed identity. Never a deployment parameter.",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/secrets/@{encodeURIComponent(parameters('KeyVaultSecretName'))}/value"
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "inputs",
+                            "outputs"
+                          ]
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Guard_community_is_not_public_unless_explicitly_allowed": {
+                      "type": "If",
+                      "description": "Decisions locked #2: sandbox submissions default to the private community; public only by explicit parameter choice. Community has no ARM default (required parameter), and even when set to 'public' or 'default' the submission is refused unless AllowPublicCommunity is explicitly true.",
+                      "expression": {
+                        "and": [
+                          {
+                            "or": [
+                              {
+                                "equals": [
+                                  "@toLower(coalesce(parameters('Community'), ''))",
+                                  "public"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@toLower(coalesce(parameters('Community'), ''))",
+                                  "default"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@toLower(coalesce(parameters('Community'), ''))",
+                                  ""
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "equals": [
+                              "@parameters('AllowPublicCommunity')",
+                              false
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Terminate_public_community_not_allowed": {
+                          "type": "Terminate",
+                          "inputs": {
+                            "runStatus": "Failed",
+                            "runError": {
+                              "code": "CommunityNotConfigured",
+                              "message": "Community parameter is empty, 'public' or 'default', and AllowPublicCommunity is false. Refusing to silently submit to the public community. Set Community to your PolySwarm private community name, or set AllowPublicCommunity to true to explicitly opt into a public submission."
+                            }
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Create_sandbox_task": {
+                            "type": "Http",
+                            "description": "Step 1 of 3. artifact_name is the URL itself - verified live, the URL string is also what gets uploaded as the artifact bytes in step 2 (a URL detonation does not fetch content client-side; PolySwarm's sandbox VM does the fetch).",
+                            "inputs": {
+                              "method": "POST",
+                              "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask/instance",
+                              "headers": {
+                                "Authorization": "@{body('Get_PolySwarm_API_key')?['value']}",
+                                "Content-Type": "application/json",
+                                "Accept": "application/json",
+                                "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-Url-Entity)')"
+                              },
+                              "body": {
+                                "artifact_name": "@trim(triggerBody()?['Entity']?['properties']?['Url'])",
+                                "artifact_type": "URL",
+                                "community": "@parameters('Community')",
+                                "provider_slug": "@parameters('Provider')",
+                                "vm_slug": "@parameters('VmSlug')",
+                                "network_enabled": "@if(parameters('NetworkEnabled'), 1, 0)"
+                              },
+                              "retryPolicy": {
+                                "type": "exponential",
+                                "count": 3,
+                                "interval": "PT10S"
+                              }
+                            },
+                            "runtimeConfiguration": {
+                              "secureData": {
+                                "properties": [
+                                  "inputs",
+                                  "outputs"
+                                ]
+                              }
+                            },
+                            "runAfter": {}
+                          },
+                          "If_task_created": {
+                            "type": "If",
+                            "expression": {
+                              "equals": [
+                                "@outputs('Create_sandbox_task')?['statusCode']",
+                                200
+                              ]
+                            },
+                            "actions": {
+                              "Upload_artifact_bytes": {
+                                "type": "Http",
+                                "description": "Step 2 of 3. Uploads the URL string itself as the artifact bytes (verified live) - not fetched page content.",
+                                "inputs": {
+                                  "method": "PUT",
+                                  "uri": "@{body('Create_sandbox_task')?['result']?['upload_url']}",
+                                  "body": "@trim(triggerBody()?['Entity']?['properties']?['Url'])"
+                                },
+                                "runtimeConfiguration": {
+                                  "secureData": {
+                                    "properties": [
+                                      "inputs",
+                                      "outputs"
+                                    ]
+                                  }
+                                },
+                                "runAfter": {}
+                              },
+                              "Finalize_sandbox_task": {
+                                "type": "Http",
+                                "description": "Step 3 of 3. Task id goes in the query string, community in the JSON body.",
+                                "inputs": {
+                                  "method": "PUT",
+                                  "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask/instance",
+                                  "queries": {
+                                    "id": "@{body('Create_sandbox_task')?['result']?['id']}"
+                                  },
+                                  "headers": {
+                                    "Authorization": "@{body('Get_PolySwarm_API_key')?['value']}",
+                                    "Content-Type": "application/json",
+                                    "Accept": "application/json",
+                                    "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-Url-Entity)')"
+                                  },
+                                  "body": {
+                                    "community": "@parameters('Community')"
+                                  },
+                                  "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 3,
+                                    "interval": "PT10S"
+                                  }
+                                },
+                                "runtimeConfiguration": {
+                                  "secureData": {
+                                    "properties": [
+                                      "inputs",
+                                      "outputs"
+                                    ]
+                                  }
+                                },
+                                "runAfter": {
+                                  "Upload_artifact_bytes": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Reset_sandbox_status": {
+                                "type": "SetVariable",
+                                "description": "Starts polling clean. InitializeVariable cannot live here (Logic Apps only allows it at the top level of the workflow) - sandboxStatus is initialized once at the top of the workflow and reset to the real starting value here.",
+                                "inputs": {
+                                  "name": "sandboxStatus",
+                                  "value": "@{coalesce(body('Finalize_sandbox_task')?['result']?['status'], 'PENDING')}"
+                                },
+                                "runAfter": {
+                                  "Finalize_sandbox_task": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Poll_until_complete_or_timeout": {
+                                "type": "Until",
+                                "expression": "@or(or(equals(variables('sandboxStatus'), 'SUCCEEDED'), equals(variables('sandboxStatus'), 'FAILED')), or(equals(variables('sandboxStatus'), 'KNOWN_GOOD'), equals(variables('sandboxStatus'), 'COMPLETE')), equals(variables('sandboxStatus'), 'NOT_FOUND'))",
+                                "limit": {
+                                  "count": 180,
+                                  "timeout": "[concat('PT', string(parameters('TimeoutMinutes')), 'M')]"
+                                },
+                                "actions": {
+                                  "Wait_before_next_poll": {
+                                    "type": "Wait",
+                                    "inputs": {
+                                      "interval": {
+                                        "count": 20,
+                                        "unit": "Second"
+                                      }
+                                    },
+                                    "runAfter": {}
+                                  },
+                                  "Get_sandbox_task_status": {
+                                    "type": "Http",
+                                    "inputs": {
+                                      "method": "GET",
+                                      "uri": "@{parameters('PolySwarmApiBaseUrl')}/sandbox/sandboxtask",
+                                      "queries": {
+                                        "sandbox_task_id": "@{body('Create_sandbox_task')?['result']?['id']}",
+                                        "community": "@parameters('Community')"
+                                      },
+                                      "headers": {
+                                        "Authorization": "@{body('Get_PolySwarm_API_key')?['value']}",
+                                        "Accept": "application/json",
+                                        "User-Agent": "@concat('PolySwarm-Microsoft-Sentinel/', parameters('SolutionVersion'), ' (Sandbox-Url-Entity)')"
+                                      },
+                                      "retryPolicy": {
+                                        "type": "exponential",
+                                        "count": 3,
+                                        "interval": "PT10S"
+                                      }
+                                    },
+                                    "runtimeConfiguration": {
+                                      "secureData": {
+                                        "properties": [
+                                          "inputs",
+                                          "outputs"
+                                        ]
+                                      }
+                                    },
+                                    "runAfter": {
+                                      "Wait_before_next_poll": [
+                                        "Succeeded"
+                                      ]
+                                    }
+                                  },
+                                  "Set_sandbox_status": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                      "name": "sandboxStatus",
+                                      "value": "@{outputs('Compose_next_sandbox_status')}"
+                                    },
+                                    "runAfter": {
+                                      "Compose_next_sandbox_status": [
+                                        "Succeeded"
+                                      ]
+                                    },
+                                    "description": "HTTP 204 with an empty body means PolySwarm has no such task (not found). It is handled explicitly as NOT_FOUND, which ends the poll loop, and the empty body is never read."
+                                  },
+                                  "Compose_next_sandbox_status": {
+                                    "type": "Compose",
+                                    "description": "Computes the next value of sandboxStatus. Logic Apps does not allow a variable to be set from an expression that reads the same variable.",
+                                    "inputs": "@{if(equals(outputs('Get_sandbox_task_status')?['statusCode'], 204), 'NOT_FOUND', coalesce(body('Get_sandbox_task_status')?['result']?['status'], variables('sandboxStatus')))}",
+                                    "runAfter": {
+                                      "Get_sandbox_task_status": [
+                                        "Succeeded",
+                                        "Failed",
+                                        "TimedOut"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "runAfter": {
+                                  "Reset_sandbox_status": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Build_summary": {
+                                "type": "Compose",
+                                "description": "Builds the summary used for both the incident comment and the PolySwarmSandbox_CL row, from the last poll of the sandbox task. The score is on the 0 to 10 scale both sandbox providers use. Verdict rule, used everywhere: KNOWN_GOOD is 'known good'; no score is 'unknown' (this covers a failed task and a timeout); at or above MaliciousScoreThreshold is 'malicious'; at or above SuspiciousScoreThreshold is 'suspicious'; otherwise 'benign'.",
+                                "inputs": {
+                                  "taskId": "@body('Create_sandbox_task')?['result']?['id']",
+                                  "sha256": "@body('Get_sandbox_task_status')?['result']?['sha256']",
+                                  "instanceId": "@body('Get_sandbox_task_status')?['result']?['instance_id']",
+                                  "status": "@variables('sandboxStatus')",
+                                  "providerSlug": "@coalesce(body('Get_sandbox_task_status')?['result']?['config']?['provider']?['slug'], parameters('Provider'))",
+                                  "vmSlug": "@coalesce(body('Get_sandbox_task_status')?['result']?['config']?['vm']?['slug'], parameters('VmSlug'))",
+                                  "score": "@coalesce(body('Get_sandbox_task_status')?['result']?['report']?['malscore'], body('Get_sandbox_task_status')?['result']?['report']?['analysis']?['score'])",
+                                  "malwareFamilyList": "@coalesce(body('Get_sandbox_task_status')?['result']?['report']?['malware_family'], json('[]'))",
+                                  "techniques": "@coalesce(body('Get_sandbox_task_status')?['result']?['report']?['ttp'], json('[]'))",
+                                  "reportLink": "@if(equals(body('Get_sandbox_task_status')?['result']?['sha256'], null), null, concat('https://polyswarm.network/scan/results/file/', body('Get_sandbox_task_status')?['result']?['sha256'], '/', body('Get_sandbox_task_status')?['result']?['instance_id']))",
+                                  "createdAt": "@body('Get_sandbox_task_status')?['result']?['created']",
+                                  "verdict": "@if(equals(variables('sandboxStatus'), 'KNOWN_GOOD'), 'known good', if(equals(coalesce(body('Get_sandbox_task_status')?['result']?['report']?['malscore'], body('Get_sandbox_task_status')?['result']?['report']?['analysis']?['score']), null), 'unknown', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['result']?['report']?['malscore'], body('Get_sandbox_task_status')?['result']?['report']?['analysis']?['score']), float(parameters('MaliciousScoreThreshold'))), 'malicious', if(greaterOrEquals(coalesce(body('Get_sandbox_task_status')?['result']?['report']?['malscore'], body('Get_sandbox_task_status')?['result']?['report']?['analysis']?['score']), float(parameters('SuspiciousScoreThreshold'))), 'suspicious', 'benign'))))"
+                                },
+                                "runAfter": {
+                                  "Poll_until_complete_or_timeout": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                  ]
+                                }
+                              },
+                              "Determine_outcome": {
+                                "type": "Compose",
+                                "description": "Outcome category, used only to choose the incident comment's narrative text - the verdict value itself (Build_summary?['verdict']) is the same single rule in every branch and in the PolySwarmSandbox_CL row.",
+                                "inputs": "@if(or(equals(outputs('Build_summary')?['status'], 'SUCCEEDED'), equals(outputs('Build_summary')?['status'], 'COMPLETE')), 'SUCCEEDED', if(equals(outputs('Build_summary')?['status'], 'KNOWN_GOOD'), 'KNOWN_GOOD', if(equals(outputs('Build_summary')?['status'], 'FAILED'), 'FAILED', if(equals(outputs('Build_summary')?['status'], 'NOT_FOUND'), 'NOT_FOUND', 'TIMEOUT'))))",
+                                "runAfter": {
+                                  "Build_summary": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Send_to_PolySwarmSandbox_CL": {
+                                "type": "Http",
+                                "description": "Logs Ingestion API: one row per detonation attempt, keyed by TaskId. CompletedAt is this playbook's own observed-terminal timestamp (utcNow()) - the verified SandboxTask response shape has no server-provided completion time.",
+                                "inputs": {
+                                  "method": "POST",
+                                  "uri": "@{parameters('DceLogsIngestionEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                                  "headers": {
+                                    "Content-Type": "application/json"
+                                  },
+                                  "body": [
+                                    {
+                                      "TimeGenerated": "@{utcNow()}",
+                                      "TaskId": "@{outputs('Build_summary')?['taskId']}",
+                                      "ArtifactType": "URL",
+                                      "Sha256": "@{outputs('Build_summary')?['sha256']}",
+                                      "Url": "@{trim(triggerBody()?['Entity']?['properties']?['Url'])}",
+                                      "FileName": "",
+                                      "Source": "Url",
+                                      "Provider": "@{outputs('Build_summary')?['providerSlug']}",
+                                      "Community": "@{parameters('Community')}",
+                                      "Verdict": "@{outputs('Build_summary')?['verdict']}",
+                                      "Score": "@outputs('Build_summary')?['score']",
+                                      "Family": "@{if(empty(outputs('Build_summary')?['malwareFamilyList']), null, join(outputs('Build_summary')?['malwareFamilyList'], ', '))}",
+                                      "Techniques": "@outputs('Build_summary')?['techniques']",
+                                      "ReportUrl": "@{outputs('Build_summary')?['reportLink']}",
+                                      "CreatedAt": "@{outputs('Build_summary')?['createdAt']}",
+                                      "CompletedAt": "@{utcNow()}",
+                                      "IncidentArmId": "@triggerBody()?['IncidentArmID']"
+                                    }
+                                  ],
+                                  "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://monitor.azure.com"
+                                  }
+                                },
+                                "runAfter": {
+                                  "Determine_outcome": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Comment_on_incident": {
+                                "type": "Switch",
+                                "expression": "@outputs('Determine_outcome')",
+                                "cases": {
+                                  "Case_SUCCEEDED": {
+                                    "case": "SUCCEEDED",
+                                    "actions": {
+                                      "Add_success_comment_to_incident": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "path": "/Incidents/Comment",
+                                          "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(string(triggerBody()?['Entity']?['properties']?['Url']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nProvider: @{outputs('Build_summary')?['providerSlug']} / @{outputs('Build_summary')?['vmSlug']}<br>\n@{if(empty(outputs('Build_summary')?['malwareFamilyList']), '', concat('Malware family: ', replace(replace(replace(replace(string(join(outputs('Build_summary')?['malwareFamilyList'], ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '<br>\n'))}@{if(empty(outputs('Build_summary')?['techniques']), '', concat('MITRE ATT&CK: ', join(outputs('Build_summary')?['techniques'], ', '), '<br>\n'))}Community: @{parameters('Community')}@{if(or(empty(parameters('Community')), equals(toLower(parameters('Community')), 'public'), equals(toLower(parameters('Community')), 'default')), ' (public: anyone with PolySwarm access can see this result)', ' (private)')}<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), concat('PolySwarm report: sandbox task ', outputs('Build_summary')?['taskId'], ' (no public report link available for this submission)'), concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a>'))}</p>"
+                                          }
+                                        },
+                                        "runAfter": {}
+                                      },
+                                      "Add_success_comment_to_incident_unless_conflict": {
+                                        "type": "If",
+                                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                        "runAfter": {
+                                          "Add_success_comment_to_incident": [
+                                            "Failed"
+                                          ]
+                                        },
+                                        "expression": {
+                                          "and": [
+                                            {
+                                              "not": {
+                                                "equals": [
+                                                  "@outputs('Add_success_comment_to_incident')?['statusCode']",
+                                                  409
+                                                ]
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Add_success_comment_to_incident_retry": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                              "host": {
+                                                "connection": {
+                                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                              },
+                                              "method": "post",
+                                              "path": "/Incidents/Comment",
+                                              "body": {
+                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(string(triggerBody()?['Entity']?['properties']?['Url']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nProvider: @{outputs('Build_summary')?['providerSlug']} / @{outputs('Build_summary')?['vmSlug']}<br>\n@{if(empty(outputs('Build_summary')?['malwareFamilyList']), '', concat('Malware family: ', replace(replace(replace(replace(string(join(outputs('Build_summary')?['malwareFamilyList'], ', ')), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '<br>\n'))}@{if(empty(outputs('Build_summary')?['techniques']), '', concat('MITRE ATT&CK: ', join(outputs('Build_summary')?['techniques'], ', '), '<br>\n'))}Community: @{parameters('Community')}@{if(or(empty(parameters('Community')), equals(toLower(parameters('Community')), 'public'), equals(toLower(parameters('Community')), 'default')), ' (public: anyone with PolySwarm access can see this result)', ' (private)')}<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), concat('PolySwarm report: sandbox task ', outputs('Build_summary')?['taskId'], ' (no public report link available for this submission)'), concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a>'))}</p>"
+                                              }
+                                            },
+                                            "runAfter": {}
+                                          }
+                                        },
+                                        "else": {
+                                          "actions": {}
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "Case_KNOWN_GOOD": {
+                                    "case": "KNOWN_GOOD",
+                                    "actions": {
+                                      "Add_known_good_comment_to_incident": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "path": "/Incidents/Comment",
+                                          "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(string(triggerBody()?['Entity']?['properties']?['Url']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nThis artifact matched PolySwarm's known-good allowlist and was not detonated.<br>\nSHA256: @{coalesce(outputs('Build_summary')?['sha256'], 'n/a')}<br>\nTask id: @{outputs('Build_summary')?['taskId']}</p>"
+                                          }
+                                        },
+                                        "runAfter": {}
+                                      },
+                                      "Add_known_good_comment_to_incident_unless_conflict": {
+                                        "type": "If",
+                                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                        "runAfter": {
+                                          "Add_known_good_comment_to_incident": [
+                                            "Failed"
+                                          ]
+                                        },
+                                        "expression": {
+                                          "and": [
+                                            {
+                                              "not": {
+                                                "equals": [
+                                                  "@outputs('Add_known_good_comment_to_incident')?['statusCode']",
+                                                  409
+                                                ]
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Add_known_good_comment_to_incident_retry": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                              "host": {
+                                                "connection": {
+                                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                              },
+                                              "method": "post",
+                                              "path": "/Incidents/Comment",
+                                              "body": {
+                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(string(triggerBody()?['Entity']?['properties']?['Url']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nThis artifact matched PolySwarm's known-good allowlist and was not detonated.<br>\nSHA256: @{coalesce(outputs('Build_summary')?['sha256'], 'n/a')}<br>\nTask id: @{outputs('Build_summary')?['taskId']}</p>"
+                                              }
+                                            },
+                                            "runAfter": {}
+                                          }
+                                        },
+                                        "else": {
+                                          "actions": {}
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "Case_FAILED": {
+                                    "case": "FAILED",
+                                    "actions": {
+                                      "Add_failed_comment_to_incident": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "path": "/Incidents/Comment",
+                                          "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nSandbox analysis failed.<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}</p>"
+                                          }
+                                        },
+                                        "runAfter": {}
+                                      },
+                                      "Add_failed_comment_to_incident_unless_conflict": {
+                                        "type": "If",
+                                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                        "runAfter": {
+                                          "Add_failed_comment_to_incident": [
+                                            "Failed"
+                                          ]
+                                        },
+                                        "expression": {
+                                          "and": [
+                                            {
+                                              "not": {
+                                                "equals": [
+                                                  "@outputs('Add_failed_comment_to_incident')?['statusCode']",
+                                                  409
+                                                ]
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Add_failed_comment_to_incident_retry": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                              "host": {
+                                                "connection": {
+                                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                              },
+                                              "method": "post",
+                                              "path": "/Incidents/Comment",
+                                              "body": {
+                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nSandbox analysis failed.<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}</p>"
+                                              }
+                                            },
+                                            "runAfter": {}
+                                          }
+                                        },
+                                        "else": {
+                                          "actions": {}
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "Case_NOT_FOUND": {
+                                    "case": "NOT_FOUND",
+                                    "actions": {
+                                      "Add_not_found_comment_to_incident": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "path": "/Incidents/Comment",
+                                          "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nPolySwarm returned no result (HTTP 204, not found) for this sandbox task. The task may have been removed, or the community name does not match the one the task was created in. No verdict is available.<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}</p>"
+                                          }
+                                        },
+                                        "runAfter": {}
+                                      },
+                                      "Add_not_found_comment_to_incident_unless_conflict": {
+                                        "type": "If",
+                                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                        "runAfter": {
+                                          "Add_not_found_comment_to_incident": [
+                                            "Failed"
+                                          ]
+                                        },
+                                        "expression": {
+                                          "and": [
+                                            {
+                                              "not": {
+                                                "equals": [
+                                                  "@outputs('Add_not_found_comment_to_incident')?['statusCode']",
+                                                  409
+                                                ]
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "actions": {
+                                          "Add_not_found_comment_to_incident_retry": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                              "host": {
+                                                "connection": {
+                                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                              },
+                                              "method": "post",
+                                              "path": "/Incidents/Comment",
+                                              "body": {
+                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nPolySwarm returned no result (HTTP 204, not found) for this sandbox task. The task may have been removed, or the community name does not match the one the task was created in. No verdict is available.<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}</p>"
+                                              }
+                                            },
+                                            "runAfter": {}
+                                          }
+                                        },
+                                        "else": {
+                                          "actions": {}
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "default": {
+                                  "actions": {
+                                    "Add_timeout_comment_to_incident": {
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                          }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment",
+                                        "body": {
+                                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                          "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nTimed out after @{parameters('TimeoutMinutes')} minutes waiting for the sandbox task (last status: @{outputs('Build_summary')?['status']}).<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}The task keeps running in PolySwarm after this playbook stops polling; check the report link later.</p>"
+                                        }
+                                      },
+                                      "runAfter": {}
+                                    },
+                                    "Add_timeout_comment_to_incident_unless_conflict": {
+                                      "type": "If",
+                                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                      "runAfter": {
+                                        "Add_timeout_comment_to_incident": [
+                                          "Failed"
+                                        ]
+                                      },
+                                      "expression": {
+                                        "and": [
+                                          {
+                                            "not": {
+                                              "equals": [
+                                                "@outputs('Add_timeout_comment_to_incident')?['statusCode']",
+                                                409
+                                              ]
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Add_timeout_comment_to_incident_retry": {
+                                          "type": "ApiConnection",
+                                          "inputs": {
+                                            "host": {
+                                              "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                              }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment",
+                                            "body": {
+                                              "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                              "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nVerdict: <strong>@{outputs('Build_summary')?['verdict']}</strong> (@{if(equals(outputs('Build_summary')?['score'], null), 'no sandbox score', concat('score ', formatNumber(outputs('Build_summary')?['score'], '0.0'), '/10'))})<br>\nTimed out after @{parameters('TimeoutMinutes')} minutes waiting for the sandbox task (last status: @{outputs('Build_summary')?['status']}).<br>\nTask id: @{outputs('Build_summary')?['taskId']}<br>\n@{if(equals(outputs('Build_summary')?['reportLink'], null), '', concat('PolySwarm report: <a href=\"', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '\">', replace(replace(replace(replace(string(outputs('Build_summary')?['reportLink']), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), '</a><br>\n'))}The task keeps running in PolySwarm after this playbook stops polling; check the report link later.</p>"
+                                            }
+                                          },
+                                          "runAfter": {}
+                                        }
+                                      },
+                                      "else": {
+                                        "actions": {}
+                                      }
+                                    }
+                                  }
+                                },
+                                "runAfter": {
+                                  "Send_to_PolySwarmSandbox_CL": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                  ]
+                                }
+                              }
+                            },
+                            "else": {
+                              "actions": {
+                                "Add_submission_failed_comment": {
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "path": "/Incidents/Comment",
+                                    "body": {
+                                      "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                      "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nPolySwarm rejected the submission. HTTP status: @{coalesce(outputs('Create_sandbox_task')?['statusCode'], 'no response')}. A 401 means the API key is invalid or lacks access to the requested community; a 429 means the PolySwarm rate limit was reached; a community-not-found error means the private community name is not provisioned on this account.</p>"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                },
+                                "Add_submission_failed_comment_unless_conflict": {
+                                  "type": "If",
+                                  "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                                  "runAfter": {
+                                    "Add_submission_failed_comment": [
+                                      "Failed"
+                                    ]
+                                  },
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "not": {
+                                          "equals": [
+                                            "@outputs('Add_submission_failed_comment')?['statusCode']",
+                                            409
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "actions": {
+                                    "Add_submission_failed_comment_retry": {
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                          }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment",
+                                        "body": {
+                                          "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                          "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nPolySwarm rejected the submission. HTTP status: @{coalesce(outputs('Create_sandbox_task')?['statusCode'], 'no response')}. A 401 means the API key is invalid or lacks access to the requested community; a 429 means the PolySwarm rate limit was reached; a community-not-found error means the private community name is not provisioned on this account.</p>"
+                                        }
+                                      },
+                                      "runAfter": {}
+                                    }
+                                  },
+                                  "else": {
+                                    "actions": {}
+                                  }
+                                }
+                              }
+                            },
+                            "runAfter": {
+                              "Create_sandbox_task": [
+                                "Succeeded",
+                                "Failed"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Get_PolySwarm_API_key": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Add_private_host_refused_comment": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                            "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nThis URL was not submitted because it points at a private or internal address (@{outputs('Compose_url_host_refusal')}). Submitting it would disclose internal host names to a third party. Nothing was sent to PolySwarm.</p>"
+                          }
+                        },
+                        "runAfter": {}
+                      },
+                      "Add_private_host_refused_comment_unless_conflict": {
+                        "type": "If",
+                        "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                        "runAfter": {
+                          "Add_private_host_refused_comment": [
+                            "Failed"
+                          ]
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "not": {
+                                "equals": [
+                                  "@outputs('Add_private_host_refused_comment')?['statusCode']",
+                                  409
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Add_private_host_refused_comment_retry": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                "message": "<p><strong>PolySwarm sandbox detonation</strong><br>\nArtifact: @{replace(replace(replace(replace(substring(string(triggerBody()?['Entity']?['properties']?['Url']), 0, min(200, length(string(triggerBody()?['Entity']?['properties']?['Url'])))), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;')}<br>\nThis URL was not submitted because it points at a private or internal address (@{outputs('Compose_url_host_refusal')}). Submitting it would disclose internal host names to a third party. Nothing was sent to PolySwarm.</p>"
+                              }
+                            },
+                            "runAfter": {}
+                          }
+                        },
+                        "else": {
+                          "actions": {}
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Compose_url_host_refusal": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Initialize_sandbox_status": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "connectionName": "[variables('KeyVaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "Community": {
+            "value": "[parameters('Community')]"
+          },
+          "AllowPublicCommunity": {
+            "value": "[parameters('AllowPublicCommunity')]"
+          },
+          "Provider": {
+            "value": "[parameters('Provider')]"
+          },
+          "VmSlug": {
+            "value": "[parameters('VmSlug')]"
+          },
+          "NetworkEnabled": {
+            "value": "[parameters('NetworkEnabled')]"
+          },
+          "TimeoutMinutes": {
+            "value": "[parameters('TimeoutMinutes')]"
+          },
+          "KeyVaultName": {
+            "value": "[parameters('KeyVaultName')]"
+          },
+          "KeyVaultSecretName": {
+            "value": "[parameters('KeyVaultSecretName')]"
+          },
+          "PolySwarmApiBaseUrl": {
+            "value": "[parameters('PolySwarmApiBaseUrl')]"
+          },
+          "MaliciousScoreThreshold": {
+            "value": "[parameters('MaliciousScoreThreshold')]"
+          },
+          "SuspiciousScoreThreshold": {
+            "value": "[parameters('SuspiciousScoreThreshold')]"
+          },
+          "DceLogsIngestionEndpoint": {
+            "value": "[parameters('DceLogsIngestionEndpoint')]"
+          },
+          "DcrImmutableId": {
+            "value": "[parameters('DcrImmutableId')]"
+          },
+          "StreamName": {
+            "value": "[parameters('StreamName')]"
+          },
+          "SolutionVersion": {
+            "value": "[parameters('SolutionVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(parameters('DcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+      "scope": "[parameters('DcrResourceId')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "condition": "[parameters('create_role_assignment')]"
+    }
+  ],
+  "outputs": {
+    "playbookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]"
+    }
+  }
+}

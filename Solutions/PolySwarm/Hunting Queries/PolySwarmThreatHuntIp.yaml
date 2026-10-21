@@ -1,0 +1,40 @@
+id: 031f94d0-f35a-4097-bea8-51e3e97884b9
+name: PolySwarm - Threat Hunting IP
+description: |
+  'PolySwarm IP correlation. Joins active PolySwarm IP indicators against observed
+  network sessions.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+tags:
+  - PolySwarm
+query: |
+  _Im_NetworkSession
+  | where isnotempty(DstIpAddr)
+  | join kind=innerunique (
+  ThreatIntelIndicators
+  | where ObservableKey == "ipv4-addr:value"
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "PolySwarm"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  ) on $left.DstIpAddr == $right.ObservableValue
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | project DstIpAddr, Confidence, Family, Permalink
+  | extend IP_0_Address = DstIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+version: 1.0.1
