@@ -98,10 +98,10 @@ Then:
 CloudFormation cannot add a notification to a bucket it did not create.
 
 1. S3, the bucket, **Properties**, **Event notifications**, **Create event notification**.
-2. Name `databricks-audit-to-sentinel`. Prefix: the **NotificationPrefix** output, exactly as shown: value 3 with a trailing slash (for example `audit-logs/`), or `workspaceId=` if value 3 is empty. Suffix: `.json`, or empty. Event types: **All object create events**.
+2. Name `databricks-audit-to-sentinel`. Prefix: the **NotificationPrefix** output, exactly as shown: value 3 with a trailing slash (for example `audit-logs/`), or `workspaceId%3D` if value 3 is empty. Type `%3D`, not `=`: S3 needs special characters in filter values URL-encoded, and a prefix written `workspaceId=` matches no file, so S3 sends nothing. The same applies to any character in value 3 other than letters, digits and `- _ . /`. Suffix: `.json`, or empty. Event types: **All object create events**.
 3. Destination **SQS queue**, the queue from step 3 (or value 7). **Save changes**.
 
-Check: in SQS, open the queue, **Send and receive messages**, **Poll for messages**. A message containing `s3:TestEvent` is there. Polling is safe now; do not poll the queue in the console after step 5, because it hides messages from the collector and counts toward the five reads before a message moves to the dead-letter queue.
+Check: in SQS, open the queue, **Send and receive messages**, **Poll for messages**. A message containing `s3:TestEvent` is there. S3 sends it whatever the prefix, so it shows the queue accepts messages from the bucket, not that the prefix matches the files. Polling is safe now; do not poll the queue in the console after step 5, because it hides messages from the collector and counts toward the five reads before a message moves to the dead-letter queue.
 
 - **Unable to validate the following destination configurations**: the queue policy does not allow this bucket. The bucket name in stack 2 does not match.
 - **Configurations overlap**: the bucket already sends object-create events for this prefix to another destination. S3 allows one destination per overlapping prefix and event type.
@@ -157,7 +157,7 @@ In AWS, the queue's **Monitoring** tab should show messages returning to 0, and 
 
 ## Without CloudFormation
 
-Create the same resources by hand, in the bucket's region and in this order. Replace `<account-id>`, `<region>`, `<workspace-id>`, `<bucket>` and `<prefix>` (no slashes) before pasting. If there is no prefix, use `arn:aws:s3:::<bucket>/workspaceId=*` for `s3:GetObject` and `workspaceId=` as the notification prefix.
+Create the same resources by hand, in the bucket's region and in this order. Replace `<account-id>`, `<region>`, `<workspace-id>`, `<bucket>` and `<prefix>` (no slashes) before pasting. If there is no prefix, use `arn:aws:s3:::<bucket>/workspaceId=*` for `s3:GetObject` and `workspaceId%3D` as the notification prefix.
 
 1. **Identity provider** (skip if it exists, see 3a): IAM, **Identity providers**, **Add provider**, **OpenID Connect**, URL `https://sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/`, audience `api://1462b192-27f7-4cb9-8523-0f4ecb54b47e`.
 2. **Role**: IAM, **Roles**, **Create role**, **Custom trust policy**:
@@ -220,7 +220,8 @@ Create the same resources by hand, in the bucket's region and in this order. Rep
 | `NonExistentQueue` | Wrong Queue URL on the collector | Delete the collector and add it again with the stack output |
 | `s3:GetObject` `AccessDenied` | Role cannot read the file | The stack's delivery prefix must be the folder holding the `workspaceId=` folders, or empty if they are at the top of the bucket |
 | `kms:Decrypt` | Bucket uses SSE-KMS | Update stack 2 with the KMS key ARN |
-| Queue stays at 0 | Notification missing or prefix wrong | Use the stack output `NotificationPrefix`: the folder holding the `workspaceId=` folders with a trailing slash, or `workspaceId=` if they are at the top of the bucket |
+| Queue stays at 0 | Notification missing or prefix wrong | Use the stack output `NotificationPrefix`: the folder holding the `workspaceId=` folders with a trailing slash, or `workspaceId%3D` if they are at the top of the bucket |
+| Queue stays at 0 while Databricks writes files, prefix `workspaceId=` | S3 needs special characters in filter values URL-encoded; an unencoded `=` matches no file | Edit the notification: prefix `workspaceId%3D` |
 | Messages deleted, no rows after 30 minutes | Rows rejected by the data collection rule | Enable diagnostic settings on `DatabricksAuditLogs-DCR` and check `DCRLogErrors` |
 | Messages in the `-dlq` queue | A file failed five reads | Poll the `-dlq` queue to see the file; fix the cause, then **Start DLQ redrive** |
 
