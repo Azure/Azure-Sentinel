@@ -1,0 +1,69 @@
+id: 3f8a6c21-9e4b-4d7a-b1c5-6a2e8f0d3b9c
+name: PHP Session Upload Progress UAF - Oversized Multipart POST (CVE-2026-109618/109619)
+description: |
+  'Detects a single oversized multipart POST carrying a PHPSESSID cookie — the
+  structural precondition for exploiting CVE-2026-109618/109619, a PHP
+  session.upload_progress heap UAF (CVSS 9.2, unauthenticated RCE). Winning the
+  freed-arData race requires a heap spray of many >=288-byte reclaim blobs,
+  producing a body far larger than a progress-tracked upload''s own form
+  fields need to be. This complements WorkerCrashPattern.yaml: it also catches
+  a one-shot exploit run with an already-known per-build offset, which never
+  crashes a worker and so produces no 502/503 signal.
+  Standard W3C extended logging does not capture POST body content, so this
+  cannot directly confirm the PHP_SESSION_UPLOAD_PROGRESS field name or any
+  payload bytes — it is a size+cookie structural proxy, not a payload match.
+  Tune csBytes to this environment''s normal upload sizes to control false
+  positives from legitimate large uploads.
+  References:
+  - https://github.com/rjmendez/phpup-2026'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2026-109618
+  - CVE-2026-109619
+  - phpup-2026
+query: |
+  W3CIISLog
+  | where csMethod == "POST"
+  | where csCookie has "PHPSESSID="
+  | where csBytes >= 40000
+  | extend
+      HostName = tostring(split(Computer, ".")[0]),
+      DomainIndex = toint(indexof(Computer, "."))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project TimeGenerated, cIP, csHost, csUriStem, csMethod, csBytes, scStatus,
+            Computer, HostName, HostNameDomain
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: cIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: rjmendez
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
