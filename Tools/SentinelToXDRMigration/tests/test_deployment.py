@@ -1029,7 +1029,8 @@ class DeploymentTests(unittest.TestCase):
                 mock.patch("sentinel_xdr_migration.deployment.require_locked_target", return_value=TARGET),
                 mock.patch("sentinel_xdr_migration.deployment._deployment_token", return_value="token"),
                 mock.patch("sentinel_xdr_migration.deployment._graph_request", side_effect=[
-                    (404, {}), (201, {}), (200, {"status": "disabled"}),
+                    (404, {}), (201, {}),
+                    (200, {"status": "disabled", "contentProvenance": {"different": True}}),
                 ]),
             ):
                 result = deploy_solution(root)
@@ -1037,6 +1038,66 @@ class DeploymentTests(unittest.TestCase):
         self.assertFalse(result["results"][0]["contentProvenanceVerified"])
         self.assertTrue(result["results"][0]["tacticProjectionVerified"])
         self.assertEqual("DeploymentVerificationFailed", result["results"][0]["error"]["code"])
+
+    def _deploy_with_readback(self, mutate):
+        value = document()
+        value["properties"]["detectionAction"]["alertTemplate"]["tactics"] = [
+            {"tactic": "Execution", "techniques": [{"technique": "T1059"}]},
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "XDR Detections"
+            output.mkdir()
+            (output / "rule.yaml").write_text(yaml.safe_dump(value), encoding="utf-8")
+            self.write_package_context(root)
+            captured = {}
+
+            def fake_request(method, url, token, body=None):
+                if method == "POST":
+                    captured["payload"] = body
+                    return 201, {"id": body["id"]}
+                if method == "GET" and "payload" in captured:
+                    readback = json.loads(json.dumps(captured["payload"]))
+                    readback.pop("contentProvenance", None)
+                    mutate(readback)
+                    return 200, readback
+                return 404, {}
+
+            with (
+                mock.patch("sentinel_xdr_migration.deployment.require_locked_target", return_value=TARGET),
+                mock.patch("sentinel_xdr_migration.deployment._deployment_token", return_value="token"),
+                mock.patch("sentinel_xdr_migration.deployment._graph_request", side_effect=fake_request),
+            ):
+                return deploy_solution(root)
+
+    def test_deploy_readback_tolerates_graph_server_side_normalization(self):
+        def normalize(readback):
+            readback["status"] = "disabled"
+            for tactic in readback["detectionAction"]["alertTemplate"]["tactics"]:
+                for technique in tactic["techniques"]:
+                    technique["subTechniques"] = []
+
+        result = self._deploy_with_readback(normalize)
+        self.assertEqual(1, result["succeeded"], result["results"][0])
+        self.assertTrue(result["results"][0]["tacticProjectionVerified"])
+        self.assertTrue(result["results"][0]["contentProvenanceVerified"])
+
+    def test_deploy_readback_still_rejects_real_tactic_and_status_drift(self):
+        def drift(readback):
+            readback["status"] = "disabled"
+            readback["detectionAction"]["alertTemplate"]["tactics"][0]["techniques"][0][
+                "subTechniques"
+            ] = ["T1059.001"]
+
+        result = self._deploy_with_readback(drift)
+        self.assertEqual(0, result["succeeded"])
+        self.assertFalse(result["results"][0]["tacticProjectionVerified"])
+
+        def enabled(readback):
+            readback["status"] = "enabled"
+
+        result = self._deploy_with_readback(enabled)
+        self.assertEqual(0, result["succeeded"])
 
 
 if __name__ == "__main__":

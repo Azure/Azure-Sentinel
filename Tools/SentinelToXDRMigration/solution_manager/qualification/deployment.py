@@ -299,6 +299,28 @@ def graph_detection_payload(
     return payload
 
 
+def _normalize_graph_tactics(tactics: Any) -> Any:
+    """Drop the empty ``subTechniques`` list that live Graph adds on readback."""
+    if isinstance(tactics, list):
+        return [_normalize_graph_tactics(item) for item in tactics]
+    if isinstance(tactics, dict):
+        return {
+            key: _normalize_graph_tactics(value)
+            for key, value in tactics.items()
+            if not (key == "subTechniques" and value in ([], None))
+        }
+    return tactics
+
+
+def _graph_provenance_matches(verified: Any, expected: Any) -> bool:
+    """Live Graph beta omits contentProvenance; an echoed value must still match."""
+    if not isinstance(verified, dict):
+        return False
+    if "contentProvenance" not in verified or verified["contentProvenance"] is None:
+        return True
+    return verified["contentProvenance"] == expected
+
+
 def deploy_solution(
     solution: str | Path,
     *,
@@ -383,10 +405,11 @@ def deploy_solution(
                     if isinstance(verified, dict)
                     else []
                 )
-                tactic_projection_verified = verified_tactics == projected_tactics
-                provenance_verified = (
-                    isinstance(verified, dict)
-                    and verified.get("contentProvenance") == payload["contentProvenance"]
+                tactic_projection_verified = _normalize_graph_tactics(
+                    verified_tactics
+                ) == _normalize_graph_tactics(projected_tactics)
+                provenance_verified = _graph_provenance_matches(
+                    verified, payload["contentProvenance"]
                 )
                 if (
                     verify_status != 200
