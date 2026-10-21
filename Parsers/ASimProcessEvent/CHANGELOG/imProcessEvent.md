@@ -2,7 +2,7 @@
 
 ## Version 0.1.5
 
-- (2026-10-21) Added the CrowdStrike Falcon Endpoint Protection filtering parser to the ProcessEvent unifying parser.
+- (2026-10-21) Added the CrowdStrike Falcon Endpoint Protection filtering parser to the ProcessEvent unifying parser - [PR #15391](https://github.com/Azure/Azure-Sentinel/pull/15391)
 - Forwards all standard ProcessEvent parameters and preserves disable-watchlist behavior.
 
 ## Version 0.1.4
