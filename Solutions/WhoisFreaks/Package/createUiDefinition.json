@@ -42,12 +42,35 @@
         "type": "Microsoft.Common.DropDown",
         "label": "Workspace",
         "placeholder": "Select a workspace",
-        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "toolTip": "Defaults to the first Log Analytics workspace in the selected resource group. Pick another workspace from the same resource group if needed.",
         "constraints": {
-          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/'))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
           "required": true
         },
+        "visible": true,
+        "defaultValue": "[first(map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/'))), (item) => item.name))]"
+      },
+      {
+        "name": "workspaceLocation",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Workspace region",
+        "defaultValue": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+        "toolTip": "Filled automatically from the selected workspace. Change it only if you need to; Sentinel content, tables and the data collection rule must be in the workspace's region.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z0-9]+$",
+          "validationMessage": "Enter an Azure region name such as eastus or westeurope (lowercase letters and digits, no spaces)."
+        },
         "visible": true
+      },
+      {
+        "name": "workspaceLocationWarning",
+        "type": "Microsoft.Common.InfoBox",
+        "visible": "[and(not(empty(basics('workspaceLocation'))), not(empty(first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)))), not(equals(toLower(basics('workspaceLocation')), toLower(first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location))))))]",
+        "options": {
+          "icon": "Warning",
+          "text": "[concat('The selected workspace is in ', first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)), '. Deploying to a different region may fail or leave the data connector unable to ingest data.')]"
+        }
       }
     ],
     "steps": [
@@ -124,7 +147,7 @@
                 "name": "analytic2-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies high-confidence malware, phishing, and spam domains from WhoisFreaks threat feeds."
+                  "text": "Identifies high-confidence malware, phishing, and spam domains from WhoisFreaks threat feeds. The feed reports confidence as a decimal between 0 and 1; this rule alerts on domains with a confidence of 0.8 or higher."
                 }
               }
             ]
@@ -161,8 +184,8 @@
       }
     ],
     "outputs": {
-      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
-      "location": "[location()]",
+      "workspace-location": "[if(empty(basics('workspaceLocation')), first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)), basics('workspaceLocation'))]",
+      "location": "[if(empty(location()), if(empty(basics('workspaceLocation')), first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)), basics('workspaceLocation')), location())]",
       "workspace": "[basics('workspace')]"
     }
   }
