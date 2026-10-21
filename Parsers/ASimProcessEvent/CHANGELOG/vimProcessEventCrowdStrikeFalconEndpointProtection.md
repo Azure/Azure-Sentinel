@@ -1,0 +1,8 @@
+# Changelog for vimProcessEventCrowdStrikeFalconEndpointProtection.yaml
+
+## Version 0.1.0
+
+- (2026-10-21) Added parameterized CrowdStrike Falcon Endpoint Protection normalization from CrowdStrike_Process_Events_CL to ProcessEvent 1.0.0.
+- Supports standard ProcessEvent time, command-line, process, user, device, event-type, and hash parameters.
+- Applies native-column filters before normalization where possible; unavailable parent-process and hostname values are not fabricated.
+- Local-only package: no pull request has been created, so an associated PR link is not yet available.

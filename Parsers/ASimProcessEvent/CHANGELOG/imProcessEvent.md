@@ -1,5 +1,10 @@
 # Changelog for imProcessEvent.yaml
 
+## Version 0.1.5
+
+- (2026-10-21) Added the CrowdStrike Falcon Endpoint Protection filtering parser to the ProcessEvent unifying parser.
+- Forwards all standard ProcessEvent parameters and preserves disable-watchlist behavior.
+
 ## Version 0.1.4
 
 - (2026-08-28) Top-level parser consistency fixes - [PR #14763](https://github.com/Azure/Azure-Sentinel/pull/14763)
@@ -19,4 +24,3 @@
 ## Version 0.1
 
 - (2021-06-22) Normalized Process Events package - Take 2 - [PR #2552](https://github.com/Azure/Azure-Sentinel/pull/2552)
-

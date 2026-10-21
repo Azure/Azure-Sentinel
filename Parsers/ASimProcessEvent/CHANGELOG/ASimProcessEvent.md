@@ -1,5 +1,10 @@
 # Changelog for ASimProcessEvent.yaml
 
+## Version 0.1.5
+
+- (2026-10-21) Added the CrowdStrike Falcon Endpoint Protection source parser to the ProcessEvent unifying parser.
+- Preserves schema-level and source-specific disable-watchlist behavior.
+
 ## Version 0.1.4
 
 - (2026-10-08) Corrected the schema-level and Linux Sysmon process creation parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
