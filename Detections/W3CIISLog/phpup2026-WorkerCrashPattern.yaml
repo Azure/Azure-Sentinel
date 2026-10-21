@@ -1,26 +1,32 @@
 id: f95e2044-d214-40f2-9bac-980556d52aee
 name: PHP Session Upload Progress UAF - Worker Crash Pattern (CVE-2026-109619)
 description: |
-  'Detects the exploitation timing pattern for CVE-2026-109619, a PHP
-  session.upload_progress heap UAF (CVSS 9.2, unauthenticated RCE). Not
-  CVE-2026-109618 - a separate, unrelated OOM-corruption bug per PHP's
-  official 2026-10-21 advisory (see
-  https://www.php.net/archive/2026.php#2026-10-21-5). An attacker
-  probing or exploiting with an incorrect per-build delta crashes the PHP worker
-  (502/503). A correct delta produces RCE (200). This rule surfaces source IPs
-  that send multiple large multipart POSTs with PHPSESSID cookies and generate
-  a mix of 200/502/503 responses - the fingerprint of the delta-derivation and
-  exploitation sequence.
+  '[Unvalidated] This rule''s detection premise does not match PHP''s
+  official advisory for CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp) and has
+  not been reproduced. Do not treat it as a working crash detector.
 
-  UNVALIDATED (2026-10-21): the 502/503 crash premise has not been
-  reproduced. A real PHP 8.3.6 lab given the documented trigger
-  precondition (a multi-second stall between multipart file parts)
-  returned a clean 200 OK, not a worker crash - see
-  https://github.com/rjmendez/phpup-2026 ANALYSIS.md's mechanism finding.
-  Do not rely on this rule until the crash path is reproduced or this
-  query is revised.
+  What this rule was built to detect: an attacker probing or exploiting
+  with an incorrect per-build delta crashing the PHP worker (502/503),
+  with a correct delta producing RCE (200), surfaced as a mix of
+  200/502/503 responses to multiple large multipart POSTs with PHPSESSID
+  cookies from one source.
+
+  Why it is unvalidated: that premise assumes a single-request,
+  two-chunk multipart stall frees and respray memory within one request.
+  The official advisory describes a different, cross-request mechanism
+  instead: a request interrupted by a fatal error (OOM, parse/compile
+  failure, uncaught exception, timeout) fails to reset a global pointer
+  into its own freed request heap; a later, separate request landing on
+  the same worker then touches that stale pointer during early-init
+  (upload-progress handling is one confirmed consumer path, among
+  others) before normal session init resets it. A real PHP 8.3.6 lab
+  reproducing this rule''s documented stall precondition returned a
+  clean 200 OK, not a worker crash - see
+  https://github.com/rjmendez/phpup-2026 ANALYSIS.md''s mechanism
+  finding. Not CVE-2026-109618 - a separate, unrelated OOM-corruption
+  bug (GHSA-w8hw-w9fx-j79w).
   References:
-  - http://jackalsyn.com/posts/phpupAssets/php-up-2026.tar.gz
+  - https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
   - https://github.com/rjmendez/phpup-2026'
 severity: Medium
 status: Available
@@ -75,7 +81,7 @@ entityMappings:
         columnName: HostName
       - identifier: DnsDomain
         columnName: HostNameDomain
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:
