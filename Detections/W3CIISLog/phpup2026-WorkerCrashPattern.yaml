@@ -1,41 +1,35 @@
 id: f95e2044-d214-40f2-9bac-980556d52aee
-name: PHP Session Upload Progress UAF - Worker Crash Pattern (CVE-2026-109619)
+name: PHP rfc1867 Amplification Burst From Single Source (CVE-2026-109618/109619)
 description: |
-  '[Unvalidated] This rule''s detection premise does not match PHP''s
-  official advisory for CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp) and has
-  not been reproduced. Do not treat it as a working crash detector.
+  '2026-10-21 rewrite, repurposed, not just re-caveated: this rule
+  previously keyed on a 200/502/503 response-mix "worker crash pattern"
+  built on a single-request multipart-stall mechanism. A real PHP 8.3.6
+  lab given that exact documented precondition returned a clean 200 OK,
+  not a crash, and the mechanism itself does not match the real fix
+  (php/php-src commit 82f8f31b16a) - see
+  https://github.com/rjmendez/phpup-2026 ANALYSIS.md. That premise is
+  deleted, not kept as an "unvalidated" rule.
 
-  What this rule was built to detect: an attacker probing or exploiting
-  with an incorrect per-build delta crashing the PHP worker (502/503),
-  with a correct delta producing RCE (200), surfaced as a mix of
-  200/502/503 responses to multiple large multipart POSTs with PHPSESSID
-  cookies from one source.
-
-  Why it is unvalidated: that premise assumes a single-request,
-  two-chunk multipart stall frees and respray memory within one request.
-  The official advisory describes a different, cross-request mechanism
-  instead: a request interrupted by a fatal error (OOM, parse/compile
-  failure, uncaught exception, timeout) fails to reset a global pointer
-  into its own freed request heap; a later, separate request landing on
-  the same worker then touches that stale pointer during early-init
-  (upload-progress handling is one confirmed consumer path, among
-  others) before normal session init resets it. A real PHP 8.3.6 lab
-  reproducing this rule''s documented stall precondition returned a
-  clean 200 OK, not a worker crash - see
-  https://github.com/rjmendez/phpup-2026 ANALYSIS.md''s mechanism
-  finding. Not CVE-2026-109618 - a separate, unrelated OOM-corruption
-  bug (GHSA-w8hw-w9fx-j79w).
+  Repurposed as the burst-over-time complement to
+  phpup2026-UploadProgressOversizedPost.yaml''s real, fix-confirmed
+  duplicate-Content-Disposition-header signal: repeated amplification
+  attempts from one source in a short window, regardless of whether any
+  single request alone crosses that rule''s threshold. What the
+  producer request''s own HTTP-visible symptom looks like (500 page,
+  truncated response, or no visible anomaly at all if the fatal error is
+  only logged) is itself unconfirmed - this rule does not assume a
+  specific response-status fingerprint, only repetition.
   References:
-  - https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
+  - https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
   - https://github.com/rjmendez/phpup-2026'
 severity: Medium
 status: Available
 requiredDataConnectors:
-  - connectorId: AzureMonitor(IIS)
+  - connectorId: WAF
     dataTypes:
-      - W3CIISLog
-queryFrequency: 30m
-queryPeriod: 1h
+      - AzureDiagnostics
+queryFrequency: 15m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -43,45 +37,40 @@ tactics:
 relevantTechniques:
   - T1190
 tags:
+  - CVE-2026-109618
   - CVE-2026-109619
   - phpup-2026
 query: |
-  W3CIISLog
-  | where csMethod == "POST"
-  | where csCookie has "PHPSESSID="
-  | where csBytes >= 10000
-  | where scStatus in ("200", "502", "503")
+  AzureDiagnostics
+  | where Category in ("ApplicationGatewayAccessLog", "FrontDoorAccessLog")
+  | where requestBody_s has "multipart/form-data"
+  | extend CDCount = countof(requestBody_s, "Content-Disposition")
+  | where CDCount >= 2
   | summarize
-      TotalRequests  = count(),
-      Crashes        = countif(scStatus in ("502", "503")),
-      Successes      = countif(scStatus == "200"),
-      MaxBytes       = max(csBytes),
-      URIs           = make_set(csUriStem, 5),
-      StartTime      = min(TimeGenerated),
-      EndTime        = max(TimeGenerated)
-      by cIP, csHost, Computer
-  | where TotalRequests >= 2
-  | extend CrashRatio = todouble(Crashes) / todouble(TotalRequests)
-  | where Crashes >= 1
+      Hits      = count(),
+      Targets   = make_set(requestUri_s, 5),
+      StartTime = min(TimeGenerated),
+      EndTime   = max(TimeGenerated)
+      by bin(TimeGenerated, 5m), clientIP_s, host_s
+  | where Hits >= 3
   | extend
-      HostName = tostring(split(Computer, ".")[0]),
-      DomainIndex = toint(indexof(Computer, "."))
-  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
-  | project StartTime, EndTime, cIP, csHost, TotalRequests, Crashes,
-            Successes, CrashRatio, MaxBytes, URIs, Computer, HostName, HostNameDomain
-  | sort by CrashRatio desc
+      HostName = tostring(split(host_s, ".")[0]),
+      DomainIndex = toint(indexof(host_s, "."))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(host_s, DomainIndex + 1), host_s)
+  | project StartTime, EndTime, clientIP_s, host_s, Hits, Targets, HostName, HostNameDomain
+  | sort by Hits desc
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: cIP
+        columnName: clientIP_s
   - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: HostName
       - identifier: DnsDomain
         columnName: HostNameDomain
-version: 1.0.3
+version: 2.0.0
 kind: Scheduled
 metadata:
     source:

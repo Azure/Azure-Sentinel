@@ -1,33 +1,34 @@
 id: 3f8a6c21-9e4b-4d7a-b1c5-6a2e8f0d3b9c
-name: PHP Session Upload Progress UAF - Oversized Multipart POST (CVE-2026-109619)
+name: PHP rfc1867 Duplicate-Header OOM-Amplification Attempt (CVE-2026-109618/109619)
 description: |
-  '[Unvalidated] This rule''s premise (a heap spray requiring an
-  oversized multipart body) does not match PHP''s official advisory for
-  CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp). The advisory describes a
-  cross-request mechanism - a fatal-error-interrupted request leaves a
-  stale global pointer, later consumed by a different request on the
-  same worker during early-init (upload-progress handling is one
-  confirmed consumer path) - not a within-one-request heap spray sized
-  by body length. An oversized multipart POST with a PHPSESSID cookie
-  may still correlate with probing or exploitation attempts in practice,
-  but that correlation has not been demonstrated against the real
-  mechanism; treat this as a size+cookie structural heuristic of unknown
-  precision, not a confirmed exploitation signal. Tune csBytes to this
-  environment''s normal upload sizes to control false positives from
-  legitimate large uploads. Standard W3C extended logging does not
-  capture POST body content, so this cannot directly confirm the
-  PHP_SESSION_UPLOAD_PROGRESS field name or any payload bytes either way.
-  Not CVE-2026-109618 - a separate, unrelated OOM-corruption bug
-  (GHSA-w8hw-w9fx-j79w).
+  '2026-10-21 rewrite: this rule previously detected an oversized
+  multipart POST as a proxy for a same-request heap-spray mechanism that
+  does not match the real fix (php/php-src commit 82f8f31b16a, "Avoid
+  state corruption via bailout") - see
+  https://github.com/rjmendez/phpup-2026 ANALYSIS.md. Replaced with the
+  real, fix-confirmed signal: main/rfc1867.c previously saved every
+  header line in a multipart part unconditionally; the fix restricts
+  this to Content-Disposition/Content-Type and skips duplicates. A
+  legitimate multipart part has exactly one Content-Disposition header.
+  Two or more occurrences within one request body is the duplicate-header
+  amplification pattern the fix specifically closes, and the practical
+  way to cheaply trigger the OOM that is CVE-2026-109618''s producer
+  condition. Requires WAF request body inspection (Azure Application
+  Gateway / Front Door with body logging enabled) - standard W3C/IIS
+  access logs do not carry POST body content at all, so this cannot run
+  against W3CIISLog.
+  Does NOT require PHP_SESSION_UPLOAD_PROGRESS or a PHPSESSID cookie -
+  the OOM-amplification trigger works against any multipart upload
+  endpoint, not only session.upload_progress users.
   References:
-  - https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
+  - https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
   - https://github.com/rjmendez/phpup-2026'
 severity: Medium
 status: Available
 requiredDataConnectors:
-  - connectorId: AzureMonitor(IIS)
+  - connectorId: WAF
     dataTypes:
-      - W3CIISLog
+      - AzureDiagnostics
 queryFrequency: 15m
 queryPeriod: 15m
 triggerOperator: gt
@@ -37,31 +38,33 @@ tactics:
 relevantTechniques:
   - T1190
 tags:
+  - CVE-2026-109618
   - CVE-2026-109619
   - phpup-2026
 query: |
-  W3CIISLog
-  | where csMethod == "POST"
-  | where csCookie has "PHPSESSID="
-  | where csBytes >= 40000
+  AzureDiagnostics
+  | where Category in ("ApplicationGatewayAccessLog", "FrontDoorAccessLog")
+  | where requestBody_s has "multipart/form-data"
+  | extend CDCount = countof(requestBody_s, "Content-Disposition")
+  | where CDCount >= 2
   | extend
-      HostName = tostring(split(Computer, ".")[0]),
-      DomainIndex = toint(indexof(Computer, "."))
-  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
-  | project TimeGenerated, cIP, csHost, csUriStem, csMethod, csBytes, scStatus,
-            Computer, HostName, HostNameDomain
+      HostName = tostring(split(host_s, ".")[0]),
+      DomainIndex = toint(indexof(host_s, "."))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(host_s, DomainIndex + 1), host_s)
+  | project TimeGenerated, clientIP_s, host_s, requestUri_s, httpStatus_d, CDCount,
+            HostName, HostNameDomain
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: cIP
+        columnName: clientIP_s
   - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: HostName
       - identifier: DnsDomain
         columnName: HostNameDomain
-version: 1.0.2
+version: 2.0.0
 kind: Scheduled
 metadata:
     source:
