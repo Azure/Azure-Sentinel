@@ -1,0 +1,78 @@
+id: f95e2044-d214-40f2-9bac-980556d52aee
+name: PHP Session Upload Progress UAF - Worker Crash Pattern (CVE-2026-109618/109619)
+description: |
+  'Detects the exploitation timing pattern for CVE-2026-109618/109619, a PHP
+  session.upload_progress heap UAF (CVSS 9.2, unauthenticated RCE). An attacker
+  probing or exploiting with an incorrect per-build delta crashes the PHP worker
+  (502/503). A correct delta produces RCE (200). This rule surfaces source IPs
+  that send multiple large multipart POSTs with PHPSESSID cookies and generate
+  a mix of 200/502/503 responses — the fingerprint of the delta-derivation and
+  exploitation sequence.
+  References:
+  - http://jackalsyn.com/posts/phpupAssets/php-up-2026.tar.gz
+  - https://github.com/rjmendez/phpup-2026'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 30m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2026-109618
+  - CVE-2026-109619
+  - phpup-2026
+query: |
+  W3CIISLog
+  | where csMethod == "POST"
+  | where csCookie has "PHPSESSID="
+  | where csBytes >= 10000
+  | where scStatus in ("200", "502", "503")
+  | summarize
+      TotalRequests  = count(),
+      Crashes        = countif(scStatus in ("502", "503")),
+      Successes      = countif(scStatus == "200"),
+      MaxBytes       = max(csBytes),
+      URIs           = make_set(csUriStem, 5),
+      StartTime      = min(TimeGenerated),
+      EndTime        = max(TimeGenerated)
+      by cIP, csHost, Computer
+  | where TotalRequests >= 2
+  | extend CrashRatio = todouble(Crashes) / todouble(TotalRequests)
+  | where Crashes >= 1
+  | extend
+      HostName = tostring(split(Computer, ".")[0]),
+      DomainIndex = toint(indexof(Computer, "."))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project StartTime, EndTime, cIP, csHost, TotalRequests, Crashes,
+            Successes, CrashRatio, MaxBytes, URIs, Computer, HostName, HostNameDomain
+  | sort by CrashRatio desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: cIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: rjmendez
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
