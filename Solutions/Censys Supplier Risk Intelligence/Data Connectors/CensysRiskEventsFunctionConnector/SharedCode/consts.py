@@ -3,6 +3,16 @@ import os
 
 API_BASE_URL = "https://api.platform.censys.io"
 RISK_EVENTS_PATH = "/v1/supplychains/default/risk-events"
+SUPPLIERS_PATH = "/v1/supplychains/default/suppliers"
+SUPPLIERS_PAGE_SIZE = 100
+# Names in SupplierNames are separated by an asterisk, so a name can contain a comma. At most MAX_SUPPLIER_IDS ids are sent
+# in one request: the supplier_ids parameter is part of the URL and the API rejected URLs of about 16000 characters
+# (400 ids) while it accepted about 8000 characters (200 ids).
+SUPPLIER_NAME_SEPARATOR = "*"
+MAX_SUPPLIER_IDS = 200
+MAX_SUPPLIER_NAMES_LENGTH = 500
+MAX_RISK_TYPE_IDS = 100
+MAX_RISK_TYPE_ID_LENGTH = 512
 PAGE_SIZE = 1000
 REQUEST_TIMEOUT = 60
 MAX_RETRIES = 5
@@ -16,7 +26,7 @@ HARD_LIMIT_SECONDS = 580
 API_TOKEN = os.environ.get("CensysApiToken")
 ORGANIZATION_ID = os.environ.get("OrganizationId")
 INITIAL_START_TIME = os.environ.get("InitialStartTime", "")
-SUPPLIER_IDS = os.environ.get("SupplierIds", "")
+SUPPLIER_NAMES = os.environ.get("SupplierNames", "")
 RISK_TYPE_IDS = os.environ.get("RiskTypeIds", "")
 CHANGE_TYPES = os.environ.get("ChangeTypes", "")
 SEVERITY = os.environ.get("Severity", "")
@@ -28,6 +38,7 @@ ALLOWED_SEVERITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 CONN_STRING = os.environ.get("AzureWebJobsStorage")
 CHECKPOINT_TABLE_NAME = os.environ.get("CheckpointTableName", "CensysSRIRiskEventsCheckpoint")
 CHECKPOINT_PARTITION_KEY = "CensysSRIRiskEvents"
+SUPPLIERS_TABLE_NAME = os.environ.get("SuppliersTableName", "CensysSRISuppliers")
 
 DATA_COLLECTION_ENDPOINT = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
 DATA_COLLECTION_RULE_ID = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID")

@@ -27,11 +27,11 @@ class SentinelIngestor:
         try:
             self.client.upload(rule_id=self.rule_id, stream_name=self.stream_name, logs=logs)
         except ClientAuthenticationError as err:
-            applogger.error(f"{consts.LOG_PREFIX}: authentication error while uploading to Sentinel: {err}")
+            applogger.error(f"{consts.LOG_PREFIX} upload: authentication error while uploading to Sentinel: {err}")
             raise CensysException(f"Authentication error while uploading to Sentinel: {err}")
         except HttpResponseError as err:
-            applogger.error(f"{consts.LOG_PREFIX}: HTTP error while uploading to Sentinel: {err}")
+            applogger.error(f"{consts.LOG_PREFIX} upload: HTTP error while uploading to Sentinel: {err}")
             raise CensysException(f"HTTP error while uploading to Sentinel: {err}")
         except Exception as err:
-            applogger.error(f"{consts.LOG_PREFIX}: unexpected error while uploading to Sentinel: {err}")
+            applogger.error(f"{consts.LOG_PREFIX} upload: unexpected error while uploading to Sentinel: {err}")
             raise CensysException(f"Unexpected error while uploading to Sentinel: {err}")

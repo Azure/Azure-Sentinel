@@ -9,39 +9,6 @@ from .exceptions import CensysAuthError, CensysCursorExpired, CensysException, C
 from .logger import applogger
 
 
-def _split(value: str) -> List[str]:
-    return [v.strip() for v in (value or "").replace("\n", ",").split(",") if v.strip()]
-
-
-def build_filters(supplier_ids: str, change_types: str, severity: str, rapid_response: str, risk_type_ids: str = "") -> Dict[str, str]:
-    """Return the optional filter query parameters. A filter that is empty is left out of the request."""
-    filters: Dict[str, str] = {}
-    suppliers = [s for s in _split(supplier_ids) if s.lower() != "supplierids"]
-    if suppliers:
-        filters["supplier_ids"] = ",".join(suppliers)
-    risk_types = [r for r in _split(risk_type_ids) if r.lower() != "risktypeids"]
-    if risk_types:
-        filters["risk_type_ids"] = ",".join(risk_types)
-    types = [t.lower() for t in _split(change_types)]
-    bad = [t for t in types if t not in consts.ALLOWED_CHANGE_TYPES]
-    if bad:
-        applogger.warning(f"{consts.LOG_PREFIX}: ignoring unsupported change_types {bad}")
-    types = [t for t in types if t in consts.ALLOWED_CHANGE_TYPES]
-    if types:
-        filters["change_types"] = ",".join(types)
-    sevs = [s.upper() for s in _split(severity)]
-    bad = [s for s in sevs if s not in consts.ALLOWED_SEVERITIES]
-    if bad:
-        applogger.warning(f"{consts.LOG_PREFIX}: ignoring unsupported severity values {bad}")
-    sevs = [s for s in sevs if s in consts.ALLOWED_SEVERITIES]
-    if sevs:
-        filters["severity"] = ",".join(sevs)
-    rr = (rapid_response or "").strip().lower()
-    if rr in ("true", "false"):
-        filters["rapid_response"] = rr
-    return filters
-
-
 class CensysClient:
     """Reads risk events page by page, following the Censys cursor rules."""
 
@@ -74,14 +41,16 @@ class CensysClient:
             return consts.REQUEST_TIMEOUT
         return max(1.0, min(consts.REQUEST_TIMEOUT, self.hard_deadline - time.time()))
 
-    def get_page(self, params: Dict[str, str]) -> dict:
+    def get_page(self, params: Dict[str, str], path: Optional[str] = None) -> dict:
         """GET one page, retrying throttling and transient server errors, within the time budget."""
+        path = path or consts.RISK_EVENTS_PATH
+        url = consts.API_BASE_URL + path
         for attempt in range(1, consts.MAX_RETRIES + 1):
             self._check_budget()
             try:
-                resp = self.session.get(self.url, params=params, timeout=self._timeout())
+                resp = self.session.get(url, params=params, timeout=self._timeout())
             except requests.RequestException as err:
-                applogger.warning(f"{consts.LOG_PREFIX}: request error (attempt {attempt}): {err}")
+                applogger.warning(f"{consts.LOG_PREFIX} get_page: request error (attempt {attempt}): {err}")
                 self._wait(min(2 ** attempt, 60))
                 continue
             status = resp.status_code
@@ -92,13 +61,16 @@ class CensysClient:
                     raise CensysException(f"Censys returned HTTP 200 with a body that is not valid JSON: {resp.text[:200]}")
                 result = (body or {}).get("result") or {}
                 shown = {k: ("<set>" if k == "page_token" else v) for k, v in params.items()}
-                applogger.info(f"{consts.LOG_PREFIX}: API call GET {consts.RISK_EVENTS_PATH} params={shown} -> HTTP 200, "
-                               f"{len(result.get('risk_events') or [])} events, next_page_token={'yes' if result.get('next_page_token') else 'no'}")
+                items = result.get("risk_events") if path == consts.RISK_EVENTS_PATH else result.get("suppliers")
+                what = "events" if path == consts.RISK_EVENTS_PATH else "suppliers"
+                applogger.info(f"{consts.LOG_PREFIX} get_page: API call GET {path} params={shown} -> HTTP 200, "
+                               f"{len(items or [])} {what}, next_page_token={'yes' if result.get('next_page_token') else 'no'}")
                 return body
             if status in (401, 403):
-                raise CensysAuthError(f"Censys API rejected the request (HTTP {status}): {resp.text[:300]}")
+                raise CensysAuthError(f"Censys API rejected the request (HTTP {status}). Check the CensysApiToken and OrganizationId settings: "
+                                      f"{resp.text[:300]}")
             if status == 404:
-                raise CensysException("Censys returned 404: the organization has no default supply chain.")
+                raise CensysException("Censys returned 404: the organization has no default supply chain. Check the OrganizationId setting.")
             if status == 410:
                 raise CensysCursorExpired("The checkpoint is older than the Censys retention window (HTTP 410).")
             if status in (429, 500, 502, 503, 504):
@@ -106,7 +78,7 @@ class CensysClient:
                     wait = int(resp.headers.get("Retry-After", ""))
                 except ValueError:
                     wait = 2 ** attempt
-                applogger.warning(f"{consts.LOG_PREFIX}: HTTP {status}, retrying in {min(wait, 60)}s (attempt {attempt})")
+                applogger.warning(f"{consts.LOG_PREFIX} get_page: HTTP {status}, retrying in {min(wait, 60)}s (attempt {attempt})")
                 self._wait(min(wait, 60))
                 continue
             raise CensysException(f"Censys API error (HTTP {status}): {resp.text[:300]}")
@@ -139,3 +111,22 @@ class CensysClient:
             page_token = result.get("next_page_token")
             if not page_token:
                 return
+
+    def iter_suppliers(self) -> Iterator[List[dict]]:
+        """Yield each page of suppliers of the default supply chain until the last page (no next_page_token)."""
+        base = {"organization_id": self.organization_id, "page_size": consts.SUPPLIERS_PAGE_SIZE, "order_by": "created_at_asc"}
+        page_token, seen = None, set()
+        while True:
+            params = dict(base)
+            if page_token:
+                params["page_token"] = page_token
+            result = (self.get_page(params, consts.SUPPLIERS_PATH) or {}).get("result") or {}
+            suppliers = result.get("suppliers") or []
+            if suppliers:
+                yield suppliers
+            page_token = result.get("next_page_token")
+            if not page_token:
+                return
+            if page_token in seen:
+                raise CensysException("Censys returned the same suppliers page token twice, stopping to avoid a loop.")
+            seen.add(page_token)

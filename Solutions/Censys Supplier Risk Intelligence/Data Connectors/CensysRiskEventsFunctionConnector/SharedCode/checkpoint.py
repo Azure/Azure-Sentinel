@@ -30,7 +30,7 @@ class CheckpointManager:
             service = TableServiceClient.from_connection_string(conn_str=connection_string)
             self.table = service.create_table_if_not_exists(table_name)
         except Exception as err:
-            applogger.error(f"{LOG_PREFIX}: error accessing checkpoint table {table_name}: {err}")
+            applogger.error(f"{LOG_PREFIX} CheckpointManager.__init__: error accessing checkpoint table {table_name}: {err}")
             raise CensysException(f"Error accessing checkpoint table {table_name}: {err}")
 
     def get(self, row_key: str) -> Optional[Tuple[str, str]]:
@@ -41,7 +41,7 @@ class CheckpointManager:
         except ResourceNotFoundError:
             return None
         except Exception as err:
-            applogger.error(f"{LOG_PREFIX}: error reading checkpoint: {err}")
+            applogger.error(f"{LOG_PREFIX} CheckpointManager.get: error reading checkpoint: {err}")
             raise CensysException(f"Error reading checkpoint: {err}")
 
     def set(self, row_key: str, inserted_at: str, event_id: str) -> None:
@@ -56,5 +56,5 @@ class CheckpointManager:
         try:
             self.table.upsert_entity(mode=UpdateMode.REPLACE, entity=entity)
         except Exception as err:
-            applogger.error(f"{LOG_PREFIX}: error saving checkpoint: {err}")
+            applogger.error(f"{LOG_PREFIX} CheckpointManager.set: error saving checkpoint: {err}")
             raise CensysException(f"Error saving checkpoint: {err}")
