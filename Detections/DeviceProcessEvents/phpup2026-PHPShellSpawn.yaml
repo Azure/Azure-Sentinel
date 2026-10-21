@@ -1,17 +1,31 @@
 id: 56cda6d3-8402-4d6c-a2e7-f72b1efed280
-name: PHP Worker Process Spawning Shell/Recon Tool (CVE-2026-109618/109619)
+name: PHP Worker Process Spawning Shell/Recon Tool
 description: |
-  '2026-10-21: the real mechanism is now confirmed from the actual PHP
-  fix (php/php-src commit 82f8f31b16a, "Avoid state corruption via
-  bailout") - a longjmp-based bailout on OOM/overflow can leave
-  worker-persistent globals dangling for a later, different request on
-  the same worker to read during early-init; session.upload_progress is
-  one confirmed consumer, not the sole mechanism. Detects a shell or
-  recon tool spawned directly under a PHP worker process (php-fpm,
-  lsphp, php) - generically useful as a PHP child-process-monitoring
-  indicator regardless of root cause or which of the two CVEs produced
-  the RCE. See https://github.com/rjmendez/phpup-2026 ANALYSIS.md for
-  the full mechanism writeup.
+  '[Unvalidated] Identifies a shell or reconnaissance tool spawned
+  directly under a PHP worker process (php-fpm, lsphp, or Apache
+  mod_php, where PHP runs in-process inside the apache2/httpd worker).
+  This is a generic PHP child-process-monitoring indicator, useful
+  against any PHP RCE regardless of root cause - it does not itself
+  detect or confirm exploitation of CVE-2026-109618 or CVE-2026-109619
+  specifically.
+
+  CVE attribution is unvalidated: the reference sample this rule's
+  field-matching was checked against
+  (https://github.com/rjmendez/phpup-2026/blob/master/examples/INDEX.md)
+  was produced by a direct shell_exec() test endpoint, not by triggering
+  either CVE''s actual longjmp/bailout mechanism
+  (https://github.com/rjmendez/phpup-2026/blob/master/ANALYSIS.md). No
+  representative malicious sample produced by exploiting either CVE has
+  been validated against this query.
+
+  Benign-use tuning: legitimate applications routinely invoke shells,
+  Python, curl, or wget from PHP (build steps, package managers, image
+  processing, health checks). Expect overlap with existing generic
+  "process spawned a shell" content already present in most
+  environments; this rule adds PHP-worker-specific parentage as a
+  narrowing filter, not a new detection category. Tune the command-line
+  tokens and account/parent filters to your own environment before
+  enabling as an alert.
   References:
   - https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
   - https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
@@ -37,12 +51,11 @@ tags:
   - CVE-2026-109618
   - CVE-2026-109619
   - phpup-2026
+  - unvalidated
 query: |
   DeviceProcessEvents
-  | where InitiatingProcessFileName has_any (
-      "php-fpm", "php", "lsphp", "php8", "php7", "php5"
-    )
-  | where FileName has_any ("sh", "bash", "dash", "zsh", "python", "python3",
+  | where InitiatingProcessFileName matches regex @"(?i)^(php-fpm[\d.]*|php[\d.]*|lsphp[\d]*|apache2|httpd)$"
+  | where FileName in~ ("sh", "bash", "dash", "zsh", "ash", "python", "python2", "python3",
       "perl", "ruby", "curl", "wget", "nc", "ncat", "nmap", "whoami", "id")
        or ProcessCommandLine has_any (
            "/bin/sh", "/bin/bash", "bash -i", "python -c", "python3 -c",
@@ -77,7 +90,7 @@ entityMappings:
         columnName: HashAlgorithm
       - identifier: Value
         columnName: SHA256
-version: 1.0.4
+version: 1.0.0
 kind: Scheduled
 metadata:
     source:
