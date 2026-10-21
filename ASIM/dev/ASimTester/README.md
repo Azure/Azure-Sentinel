@@ -22,6 +22,8 @@ Replace the parser or table name of your choice.
 
 Empty dynamic arrays are valid for array fields because they contain no elements to validate. Non-empty arrays must still contain only elements of the schema's required type; mixed-type arrays and incorrect dynamic types remain errors.
 
+EmailEvent To, Cc and Bcc recipient arrays explicitly require string elements in the tester query, including when the remote metadata still has blank element-type declarations.
+
 Refer to this [link](https://learn.microsoft.com/en-us/azure/sentinel/normalization-about-schemas) for supported schema name values.
 
 
