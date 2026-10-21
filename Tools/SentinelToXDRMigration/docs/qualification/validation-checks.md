@@ -415,14 +415,6 @@ responsible: Planned PR artifact adapter reusing solution_manager.reporting.evid
 
 These general XDR dependencies apply to native as well as migrated content.
 
-Custom Detections cannot call Sentinel workspace functions (Graph refuses to enable them), so
-conversion inlines solution-local parsers (`Parsers/**/*.yaml`) into the detection query as
-`let XdrInline<Alias> = view() { ... };` and records each in
-`contentProvenance.conversion.inlinedParsers` (alias, parser path, `functionQuerySha256`).
-Dependencies are then the underlying tables; the parser alias is no longer a dependency of the
-detection query. Built-in ASIM functions (`_ASim_*`, `_Im_*`) are not inlined. Set
-`inlineSolutionParsers: false` in `migration-config.yaml` to opt out.
-
 ```yaml check-definition
 id: TK-V06
 checklist: validation

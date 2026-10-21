@@ -7,38 +7,38 @@ const { renameParserBindings: rename } = require('./rename-parser-bindings.cjs')
 test('renames a tabular binding, not a same-named column or literal', () => {
   const query = "let Parser = datatable(Parser:string)['Parser']; Parser | project Parser";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = datatable(Parser:string)['Parser']; XdrInlineParser | project Parser");
+    "let __xdr_inline_Parser = datatable(Parser:string)['Parser']; __xdr_inline_Parser | project Parser");
 });
 
 test('preserves comments, escaped strings, verbatim strings, and Unicode offsets', () => {
   const query = "// \u{1f512} Parser\nlet Parser = datatable(Value:string)['Parser', @'a\\Parser', 'can\\'t Parser'];\nParser // Parser";
   assert.equal(rename(query, ['Parser']).query, query
-    .replace('let Parser', 'let XdrInlineParser')
-    .replace('\nParser //', '\nXdrInlineParser //'));
+    .replace('let Parser', 'let __xdr_inline_Parser')
+    .replace('\nParser //', '\n__xdr_inline_Parser //'));
 });
 
 test('a parameter shadows the outer binding and keeps its own references', () => {
   const query = "let Parser = datatable(x:string)['x']; let f = (Parser:string) { print Value=Parser }; Parser";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = datatable(x:string)['x']; let f = (Parser:string) { print Value=Parser }; XdrInlineParser");
+    "let __xdr_inline_Parser = datatable(x:string)['x']; let f = (Parser:string) { print Value=Parser }; __xdr_inline_Parser");
 });
 
 test('nested let bindings get distinct names with references in the right scopes', () => {
   const query = "let Parser = datatable(x:string)['outer']; let f = () { let Parser = datatable(x:string)['inner']; Parser }; union Parser, f()";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = datatable(x:string)['outer']; let f = () { let XdrInlineParser_2 = datatable(x:string)['inner']; XdrInlineParser_2 }; union XdrInlineParser, f()");
+    "let __xdr_inline_Parser = datatable(x:string)['outer']; let f = () { let __xdr_inline_Parser_2 = datatable(x:string)['inner']; __xdr_inline_Parser_2 }; union __xdr_inline_Parser, f()");
 });
 
 test('renames parser functions and their calls', () => {
   const query = "let Parser = () { datatable(x:long)[1] }; Parser() | where x > 0";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = () { datatable(x:long)[1] }; XdrInlineParser() | where x > 0");
+    "let __xdr_inline_Parser = () { datatable(x:long)[1] }; __xdr_inline_Parser() | where x > 0");
 });
 
 test('supports arbitrary parser names and dependencies between bindings', () => {
   const query = 'let VendorA = datatable(x:long)[1]; let VendorB = VendorA; union VendorA, VendorB';
   assert.equal(rename(query, ['VendorA', 'VendorB']).query,
-    'let XdrInlineVendorA = datatable(x:long)[1]; let XdrInlineVendorB = XdrInlineVendorA; union XdrInlineVendorA, XdrInlineVendorB');
+    'let __xdr_inline_VendorA = datatable(x:long)[1]; let __xdr_inline_VendorB = __xdr_inline_VendorA; union __xdr_inline_VendorA, __xdr_inline_VendorB');
 });
 
 test('refuses to discard comments embedded inside a quoted identifier', () => {
@@ -49,21 +49,21 @@ test('refuses to discard comments embedded inside a quoted identifier', () => {
 test('handles bracketed identifiers without editing bracketed column names', () => {
   const query = "let ['Parser'] = datatable(['Parser']:long)[1]; ['Parser'] | project ['Parser']";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = datatable(['Parser']:long)[1]; XdrInlineParser | project ['Parser']");
+    "let __xdr_inline_Parser = datatable(['Parser']:long)[1]; __xdr_inline_Parser | project ['Parser']");
 });
 
 test('avoids existing identifiers and reserved aliases; normalization is idempotent', () => {
-  const query = "let XdrInlineParser=1; let Parser=datatable(x:long)[1]; Parser";
-  const result = rename(query, ['Parser', 'XdrInlineParser_2']);
-  assert.equal(result.renames[0].to, 'XdrInlineParser_3');
-  assert.deepEqual(rename(result.query, ['Parser', 'XdrInlineParser_2']),
+  const query = "let __xdr_inline_Parser=1; let Parser=datatable(x:long)[1]; Parser";
+  const result = rename(query, ['Parser', '__xdr_inline_Parser_2']);
+  assert.equal(result.renames[0].to, '__xdr_inline_Parser_3');
+  assert.deepEqual(rename(result.query, ['Parser', '__xdr_inline_Parser_2']),
     { query: result.query, renames: [] });
 });
 
 test('renames only declared local symbols, not a saved parser call in the initializer', () => {
   const query = "let Parser = Parser(); Parser";
   assert.equal(rename(query, ['Parser']).query,
-    "let XdrInlineParser = Parser(); XdrInlineParser");
+    "let __xdr_inline_Parser = Parser(); __xdr_inline_Parser");
 });
 
 test('does not rewrite unrelated bindings or an external parser reference', () => {
@@ -74,7 +74,7 @@ test('does not rewrite unrelated bindings or an external parser reference', () =
 
 test('supports scalar local references when the output alias is explicit', () => {
   assert.equal(rename('let Parser=1; print Value=Parser', ['Parser']).query,
-    'let XdrInlineParser=1; print Value=XdrInlineParser');
+    'let __xdr_inline_Parser=1; print Value=__xdr_inline_Parser');
 });
 
 test('refuses an implicit output-column change', () => {
@@ -102,7 +102,7 @@ for (const fixture of fixtures) {
     assert.equal(crypto.createHash('sha256').update(fixture.query).digest('hex'), fixture.sourceSha256);
     assert.equal(fixture.query.split(fixture.parser).length - 1, 2);
     const result = rename(fixture.query, [fixture.parser]);
-    assert.equal(result.query, fixture.query.replaceAll(fixture.parser, `XdrInline${fixture.parser}`));
+    assert.equal(result.query, fixture.query.replaceAll(fixture.parser, `__xdr_inline_${fixture.parser}`));
     assert.equal(result.renames.length, 1);
     assert.deepEqual(rename(result.query, [fixture.parser]), { query: result.query, renames: [] });
   });

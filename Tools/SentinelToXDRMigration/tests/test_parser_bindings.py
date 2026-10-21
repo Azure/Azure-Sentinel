@@ -91,7 +91,7 @@ class ParserBindingTests(unittest.TestCase):
                 before = self.source.read_bytes(), parser.read_bytes()
                 document = build_xdr_document(self.source, self.solution, {})
                 expected = convert_query(fixture["query"], {})[0].replace(
-                    fixture["parser"], f"XdrInline{fixture['parser']}"
+                    fixture["parser"], f"__xdr_inline_{fixture['parser']}"
                 )
                 self.assertEqual(expected, document["properties"]["queryCondition"]["queryText"])
                 self.assertEqual("disabled", document["properties"]["status"])
@@ -171,7 +171,7 @@ class ParserBindingTests(unittest.TestCase):
                     if mapping.get("id"):
                         mapping["id"] = f"[if(true(), '{mapping['id']}', '{mapping['id']}')]"
             properties["queryCondition"]["queryText"] = fixture["query"].replace(
-                fixture["parser"], f"XdrInline{fixture['parser']}"
+                fixture["parser"], f"__xdr_inline_{fixture['parser']}"
             )
             expected.append(properties)
         native = list(self.parsers.glob("*.yaml")) + paths

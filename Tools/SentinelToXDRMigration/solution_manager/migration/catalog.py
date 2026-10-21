@@ -122,7 +122,7 @@ def query_table_references(
         )
         if lowered in known or is_custom or is_simple_base:
             previous = tokens[index - 1].casefold() if index else ""
-            at_start = index == 0 or previous in {"=", "(", ",", ";", "{", "join", "union", "lookup", "from"}
+            at_start = index == 0 or previous in {"=", "(", ",", ";", "join", "union", "lookup", "from"}
             if not at_start:
                 continue
             canonical = known.get(lowered, token)

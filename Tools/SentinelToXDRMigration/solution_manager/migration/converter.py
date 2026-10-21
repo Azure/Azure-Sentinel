@@ -34,7 +34,6 @@ from solution_manager.authoring.columns import projected_columns
 from solution_manager.authoring.dependencies import dependency_plan, dependency_validation_errors
 from solution_manager.core.content_paths import content_path, yaml_files
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
-from solution_manager.migration.parser_inlining import inline_solution_parsers
 from solution_manager.reporting.report import write_transformation_report
 
 SCHEMA_VERSION = "1.0.0"
@@ -2017,23 +2016,11 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             if isinstance(val, str) and val:
                 extra_referenced_columns.add(val)
 
-    conversion_source_query = source_query
-    inlined_parsers: list[dict[str, str]] = []
-    inline_warnings: list[str] = []
-    inline_error: str | None = None
-    try:
-        conversion_source_query, inlined_parsers, inline_warnings = inline_solution_parsers(
-            source_query, solution_root, config,
-        )
-    except ValueError as exc:
-        inline_error = f"solution parser inlining failed: {exc}"
     converted_query, query_warnings, errors = convert_query(
-        conversion_source_query,
+        source_query,
         config,
         extra_referenced_columns=extra_referenced_columns,
     )
-    if inline_error:
-        errors.append(inline_error)
     provenance_notes: list[str] = [
         w for w in query_warnings
         if w.startswith((
@@ -2043,18 +2030,6 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             "nrt_behavioral_summarize_fallback_pt1h",
         ))
     ]
-    if inlined_parsers:
-        # Constructs that appear only inside an inlined parser body keep their warning, but the
-        # rule itself is unchanged, so they do not become a new blocking review reason.
-        authored_review_messages = {
-            message for pattern, message in REVIEW_KQL_PATTERNS.items()
-            if re.search(pattern, source_query, re.IGNORECASE)
-        }
-        provenance_notes.extend(
-            w for w in query_warnings
-            if w in REVIEW_KQL_PATTERNS.values() and w not in authored_review_messages
-            and w not in provenance_notes
-        )
     non_provenance_query_warnings = [
         w for w in query_warnings if w not in provenance_notes
     ]
@@ -2065,8 +2040,8 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             f"requiredDataConnectors{''.join(f'[{part!r}]' for part in error.path)}: {error.message}"
             for error in Draft202012Validator(connector_schema).iter_errors(doc["requiredDataConnectors"])
         )
-    warnings = list(query_warnings) + inline_warnings
-    informational: list[str] = list(provenance_notes) + inline_warnings
+    warnings = list(query_warnings)
+    informational: list[str] = list(provenance_notes)
     review_reasons = list(non_provenance_query_warnings)
     try:
         converted_query, parser_warnings = normalize_parser_bindings(converted_query, solution_root)
@@ -2377,7 +2352,7 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
         effective_table_mappings.setdefault("SecurityAlert", "AlertInfo")
         effective_table_mappings.setdefault("SecurityIncident", "AlertInfo")
     dependencies = dependency_plan(
-        conversion_source_query,
+        source_query,
         target_query=converted_query,
         connectors=doc.get("requiredDataConnectors"),
         table_mappings=effective_table_mappings,
@@ -2418,7 +2393,6 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
                 "requiredWorkloads": ["sentinel"],
                 "warnings": warnings,
                 "informational": informational,
-                **({"inlinedParsers": inlined_parsers} if inlined_parsers else {}),
                 **({"notes": provenance_notes} if provenance_notes else {}),
                 "errors": errors,
                 "originalTactics": source_tactics,
