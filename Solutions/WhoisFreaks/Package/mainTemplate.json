@@ -65,11 +65,11 @@
       "_analyticRulecontentProductId2": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','0eb4df70-418e-4f7d-9b5a-cfe35034ec11','-', '1.0.1')))]"
     },
     "analyticRuleObject3": {
-      "analyticRuleVersion3": "1.0.0",
+      "analyticRuleVersion3": "1.0.1",
       "_analyticRulecontentId3": "d2deed97-6c0c-4a57-95fd-675d3c6fb949",
       "analyticRuleId3": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'd2deed97-6c0c-4a57-95fd-675d3c6fb949')]",
       "analyticRuleTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('d2deed97-6c0c-4a57-95fd-675d3c6fb949')))]",
-      "_analyticRulecontentProductId3": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','d2deed97-6c0c-4a57-95fd-675d3c6fb949','-', '1.0.0')))]"
+      "_analyticRulecontentProductId3": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','d2deed97-6c0c-4a57-95fd-675d3c6fb949','-', '1.0.1')))]"
     },
     "analyticRuleObject4": {
       "analyticRuleVersion4": "1.0.0",
@@ -319,10 +319,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Identifies newly registered domains that are later observed in WhoisFreaks threat feeds.",
+                "description": "Identifies newly registered domains that are later observed in WhoisFreaks threat feeds. The rule runs hourly and matches threat rows ingested in the last hour against domains seen in the NRD feeds during the previous seven days, so each threat row is alerted on once.",
                 "displayName": "WhoisFreaks - newly registered domain seen in threat feed",
                 "enabled": false,
-                "query": "let nrd = union WhoisFreaksNRD_CL, WhoisFreaksNRDNoWhois_CL\n| where TimeGenerated > ago(7d)\n| distinct domain_name;\nWhoisFreaksThreat_CL\n| where TimeGenerated > ago(1d)\n| join kind=inner (nrd) on $left.domain == $right.domain_name\n| summarize arg_max(TimeGenerated, *) by domain, threat_type\n| project TimeGenerated, domain, threat_type, confidence, domain_name\n",
+                "query": "let nrd = union WhoisFreaksNRD_CL, WhoisFreaksNRDNoWhois_CL\n| where TimeGenerated > ago(7d)\n| distinct domain_name;\nWhoisFreaksThreat_CL\n| where TimeGenerated > ago(1h)\n| join kind=inner (nrd) on $left.domain == $right.domain_name\n| summarize arg_max(TimeGenerated, *) by domain, threat_type\n| project TimeGenerated, domain, threat_type, confidence, domain_name\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P7D",
                 "severity": "High",
@@ -1647,9 +1647,7 @@
                     "outputStream": "Custom-WhoisFreaksNRDNoWhois_CL"
                   }
                 ],
-                "workspaceResourceId": "{{workspaceResourceId}}",
-                "dataSources": "[variables('TemplateEmptyObject')]",
-                "provisioningState": "Succeeded"
+                "dataSources": "[variables('TemplateEmptyObject')]"
               }
             },
             {
@@ -2007,7 +2005,7 @@
                   "tableType": "CustomLog",
                   "isTroubleshootingAllowed": true
                 },
-                "retentionInDays": 4
+                "retentionInDays": 30
               }
             },
             {
@@ -2037,7 +2035,7 @@
                   "tableType": "CustomLog",
                   "isTroubleshootingAllowed": true
                 },
-                "retentionInDays": 4
+                "retentionInDays": 30
               }
             },
             {
@@ -2103,7 +2101,7 @@
                   "tableType": "CustomLog",
                   "isTroubleshootingAllowed": true
                 },
-                "retentionInDays": 4
+                "retentionInDays": 30
               }
             }
           ]
@@ -2396,6 +2394,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'threat_malware')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksThreat_CL",
@@ -2431,7 +2430,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchThreat_malware",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2450,11 +2449,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2480,6 +2474,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'threat_phishing')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksThreat_CL",
@@ -2515,7 +2510,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchThreat_phishing",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2534,11 +2529,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2564,6 +2554,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'threat_spam')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksThreat_CL",
@@ -2599,7 +2590,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchThreat_spam",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2618,11 +2609,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2648,6 +2634,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'nrd_gtld_whois')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksNRD_CL",
@@ -2683,7 +2670,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchNrd_gtld_whois",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2703,11 +2690,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2733,6 +2715,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'nrd_gtld_nowhois')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksNRDNoWhois_CL",
@@ -2768,7 +2751,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchNrd_gtld_nowhois",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2788,11 +2771,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2818,6 +2796,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'nrd_cctld_whois')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksNRD_CL",
@@ -2853,7 +2832,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchNrd_cctld_whois",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2873,11 +2852,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",
@@ -2903,6 +2877,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
+              "condition": "[[contains(parameters('feedTypes'), 'nrd_cctld_nowhois')]",
               "properties": {
                 "connectorDefinitionName": "WhoisFreaks",
                 "dataType": "WhoisFreaksNRDNoWhois_CL",
@@ -2938,7 +2913,7 @@
                   "nextSteps": [
                     {
                       "stepId": "fetchNrd_cctld_nowhois",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project lastUpdate = tostring(res.last_update)"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | extend lastUpdate = tostring(res.last_update) | where todatetime(lastUpdate) >= startofday(now(), -1) | project lastUpdate"
                     }
                   ]
                 },
@@ -2958,11 +2933,6 @@
                       "retryCount": 3,
                       "timeoutInSeconds": 180,
                       "rateLimitQPS": 2
-                    },
-                    "auth": {
-                      "AuthType": "APIKey",
-                      "APIKey": "{{apiKey}}",
-                      "APIKeyName": "X-API-KEY"
                     },
                     "paging": {
                       "pagingType": "Offset",

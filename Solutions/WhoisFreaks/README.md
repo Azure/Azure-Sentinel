@@ -104,6 +104,8 @@ WhoisFreaksNRD_CL
 
 ## Polling, Pages, and Deployment History
 
+The `/v3.4/stream/threat-feed/*` and `/v3.3/stream/domainer/*` endpoints used by the pollers are purpose-built for this connector and are not listed in the public WhoisFreaks documentation, which describes the equivalent `/download/` file endpoints. They authenticate with the `X-API-KEY` header, return uncompressed CSV, and support `limit` and `offset` paging. The with-WHOIS streams return a header row; the no-WHOIS streams return one headerless domain per line. Each poller fetches a dated file only when the status endpoint reports a `last_update` of today or yesterday, so a feed that has not published for two or more days is not re-ingested and a `Not Available` status is skipped.
+
 All seven feed requests use `pageSize: 10000` with `limit` and offset paging. Each connector first reads its matching `last_update` from the status response, then requests the dated feed: NRD uses `newly.gtld`/`newly.cctld`, and threat feeds use `threat_feed.malware`/`phishing`/`spam`. The status request itself is not paged. CCF advances `offset` for successive pages.
 
 The configured page size in the source does not prove what is currently deployed. Inspect the live connector resources in the target subscription and workspace:
