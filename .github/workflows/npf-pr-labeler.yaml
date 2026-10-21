@@ -18,10 +18,10 @@ permissions:
 jobs:
   label-npf-pr:
     if: ${{ github.actor != 'dependabot[bot]' }}
-    name: Label NPF Migration, Validation, Qualification, and Publisher Tier
+    name: Label NPF Migration, Validation, Qualification, and Solution Metadata
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect PR files and apply NPF and publisher-tier labels
+      - name: Inspect PR files, apply NPF labels, and write npf-meta block
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
           script: |
@@ -55,26 +55,34 @@ jobs:
             );
 
             const desired = new Set();
+            const npfModes = [];
             if (solutionNames.size > 0) {
               desired.add('Solution');
             }
             if (hasXdrContent) {
               desired.add('XDR');
               desired.add('Migration');
+              npfModes.push('Migration');
             }
             if (hasValidationEvidence) {
               desired.add('Validation');
+              npfModes.push('Validation');
             }
             if (hasQualificationEvidence) {
               desired.add('Qualification');
+              npfModes.push('Qualification');
             }
 
             // Determine 1P Solution / ISV Solution / Community Solution from SolutionMetadata.json
             const headSha = context.payload.pull_request?.head?.sha;
-            for (const sol of solutionNames) {
+            const baseSha = context.payload.pull_request?.base?.sha;
+            const publisherTiers = new Set();
+            const solutionDetails = [];
+
+            for (const sol of [...solutionNames].sort()) {
               const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
               let metaText = null;
-              for (const ref of [headSha, context.payload.pull_request?.base?.sha].filter(Boolean)) {
+              for (const ref of [headSha, baseSha].filter(Boolean)) {
                 try {
                   const resp = await github.rest.repos.getContent({
                     owner: context.repo.owner,
@@ -90,22 +98,28 @@ jobs:
                   // Try fallback ref
                 }
               }
+              let tierLabel = 'Unknown';
               if (metaText) {
                 try {
                   const meta = JSON.parse(metaText.replace(/^\uFEFF/, ''));
                   const tier = String(meta?.support?.tier || '').trim().toLowerCase();
                   const pub = String(meta?.publisherId || '').trim().toLowerCase();
                   if (tier === 'community' || pub === 'microsoftsentinelcommunity') {
-                    desired.add('Community Solution');
+                    tierLabel = 'Community Solution';
                   } else if (tier === 'partner') {
-                    desired.add('ISV Solution');
+                    tierLabel = 'ISV Solution';
                   } else if (tier === 'microsoft' || pub === 'azuresentinel' || pub === 'microsoftcorporation') {
-                    desired.add('1P Solution');
+                    tierLabel = '1P Solution';
+                  }
+                  if (tierLabel !== 'Unknown') {
+                    desired.add(tierLabel);
+                    publisherTiers.add(tierLabel);
                   }
                 } catch (e) {
                   core.warning(`Failed to parse ${metaPath}: ${e.message}`);
                 }
               }
+              solutionDetails.push({ name: sol, tier: tierLabel });
             }
 
             if (desired.size === 0) {
@@ -118,15 +132,48 @@ jobs:
             );
             const labelsToAdd = [...desired].filter(l => !existing.has(l));
 
-            if (labelsToAdd.length === 0) {
+            if (labelsToAdd.length > 0) {
+              core.info(`Adding labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labelsToAdd
+              });
+            } else {
               core.info(`All applicable labels already present: ${[...desired].join(', ')}`);
-              return;
             }
 
-            core.info(`Adding labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: labelsToAdd
-            });
+            // Build machine-readable npf-meta block for PR body and step summary
+            const npfMeta = {
+              solutionCount: solutionDetails.length,
+              solutions: solutionDetails.map(s => s.name),
+              publisherTiers: [...publisherTiers],
+              npfModes
+            };
+            const metaComment = `<!-- npf-meta: ${JSON.stringify(npfMeta)} -->`;
+
+            const currentBody = context.payload.pull_request?.body || '';
+            const metaRegex = /<!--\s*npf-meta:\s*\{.*?\}\s*-->/s;
+            let updatedBody = currentBody;
+            if (metaRegex.test(currentBody)) {
+              updatedBody = currentBody.replace(metaRegex, metaComment);
+            } else {
+              updatedBody = currentBody.trimEnd() + `\n\n${metaComment}\n`;
+            }
+
+            if (updatedBody !== currentBody) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: updatedBody
+              });
+              core.info(`Updated PR #${context.issue.number} body with npf-meta block.`);
+            }
+
+            await core.summary
+              .addHeading('NPF PR Metadata Summary', 3)
+              .addRaw(`<p><strong>Solutions Count:</strong> ${npfMeta.solutionCount}</p>`, true)
+              .addCodeBlock(JSON.stringify(npfMeta, null, 2), 'json')
+              .write();
