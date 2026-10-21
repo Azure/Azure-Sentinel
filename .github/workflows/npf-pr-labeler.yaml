@@ -18,10 +18,10 @@ permissions:
 jobs:
   label-npf-pr:
     if: ${{ github.actor != 'dependabot[bot]' }}
-    name: Label NPF Migration, Validation, and Qualification PRs
+    name: Label NPF Migration, Validation, Qualification, and Publisher Tier
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect PR files and apply NPF labels
+      - name: Inspect PR files and apply NPF and publisher-tier labels
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
           script: |
@@ -36,33 +36,80 @@ jobs:
               .filter(f => f.status !== 'removed')
               .map(f => f.filename);
 
+            const solutionNames = new Set();
+            for (const p of activePaths) {
+              const m = p.match(/^Solutions\/([^/]+)\//);
+              if (m && m[1] !== 'Images') {
+                solutionNames.add(m[1]);
+              }
+            }
+
             const hasXdrContent = activePaths.some(p =>
               /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
             );
             const hasValidationEvidence = activePaths.some(p =>
-              /^Solutions\/[^/]+\/Evidence\/(pr-qualification\/pr-qualification-result\.json|workflow-state\.json|decision-manifest\.json)$/.test(p)
+              /^Solutions\/[^/]+\/Evidence\/(pr-qualification\/(pr-qualification-result\.json|qualification-report\.html|qualification-summary\.md)|workflow-state\.json|decision-manifest\.json|[^/]+\/evidence\.json)$/.test(p)
             );
             const hasQualificationEvidence = activePaths.some(p =>
               /^Solutions\/[^/]+\/Evidence\/(qualification-evidence\.json|receipts\/(alert-parity-live|workbook-queries-live|arm-deployment-readback|graph-detection-deployment)\.json)$/.test(p)
             );
 
             const desired = new Set();
-            if (hasXdrContent) {
+            if (solutionNames.size > 0) {
               desired.add('Solution');
+            }
+            if (hasXdrContent) {
               desired.add('XDR');
               desired.add('Migration');
             }
             if (hasValidationEvidence) {
-              desired.add('Solution');
               desired.add('Validation');
             }
             if (hasQualificationEvidence) {
-              desired.add('Solution');
               desired.add('Qualification');
             }
 
+            // Determine 1P Solution / ISV Solution / Community Solution from SolutionMetadata.json
+            const headSha = context.payload.pull_request?.head?.sha;
+            for (const sol of solutionNames) {
+              const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
+              let metaText = null;
+              for (const ref of [headSha, context.payload.pull_request?.base?.sha].filter(Boolean)) {
+                try {
+                  const resp = await github.rest.repos.getContent({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: metaPath,
+                    ref
+                  });
+                  if (resp.data && resp.data.content) {
+                    metaText = Buffer.from(resp.data.content, 'base64').toString('utf8');
+                    break;
+                  }
+                } catch (_) {
+                  // Try fallback ref
+                }
+              }
+              if (metaText) {
+                try {
+                  const meta = JSON.parse(metaText.replace(/^\uFEFF/, ''));
+                  const tier = String(meta?.support?.tier || '').trim().toLowerCase();
+                  const pub = String(meta?.publisherId || '').trim().toLowerCase();
+                  if (tier === 'community' || pub === 'microsoftsentinelcommunity') {
+                    desired.add('Community Solution');
+                  } else if (tier === 'partner') {
+                    desired.add('ISV Solution');
+                  } else if (tier === 'microsoft' || pub === 'azuresentinel' || pub === 'microsoftcorporation') {
+                    desired.add('1P Solution');
+                  }
+                } catch (e) {
+                  core.warning(`Failed to parse ${metaPath}: ${e.message}`);
+                }
+              }
+            }
+
             if (desired.size === 0) {
-              core.info('No NPF Migration, Validation, or Qualification artifacts detected.');
+              core.info('No Solution or NPF labels detected.');
               return;
             }
 
@@ -72,11 +119,11 @@ jobs:
             const labelsToAdd = [...desired].filter(l => !existing.has(l));
 
             if (labelsToAdd.length === 0) {
-              core.info(`All applicable NPF labels already present: ${[...desired].join(', ')}`);
+              core.info(`All applicable labels already present: ${[...desired].join(', ')}`);
               return;
             }
 
-            core.info(`Adding NPF labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
+            core.info(`Adding labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
