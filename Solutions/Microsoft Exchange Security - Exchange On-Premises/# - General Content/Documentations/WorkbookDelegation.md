@@ -1,126 +1,91 @@
-# Workbooks
+# Delegate access to Microsoft Exchange Security workbooks
 
-- [Workbooks](#workbooks)
-  - [Group creation in Entra ID](#group-creation-in-entra-id)
-  - [Creation of the custom role to access Log Analytics](#creation-of-the-custom-role-to-access-log-analytics)
-  - [Create a dédicated workspace for the workbook](#create-a-dédicated-workspace-for-the-workbook)
-  - [Set Permissions on the Resource Group](#set-permissions-on-the-resource-group)
-  - [Set Permissions in Log Analytics](#set-permissions-in-log-analytics)
-  - [Save the Workbook in the dedicated Resource Group](#save-the-workbook-in-the-dedicated-resource-group)
-  - [Access to the workbook](#access-to-the-workbook)
+## Overview
 
+Use Microsoft Entra groups and Azure role-based access control (RBAC) to delegate workbook access. Assign roles to groups instead of individual users whenever possible.
 
-If the teams that needs to review the Workbook are not part of the Sentinel Team, delegation should be set.
-There are several solution to reach this goal, here a solution that also could be adapted.
-The solution is to create a separate **Resource Group** for storing the Workbook and delegate the appropriate permission to a group.
+Workbook access has two independent parts:
 
-It is recommended to do the delegation on a group rather than a user.
+1. Permission to open the Azure workbook resource.
+2. Permission to query every Log Analytics table used by that workbook.
 
-## Group creation in Entra ID
-1. Create the group in EntraID
-   1. Example ESI_Workbook_Delegation
-   2. Add appropriate Entra ID account in the group
+Granting access to the workbook does not grant access to its data, and granting access to Log Analytics data does not grant access to the workbook resource.
 
-## Creation of the custom role to access Log Analytics
-1. In Azure Portal, go to the **Subscription**
-2. Select Access Control (IAM)
-3. Click Add and Choose Add custom Role
-   ![alt text](./Images/Image64.png)
-4. Name your role and click **Next**
-   ![alt text](./Images/Image65.png)
-6. Click **Next** twice until you are on the JSON Tab
-7. Click **Edit**
-   ![alt text](./Images/Image67.png)
-8. Between the **"actions": []**, paste the following lines
-      "Microsoft.OperationalInsights/workspaces/read",
-      "Microsoft.OperationalInsights/workspaces/query/read"
-         ![alt text](./Images/Image66.png)
-9. Click **Next** and click **Create**
+## Recommended access model
 
-## Create a dédicated workspace for the workbook
-By using this procedure, the Workbook won't be upadted when the solution is updated.
-A manual update by copyingg the Workbook code will be necessary.
-1. In Azure Portal, go to Resource
-2. Click **Create**
-   ![alt text](./Images/Image68.png)
-3. Fill the require fields : Resource Group name, Region, Tags...
+| Scope | Recommended role | Purpose |
+|-------|------------------|---------|
+| Resource group containing the saved workbooks | **Workbook Reader** | Open and use saved workbooks |
+| Resource group containing the saved workbooks | **Workbook Contributor** | Optional: edit and save workbooks |
+| Log Analytics workspace | **Log Analytics Data Reader** with granular RBAC conditions | Query only the tables required by the workbooks |
 
-## Set Permissions on the Resource Group
-1. In Azure Portal, go to **Resource Group**
-2. Select the Resource Group dedicated to the Workbook
-3. Click **Access Control(IAM)**
-4. Click **Add** and select **Add Role Assignment**
-   ![alt text](./Images/Image69.png)
-5. In the **Search** Field, type Reader and Select the **Reader** Role
-   ![alt text](./Images/Image70.png)
-6. Select the Role **Reader**
-7. Click **Next**
-8. On the **Member** tab
-9. Click **Select Members**
-10. On the **Search** field, enter the beginning of your group name
-11. Select your group and click **Select** and click **Review + assign**
-   ![alt text](./Images/Image71.png)
-12. click **Review + assign** 
+For current Microsoft guidance, see:
 
-## Set Permissions in Log Analytics
-1. In Azure Portal, go to **Log Analytics workspaces**
-2. Select the Log Analytics of your Sentinel
-3. Click **Setting**  and select **Tables**
-4. Select the **Tables**
-5. The following operations needs to be repeat for each table
-   1. **OfficeActivity** : For Microsoft Exchange Security for Exchange Online
-   2. **ESIExchangeOnlineConfig_CL** : For Microsoft Exchange Security for Exchange Online
-   3. **ESIExchangeConfig_CL** : For Microsoft Exchange Security for Exchange On-Premises
-6. In the **Search** field enter the beginning of the table name
-7. Click on **Three dot**
-8. Select **Access control (IAM)**
-    ![alt text](./Images/Image72.png)
-10. 3. Click **Access Control(IAM)**
-4. Click **Add** and select **Add Role Assignment**
-5. 5. In the **Search** Field, type Reader and Select the **Reader** Role
-   ![alt text](./Images/Image73.png)
-6. Select the Role **Reader**
-7. Click **Next**
-8. On the **Member** tab
-9. Click **Select Members**
-10. On the **Search** field, enter the beginning of your group name
-11. Select your group and click **Select** and click **Review + assign**
-   ![alt text](./Images/Image71.png)
-12. click **Review + assign** 
+- [Use workbooks in Microsoft Sentinel](https://learn.microsoft.com/azure/sentinel/monitor-your-data)
+- [Manage table-level access in a Log Analytics workspace](https://learn.microsoft.com/azure/azure-monitor/logs/manage-table-access)
+- [Configure granular RBAC for Log Analytics](https://learn.microsoft.com/azure/azure-monitor/logs/granular-rbac-log-analytics)
 
-## Save the Workbook in the dedicated Resource Group
-1. In Azure Portal, go to **Sentinel**
-2. Select your Sentinel
-3. Click **Workbook**
-4. In My workbook or Template (if you did not already savec the Workbook)
-5. Select the workbook
-6. The following operations need to be repeat for each Workbook
-   1. Workbook for the Microsoft Exchange Security for Exchange On-Premises :
-     * Microsoft Exchange Admin Activity
-     * Microsoft Exchange Least Privilege with RBAC
-     * Microsoft Exchange Search AdminAuditLog
-     * Microsoft Exchange Security Review
-   2. Workbook for the Microsoft Exchange Security for Exchange Online :
-     * Microsoft Exchange Admin Activity - Online
-     * Microsoft Exchange Least Privilege with RBAC - Online
-     * Microsoft Exchange Search AdminAuditLog - Online
-     * Microsoft Exchange Security Review - Online
-7. Click on View Saved Workbook
-   ![alt text](./Images/Image74.png)
-8. Click **Edit**
-9.  ![alt text](./Images/Image75.png)
-10. Click on the double Floppy
-    ![alt text](./Images/Image76.png)
-11. Select your dedicated Resource Group
-12. ![alt text](./Images/Image77.png)
-13. Click Apply
-    1.  If necessary change the name of the workbook
-14. Close Workbook
+The older dual-role method based on a custom workspace role and table-scoped **Reader** assignments is retained by Azure Monitor for compatibility, but granular RBAC is the recommended approach for new deployments.
 
-## Access to the workbook
-1. 1. In Azure Portal, go to **Resource Group**
-2. Select the Resource Group dedicated to the Workbook
-3. All the workbook are available in the Overview section
-4. Copy paste the Url of the Overview section
-   ![alt text](./Images/Image78.png)
+## Identify the required tables
 
+Grant access only to tables queried by the workbooks that the group will use. The standard workbooks can require:
+
+| Solution | Current configuration table | Additional tables |
+|----------|-----------------------------|-------------------|
+| Exchange On-Premises | `ESIAPIExchangeOnPremConfig_CL` | `Event` for administrative audit activity; `ESIExchangeConfig_CL` when historical data from the legacy ingestion API is required |
+| Exchange Online | `ESIAPIExchangeOnlineConfig_CL` | `OfficeActivity` for administrative activity; `ESIExchangeOnlineConfig_CL` when historical data from the legacy ingestion API is required |
+
+Customized workbooks can query other tables. Review each workbook query before finalizing the role condition.
+
+## Configure delegation
+
+### 1. Create the Microsoft Entra group
+
+1. Create a security group, for example `ESI-Workbook-Readers`.
+2. Add the users who require access.
+3. If workbook editors require broader permissions than readers, create a separate editor group.
+
+### 2. Save the workbooks
+
+Save the required templates as Azure workbook resources by following [Deploy Microsoft Exchange Security workbooks](./WorkbookDeployement.md).
+
+You can store the saved workbooks in a dedicated resource group to simplify role assignments. A saved workbook is independent of its solution template and is not updated automatically when the solution changes.
+
+### 3. Grant access to the workbook resources
+
+1. Open the resource group that contains the saved workbooks.
+2. Open **Access control (IAM)**.
+3. Add a role assignment.
+4. Assign **Workbook Reader** to the reader group.
+5. If required, assign **Workbook Contributor** to the editor group.
+
+Avoid assigning the general **Reader** or **Contributor** role when the workbook-specific roles provide sufficient access.
+
+### 4. Grant access to workbook data
+
+1. Open the Log Analytics workspace used by Microsoft Sentinel.
+2. Follow the Microsoft procedure to create a granular RBAC assignment.
+3. Use the built-in **Log Analytics Data Reader** role.
+4. Add a condition that permits access only to the tables required by the selected workbooks.
+5. Assign the conditioned role to the Microsoft Entra reader group.
+
+Do not also assign a broader workspace role that grants access to all log data, because that would bypass the intended table restriction.
+
+### 5. Validate the delegated access
+
+Use a test account that is a member of the delegated group and verify that it can:
+
+1. Open each saved workbook.
+2. Run every workbook query without authorization errors.
+3. Query only the intended Log Analytics tables.
+4. Save changes only if it belongs to the editor group.
+
+After validation, share the saved workbook URL or the dedicated resource group with the authorized users.
+
+## Maintenance
+
+- Review group membership regularly.
+- Update granular RBAC conditions when workbook queries or ingestion tables change.
+- Revalidate access after solution upgrades.
+- Compare customized saved workbooks with updated templates before manually applying template improvements.
