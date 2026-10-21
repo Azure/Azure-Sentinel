@@ -1,10 +1,14 @@
 id: 9b4306d2-af4a-4d68-8db3-8ff15f56b4a3
-name: PIM Privileged Role Activation Without MFA From Unusual Location
+name: PIM Role Activation After Sign-In Without MFA or From New Country
 description: |
-  'Detects Privileged Identity Management (PIM) role activations that occur
-  without a strong MFA claim, or from a country/region not previously seen
-  for that user, indicating potential compromised credential use to escalate
-  privileges via PIM self-activation.'
+  'Detects Privileged Identity Management (PIM) role activations where the
+  preceding sign-in did not use MFA, or came from a country not seen for that
+  user in the prior 14 days. Either condition alone triggers the alert.
+  The sign-in is linked to the activation heuristically: the sign-in from the
+  same IP as the activation is preferred, otherwise the user''s most recent
+  successful sign-in in the hour before the activation is used. The
+  CorrelationMethod column shows which was applied. Users with no location
+  baseline, or a sign-in with no country, are not evaluated for the location condition.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -25,21 +29,20 @@ query: |
   let detectionWindow = 1h;
   let signinLookback = 1h;
   let baselineEnd = detectionWindow + signinLookback;
-  // Baseline stops before any sign-in that could be correlated with a new activation
   let UserBaseline = SigninLogs
   | where TimeGenerated between (ago(14d) .. ago(baselineEnd))
   | where ResultType == 0
   | extend Country = tostring(LocationDetails.countryOrRegion)
   | where isnotempty(Country)
   | summarize UsualCountries = make_set(Country) by UserPrincipalName;
-  // Only activations inside the current detection window
   let PIMActivations = AuditLogs
   | where TimeGenerated > ago(detectionWindow)
   | where OperationName == "Add member to role completed (PIM activation)"
   | extend Actor = tostring(InitiatedBy.user.userPrincipalName)
   | where isnotempty(Actor)
-  | extend Role = tostring(TargetResources[0].displayName)
-  | project ActivationTime = TimeGenerated, Actor, Role;
+  | extend Role = tostring(TargetResources[0].displayName),
+          ActivationIP = tostring(InitiatedBy.user.ipAddress)
+  | project ActivationTime = TimeGenerated, Actor, Role, ActivationIP;
   let CandidateSignins = SigninLogs
   | where TimeGenerated > ago(baselineEnd)
   | where ResultType == 0
@@ -47,14 +50,15 @@ query: |
       Country = tostring(LocationDetails.countryOrRegion), IPAddress;
   PIMActivations
   | join kind=inner CandidateSignins on $left.Actor == $right.UserPrincipalName
-  // Successful sign-ins in the hour before the activation only
   | where SigninTime between ((ActivationTime - signinLookback) .. ActivationTime)
-  // Resolve multiple candidates: keep the most recent one per activation
-  | summarize arg_max(SigninTime, AuthenticationRequirement, Country, IPAddress) by ActivationTime, Actor, Role
+  | extend MatchScore = iff(isnotempty(ActivationIP) and IPAddress == ActivationIP, 1, 0)
+  | summarize arg_max(SigninTime, AuthenticationRequirement, Country, IPAddress) by ActivationTime, Actor, Role, MatchScore
+  | summarize arg_max(MatchScore, *) by ActivationTime, Actor, Role
+  | extend CorrelationMethod = iff(MatchScore == 1, "Same IP as activation", "Time-window heuristic")
   | join kind=leftouter UserBaseline on $left.Actor == $right.UserPrincipalName
   | where AuthenticationRequirement != "multiFactorAuthentication"
-      or (array_length(UsualCountries) > 0 and not(set_has_element(UsualCountries, Country)))
-  | project ActivationTime, Actor, Role, SigninTime, Country, IPAddress, AuthenticationRequirement, UsualCountries
+      or (isnotempty(Country) and array_length(UsualCountries) > 0 and not(set_has_element(UsualCountries, Country)))
+  | project ActivationTime, Actor, Role, SigninTime, Country, IPAddress, AuthenticationRequirement, CorrelationMethod, UsualCountries
 entityMappings:
   - entityType: Account
     fieldMappings:
