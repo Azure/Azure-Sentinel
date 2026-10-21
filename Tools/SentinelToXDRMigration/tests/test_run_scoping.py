@@ -90,6 +90,15 @@ class RunScopingTests(unittest.TestCase):
         with using_run(self.solution, first["runId"]):
             self.assertEqual("blocked", workflow_status(self.solution)["workflowStatus"])
 
+    def test_json_artifacts_use_lf_line_endings_on_every_platform(self):
+        state = self.init()
+        with using_run(self.solution, state["runId"]):
+            manifest = artifact_path(self.solution, "manifest.json")
+            write_json_artifact(self.solution, manifest, {"nested": {"value": 1}})
+        raw = manifest.read_bytes()
+        self.assertNotIn(b"\r\n", raw)
+        self.assertEqual(raw, (json.dumps({"nested": {"value": 1}}, indent=2) + "\n").encode("utf-8"))
+
     def test_unknown_and_traversal_run_ids_cannot_write(self):
         with self.assertRaisesRegex(ValueError, "safe directory"):
             with using_run(self.solution, "../escape"):
