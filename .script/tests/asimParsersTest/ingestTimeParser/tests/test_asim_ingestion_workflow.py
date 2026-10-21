@@ -557,7 +557,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
         )
 
-    def test_security_gate_matches_legacy_workflow_exactly(self):
+    def test_security_gate_matches_legacy_except_initial_events(self):
         legacy = self.legacy_path.read_text(encoding="utf-8")
         isolated = self.isolated_path.read_text(encoding="utf-8")
 
@@ -575,6 +575,19 @@ class WorkflowTopologyTests(unittest.TestCase):
             isolated,
             "  security-gate:\n",
             "\n  discover:",
+        )
+        initial_event_branch = """\
+            elif [ "$trigger_event" = "opened" ] ||
+                 [ "$trigger_event" = "reopened" ]; then
+              log_info "Fork PR requires SafeToRun approval"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=true" >> $GITHUB_OUTPUT
+              echo "comment_needed=true" >> $GITHUB_OUTPUT
+              exit 1
+"""
+        self.assertIn(initial_event_branch, isolated_gate)
+        isolated_gate = isolated_gate.replace(
+            initial_event_branch, "", 1
         )
 
         normalize = lambda value: "\n".join(
@@ -632,6 +645,30 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow.count(
                 "ref: ${{ github.event.pull_request.base.sha }}"
             ),
+        )
+
+    def test_workflow_runs_on_initial_pull_request_events(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "types: [opened, reopened, labeled, synchronize]",
+            workflow,
+        )
+        self.assertIn(
+            'elif [ "$trigger_event" = "opened" ] ||',
+            workflow,
+        )
+        self.assertIn(
+            '[ "$trigger_event" = "reopened" ]; then',
+            workflow,
+        )
+        self.assertIn(
+            'echo "needs_approval=true" >> $GITHUB_OUTPUT',
+            workflow,
+        )
+        self.assertIn(
+            'echo "comment_needed=true" >> $GITHUB_OUTPUT',
+            workflow,
         )
 
     def test_untrusted_pr_content_is_materialized_only_as_data(self):
