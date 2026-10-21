@@ -1,0 +1,106 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: true
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b6c3a8a6-d22c-4882-9c57-abc01690938b
+    path: Analytic Rules/App-GW-WAF-Path-Traversal-Attack.yaml
+    version: 1.0.3
+    querySha256: 7f1e547530f730be71758878b6b3d7e843efc3cc4a1fed3eae5d48ff2d72ef38
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Execution
+    - InitialAccess
+    - PrivilegeEscalation
+    - Discovery
+    originalTechniques:
+    - T1548
+    - T1203
+    - T1190
+    - T1548
+    - T1087
+    reviewScope:
+      sourceDocumentSha256: f8e1530c37b00119416e36f93df6f5226808bf8356491d90ade24721a960640d
+      targetQuerySha256: c4efd6b336dee05c613c54808cf6ff1abc0c9ad63f6f1eefd360cb1b39c41a18
+properties:
+  id: xdr-b6c3a8a6-d22c-4882-9c57-abc01690938b
+  displayName: App GW WAF - Path Traversal Attack
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AGWFirewallLogs
+      | where Action == "Matched"
+      | where Message has "Path Traversal Attack"
+      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
+      | join kind = inner(
+      AGWFirewallLogs
+      | where Action == "Blocked") on TransactionId
+      | extend Uri = strcat(Hostname,RequestUri)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId,100), Message = make_set(Message,100), Detail_Message = make_set(DetailedMessage,100), Detail_Data = make_set(DetailedData,100), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
+      | where Total_TransactionId >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: App GW WAF - Path Traversal Attack
+      description: |-
+        'Identifies a match for a Path Traversal based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        References: https://owasp.org/www-community/attacks/Path_Traversal'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Uri
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
+      - tactic: Discovery
+        techniques:
+        - technique: T1087

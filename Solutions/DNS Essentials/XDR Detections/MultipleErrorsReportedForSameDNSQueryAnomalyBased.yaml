@@ -1,0 +1,173 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: cf687598-5a2c-46f8-81c8-06b15ed489b1
+    path: Analytic Rules/MultipleErrorsReportedForSameDNSQueryAnomalyBased.yaml
+    version: 1.0.3
+    querySha256: c987a6688a6bc0efce953a28a478863cf7cf64ea3800bbf7cd2b6194b87f7a66
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'SrcIps' column `SrcIps` has an unproven output binding after a destructive projection; the explicit binding
+      is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'TotalIPs' column `TotalIPs` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors:
+    - a Host, Account, Mailbox, or IP mapping is required
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1573
+    - T1008
+    reviewScope:
+      sourceDocumentSha256: 74bbcb66122a04944dc15b0a058e6960018929900f2e6068cb59f5a64851400b
+      targetQuerySha256: 840910ba03dbecd886dbcd5de3794b5094f02713fc72822be24203aaae29a9ee
+properties:
+  id: xdr-cf687598-5a2c-46f8-81c8-06b15ed489b1
+  displayName: Detect DNS queries reporting multiple errors from different clients - Anomaly Based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 2.5;
+      let min_t = ago(14d);
+      let max_t = now();
+      let dt = 1d;
+      let Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+      // calculate avg. eps(events per second)
+      let eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
+      let maxSummarizedTime = toscalar (
+        union isfuzzy=true
+            (
+                DNSEssentialsCustomParser
+                    | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
+                    | where EventTime_t >= min_t
+                    | summarize max_TimeGenerated=max(EventTime_t)
+                    | extend max_TimeGenerated = datetime_add('hour',1,max_TimeGenerated)
+            ),
+            (
+                print(min_t)
+                | project max_TimeGenerated = print_0
+            )
+          | summarize maxTimeGenerated = max(max_TimeGenerated)
+        );
+        let summarizationexist = materialize(
+                  union isfuzzy=true
+                    (
+                        DNSEssentialsCustomParser
+                        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
+                        | where EventTime_t > ago(1d)
+                        | project v = int(2)
+                    ),
+                    (
+                        print int(1)
+                        | project v = print_0
+                    )
+                    | summarize maxv = max(v)
+                    | extend sumexist = (maxv > 1)
+                  );
+      let allData = union isfuzzy=true
+      (
+        (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (
+        _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())
+        | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+        | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+        | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+        ) on exists
+        | project-away exists, maxv, sum*
+      ),
+      (
+        (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (
+        _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())
+        | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+        | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+        | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+        ) on exists
+        | project-away exists, maxv, sum*
+      ),
+      (
+        (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (
+        _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())
+        | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+        | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+        | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+        ) on exists
+        | project-away exists, maxv, sum*
+      ),
+      (
+            DNSEssentialsCustomParser
+            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
+            | where EventTime_t > min_t and EventResultDetails_s in (Errors)
+            | project-rename SrcIpAddr=SrcIpAddr_s, DnsQuery=DnsQuery_s, Count=count__d, EventTime=EventTime_t
+            | extend Count = toint(Count)
+      );
+      allData
+      | make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, threshold, -1, 'linefit')
+      | mv-expand anomalies, score, baseline, EventTime, TotalIPCount
+      | extend
+        anomalies = toint(anomalies),
+        score = toint(score),
+        baseline = toint(baseline),
+        EventTime = todatetime(EventTime),
+        TotalIPs = tolong(TotalIPCount)
+      | where EventTime >= ago(dt)
+      | where score >= threshold * 2
+      | join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery
+      | project-away DnsQuery1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Detect DNS queries reporting multiple errors from different clients - Anomaly Based (ASIM DNS Solution)
+      description: '''This rule makes use of the series decompose anomaly method to generate an alert when multiple clients
+        report errors for the same DNS query. This rule monitors DNS traffic over a period of 14 days to detect possible similar
+        C2 communication originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and
+        is applied to any source that supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**"
+        Parser, so please make sure it is installed and configured before you use this Rule.'''
+      severity: medium
+      entityMappings:
+        dns:
+        - id: dn1
+          domainNameColumn: DnsQuery
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1573
+        - technique: T1008
+      customDetails:
+        SrcIps: SrcIps
+        AnomalyScore: score
+        baseline: baseline
+        TotalIPs: TotalIPs

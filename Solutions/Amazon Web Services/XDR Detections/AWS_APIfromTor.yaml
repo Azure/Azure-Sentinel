@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0adab960-5565-4978-ba6d-044553e4acc4
+    path: Analytic Rules/AWS_APIfromTor.yaml
+    version: 1.0.2
+    querySha256: cc016d8d99ce9455260f6f698ac81def8b041956af589923231fcf38c810c1bf
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons:
+    - externaldata availability must be verified by runtime validation
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+    reviewScope:
+      sourceDocumentSha256: ce9d051628b9669ba00199881f9d53b937f65e41b14044fe7ed9bddff823f100
+      targetQuerySha256: 724ada00781b15ecab8e6bcea4f8a46705c356b900d709d2e2b4cb4c78b6c04a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-0adab960-5565-4978-ba6d-044553e4acc4
+  displayName: AWSCloudTrail - Successful API executed from a Tor exit node
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let TorNodes = (
+      externaldata (TorIP:string)
+      [h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']
+      with (ignoreFirstRecord=true));
+      AWSCloudTrail
+      | where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+          AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | project TimeGenerated, SourceIpAddress, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName, UserIdentityPrincipalid, EventName, EventSource, AWSRegion, RecipientAccountId
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Successful API executed from a Tor exit node
+      description: |-
+        Identifies successful AWS CloudTrail API activity originating from an IP address identified as a TOR exit node in
+        the external TOR list hosted at https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip. The rule alerts
+        only when CloudTrail indicates the request completed successfully with no ErrorCode and no ErrorMessage, and the source
+        IP is present in the TOR exit node list.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204
+      customDetails:
+        UserIdentityArn: UserIdentityArn
+        EventName: EventName
+        EventSource: EventSource
+        AWSRegion: AWSRegion
+        AccountCloudAppAccountId: RecipientAccountId

@@ -1,0 +1,98 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b7643904-5081-4920-917e-a559ddc3448f
+    path: Analytic Rules/AFD-Premium-WAF-XSSDetection.yaml
+    version: 1.0.2
+    querySha256: 65369d2e83a80a624aaeffaeb4bb9032eeeaa72098dcea5746f0491dd1157df8
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    originalTechniques:
+    - T1189
+    - T1203
+    - T0853
+    reviewScope:
+      sourceDocumentSha256: 7ba46869487601324a7c850995a9cf8c4a3444be1a6ea5afb4fb37aa77b58b01
+      targetQuerySha256: 53acabfe7f3ae07a52bff037bfac146023357a80456e24395f6ea75a2ca82916
+properties:
+  id: xdr-b7643904-5081-4920-917e-a559ddc3448f
+  displayName: Front Door Premium WAF - XSS Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 1;
+      AzureDiagnostics
+      | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | where action_s =~ "AnomalyScoring"
+      | where details_msg_s has "XSS"
+      | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
+      | project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
+      | join kind = inner(
+      AzureDiagnostics
+      | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | where action_s =~ "Block") on trackingReference_s
+      | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
+      | where Total_TrackingReference >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: Front Door Premium WAF - XSS Detection
+      description: |-
+        'Identifies a match for an XSS attack in the Front Door Premium WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+         References: https://owasp.org/www-project-top-ten/2017/A7_2017-Cross-Site_Scripting_(XSS)'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URI_s
+        ips:
+        - id: ip1
+          addressColumn: clientIP_s
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+        - technique: T0853

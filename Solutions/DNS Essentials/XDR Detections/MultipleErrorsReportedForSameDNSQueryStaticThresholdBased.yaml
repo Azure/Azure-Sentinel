@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5b8344eb-fa28-4ac3-bcff-bc19d5d63089
+    path: Analytic Rules/MultipleErrorsReportedForSameDNSQueryStaticThresholdBased.yaml
+    version: 1.0.4
+    querySha256: 460af422eb8e1d484dc7df69e909d5e810ef817832bab656744421b15ff7b860
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'SrcIPs' column `SrcIPs` requires runtime output-schema binding verification
+    - customDetails 'IPCountthreshold' column `IPCountthreshold` requires runtime output-schema binding verification
+    - customDetails 'TotalIPs' column `TotalIPs` requires runtime output-schema binding verification
+    - Url.Url value is retained as customDetails.UrlUrl from query column `DnsQuery`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.UrlUrl column `DnsQuery` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1573
+    - T1008
+    reviewScope:
+      sourceDocumentSha256: 19f069cc273fa9a45d03289f012d977f9a2a31424e5279abbe81f2ec8c071eee
+      targetQuerySha256: 0a2693c33d3179b969c9684abe295e2907e2866cf16b142f06c30b6e5aa15bdb
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 19f069cc273fa9a45d03289f012d977f9a2a31424e5279abbe81f2ec8c071eee
+      targetQuerySha256: 0a2693c33d3179b969c9684abe295e2907e2866cf16b142f06c30b6e5aa15bdb
+    supplementalEntityDetails:
+    - entityType: Url
+      entityIndex: 4
+      identifier: Url
+      sourceColumn: DnsQuery
+      column: DnsQuery
+      status: runtime-binding-pending
+      customDetailKey: UrlUrl
+properties:
+  id: xdr-5b8344eb-fa28-4ac3-bcff-bc19d5d63089
+  displayName: Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback=1h;
+      let threshold = 2;
+      let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+      _Im_Dns(starttime=ago(lookback))
+        | where EventResultDetails has_any (errors)
+        | summarize SrcIPs = make_set(SrcIpAddr, 100), Dvcs = make_set(Dvc, 100), ResourceIds = make_set(_ResourceId, 100) by DnsQuery, bin(TimeGenerated, 10min)
+        | where array_length(SrcIPs) >= threshold
+        | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold
+        | extend DomainName = strcat(split(DnsQuery, ".")[1], ".", split(DnsQuery, ".")[2])
+        | mv-expand SrcIPs
+        | extend SrcIP = tostring(SrcIPs)
+        | mv-expand Dvcs
+        | extend Dvc = tostring(Dvcs)
+        | mv-expand ResourceIds
+        | extend ResourceId = tostring(ResourceIds)
+        | extend Dvc = strcat(split(Dvc, ".")[0])
+        | summarize Start=min(TimeGenerated), End=max(TimeGenerated) by SrcIP, Dvc, ResourceId, DnsQuery, DomainName, SrcIPs = tostring(SrcIPs), IPCountthreshold = threshold, TotalIPs
+        | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)
+      description: '''This rule creates an alert when multiple clients report errors for the same DNS query. This helps in
+        identifying possible similar C2 communications originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM)
+        normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        dns:
+        - id: dn1
+          domainNameColumn: DnsQuery
+        ips:
+        - id: ip1
+          addressColumn: SrcIP
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: ResourceId
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          ntDomainColumn: HostNameDomain
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1573
+        - technique: T1008
+      customDetails:
+        SrcIPs: SrcIPs
+        IPCountthreshold: IPCountthreshold
+        TotalIPs: TotalIPs
+        UrlUrl: DnsQuery

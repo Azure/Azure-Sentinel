@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: true
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1c7ff502-2ad4-4970-9d29-9210c6753138
+    path: Analytic Rules/App-GW-WAF-XSSDetection.yaml
+    version: 1.0.2
+    querySha256: afc8649d0865daa8c4fd2797f93e3dd0a209bdb58fb952d1f33e9964347fb67d
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    originalTechniques:
+    - T1189
+    - T1203
+    - T0853
+    reviewScope:
+      sourceDocumentSha256: dbd45382394570b14e8e5970f423e4b094e113345371fc2fcf36702a580c2a97
+      targetQuerySha256: d17aaa0ecba1228f690bb06cf1c654c7114487191a02733a2a2de8577cd48fb7
+properties:
+  id: xdr-1c7ff502-2ad4-4970-9d29-9210c6753138
+  displayName: App Gateway WAF - XSS Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AGWFirewallLogs
+      | where Action == "Matched"
+      | where Message has "XSS"
+      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message
+      | join kind = inner(
+      AGWFirewallLogs
+      | where Action == "Blocked"
+      | extend transactionId_g = tostring(TransactionId)) on TransactionId
+      | extend Uri = strcat(Hostname,RequestUri)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(transactionId_g,100), Message = make_set(Message,100), Total_TransactionId = dcount(transactionId_g) by ClientIp, Uri, Action
+      | where Total_TransactionId >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: App Gateway WAF - XSS Detection
+      description: |-
+        'Identifies a match for an XSS attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+         References: https://owasp.org/www-community/attacks/xss/'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Uri
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+        - technique: T0853

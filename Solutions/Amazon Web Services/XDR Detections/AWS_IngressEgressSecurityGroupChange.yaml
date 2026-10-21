@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4f19d4e3-ec5f-4abc-9e61-819eb131758c
+    path: Analytic Rules/AWS_IngressEgressSecurityGroupChange.yaml
+    version: 1.0.5
+    querySha256: 4a0bb6deeca77ffb943dfde97c3794e3234dd8a4bf6a377c5c247cd8e24f808f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: needsReview
+    reviewRequired: true
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityType' column `UserIdentityType` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors:
+    - customDetails 'UserIdentityUserName' column `UserIdentityUserName` is missing from the final query output; explicit
+      binding retained for correction
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: 7a73fdfaac529c02a22e5788dc5e21ef8092fef5e8e79f9572f8b47b5386611c
+      targetQuerySha256: 3d10e54f71f19dd865b0fb16740f27662723b41fb907ca03a8c69fec132e43b8
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-4f19d4e3-ec5f-4abc-9e61-819eb131758c
+  displayName: AWSCloudTrail - Changes to AWS Security Group ingress and egress settings
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic([ "AuthorizeSecurityGroupEgress", "AuthorizeSecurityGroupIngress", "RevokeSecurityGroupEgress", "RevokeSecurityGroupIngress"]);
+      AWSCloudTrail
+      | where EventName in~ (EventNameList)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)
+      by EventSource, EventName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,
+      AdditionalEventData, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Changes to AWS Security Group ingress and egress settings
+      description: |-
+        A Security Group acts as a virtual firewall for an AWS instance to control inbound and outbound traffic. This rule detects AWS CloudTrail events for changes to Security Group ingress and egress settings.
+        Investigate to validate the legitimacy of the activity and identify potential malicious activity.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007
+      customDetails:
+        UserIdentityArn: UserIdentityArn
+        UserIdentityUserName: UserIdentityUserName
+        UserIdentityType: UserIdentityType
+        EventName: EventName
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        AccountCloudAppAccountId: RecipientAccountId
