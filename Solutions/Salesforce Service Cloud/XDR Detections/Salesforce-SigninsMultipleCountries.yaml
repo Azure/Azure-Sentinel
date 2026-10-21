@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.7.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SalesforceServiceCloudCCPDefinition
+  dataTypes:
+  - SalesforceServiceCloud
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SalesforceServiceCloud
+    - SalesforceServiceCloudV2_CL
+    - SalesforceServiceCloudV3_CL
+    - SalesforceServiceCloud_CL
+  requiredDataConnectors:
+  - connectorId: SalesforceServiceCloudCCPDefinition
+    dataTypes:
+    - SalesforceServiceCloud
+    - SalesforceServiceCloudV3_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3094e036-e5ae-4d6e-8626-b0f86ebc71f2
+    path: Analytic Rules/Salesforce-SigninsMultipleCountries.yaml
+    version: 1.0.4
+    querySha256: ac799ca1787d5dee66b7603ed71d99de021e18e5bf420b5c478a6c60c237fe0d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 3ad1c59239c17ed5a8f820f79905d58663b134a0e0f9bae9332538e3d246839e
+      targetQuerySha256: b83c3f20a6e4dc72fa885e29c739229d35921808b12b103b62ed09f7ba48f041
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 3ad1c59239c17ed5a8f820f79905d58663b134a0e0f9bae9332538e3d246839e
+      targetQuerySha256: b83c3f20a6e4dc72fa885e29c739229d35921808b12b103b62ed09f7ba48f041
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 3ad1c59239c17ed5a8f820f79905d58663b134a0e0f9bae9332538e3d246839e
+      targetQuerySha256: b83c3f20a6e4dc72fa885e29c739229d35921808b12b103b62ed09f7ba48f041
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-3094e036-e5ae-4d6e-8626-b0f86ebc71f2
+  displayName: User Sign in from different countries
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 2;
+      let Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)
+      [@"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv"];
+      let UsersLocation = SalesforceServiceCloud
+      | where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'
+      | project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;
+      UsersLocation
+      | extend Dummy=1
+      | extend TimestampDerived = todatetime(TimestampDerived)
+      | summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy
+      | partition by Hour(
+                      lookup (Countrydb|extend Dummy=1) on Dummy
+                    | where ipv4_is_match(ClientIp, Network)
+                    )
+      | summarize NumOfCountries = dcount(country_name) by User, Hour
+      | where NumOfCountries >= threshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: User Sign in from different countries
+      description: '''This query searches for successful user logins from different countries within 30 mins.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: User
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078

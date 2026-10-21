@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - ZPA_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ZPAEvent
+    - ZPA_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - ZPA_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 24f0779d-3927-403a-aac1-cc8791653606
+    path: Analytic Rules/ZscalerZPAConnectionsFromNewIP.yaml
+    version: 1.0.2
+    querySha256: cb349834f6454cc334fe14a0e07546b444d5c4fec06b99ab37b1f174705c93e8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: c6a0d11550b05c22e90212dcbe742f3b32c82e6012afe14eba88ef19df9158b0
+      targetQuerySha256: dea04cb11cbebe5665ef32ed7d81a1b742797f243f3253ba6185d0a52b162543
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-24f0779d-3927-403a-aac1-cc8791653606
+  displayName: Zscaler - ZPA connections from new IP
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let listIPs =
+      ZPAEvent
+      | where TimeGenerated > ago(14d)
+      | where DvcAction == 'open'
+      | summarize ListofIPs = make_set(SrcIpAddr) by DstUserName
+      | project ListofIPs;
+      ZPAEvent
+      | where isnotempty(SrcIpAddr)
+      | where SrcIpAddr !in (listIPs)
+      | summarize EventCount = count() by DstUserName, SrcIpAddr
+      | project-away EventCount
+      | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Zscaler - ZPA connections from new IP
+      description: '''Detects ZPA connections from new IP.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1133

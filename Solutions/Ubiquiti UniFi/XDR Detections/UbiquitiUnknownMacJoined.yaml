@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9757cee3-1a6c-4d8e-a968-3b7e48ded690
+    path: Analytic Rules/UbiquitiUnknownMacJoined.yaml
+    version: 1.0.2
+    querySha256: 3c62f943349f0c33c6863368230994730272ffac2fc04a8f629f99de30aa22ec
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally represented
+      by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The original value
+      is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `HostCustomEntity`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 5dfcd3e50a0251f986dd0e369d8114ff2deb3f7fac1606606fd48bce2698805f
+      targetQuerySha256: 764070afca66e9df3a85a30a16b0d73ecb11e9f41932b51e0ac1d94393a57b94
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally
+        represented by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The
+        original value is also retained in customDetails when the query output binding is available; this assumption does
+        not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 5dfcd3e50a0251f986dd0e369d8114ff2deb3f7fac1606606fd48bce2698805f
+      targetQuerySha256: 764070afca66e9df3a85a30a16b0d73ecb11e9f41932b51e0ac1d94393a57b94
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally represented
+      by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The original value
+      is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+properties:
+  id: xdr-9757cee3-1a6c-4d8e-a968-3b7e48ded690
+  displayName: Ubiquiti - Unknown MAC Joined AP
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lbperiod = 14d;
+      let lbperiod_24h = 24h;
+      let known_macs = UbiquitiAuditEvent
+      | where TimeGenerated between (ago(lbperiod) .. ago(lbperiod_24h))
+      | where DvcAction =~ 'JOIN'
+      | summarize makeset(SrcMacAddr);
+      UbiquitiAuditEvent
+      | where DvcAction =~ 'JOIN'
+      | where SrcMacAddr !in (known_macs)
+      | extend Device = SrcMacAddr
+      | extend HostCustomEntity = Device
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Unknown MAC Joined AP
+      description: '''Detects when device with unseen MAC Address joined AP.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      customDetails:
+        HostFullName: HostCustomEntity

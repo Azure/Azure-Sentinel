@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - ZPA_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ZPA_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - ZPA_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 40a98355-0e52-479f-8c91-4ab659cba878
+    path: Analytic Rules/ZscalerSharedZPASession.yaml
+    version: 1.0.2
+    querySha256: 372bdda9223b2d76b555dfc39be8669ae9cc8a10ef34f97d93cd7e7debb23412
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=24h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 2c875b5179dac485aa1ca916ce293f69790333d9e656befaee3dcf378969516e
+      targetQuerySha256: 1bf318c861021b53aa2d6e68d68c9c0ee72ff6f59867dd2080eee9194c781c4e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-40a98355-0e52-479f-8c91-4ab659cba878
+  displayName: Zscaler - Shared ZPA session
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let open_sessions =
+      ZPAEvent
+      | where DvcAction == 'open'
+      | summarize timestampstart = min(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+      | sort by timestampstart asc;
+      let closed_sessions =
+      ZPAEvent
+      | where TimeGenerated > ago(1h)
+      | where DvcAction == 'close'
+      | summarize timestampend = max(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+      | sort by timestampend asc;
+      open_sessions
+      | join (closed_sessions) on DstUserName
+      | sort by DstUserName, timestampstart
+      | extend prev_session_closetime = prev(timestampend,1)
+      | extend prev_session_starttime = prev(timestampstart,1)
+      | extend PreviousSrcIpAddr = prev(SrcIpAddr, 1)
+      | extend prev_sessionuser = prev(DstUserName, 1)
+      | where DstUserName == prev_sessionuser
+      | where SrcIpAddr != PreviousSrcIpAddr
+      | where prev_session_closetime > timestampstart
+      | project DstUserName, SrcIpAddr, PreviousSrcIpAddr
+      | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Zscaler - Shared ZPA session
+      description: '''Detects shared ZPA session.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1133
+      customDetails:
+        AccountName: AccountCustomEntity

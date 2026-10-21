@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.7.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SalesforceServiceCloudCCPDefinition
+  dataTypes:
+  - SalesforceServiceCloud
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SalesforceServiceCloud
+    - SalesforceServiceCloudV2_CL
+    - SalesforceServiceCloudV3_CL
+    - SalesforceServiceCloud_CL
+  requiredDataConnectors:
+  - connectorId: SalesforceServiceCloudCCPDefinition
+    dataTypes:
+    - SalesforceServiceCloud
+    - SalesforceServiceCloudV3_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5a6ce089-e756-40fb-b022-c8e8864a973a
+    path: Analytic Rules/Salesforce-BruteForce.yaml
+    version: 1.0.5
+    querySha256: d01eec8e2473dcb341ee339be9fb9769d07e2d36c1ff69e4984f9ee19245512a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - entity mappings were resolved by the configured per-rule override
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - customDetails 'IPAddresses' column `IpAddresses` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 2cbe75753e1b7a78a028ae7bd5310a63216e8a3327ee7815e8d2108927908545
+      targetQuerySha256: e061f5e51557ecf3f9246c91f8c83eb3a7411e512f42e01ec711d978b572d3fd
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 2cbe75753e1b7a78a028ae7bd5310a63216e8a3327ee7815e8d2108927908545
+      targetQuerySha256: e061f5e51557ecf3f9246c91f8c83eb3a7411e512f42e01ec711d978b572d3fd
+properties:
+  id: xdr-5a6ce089-e756-40fb-b022-c8e8864a973a
+  displayName: Brute force attack against user credentials
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let failureCountThreshold = 10;
+      let successCountThreshold = 1;
+      let Failures =
+      SalesforceServiceCloud
+      | where EventType == "Login" and LoginStatus != "LOGIN_NO_ERROR"
+      | summarize
+            FailureStartTime = min(TimeGenerated),
+            FailureEndTime = max(TimeGenerated),
+            IpAddresses = make_set (ClientIp, 100),
+            FailureCount = count() by User, UserId, UserType;
+        SalesforceServiceCloud
+        | where EventType == "Login" and LoginStatus == "LOGIN_NO_ERROR"
+        | summarize
+                SuccessStartTime = min(TimeGenerated),
+                SuccessEndTime = max(TimeGenerated),
+                IpAddresses = make_set (ClientIp, 100),
+                SuccessCount = count() by User, UserId, UserType
+        | join kind=leftouter Failures on UserId
+        | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+        | where FailureEndTime < SuccessStartTime
+        | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Brute force attack against user credentials
+      description: |-
+        'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.
+        The default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: User
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        IPAddresses: IpAddresses

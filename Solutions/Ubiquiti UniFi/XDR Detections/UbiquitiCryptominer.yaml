@@ -1,0 +1,101 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7feb3c32-2a11-4eb8-a2d7-e3792b31cb80
+    path: Analytic Rules/UbiquitiCryptominer.yaml
+    version: 1.0.2
+    querySha256: 6dd4fc2b3f990b4901aa61ba9a7f328d63807be06cc74a518c4a88acae542745
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    - T1095
+    - T1571
+    reviewScope:
+      sourceDocumentSha256: 587312881e4fa41dbd6a836a96d097eb80b1a2160cdb4f824dc25e0bdfa7c685
+      targetQuerySha256: b90a979b373da28700bd92358ac2af712feabf4986db6df48d5f56f09cee7d4e
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 587312881e4fa41dbd6a836a96d097eb80b1a2160cdb4f824dc25e0bdfa7c685
+      targetQuerySha256: b90a979b373da28700bd92358ac2af712feabf4986db6df48d5f56f09cee7d4e
+properties:
+  id: xdr-7feb3c32-2a11-4eb8-a2d7-e3792b31cb80
+  displayName: Ubiquiti - Possible connection to cryptominning pool
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let susp_dst_ports = dynamic(['14433', '14444', '3333', '3334', '3335', '3336', '4444', '45560', '45700', '5555', '5556', '6666', '7777', '8788', '8888', '8899', '9999', '10034']);
+      UbiquitiAuditEvent
+      | where ipv4_is_private(SrcIpAddr)
+      | where ipv4_is_private(DstIpAddr) == 'False'
+      | where DstPortNumber in (susp_dst_ports)  or (DnsQuery contains 'pool' and DnsQuery contains 'xmr')
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Possible connection to cryptominning pool
+      description: '''Detects connections which may indicate that device is infected with cryptominer.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+        - technique: T1095
+        - technique: T1571

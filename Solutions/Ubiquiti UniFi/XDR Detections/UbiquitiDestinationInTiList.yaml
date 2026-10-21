@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ThreatIntelligenceIndicator
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: db60ca0b-b668-439b-b889-b63b57ef20fb
+    path: Analytic Rules/UbiquitiDestinationInTiList.yaml
+    version: 1.0.2
+    querySha256: 16c6e1c60d63f7464c5748a566ac5dc02c5edcd50ef1ce2b28f004dbb588b1f5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    - T1571
+    - T1572
+    reviewScope:
+      sourceDocumentSha256: fd4d51b912c318eaf098a4812b5673e99b094a8db9bb2661edcf89d8f47a254e
+      targetQuerySha256: 700a2ffd34cbaaa423d7ad3a326b10847d2fc0206c44f752dcefc4568ea9b5bd
+properties:
+  id: xdr-db60ca0b-b668-439b-b889-b63b57ef20fb
+  displayName: Ubiquiti - Connection to known malicious IP or C2
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let malicious_ips =
+      ThreatIntelligenceIndicator
+      | where isnotempty(NetworkIP)
+      | summarize make_list(NetworkIP);
+      UbiquitiAuditEvent
+      | where EventCategory =~ 'firewall'
+      | where ipv4_is_private(SrcIpAddr)
+      | where ipv4_is_private(DstIpAddr) == 'False'
+      | where DstIpAddr in (malicious_ips)
+      | where DvcAction =~ 'Accepted' or DvcAction =~ 'Other'
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Connection to known malicious IP or C2
+      description: '''Detects allowed connections to IP addresses which are in TI list and are known to be malicious.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Exfiltration
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+        - technique: T1571
+        - technique: T1572

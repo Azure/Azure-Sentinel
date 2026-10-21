@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPIAMDataConnector
+  dataTypes:
+  - GCP_IAM
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCP_IAM_CL
+    - GCPIAM
+    - GCP_IAM
+  requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+    - GCP_IAM
+    - GCP_IAM_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 80e4db30-5636-4fbd-8816-24c3ded8d243
+    path: Analytic Rules/GCPIAMNewAuthenticationToken.yaml
+    version: 1.0.2
+    querySha256: ed252388f482670e89a7ccb1f371311170a8c6736e8a7830278d10e6927bd859
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `service_account` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1550
+    reviewScope:
+      sourceDocumentSha256: fd25d017ff8936de2253b642503e20ab4af7aa37d00ef03552c7104f5e4274fc
+      targetQuerySha256: 2392813eb23acb116760aa0e6ec406149d3d3b1dc1c575e9b16923e4e98b1b3b
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: fd25d017ff8936de2253b642503e20ab4af7aa37d00ef03552c7104f5e4274fc
+      targetQuerySha256: 2392813eb23acb116760aa0e6ec406149d3d3b1dc1c575e9b16923e4e98b1b3b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: service_account
+      column: service_account
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-80e4db30-5636-4fbd-8816-24c3ded8d243
+  displayName: GCP IAM - New Authentication Token for Service Account
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GCP_IAM
+      | where PayloadMethodname in ('GenerateAccessToken', 'google.iam.admin.v1.GenerateAccessToken')
+      | extend result = parse_json(todynamic(PayloadAuthorizationinfo))[0]['granted']
+      | where result =~ 'true'
+      | extend service_account = extract(@'serviceAccounts\/(.*?)@', 1, PayloadResponseName)
+      | project-away result
+      | extend AccountName = tostring(split(service_account, "@")[0]), AccountUPNSuffix = tostring(split(service_account, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP IAM - New Authentication Token for Service Account
+      description: '''Detects when new authentication token is created for service account.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1550

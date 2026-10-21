@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - ZPA_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ZPAEvent
+    - ZPA_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - ZPA_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b3d112b4-3e1e-11ec-9bbc-0242ac130002
+    path: Analytic Rules/ZscalerUnexpectedCountries.yaml
+    version: 1.0.2
+    querySha256: d804cb14413ca676efea148197efd43ed5f444e69e200e557e665f237dab9a7e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: e219b73944f2bfac91dcf9b591d4bfd3dd66254d8f21fd7fd66770402250f929
+      targetQuerySha256: 3525cabf2b2c6efb93ab0f2cabf97e7b4dd100756053b661a7d39b8c4c8ed07d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: e219b73944f2bfac91dcf9b591d4bfd3dd66254d8f21fd7fd66770402250f929
+      targetQuerySha256: 3525cabf2b2c6efb93ab0f2cabf97e7b4dd100756053b661a7d39b8c4c8ed07d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-b3d112b4-3e1e-11ec-9bbc-0242ac130002
+  displayName: Zscaler - Forbidden countries
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let bl_countries = dynamic(['CH', 'RU']);       //List of countries from which you do not expect connections
+      ZPAEvent
+      | where DvcAction == 'open'
+      | where SrcGeoCountry in~ (bl_countries)
+      | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Zscaler - Forbidden countries
+      description: '''Detects suspicious ZPA connections from forbidden countries.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        AccountName: AccountCustomEntity

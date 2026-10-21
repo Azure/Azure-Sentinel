@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 14a23ded-7fb9-48ee-ba39-859517a49b51
+    path: Analytic Rules/UbiquitiR2LDns.yaml
+    version: 1.0.2
+    querySha256: f876be034be655aba6c727c073001d1f2393cda25847e0aa2e5d9db8fab6ee6e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1090
+    - T1572
+    reviewScope:
+      sourceDocumentSha256: 3707937880c3a58fb3a2f6d4dd3cd21e84e46768681fa9cfc2794d67141146b0
+      targetQuerySha256: 7783253057f7e39533056ab00cf467910943b54fa06b09a9de43d476464a7f35
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 3707937880c3a58fb3a2f6d4dd3cd21e84e46768681fa9cfc2794d67141146b0
+      targetQuerySha256: 7783253057f7e39533056ab00cf467910943b54fa06b09a9de43d476464a7f35
+properties:
+  id: xdr-14a23ded-7fb9-48ee-ba39-859517a49b51
+  displayName: Ubiquiti - Unusual DNS connection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 50;
+      UbiquitiAuditEvent
+      | where EventCategory =~ 'firewall'
+      | where ipv4_is_private(SrcIpAddr) == 'False'
+      | where ipv4_is_private(DstIpAddr)
+      | where DstPortNumber == '53'
+      | summarize count() by SrcIpAddr, DstIpAddr
+      | where count_ > threshold
+      | extend IPCustomEntity = DstIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Unusual DNS connection
+      description: '''Detects unusual remote to local (R2L) DNS connections.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1090
+        - technique: T1572

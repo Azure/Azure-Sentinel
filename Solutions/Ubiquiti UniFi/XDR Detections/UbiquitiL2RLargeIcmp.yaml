@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6df85d74-e32f-4b71-80e5-bfe2af00be1c
+    path: Analytic Rules/UbiquitiL2RLargeIcmp.yaml
+    version: 1.0.2
+    querySha256: 7e67e3b0e878a00936f2e1e9c76a0daafe7c698679389df7fdd0e26a58af3e24
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1041
+    - T1572
+    reviewScope:
+      sourceDocumentSha256: 95042e950d00c3429c4e597b9dc86193e8162ce4bf73f0cff91e8e0c08866923
+      targetQuerySha256: e7bd01da5a50377bf3e69b2d27d3fcb86d1807572a72bca1ea6395df2372f473
+properties:
+  id: xdr-6df85d74-e32f-4b71-80e5-bfe2af00be1c
+  displayName: Ubiquiti - Large ICMP to external server
+  status: disabled
+  queryCondition:
+    queryText: |-
+      UbiquitiAuditEvent
+      | where EventCategory =~ 'firewall'
+      | where ipv4_is_private(SrcIpAddr)
+      | where ipv4_is_private(DstIpAddr) == 'False'
+      | where NetworkProtocol =~ 'ICMP'
+      | summarize avg_packet_length = avg(toint(NetworkBytes))
+      | extend a = 1
+      | join (UbiquitiAuditEvent
+        | where EventCategory =~ 'firewall'
+        | where ipv4_is_private(SrcIpAddr)
+        | where ipv4_is_private(DstIpAddr) == 'False'
+        | where NetworkProtocol =~ 'ICMP'
+        | extend a = 1) on a
+      | where toint(NetworkBytes) > 2*avg_packet_length
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Large ICMP to external server
+      description: '''Detects large ICMP packets to external host.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1572

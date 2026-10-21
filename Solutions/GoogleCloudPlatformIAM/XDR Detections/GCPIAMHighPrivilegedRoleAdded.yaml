@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPIAMDataConnector
+  dataTypes:
+  - GCP_IAM
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCP_IAM_CL
+    - GCPIAM
+    - GCP_IAM
+  requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+    - GCP_IAM
+    - GCP_IAM_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 86112c4b-2535-4178-aa0e-ed9e32e3f054
+    path: Analytic Rules/GCPIAMHighPrivilegedRoleAdded.yaml
+    version: 1.0.1
+    querySha256: d936ce353e14d9fd383ea294ef3d0c77e40f4d25a94ebaf133e52e0c66c1cde0
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `PayloadAuthenticationinfoPrincipalemail` cannot be proven after a destructive projection;
+      no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: fa93ee60f1713db0fa743b95de4ef80c274fdc0752c6271785288403089a702d
+      targetQuerySha256: 638267eb44791158cc42849025514af87fc7bcb35b7379eaf65f9e795f6f5e7e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PayloadAuthenticationinfoPrincipalemail
+      column: PayloadAuthenticationinfoPrincipalemail
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-86112c4b-2535-4178-aa0e-ed9e32e3f054
+  displayName: GCP IAM - High privileged role added to service account
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let privileged_roles = dynamic(['roles/iam.securityAdmin', 'roles/secretmanager.admin', 'roles/secretmanager.secretAccessor', 'roles/apigateway.admin', 'roles/logging.admin', 'roles/iam.organizationRoleAdmin', 'roles/iam.roleAdmin', 'roles/iam.serviceAccountAdmin', 'roles/iam.serviceAccountCreator', 'roles/iam.serviceAccountKeyAdmin']);
+      GCP_IAM
+      | where PayloadMethodname =~ 'SetIamPolicy'
+      | extend action = parse_json(todynamic(PayloadServicedataPolicydeltaBindingdeltas))[0]['action']
+      | where action =~ 'ADD'
+      | extend role = parse_json(todynamic(PayloadServicedataPolicydeltaBindingdeltas))[0]['role']
+      | where role in~ (privileged_roles)
+      | project-away action
+      | extend AccountName = tostring(split(PayloadAuthenticationinfoPrincipalemail, "@")[0]), AccountUPNSuffix = tostring(split(PayloadAuthenticationinfoPrincipalemail, "@")[1])
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: GCP IAM - High privileged role added to service account
+      description: '''Detects when high privileged role was added to service account.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078

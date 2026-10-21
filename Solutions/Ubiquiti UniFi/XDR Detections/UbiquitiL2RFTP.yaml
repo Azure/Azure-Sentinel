@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Ubiquiti_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - UbiquitiAuditEvent
+    - Ubiquiti_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - Ubiquiti_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fd200125-9d57-4838-85ca-6430c63e4e5d
+    path: Analytic Rules/UbiquitiL2RFTP.yaml
+    version: 1.0.3
+    querySha256: 1dd24a50806df6d7f427ef87142501c4a08b52e79cfffa66b572b47686a5c45d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1048
+    - T1071.002
+    reviewScope:
+      sourceDocumentSha256: 5c331c3a7c0d53a5eb589ff11495706bb35d5ee16d2367e430e4abac2ceb2b7c
+      targetQuerySha256: 8c097825ed362cfc2a6c0a75791a3b6793bfd0e4da2de67e66dd6d22e08174e7
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 5c331c3a7c0d53a5eb589ff11495706bb35d5ee16d2367e430e4abac2ceb2b7c
+      targetQuerySha256: 8c097825ed362cfc2a6c0a75791a3b6793bfd0e4da2de67e66dd6d22e08174e7
+properties:
+  id: xdr-fd200125-9d57-4838-85ca-6430c63e4e5d
+  displayName: Ubiquiti - Unusual FTP connection to external server
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let allowed_ftp = dynamic(['127.0.0.2']);
+      UbiquitiAuditEvent
+      | where EventCategory == 'firewall'
+      | where ipv4_is_private(SrcIpAddr)
+      | where ipv4_is_private(DstIpAddr) == 'False'
+      | where DstPortNumber in ('20', '21')
+      | where DstIpAddr !in (allowed_ftp)
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ubiquiti - Unusual FTP connection to external server
+      description: '''Detects local to remote (L2R) FTP connections.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1048
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.002

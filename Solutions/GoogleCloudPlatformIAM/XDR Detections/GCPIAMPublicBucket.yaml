@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPIAMDataConnector
+  dataTypes:
+  - GCP_IAM
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCP_IAM_CL
+    - GCPIAM
+    - GCP_IAM
+  requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+    - GCP_IAM
+    - GCP_IAM_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4a433846-4b05-4a27-99d7-92093feded79
+    path: Analytic Rules/GCPIAMPublicBucket.yaml
+    version: 1.0.1
+    querySha256: 711251b5867fbc2bc9f3f92d40e27ad524633c7c7c4511b3b36edbf50cbd75fc
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `PayloadAuthenticationinfoPrincipalemail`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `PayloadAuthenticationinfoPrincipalemail` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1069
+    reviewScope:
+      sourceDocumentSha256: 086795d647eedbdf09745df946deca36db5584fe3a9c7369d667e3d75cae74f3
+      targetQuerySha256: 00931e141267387c1c17723aaf4421f4bbdf445e41a66fbce4c1f6cacc10aa97
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 086795d647eedbdf09745df946deca36db5584fe3a9c7369d667e3d75cae74f3
+      targetQuerySha256: 00931e141267387c1c17723aaf4421f4bbdf445e41a66fbce4c1f6cacc10aa97
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PayloadAuthenticationinfoPrincipalemail
+      column: PayloadAuthenticationinfoPrincipalemail
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4a433846-4b05-4a27-99d7-92093feded79
+  displayName: GCP IAM - Publicly exposed storage bucket
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GCP_IAM
+      | where PayloadMethodname =~ 'google.iam.v1.IAMPolicy.SetIamPolicy'
+      | where ResourceType has 'bucket'
+      | extend members = parse_json(todynamic(PayloadRequestPolicyBindings))[0]['members']
+      | extend action = parse_json(todynamic(PayloadRequestPolicyBindings))[0]['action']
+      | where members in~ ('allUsers', 'allAuthenticatedUsers')
+      | where action =~ 'ADD'
+      | extend AccountName = tostring(split(PayloadAuthenticationinfoPrincipalemail, "@")[0]), AccountUPNSuffix = tostring(split(PayloadAuthenticationinfoPrincipalemail, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP IAM - Publicly exposed storage bucket
+      description: '''Detects possible misconfiguration for bucket policy making it publicly available.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1069
+      customDetails:
+        AccountFullName: PayloadAuthenticationinfoPrincipalemail

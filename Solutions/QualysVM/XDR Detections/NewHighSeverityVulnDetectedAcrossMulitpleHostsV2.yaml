@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: QualysVMLogsCCPDefinition
+  dataTypes:
+  - QualysHostDetection
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - QualysHostDetection_CL
+    - QualysHostDetectionV2_CL
+    - QualysHostDetectionV3_CL
+    - QualysHostDetection
+  requiredDataConnectors:
+  - connectorId: QualysVMLogsCCPDefinition
+    dataTypes:
+    - QualysHostDetection
+    - QualysHostDetectionV3_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6116dc19-475a-4148-84b2-efe89c073e27
+    path: Analytic Rules/NewHighSeverityVulnDetectedAcrossMulitpleHostsV2.yaml
+    version: 1.0.3
+    querySha256: e9b2aa5799c815e51dc02cb4935b86d52befb464c1cce26c30af8f7cb7a4154b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'QID' column `QID` requires runtime output-schema binding verification
+    - customDetails 'AffectedHosts' column `AffectedHosts` requires runtime output-schema binding verification
+    - customDetails 'AffectedHostCount' column `AffectedHostCount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: e883a7d584ed74805417f3d218172d948b9e8a0fe8ca2a9a21b1a6a3e237b5b2
+      targetQuerySha256: 1df39dbdd2a0d6a62aaf81989428a8cd96295789c56840b5ba4fe280b264c73a
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: e883a7d584ed74805417f3d218172d948b9e8a0fe8ca2a9a21b1a6a3e237b5b2
+      targetQuerySha256: 1df39dbdd2a0d6a62aaf81989428a8cd96295789c56840b5ba4fe280b264c73a
+properties:
+  id: xdr-6116dc19-475a-4148-84b2-efe89c073e27
+  displayName: New High Severity Vulnerability Detected Across Multiple Hosts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      QualysHostDetection
+      | extend Status = tostring(Status), Vulnerability = tostring(QID), Severity = tostring(Severity)
+      | where Status =~ "New" and Severity == "5"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), AffectedHostCount = dcount(NetBios), AffectedHosts = make_set(NetBios, 100), HostName = take_any(NetBios) by QID = tostring(QID)
+      | where AffectedHostCount >= threshold
+      | extend timestamp = StartTime
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: New High Severity Vulnerability Detected Across Multiple Hosts
+      description: '''This creates an incident when a new high severity vulnerability is detected across multilple hosts'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      customDetails:
+        QID: QID
+        AffectedHosts: AffectedHosts
+        AffectedHostCount: AffectedHostCount
