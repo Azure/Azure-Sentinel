@@ -928,6 +928,9 @@ function Get-DefenderWorkbookParserDependencies {
                 -ExcludedQueryPaths $excludedQueryPaths -Path '/items') +
             @(Get-DefenderWorkbookImplicitFunctions -Value $Document.items `
                 -AllowedBareTables $allowedBareTables -KnownFunctionAliases $knownFunctionAliases)) {
+        # Built-in Sentinel ASIM unifying parsers (_ASim_*, _Im_*) ship with the workspace; mirrors
+        # is_standard_builtin_asim_parser in solution_manager/migration/_workbook_core/workbook.py.
+        if ($alias -imatch '\A_(?:asim|im)_(?!test\z)[a-z0-9_]+\z') { continue }
         if (-not $referenced.Contains($alias)) {
             throw "Defender Workbook has an unreviewed implicit workspace function '$alias'."
         }

@@ -459,6 +459,30 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         error = self.invoke_prerequisites(success=False)
         self.assertIn("unreviewed implicit workspace function 'EmailEvents'", error)
 
+    def _set_single_query(self, text: str) -> None:
+        self.notebook["items"][0]["content"]["query"] = text
+        query = self.notebook["contentProvenance"]["conversion"]["queries"][0]
+        query["targetSha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        query["workspaceFunctions"] = []
+        self.notebook["contentProvenance"]["requiredWorkspaceFunctions"] = []
+
+    def test_builtin_asim_unifying_parsers_need_no_declaration_or_saved_search(self) -> None:
+        for name in ("_ASim_RegistryEvent", "_Im_NetworkSession"):
+            with self.subTest(name=name):
+                self._set_single_query(f"{name} | take 1")
+                self.invoke_prerequisites(success=True)
+                self.assertFalse([
+                    r for r in self.template["resources"]
+                    if r.get("type") == "Microsoft.OperationalInsights/workspaces/savedSearches"
+                ])
+
+    def test_other_unknown_implicit_functions_are_still_rejected(self) -> None:
+        for name in ("_Foo_RegistryEvent", "_Im_Test", "ASim_RegistryEvent"):
+            with self.subTest(name=name):
+                self._set_single_query(f"{name} | take 1")
+                error = self.invoke_prerequisites(success=False)
+                self.assertIn(f"unreviewed implicit workspace function '{name}'", error)
+
     def test_required_parser_dependencies_use_emitted_names_and_preserve_provenance(self) -> None:
         self.add_function()
         self.add_function("SecondParser", folder="Workspace Functions", name="lab/arm-name-not-alias")
