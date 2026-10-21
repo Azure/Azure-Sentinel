@@ -656,6 +656,35 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
+    def test_untrusted_pr_content_is_pinned_to_event_head_sha(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            2,
+            workflow.count(
+                "PR_HEAD_SHA: "
+                "${{ github.event.pull_request.head.sha }}"
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"$pr_data_dir" "$PR_HEAD_SHA"'
+            ),
+        )
+
     def test_trusted_helper_package_is_restored_from_master(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
