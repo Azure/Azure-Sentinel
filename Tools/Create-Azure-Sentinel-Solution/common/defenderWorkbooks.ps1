@@ -477,9 +477,13 @@ function Get-DefenderWorkbookImplicitFunctions {
                     }
                     $queryText = $settings.query
                 }
-                # Ignore single-line // comments first (/* */ is NOT a KQL comment).
-                $noComments = [regex]::Replace($queryText, '//[^\r\n]*', ' ')
                 $strPat = '@"(?:""|[^"])*"|@''(?:''''|[^''])*''|"(?:\\.|[^"\\])*"|''(?:\\.|[^''\\])*'''
+                # Ignore single-line // comments (/* */ is NOT a KQL comment), but leave string
+                # literals intact so a URL such as "https://..." is not mistaken for a comment.
+                $noComments = [regex]::Replace($queryText, "(?s)$strPat|//[^\r\n]*", {
+                    param($m)
+                    if ($m.Value.StartsWith('//')) { ' ' } else { $m.Value }
+                })
                 $bracketPat = "(?s)\[\s*($strPat)\s*\]"
                 $tableCallPat = "(?i)(?<![.\w])(?:table|totable)\s*\(\s*($strPat)\s*(?:,[^;\r\n)]*)?\)"
                 $tableAnyCallPat = "(?i)(?<![.\w])(?:table|totable)\s*\("

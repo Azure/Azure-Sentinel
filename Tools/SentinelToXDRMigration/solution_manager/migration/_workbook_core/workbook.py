@@ -358,7 +358,10 @@ def _quoted_calls_and_table_sources(query: str) -> tuple[set[str], set[str]]:
     calls: set[str] = set()
     bare: set[str] = set()
     # Mask single-line // comments only first, then inspect quoted constructs at top level.
-    no_comments = re.sub(r"//[^\r\n]*", lambda m: " " * len(m.group(0)), query)
+    # String literals are matched first so "https://..." is not treated as a comment.
+    no_comments = _QUOTED_LITERAL_RE.sub(
+        lambda m: " " * len(m.group(0)) if m.group(0).startswith("//") else m.group(0), query
+    )
     protectedspans: list[tuple[int, int]] = []
     for m in _BRACKETED_QUOTED_NAME_RE.finditer(no_comments):
         protectedspans.append(m.span())
