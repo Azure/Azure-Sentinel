@@ -1,0 +1,124 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0ee2aafb-4500-4e36-bcb1-e90eec2f0b9b
+    path: Analytic Rules/NRT_AWS_ConsoleLogonWithoutMFA.yaml
+    version: 1.0.4
+    querySha256: 22be3c611b3e8ffeaa2f12c6887f9cec61de1a94f11d65829a05803c7400e56c
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountCloudAppAccountId
+      from query column `RecipientAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - PrivilegeEscalation
+    - Persistence
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: ac590b346ce2c0aa621fa6c1b7e97cb8c5b973cdb07ebc16307e6baf3e7f18a5
+      targetQuerySha256: 6f2e103a4249caff64987366f4c401e02008d75c65084e4dd88bc8308e7ce15d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: available
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-0ee2aafb-4500-4e36-bcb1-e90eec2f0b9b
+  displayName: AWSCloudTrail - NRT Login to AWS Management Console without MFA
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName =~ "ConsoleLogin"
+      | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
+      | where MFAUsed !~ "Yes" and LoginResult !~ "Failure"
+      | where SessionIssuerUserName !contains "AWSReservedSSO"
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
+        UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - NRT Login to AWS Management Console without MFA
+      description: |-
+        'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
+        You can limit this detection to trigger for administrative accounts if you do not have MFA enabled on all accounts.
+        This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountCloudAppAccountId: RecipientAccountId

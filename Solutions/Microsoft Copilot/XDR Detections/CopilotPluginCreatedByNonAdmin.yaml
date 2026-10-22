@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftCopilot
+  dataTypes:
+  - CopilotActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CopilotActivity
+  requiredDataConnectors:
+  - connectorId: MicrosoftCopilot
+    dataTypes:
+    - CopilotActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6
+    path: Analytic Rules/CopilotPluginCreatedByNonAdmin.yaml
+    version: 1.0.0
+    querySha256: e88df5114b6d558cd03ba9132a69bd04c2fcb7bf17c7b98ce28d3676c2ae9710
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `ActorName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1546
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 069441644dd06567c8f2076b67aa6d7f5b2399656596805241097398fd6abe7e
+      targetQuerySha256: d38ec64a6b73d66cf54fc85deaa3f2bdf6e507352d44db1b3c53b71abddcb557
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 069441644dd06567c8f2076b67aa6d7f5b2399656596805241097398fd6abe7e
+      targetQuerySha256: d38ec64a6b73d66cf54fc85deaa3f2bdf6e507352d44db1b3c53b71abddcb557
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorName
+      column: ActorName
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6
+  displayName: Copilot - Plugin Created by Non-Admin User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CopilotActivity
+      | where RecordType == "CreateCopilotPlugin"
+      | where ActorUserType != "Admin"
+      | extend Data = parse_json(LLMEventData)
+      | extend Plugin = tostring(Data.Resource[0].Property)
+      | project TimeGenerated, ActorName, ActorUserId, SrcIpAddr, Plugin
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Copilot - Plugin Created by Non-Admin User
+      description: |-
+        'Detects when a normal user creates a Copilot plugin. This can be used to inject malicious prompts, tools, or data exfiltration paths.
+        This rule identifies potential persistence or privilege misuse scenarios where non-administrative users create plugins that could be leveraged for malicious purposes.'
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1546
+        - technique: T1098
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1546
+        - technique: T1098
+      customDetails:
+        AccountFullName: ActorName

@@ -1,0 +1,91 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureKeyVault
+  dataTypes:
+  - KeyVaultData
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: AzureKeyVault
+    dataTypes:
+    - KeyVaultData
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 884ead54-cb3f-4676-a1eb-b26532d6cbfd
+    path: Analytic Rules/NRT_KeyVaultSensitiveOperations.yaml
+    version: 1.0.2
+    querySha256: 7076f3beb01de7b927557da0b1b2b11275c31b7f5398a9263b9392c0f319994d
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    reviewScope:
+      sourceDocumentSha256: 73fd0f205ed8e4ecea60b13af5b16733212b35e05b8eda7ed9dd950a28fedd00
+      targetQuerySha256: b6d926fd606066bc1d3eef0758d619047ec27bbc1c2470f9635a60f72dc0c38d
+properties:
+  id: xdr-884ead54-cb3f-4676-a1eb-b26532d6cbfd
+  displayName: NRT Sensitive Azure Key Vault operations
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let SensitiveOperationList = dynamic(
+      ["VaultDelete", "KeyDelete", "SecretDelete", "SecretPurge", "KeyPurge", "SecretBackup", "KeyBackup"]);
+      AzureDiagnostics
+      | extend ResultType = column_ifexists("ResultType", "NoResultType"),
+      requestUri_s = column_ifexists("requestUri_s", "None"),
+      identity_claim_oid_g = column_ifexists("identity_claim_oid_g", "None"), CallerIPAddress = column_ifexists("CallerIPAddress", "None"),
+      clientInfo_s = column_ifexists("clientInfo_s", "None"),
+      identity_claim_upn_s = column_ifexists("identity_claim_upn_s", "None"),
+      identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists("identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g", "None")
+      | where ResourceType =~ "VAULTS" and ResultType =~ "Success"
+      | where OperationName in~ (SensitiveOperationList)
+      | summarize EventCount=count(), StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated), TimeTriggered=make_list(TimeGenerated),OperationNameList=make_set(OperationName), RequestURLList=make_set(requestUri_s), CallerIPList = make_set(CallerIPAddress),  CallerIPMax= arg_max(CallerIPAddress,*) by ResourceType, ResultType, Resource, identity_claim_upn_s, clientInfo_s, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g
+      | extend timestamp = StartTimeUtc
+      | extend Name = tostring(split(identity_claim_upn_s,'@',0)[0]), UPNSuffix = tostring(split(identity_claim_upn_s,'@',1)[0]), AadUserId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: NRT Sensitive Azure Key Vault operations
+      description: |-
+        'Identifies when sensitive Azure Key Vault operations are used. This includes: VaultDelete, KeyDelete, SecretDelete, SecretPurge, KeyPurge, SecretBackup, KeyBackup.
+        Any Backup operations should match with expected scheduled backup activity.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: AadUserId
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIPMax
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485

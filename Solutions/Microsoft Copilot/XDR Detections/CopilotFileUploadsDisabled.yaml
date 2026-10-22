@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftCopilot
+  dataTypes:
+  - CopilotActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CopilotActivity
+  requiredDataConnectors:
+  - connectorId: MicrosoftCopilot
+    dataTypes:
+    - CopilotActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c3d4e5f6-a7b8-49c0-d1e2-f3a4b5c6d7e8
+    path: Analytic Rules/CopilotFileUploadsDisabled.yaml
+    version: 1.0.0
+    querySha256: 56adf3680153e68d23d292a4c5aeb26ecd1e3a1e8f2192362a4b0fac4f9ea88d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `ActorName`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: 011b760570f73e91fb3a5bdb34e20245940c87b5efad395bb576d1928006008f
+      targetQuerySha256: eeae3e096fd1ffca246146d84aa8c403218935acf019f3be88b15eed052dca43
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 011b760570f73e91fb3a5bdb34e20245940c87b5efad395bb576d1928006008f
+      targetQuerySha256: eeae3e096fd1ffca246146d84aa8c403218935acf019f3be88b15eed052dca43
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorName
+      column: ActorName
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-c3d4e5f6-a7b8-49c0-d1e2-f3a4b5c6d7e8
+  displayName: Copilot - File Uploads Disabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CopilotActivity
+      | where RecordType == "DisableCopilotPlugin"
+      | extend Resource = parse_json(LLMEventData).Resource[0]
+      | extend Property = tostring(Resource.Property)
+      | extend Old = tostring(Resource.OriginalValue)
+      | extend New = tostring(Resource.NewValue)
+      | where Property == "FileUploads" and Old == "Enabled" and New == "Disabled"
+      | project TimeGenerated, ActorName, SrcIpAddr, Property, Old, New
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Copilot - File Uploads Disabled
+      description: |-
+        'Detects when file uploads are disabled in Copilot. Attackers often disable logging or file upload capabilities to avoid evidence collection and cover their tracks.
+        This rule identifies potential data exfiltration cover-up scenarios where security controls are being disabled.'
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      customDetails:
+        AccountFullName: ActorName

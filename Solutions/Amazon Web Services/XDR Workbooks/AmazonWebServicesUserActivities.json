@@ -1,0 +1,1513 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## AWS user activities\nThis workbook summarizes AWS CloudTrail user activity patterns for sign-ins, regions, identities, and user agents across the selected time range. Use the sections below to quickly spot failures, activity spikes, and suspicious identity behavior."
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "parameters": [
+          {
+            "id": "b075dcf3-76b9-412a-8094-f7dfe264b4a1",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 0"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Signin and login events\nThis section highlights AWS CloudTrail login activity, failures, and related breakdowns. Use it to identify sign-in spikes, suspicious patterns, and impacted users."
+      },
+      "name": "text - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| project TimeGenerated, UserIdentityArn, SourceIpAddress, LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), EventName, UserIdentityUserName\r\n| where LoginResult != \"\"\r\n| summarize count() by TimeGenerated, LoginResult, EventName, UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Sign-in events",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "areachart",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": "info",
+        "exportParameterName": "SelectedRow_0"
+      },
+      "customWidth": "50",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where LoginResult != \"\";\r\nlet appData = data\r\n| summarize TotalCount = count() by LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult\r\n    | project-away TimeGenerated) on LoginResult\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult, EventName\r\n    | project-away TimeGenerated) on LoginResult, EventName\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on LoginResult\r\n| project Id, Name = EventName, Type = 'EventName', ['LoginResults Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = LoginResult, Type = 'LoginResult', ['LoginResults Count'] = TotalCount,  Trend)\r\n| order by ['LoginResults Count'] desc, Name asc",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Sign-in events results",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 18,
+              "formatOptions": {
+                "showIcon": true,
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Success",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Failure",
+                    "representation": "failed",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "Blank",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "LoginResults Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No sign-in event data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_1",
+        "visualization": "linechart"
+      },
+      "customWidth": "50",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| extend Result = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where Result != \"\"\r\n| summarize Success = sum(Result == \"Success\"), Failure = sum(Result == \"Failure\") by UserIdentityUserName, UserIdentityAccountId, SourceIpAddress, EventName\r\n//| summarize NumberOfIPs = count() by UserIdentityUserName, UserIdentityAccountId, Success, Failure, EventName\r\n| sort by Failure desc \r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User sign-ins, by failure rate, and IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "EventName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "Success",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "greenRed",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "Failure",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "NumberOfIPs",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "$gen_group",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "treeType": 1,
+            "groupBy": [
+              "UserIdentityUserName"
+            ]
+          },
+          "sortBy": [
+            {
+              "itemKey": "$gen_heatmap_Failure_5",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No sign-in result breakdown data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_2"
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| summarize count() by Event = strcat(EventTypeName, \": \", EventName), bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Console and API signin events over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No sign-in failure data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "exportParameterName": "SelectedRow_3",
+        "showExportToExcel": true
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| where tostring(parse_json(ResponseElements).ConsoleLogin) == \"Failure\"\r\n| summarize count() by UserIdentityUserName, UserIdentityArn, SourceIpAddress, ErrorMessage, UserAgent, AWSRegion,  TimeGenerated ",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Failed sign-ins",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityArn",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ErrorMessage",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserAgent",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegion",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6,
+              "formatOptions": {
+                "showIcon": true
+              },
+              "dateFormat": {
+                "formatName": "fullDateTimePattern"
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "redDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No failed sign-in events were returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_5",
+        "visualization": "table"
+      },
+      "name": "Failed sign-ins by user and source IP"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Activities, by user types\nThis section compares AWS identity activity across account IDs, identity types, and related summary views. It helps analysts quickly narrow unusual activity by identity context."
+      },
+      "name": "text - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where UserIdentityType == \"IAMUser\"\r\n| summarize NumberOfEvents = count() by UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Active users",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No active user data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "exportParameterName": "SelectedRow_6",
+        "showExportToExcel": true
+      },
+      "customWidth": "33",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId , bin(TimeGenerated, {TimeRange:grain})\r\n| where UserIdentityAccountId != \"\"",
+        "size": 0,
+        "exportDefaultValue": "*",
+        "exportToExcelOptions": "visible",
+        "title": "Active account IDs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No active account ID data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_4"
+      },
+      "customWidth": "33",
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize count() by UserIdentityType, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User identity types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No user identity type data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_7"
+      },
+      "customWidth": "33",
+      "name": "query - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n//| where UserIdentityAccountId != \"\"\r\n//| where UserIdentityUserName != \"\"\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId, UserIdentityUserName, EventName,SourceIpAddress, UserIdentityType, EventTypeName, TimeGenerated\r\n| order by NumberOfEvents desc",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Summary",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "EventName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityType",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "EventTypeName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "NumberOfEvents",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 1000,
+          "filter": true,
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No summary data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_8"
+      },
+      "customWidth": "50",
+      "name": "AWS activity summary by identity and event"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName == \"GetCallerIdentity\"\r\n| where UserIdentityType == \"AssumedRole\" \r\n| summarize Count = count() by SourceIpAddress, UserIdentityAccountId, UserIdentityPrincipalid, AWSRegion, TimeGenerated\r\n| sort by Count desc nulls last ",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Suspicious assumed-role account reconnaissance",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityPrincipalid",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegion",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "redDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No assumed-role reconnaissance activity was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_9"
+      },
+      "customWidth": "50",
+      "name": "query - 11"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Region activities\nUse this section to spot geographic anomalies and regional trends in AWS activity. It is most useful when paired with the region filter and the regional trend visualization."
+      },
+      "name": "text - 19"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AWSCloudTrail;\r\nlet appData = data\r\n| summarize TotalCount = count() by AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion\r\n    | project-away TimeGenerated) on AWSRegion\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion, EventName\r\n    | project-away TimeGenerated) on AWSRegion, EventName\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on AWSRegion\r\n| project Id, Name = EventName, Type = 'EventName', ['AWSRegions Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = AWSRegion, Type = 'AWSRegion', ['AWSRegions Count'] = TotalCount,  Trend)\r\n| order by ['AWSRegions Count'] desc, Name asc",
+        "size": 0,
+        "exportParameterName": "RegionFilter",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Activities, by region - click to filter",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegions Count",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 10,
+              "formatOptions": {
+                "min": 0,
+                "palette": "lightBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No regional activity data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "query - 13"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({RegionFilter});\r\nAWSCloudTrail\r\n| where details.Type == \"*\" or (details.Type == \"EventName\" and details.Name == EventName) or (details.Type == \"AWSRegion\" and details.Name == AWSRegion)\r\n| summarize count() by AWSRegion, bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Activities, by region over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "linechart",
+        "noDataMessage": "No region trend data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_10"
+      },
+      "customWidth": "50",
+      "name": "query - 12"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### User agent\nThis section groups AWS activity by user agent to help identify automation, scripts, or unusual client behavior. Review both the summary and trend views together."
+      },
+      "name": "text - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize Count = count() by UserAgent\r\n| order by Count\r\n",
+        "size": 0,
+        "exportFieldName": "UserAgent",
+        "exportParameterName": "UserAgent",
+        "exportDefaultValue": "All",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "User agent activities - click to filter",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserAgent",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": [],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No user agent activity data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "visualization": "table"
+      },
+      "customWidth": "40",
+      "name": "User agent activity summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where '{UserAgent}' == UserAgent or '{UserAgent}' == \"All\"\r\n| summarize Count = count() by UserAgent, TimeGenerated",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User agent activities over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "linechart",
+        "noDataMessage": "No user agent trend data was returned for the selected time range.",
+        "noDataMessageStyle": "info",
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_11"
+      },
+      "customWidth": "60",
+      "name": "User agent activity over time"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-AWSUserActivities",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "695d936a-8f45-5ed4-97c2-e2e4c1cd8782",
+    "instanceId": "f2b376a1-8f75-591e-b601-ff9781a63ed9",
+    "version": "3.2.0",
+    "schemaVersion": "1.0.0",
+    "displayName": "AWS User Activities"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/AmazonWebServicesUserActivities.json",
+      "sha256": "5f8de3a65cdb20a422207d6127b23ddbda60fd8bb651e128548348b70877bde9",
+      "contentId": "sentinel-AWSUserActivities",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "700ad288f88ffdd853eca0edc7313163113d090cf30a8a974df2862b6fd93dea"
+          },
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| project TimeGenerated, UserIdentityArn, SourceIpAddress, LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), EventName, UserIdentityUserName\r\n| where LoginResult != \"\"\r\n| summarize count() by TimeGenerated, LoginResult, EventName, UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "700ad288f88ffdd853eca0edc7313163113d090cf30a8a974df2862b6fd93dea",
+          "targetSha256": "700ad288f88ffdd853eca0edc7313163113d090cf30a8a974df2862b6fd93dea"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "d00f2dd22e2205f64c7e740380cec3edd33129de9f45b711567bdbe763929f5a"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where LoginResult != \"\";\r\nlet appData = data\r\n| summarize TotalCount = count() by LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult\r\n    | project-away TimeGenerated) on LoginResult\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult, EventName\r\n    | project-away TimeGenerated) on LoginResult, EventName\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on LoginResult\r\n| project Id, Name = EventName, Type = 'EventName', ['LoginResults Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = LoginResult, Type = 'LoginResult', ['LoginResults Count'] = TotalCount,  Trend)\r\n| order by ['LoginResults Count'] desc, Name asc",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "d00f2dd22e2205f64c7e740380cec3edd33129de9f45b711567bdbe763929f5a",
+          "targetSha256": "d00f2dd22e2205f64c7e740380cec3edd33129de9f45b711567bdbe763929f5a"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "f5503732d64851231beae14142ee847817f9e7b6b8e30a6e1c909549df15109c"
+          },
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| extend Result = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where Result != \"\"\r\n| summarize Success = sum(Result == \"Success\"), Failure = sum(Result == \"Failure\") by UserIdentityUserName, UserIdentityAccountId, SourceIpAddress, EventName\r\n//| summarize NumberOfIPs = count() by UserIdentityUserName, UserIdentityAccountId, Success, Failure, EventName\r\n| sort by Failure desc \r\n",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "f5503732d64851231beae14142ee847817f9e7b6b8e30a6e1c909549df15109c",
+          "targetSha256": "f5503732d64851231beae14142ee847817f9e7b6b8e30a6e1c909549df15109c"
+        },
+        {
+          "sourcePath": "/items/6/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "a028a6d77759e7f8539a0346ef0b7146af4c310550399f6bfbce5a1057c2859c"
+          },
+          "conversion": {
+            "sourceId": "/items/6/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| summarize count() by Event = strcat(EventTypeName, \": \", EventName), bin(TimeGenerated, {TimeRange:grain})\r\n",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/6/content/query",
+          "sourceSha256": "a028a6d77759e7f8539a0346ef0b7146af4c310550399f6bfbce5a1057c2859c",
+          "targetSha256": "a028a6d77759e7f8539a0346ef0b7146af4c310550399f6bfbce5a1057c2859c"
+        },
+        {
+          "sourcePath": "/items/7/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "7c64a7ebf6d78a8cec49c1fa2dc55502e349c3e61d2ae074b661a8109396a65f"
+          },
+          "conversion": {
+            "sourceId": "/items/7/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| where tostring(parse_json(ResponseElements).ConsoleLogin) == \"Failure\"\r\n| summarize count() by UserIdentityUserName, UserIdentityArn, SourceIpAddress, ErrorMessage, UserAgent, AWSRegion,  TimeGenerated ",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/7/content/query",
+          "sourceSha256": "7c64a7ebf6d78a8cec49c1fa2dc55502e349c3e61d2ae074b661a8109396a65f",
+          "targetSha256": "7c64a7ebf6d78a8cec49c1fa2dc55502e349c3e61d2ae074b661a8109396a65f"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "57e93dbb8a6c130d10401bfb3eed42e5401d7b206718214f19736f14653af92c"
+          },
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where UserIdentityType == \"IAMUser\"\r\n| summarize NumberOfEvents = count() by UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})\r\n",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "57e93dbb8a6c130d10401bfb3eed42e5401d7b206718214f19736f14653af92c",
+          "targetSha256": "57e93dbb8a6c130d10401bfb3eed42e5401d7b206718214f19736f14653af92c"
+        },
+        {
+          "sourcePath": "/items/10/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "18c6374fe9c523c2b6ca9355eb61159ef3cc63c99b7b34f83c4f13a85bc5f666"
+          },
+          "conversion": {
+            "sourceId": "/items/10/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId , bin(TimeGenerated, {TimeRange:grain})\r\n| where UserIdentityAccountId != \"\"",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/10/content/query",
+          "sourceSha256": "18c6374fe9c523c2b6ca9355eb61159ef3cc63c99b7b34f83c4f13a85bc5f666",
+          "targetSha256": "18c6374fe9c523c2b6ca9355eb61159ef3cc63c99b7b34f83c4f13a85bc5f666"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "d733026f94f7a17253ab711c607890f4bfbf8eae9eec062dac51ed2a43267ebb"
+          },
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| summarize count() by UserIdentityType, bin(TimeGenerated, {TimeRange:grain})",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "d733026f94f7a17253ab711c607890f4bfbf8eae9eec062dac51ed2a43267ebb",
+          "targetSha256": "d733026f94f7a17253ab711c607890f4bfbf8eae9eec062dac51ed2a43267ebb"
+        },
+        {
+          "sourcePath": "/items/12/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "e2d30808bf21670ffbd7df420613308b93d1cdad08a29d338bc47b97f43e31eb"
+          },
+          "conversion": {
+            "sourceId": "/items/12/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n//| where UserIdentityAccountId != \"\"\r\n//| where UserIdentityUserName != \"\"\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId, UserIdentityUserName, EventName,SourceIpAddress, UserIdentityType, EventTypeName, TimeGenerated\r\n| order by NumberOfEvents desc",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/12/content/query",
+          "sourceSha256": "e2d30808bf21670ffbd7df420613308b93d1cdad08a29d338bc47b97f43e31eb",
+          "targetSha256": "e2d30808bf21670ffbd7df420613308b93d1cdad08a29d338bc47b97f43e31eb"
+        },
+        {
+          "sourcePath": "/items/13/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "98757fd963e961fdc83312d603875c147ee5f56fce15f730c04a629103e73337"
+          },
+          "conversion": {
+            "sourceId": "/items/13/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where EventName == \"GetCallerIdentity\"\r\n| where UserIdentityType == \"AssumedRole\" \r\n| summarize Count = count() by SourceIpAddress, UserIdentityAccountId, UserIdentityPrincipalid, AWSRegion, TimeGenerated\r\n| sort by Count desc nulls last ",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/13/content/query",
+          "sourceSha256": "98757fd963e961fdc83312d603875c147ee5f56fce15f730c04a629103e73337",
+          "targetSha256": "98757fd963e961fdc83312d603875c147ee5f56fce15f730c04a629103e73337"
+        },
+        {
+          "sourcePath": "/items/15/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "c29c8130a63960584c51c2c026b4a649642e36b9ddb60f336bef6c5aaceaba08"
+          },
+          "conversion": {
+            "sourceId": "/items/15/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = AWSCloudTrail;\r\nlet appData = data\r\n| summarize TotalCount = count() by AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion\r\n    | project-away TimeGenerated) on AWSRegion\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion, EventName\r\n    | project-away TimeGenerated) on AWSRegion, EventName\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on AWSRegion\r\n| project Id, Name = EventName, Type = 'EventName', ['AWSRegions Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = AWSRegion, Type = 'AWSRegion', ['AWSRegions Count'] = TotalCount,  Trend)\r\n| order by ['AWSRegions Count'] desc, Name asc",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/15/content/query",
+          "sourceSha256": "c29c8130a63960584c51c2c026b4a649642e36b9ddb60f336bef6c5aaceaba08",
+          "targetSha256": "c29c8130a63960584c51c2c026b4a649642e36b9ddb60f336bef6c5aaceaba08"
+        },
+        {
+          "sourcePath": "/items/16/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "f9ce2f4171f48e19ebbe556e8ee6fd01c516e433d8b9e001b9d38149f77f102e"
+          },
+          "conversion": {
+            "sourceId": "/items/16/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({RegionFilter});\r\nAWSCloudTrail\r\n| where details.Type == \"*\" or (details.Type == \"EventName\" and details.Name == EventName) or (details.Type == \"AWSRegion\" and details.Name == AWSRegion)\r\n| summarize count() by AWSRegion, bin(TimeGenerated, {TimeRange:grain})\r\n",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/16/content/query",
+          "sourceSha256": "f9ce2f4171f48e19ebbe556e8ee6fd01c516e433d8b9e001b9d38149f77f102e",
+          "targetSha256": "f9ce2f4171f48e19ebbe556e8ee6fd01c516e433d8b9e001b9d38149f77f102e"
+        },
+        {
+          "sourcePath": "/items/18/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "9ee72438f8934c3d1e78b42e2fa74fbc3cc370a4952c3f709444b4a193343311"
+          },
+          "conversion": {
+            "sourceId": "/items/18/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| summarize Count = count() by UserAgent\r\n| order by Count\r\n",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/18/content/query",
+          "sourceSha256": "9ee72438f8934c3d1e78b42e2fa74fbc3cc370a4952c3f709444b4a193343311",
+          "targetSha256": "9ee72438f8934c3d1e78b42e2fa74fbc3cc370a4952c3f709444b4a193343311"
+        },
+        {
+          "sourcePath": "/items/19/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "@idoshabi_microsoft",
+            "reference": "Explicit approve-all-51 decision in Copilot session 53d5f70d-e8eb-413c-bffa-6b9ee8f5d3b2; exact source templates; packaged AwsS3 connector; Microsoft Sentinel connect-aws recommends S3 over legacy CloudTrail; local static review only, no connector installation or runtime authorization.",
+            "planSha256": "063869357dc997db8941a53bf79c2c7bdc1fe2aaf557202daad8693690b7b9d0",
+            "decision": "accept",
+            "querySha256": "bb15f0d085152c749c391ba25828f0b99e7dabdc5fe6be3891cfc0916d8bf82b"
+          },
+          "conversion": {
+            "sourceId": "/items/19/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AWSCloudTrail\r\n| where '{UserAgent}' == UserAgent or '{UserAgent}' == \"All\"\r\n| summarize Count = count() by UserAgent, TimeGenerated",
+            "resolvedTables": [
+              "AWSCloudTrail"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AWSCloudTrail",
+                "ahTable": "AWSCloudTrail",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 50,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/19/content/query",
+          "sourceSha256": "bb15f0d085152c749c391ba25828f0b99e7dabdc5fe6be3891cfc0916d8bf82b",
+          "targetSha256": "bb15f0d085152c749c391ba25828f0b99e7dabdc5fe6be3891cfc0916d8bf82b"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "AWSCloudTrail"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "AwsS3",
+        "dataTypes": [
+          "AWSCloudTrail"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

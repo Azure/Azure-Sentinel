@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a4d99328-e4e6-493d-b0d5-57e6f9ddae77
+    path: Analytic Rules/AFD-WAF-Path-Traversal-Attack.yaml
+    version: 1.0.1
+    querySha256: c0578c33df3f812e3f70ace26d9e77bc17d627d363db0a8d9c2e76ef31f5f210
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Execution
+    - InitialAccess
+    - PrivilegeEscalation
+    - Discovery
+    originalTechniques:
+    - T1548
+    - T1203
+    - T1190
+    - T1548
+    - T1087
+    reviewScope:
+      sourceDocumentSha256: 532eb7fce9d1369821360d8da4f21ae63efb16a6c7894a2197c622eb582d048f
+      targetQuerySha256: e09055a54db4b8d99c363e9b96e9668e14b0da6a37faa4d4e88bcb3dcab4d93e
+properties:
+  id: xdr-a4d99328-e4e6-493d-b0d5-57e6f9ddae77
+  displayName: AFD WAF - Path Traversal Attack
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AzureDiagnostics
+      | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | where action_s =~ "AnomalyScoring"
+      | where details_msg_s has "Path Traversal Attack"
+      | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
+      | project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
+      | join kind = inner(
+      AzureDiagnostics
+      | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | where action_s =~ "Block") on trackingReference_s
+      | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
+      | where Total_TrackingReference >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: AFD WAF - Path Traversal Attack
+      description: |-
+        'Identifies a match for a Path Traversal based attack in the AFD WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        References: https://owasp.org/www-community/attacks/Path_Traversal'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URI_s
+        ips:
+        - id: ip1
+          addressColumn: clientIP_s
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
