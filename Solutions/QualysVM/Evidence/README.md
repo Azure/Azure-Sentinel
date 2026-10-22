@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **QualysVM (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (62 PASS, 13 FAIL, 4 human-review, 2 N/A of 81)
+**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (68 PASS, 7 FAIL, 4 human-review, 2 N/A of 81)
 
 ---
 
@@ -28,8 +28,8 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 - **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and the 2 Analytic Rule(s) deployed with `enabled: false`, with the GET snapshot of each rule. Deployment section status: **passed**.
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 2 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
 - **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **failed**; alert lifecycle: **failed**; dual-surface KQL: **passed**.
-- **`workbook-queries-live.json`** — 14 workbook queries executed live on both surfaces (status **failed**, 12 with rows on both surfaces).
-- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **failed**, assets: **passed**; portal traversal: **failed**).
+- **`workbook-queries-live.json`** — 14 workbook queries executed live on both surfaces (status **passed**, 14 with rows on both surfaces).
+- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **passed**, assets: **passed**; portal traversal: **passed**).
 
 ## 3. Failing Checks and Why
 
@@ -38,21 +38,13 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 | `VAL-DC-01` | Checked 8 connector file(s); issues: Data Connectors/AzureFunctionQualysVM_V2/function.json: missing connector id/title/dataTypes/instructionSteps; Data Connectors/host.j |
 | `QUAL-00` | Validation rollup is 'Validation Failed'; unwaived failing/skipped checks: VAL-DC-01. |
 | `E2E-Q02` | Evaluated 4 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `E2E-Q04` | Executed 14 workbook query/queries; totalRows=74, zeroOrFailedQueries=['WB-Q05', 'WB-Q07']. |
-| `E2E-Q05` | No UI agent portal traversal or screenshot evidence found. |
-| `QUAL-URL-01` | Checked 35 URL(s); found 1 broken link(s). |
 | `TK-Q11` | alert-parity-state status=failed; alertsFired=0; restoredToDisabled=True; reason=parity attempt: Sentinel AR enabled then CD enable BadRequest; cleanup restored both disa |
-| `TK-G06` | uiTraversal: no browser/portal session receipt exists. |
-| `TK-Q06` | uiTraversal: no ui/ui-portal-traversal.json receipt exists. |
-| `TK-Q07` | ARM provisioningState=Succeeded; installationVerified=False; registrationVerified=False; status=arm-accepted-contract-pending. |
 | `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'uiTraversal', 'urlVerifi |
+| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion', 'uiTraversal', 'urlVerification', 'workbookQualification']; failing/absent: ['alertLifecycle', 'alertP |
 | `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'parity attempt: Sentinel AR enabled then CD enable |
 
 ### Known gaps
 - **Alert lifecycle / alert parity not achieved:** parity attempt: Sentinel AR enabled then CD enable BadRequest; cleanup restored both disabled; diagnostic PATCH of CD 3edb7215 query to table-based text then restored original (queryText verified identical), CD left disabled -> Graph CD enable fails when query references workspace function QualysHostDetection; passes when query uses underlying table. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).
-- **Installed workbook readback missing:** the ARM deployment succeeded, but installation/registration of the packaged (Defender) workbook could not be read back (Graph `security/workbooks` GET returned 403), so `TK-Q07` is reported as FAIL.
-- **Workbook queries:** 12/14 returned rows on both surfaces; 14/14 executed without error. Zero-row panels are listed in `receipts/workbook-queries-live.json`.
 - **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
 
 ## 4. Human-Review Sign-Off Items
