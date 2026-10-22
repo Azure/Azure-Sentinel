@@ -1,5 +1,4 @@
 import importlib.util
-import json
 import sys
 import tempfile
 import unittest
@@ -22,7 +21,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
     def setUp(self):
         self.temp_directory = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.temp_directory.name)
-        self.write_dcr_output_stream("Custom-Contoso_CL")
         self.write_fixture(
             "Contoso",
             "Contoso",
@@ -38,34 +36,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             yaml.safe_dump(document, sort_keys=False),
-            encoding="utf-8",
-        )
-        return path
-
-    def write_dcr_output_stream(self, output_stream):
-        safe_name = output_stream.replace("-", "_")
-        path = (
-            self.repo_root
-            / "Solutions/Test Solution/Data Connectors/"
-            f"{safe_name}_DCR.json"
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {
-                    "name": f"{safe_name}DCR",
-                    "type": "Microsoft.Insights/dataCollectionRules",
-                    "properties": {
-                        "dataFlows": [
-                            {
-                                "streams": ["Custom-Input"],
-                                "destinations": ["workspace"],
-                                "outputStream": output_stream,
-                            }
-                        ]
-                    },
-                }
-            ),
             encoding="utf-8",
         )
         return path
@@ -552,7 +522,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
         self.assertEqual([], result["findings"])
-        self.assertTrue(result["connectorEvidence"])
         self.assertEqual(
             "resolved", result["fixtureResolution"]["status"]
         )
@@ -675,7 +644,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "META008", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_rejects_syntactically_valid_but_incorrect_input_stream(self):
+    def test_standard_parser_allows_connector_specific_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -684,11 +653,9 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        codes = {finding["code"] for finding in result["findings"]}
-        self.assertIn("SOURCE001", codes)
-        self.assertIn("SOURCE002", codes)
+        self.assertTrue(result["valid"], result["findings"])
 
-    def test_workspace_parser_accepts_none_without_dcr_evidence(self):
+    def test_workspace_parser_accepts_none_input_stream(self):
         self.write_fixture(
             "Legacy",
             "Legacy",
@@ -711,17 +678,20 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
 
-    def test_workspace_parser_rejects_contradictory_dcr_evidence(self):
+    def test_workspace_parser_rejects_non_none_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
-            self.ingest_parser(dcr_type="Workspace", input_stream="none"),
+            self.ingest_parser(
+                dcr_type="Workspace",
+                input_stream="Custom-Contoso_CL",
+            ),
         )
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
         self.assertIn(
-            "SOURCE004", {finding["code"] for finding in result["findings"]}
+            "SOURCE001", {finding["code"] for finding in result["findings"]}
         )
 
     def test_rejects_filter_stage_missing_from_parser_query(self):

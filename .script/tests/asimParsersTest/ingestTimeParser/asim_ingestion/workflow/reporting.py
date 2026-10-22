@@ -131,16 +131,10 @@ def build_report(
         else ""
     )
 
-    fixture = _stage(
-        "passed" if prepared_fixture is not None else "failed",
-        (
-            f"{prepared_fixture.get('rowCount')} prepared rows"
-            if isinstance(prepared_fixture, Mapping)
-            else error_message
-            if error_stage == "fixture-preparation"
-            else "Fixture preparation did not complete."
-        ),
-        (
+    if isinstance(prepared_fixture, Mapping):
+        fixture = _stage(
+            "passed",
+            f"{prepared_fixture.get('rowCount')} prepared rows",
             {
                 "path": prepared_fixture.get("fixturePath"),
                 "rowCount": prepared_fixture.get("rowCount"),
@@ -153,11 +147,22 @@ def build_report(
                     )
                     else None
                 ),
-            }
-            if isinstance(prepared_fixture, Mapping)
-            else None
-        ),
-    )
+            },
+        )
+    elif not template_valid:
+        fixture = _stage(
+            "blocked",
+            "Blocked by template validation.",
+        )
+    else:
+        fixture = _stage(
+            "failed",
+            (
+                error_message
+                if error_stage == "fixture-preparation"
+                else "Fixture preparation did not complete."
+            ),
+        )
 
     raw_dcr = _stage(
         "passed" if validation.get("rawDcr") else (
@@ -323,13 +328,7 @@ def build_report(
         or prepared_fixture is None
         or not validation_completed
     )
-    overall_status = (
-        "failed"
-        if required_failure and enforcement_required
-        else "shadow-only-failure"
-        if required_failure
-        else "passed"
-    )
+    overall_status = "failed" if required_failure else "passed"
     return {
         "version": WORKFLOW_RESULT_VERSION,
         "status": overall_status,
@@ -421,15 +420,15 @@ def emit_annotations(report: Mapping[str, Any]) -> None:
                 f"failure::{target_id}: "
                 f"{_github_command_message(detail)}"
             )
-    if status == "shadow-only-failure":
-        print(
-            "::warning title=ASIM ingestion validation shadow failure::"
-            f"{target_id} failed in shadow mode."
+    if status == "failed":
+        mode = (
+            "required"
+            if report.get("enforcementRequired")
+            else "shadow"
         )
-    elif status == "failed":
         print(
             "::error title=ASIM ingestion validation failed::"
-            f"{target_id} failed required validation."
+            f"{target_id} failed validation in {mode} mode."
         )
     cleanup = report.get("stages", {}).get("cleanup", {})
     if isinstance(cleanup, Mapping) and cleanup.get("status") == "warning":

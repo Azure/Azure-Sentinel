@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import functools
-import json
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
@@ -197,91 +194,3 @@ def _find_repo_root(path: Path) -> Path | None:
         if (candidate / "Parsers").is_dir():
             matches.append(candidate)
     return matches[-1] if matches else None
-
-
-def _collect_output_streams(value: Any) -> set[str]:
-    streams: set[str] = set()
-    if isinstance(value, dict):
-        output_stream = value.get("outputStream")
-        if isinstance(output_stream, str):
-            streams.add(output_stream)
-        for child in value.values():
-            streams.update(_collect_output_streams(child))
-    elif isinstance(value, list):
-        for child in value:
-            streams.update(_collect_output_streams(child))
-    return streams
-
-
-def _collect_dcr_resources(value: Any) -> Iterable[dict[str, Any]]:
-    if isinstance(value, dict):
-        resource_type = value.get("type")
-        if (
-            isinstance(resource_type, str)
-            and resource_type.casefold()
-            == "microsoft.insights/datacollectionrules"
-        ):
-            yield value
-        for child in value.values():
-            yield from _collect_dcr_resources(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _collect_dcr_resources(child)
-
-
-@functools.lru_cache(maxsize=128)
-def find_dcr_output_stream_evidence(
-    repo_root_text: str, output_stream: str
-) -> tuple[str, ...]:
-    repo_root = Path(repo_root_text)
-    candidate_paths: set[Path] = set()
-    if (repo_root / ".git").exists():
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo_root),
-                "grep",
-                "-l",
-                "-F",
-                output_stream,
-                "--",
-                "Solutions/**/*.json",
-                "DataConnectors/**/*.json",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        candidate_paths.update(
-            repo_root / line
-            for line in result.stdout.splitlines()
-            if "/Data Connectors/" in line.replace("\\", "/")
-            or line.replace("\\", "/").startswith("DataConnectors/")
-        )
-    else:
-        solutions_root = repo_root / "Solutions"
-        if solutions_root.is_dir():
-            candidate_paths.update(
-                solutions_root.glob("*/Data Connectors/**/*.json")
-            )
-        data_connectors_root = repo_root / "DataConnectors"
-        if data_connectors_root.is_dir():
-            candidate_paths.update(data_connectors_root.rglob("*.json"))
-
-    evidence_paths: set[str] = set()
-    for path in sorted(candidate_paths):
-        try:
-            raw = path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if "outputStream" not in raw:
-            continue
-        try:
-            document = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        for resource in _collect_dcr_resources(document):
-            if output_stream in _collect_output_streams(resource):
-                evidence_paths.add(_repo_relative_path(repo_root, path))
-    return tuple(sorted(evidence_paths))
