@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Snowflake (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (57 PASS, 16 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (50 PASS, 23 FAIL, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -39,18 +39,25 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 | `VAL-DC-01` | Checked 18 connector file(s); issues: Data Connectors/AzureFunctionSnowflake/function.json: missing connector id/title/dataTypes/instructionSteps; Data Connectors/host.js |
 | `E2E-V01` | Total items=57, packaged=34, unacknowledged missing/excluded=23: Data Connectors/azuredeploy_Snowflake_API_FunctionApp.json, Data Connectors/AzureFunctionSnowflake/functi |
 | `QUAL-00` | Validation rollup is 'Validation Failed'; unwaived failing/skipped checks: VAL-URL-01, VAL-DC-01, E2E-V01. |
-| `E2E-Q01` | DCR mock ingestion unverified (verified=False, rowCount=115, simulated=False). |
-| `E2E-Q02` | Evaluated 20 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `E2E-Q04` | Executed 26 workbook query/queries; totalRows=42, zeroOrFailedQueries=['WB-Q07', 'WB-Q10', 'WB-Q11', 'WB-Q12', 'WB-Q13', 'WB-Q20', 'WB-Q23', 'WB-Q24', 'WB-Q25', 'WB-Q26'] |
+| `QUAL-DEP-01` | Deployment/readback evidence missing or unverified (simulated=False, deployment={'name': 'deployment', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt |
+| `E2E-Q01` | DCR mock ingestion unverified (verified=False, rowCount=2, simulated=False). |
+| `E2E-Q02` | No live alert lifecycle evidence supplied for 20 detection(s). |
+| `E2E-Q04` | No live workbook query execution evidence supplied. |
 | `E2E-Q05` | UI traversal incomplete: domVerified=False, screenshotCount=19. |
-| `QUAL-MOCK-01` | expected keys landed=False; pairs satisfied=10/10 (not satisfied: []; zero-row pairs accepted by decision/no declared scenario: []); committed mocks=['SnowflakeLoginV3_CL |
-| `TK-Q11` | alert-parity-state status=aborted; alertsFired=0; restoredToDisabled=True; reason=start-alert-parity-batch parity attempt -> Graph PATCH status=enabled on parser-calling  |
+| `TK-G02` | qualification-target locked=True; arm-preflight status=None, tenantMatches=None, subscriptionMatches=None, workspaceMatches=None, nonProduction=None; approval target boun |
+| `TK-G03` | arm-validation-result: actor=None, approvalReference=None, approvedAt=None, writeAttempted=None, target bound=False. |
+| `TK-G04` | armPreflight=False, logAnalytics(SDK 200s)=True, graphHunting(AH 200s)=True, graphCustomDetectionWrite=False. |
+| `QUAL-MOCK-01` | expected keys landed=False; pairs satisfied=0/10 (not satisfied: ['SnowflakeDiscoveryActivity', 'SnowflakeLongQueryProcessTime', 'SnowflakeMultipleFailedQueries', 'Snowfl |
+| `TK-Q08` | 0 ingestion report(s): statuses=[], recordsAccepted=0, warnings=[]. |
+| `QUAL-RUNTIME-01` | Detections SDK True / AH True; workbook queries executed OK on both surfaces: 0/0. |
+| `TK-Q11` | alert-parity-state status=None; alertsFired=0; restoredToDisabled=False; reason=None. |
 | `TK-G06` | uiTraversal: failed. |
 | `TK-Q06` | uiTraversal: status=failed, screenshots=19, failedItems=['azure-portal-sentinel-workbooks', 'defender-sentinel-connectors', 'defender-workbook-view']. |
-| `TK-Q07` | ARM provisioningState=Succeeded; installationVerified=False; registrationVerified=False; status=arm-accepted-contract-pending. |
+| `TK-Q07` | ARM provisioningState=None; installationVerified=None; registrationVerified=None; status=None. |
+| `QUAL-PARSER-01` | Parsers=['Snowflake']; used by rules=['Snowflake']; per-pair row counts (sentinel/xdr)=[(None, None), (None, None), (None, None), (None, None), (None, None), (None, None) |
 | `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'mockIngestion', 'uiTra |
-| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'start-alert-parity-batch parity attempt -> Graph P |
+| `E2E-V04` | Passing sections: ['imageRendering', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'deployment', 'mockIngestion', 'uiTra |
+| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'name': 'alertParity', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt': None, 'message': None, |
 
 ### Known gaps
 - **Alert lifecycle / alert parity not achieved:** start-alert-parity-batch parity attempt -> Graph PATCH status=enabled on parser-calling Custom Detection returned HTTP 400 Bad Request (platform limitation; user decision 2026-10-21 17:50, 19:45); cleanup restored all AR/CD disabled. NOTE start-alert-parity-batch x5: every attempt: AR PUT enable ok, CD PATCH enabled -> HTTP 400 Bad Request (platform limitation, parser-based CD); cleanup restored disabled (some attempts hit mgmt.azure.com WinError 10060 during cleanup; final independent readback 18:2x: 10 AR enabled=false, 10 CD disabled). Also ARM/Graph read: defender-workbook-readback.json.. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).

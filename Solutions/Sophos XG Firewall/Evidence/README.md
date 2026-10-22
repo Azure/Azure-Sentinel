@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Sophos XG Firewall (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validated** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (60 PASS, 13 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validated** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (55 PASS, 18 FAIL, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -35,19 +35,24 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 | Check | Observation |
 |---|---|
-| `E2E-Q02` | Evaluated 4 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `E2E-Q04` | Executed 10 workbook query/queries; totalRows=15, zeroOrFailedQueries=['WB-Q04', 'WB-Q06', 'WB-Q07', 'WB-Q08', 'WB-Q09', 'WB-Q10']. |
+| `QUAL-DEP-01` | Deployment/readback evidence missing or unverified (simulated=False, deployment={'name': 'deployment', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt |
+| `E2E-Q02` | No live alert lifecycle evidence supplied for 4 detection(s). |
+| `E2E-Q04` | No live workbook query execution evidence supplied. |
 | `E2E-Q05` | UI traversal incomplete: domVerified=False, screenshotCount=9. |
 | `QUAL-URL-01` | Checked 11 URL(s); found 1 broken link(s). |
+| `TK-G02` | qualification-target locked=True; arm-preflight status=None, tenantMatches=None, subscriptionMatches=None, workspaceMatches=None, nonProduction=None; approval target boun |
+| `TK-G03` | arm-validation-result: actor=None, approvalReference=None, approvedAt=None, writeAttempted=None, target bound=False. |
+| `TK-G04` | armPreflight=False, logAnalytics(SDK 200s)=True, graphHunting(AH 200s)=True, graphCustomDetectionWrite=False. |
 | `QUAL-MOCK-01` | expected keys landed=True; pairs satisfied=0/2 (not satisfied: ['ExcessiveAmountofDeniedConnectionsfromASingleSource', 'PortScanDetected']; zero-row pairs accepted by dec |
-| `TK-Q11` | alert-parity-state status=failed; alertsFired=0; restoredToDisabled=True; reason=failed to enable parity rules: Custom Detection: Bad request. Please check your input.. |
+| `QUAL-RUNTIME-01` | Detections SDK True / AH True; workbook queries executed OK on both surfaces: 0/0. |
+| `TK-Q11` | alert-parity-state status=None; alertsFired=0; restoredToDisabled=False; reason=failed to enable parity rules: Custom Detection: Bad request. Please check your input.. |
 | `TK-G06` | uiTraversal: failed. |
 | `TK-Q06` | uiTraversal: status=failed, screenshots=9, failedItems=['azure-portal-sentinel-workbooks', 'defender-sentinel-connectors', 'defender-workbook-view']. |
-| `TK-Q07` | ARM provisioningState=Succeeded; installationVerified=False; registrationVerified=False; status=arm-accepted-contract-pending. |
+| `TK-Q07` | ARM provisioningState=None; installationVerified=None; registrationVerified=None; status=None. |
 | `QUAL-PARSER-01` | Parsers=['SophosXGFirewall']; used by rules=['SophosXGFirewall']; per-pair row counts (sentinel/xdr)=[(None, 1), (None, 1)]. |
 | `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'uiTraversal', 'urlVerifi |
-| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'failed to enable parity rules: Custom Detection: B |
+| `E2E-V04` | Passing sections: ['imageRendering', 'mockIngestion']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'deployment', 'uiTraversal', 'urlVerifi |
+| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'name': 'alertParity', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt': None, 'message': None, |
 
 ### Known gaps
 - **Alert lifecycle / alert parity not achieved:** failed to enable parity rules: Custom Detection: Bad request. Please check your input.. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).

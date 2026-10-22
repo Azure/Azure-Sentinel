@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Zscaler Private Access (ZPA) (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validated** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (63 PASS, 10 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validated** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (54 PASS, 19 FAIL, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -35,16 +35,25 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 | Check | Observation |
 |---|---|
-| `E2E-Q02` | Evaluated 20 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `E2E-Q04` | Executed 9 workbook query/queries; totalRows=25, zeroOrFailedQueries=['WB-Q09']. |
+| `QUAL-DEP-01` | Deployment/readback evidence missing or unverified (simulated=False, deployment={'name': 'deployment', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt |
+| `E2E-Q01` | DCR mock ingestion unverified (verified=False, rowCount=2, simulated=False). |
+| `E2E-Q02` | No live alert lifecycle evidence supplied for 20 detection(s). |
+| `E2E-Q04` | No live workbook query execution evidence supplied. |
 | `E2E-Q05` | UI traversal incomplete: domVerified=False, screenshotCount=19. |
-| `TK-Q11` | alert-parity-state status=aborted; alertsFired=0; restoredToDisabled=True; reason=failed to enable parity rules: Custom Detection: Bad request. Please check your input.. |
+| `TK-G02` | qualification-target locked=True; arm-preflight status=None, tenantMatches=None, subscriptionMatches=None, workspaceMatches=None, nonProduction=None; approval target boun |
+| `TK-G03` | arm-validation-result: actor=None, approvalReference=None, approvedAt=None, writeAttempted=None, target bound=False. |
+| `TK-G04` | armPreflight=False, logAnalytics(SDK 200s)=True, graphHunting(AH 200s)=True, graphCustomDetectionWrite=False. |
+| `QUAL-MOCK-01` | expected keys landed=False; pairs satisfied=0/10 (not satisfied: ['ZscalerSharedZPASession', 'ZscalerUnexpectedCountEventResult', 'ZscalerUnexpectedCountries', 'ZscalerUn |
+| `TK-Q08` | 0 ingestion report(s): statuses=[], recordsAccepted=0, warnings=[]. |
+| `QUAL-RUNTIME-01` | Detections SDK True / AH True; workbook queries executed OK on both surfaces: 0/0. |
+| `TK-Q11` | alert-parity-state status=None; alertsFired=0; restoredToDisabled=False; reason=None. |
 | `TK-G06` | uiTraversal: failed. |
 | `TK-Q06` | uiTraversal: status=failed, screenshots=19, failedItems=['azure-portal-sentinel-workbooks', 'defender-cd-detail:xdr-c4902121-7a7e-44d1-810b-88d26db622ff', 'defender-workb |
-| `TK-Q07` | ARM provisioningState=Succeeded; installationVerified=False; registrationVerified=False; status=arm-accepted-contract-pending. |
+| `TK-Q07` | ARM provisioningState=None; installationVerified=None; registrationVerified=None; status=None. |
+| `QUAL-PARSER-01` | Parsers=['ZPAEvent']; used by rules=['ZPAEvent']; per-pair row counts (sentinel/xdr)=[(None, None), (None, None), (None, None), (None, None), (None, None), (None, None),  |
 | `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'uiTra |
-| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'failed to enable parity rules: Custom Detection: B |
+| `E2E-V04` | Passing sections: ['imageRendering', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'deployment', 'mockIngestion', 'uiTra |
+| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'name': 'alertParity', 'status': 'pending', 'attempts': 0, 'startedAt': None, 'completedAt': None, 'message': None, |
 
 ### Known gaps
 - **Alert lifecycle / alert parity not achieved:** failed to enable parity rules: Custom Detection: Bad request. Please check your input.. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).
