@@ -383,10 +383,8 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
             "range x from 0 to 10 step 1 | union HiddenParser",
             "union (range x from 0 to 10 step 1), (HiddenParser())",
             "range x from 0 to 10 step 1 | union EmailEvents",
-            "let UsersLocation = externaldata(ip:string)[@\"https://example.invalid/geo.csv\"] with (format='csv'); "
-            "UsersLocation | take 1",
-            "let UsersLocation = externaldata(ip:string)['https://example.invalid/geo.csv']; "
-            "UsersLocation | join (HiddenParser()) on ip // trailing https://comment",
+            "let UsersLocation = externaldata(ip:string)[@\"https://example.invalid/geo.csv\"] with (format='csv'); UsersLocation | take 1",
+            "let UsersLocation = externaldata(ip:string)['https://example.invalid/geo.csv']; UsersLocation | join (HiddenParser()) on ip // trailing https://comment",
             "let U = datatable(u:string)[\"http://a//b\"]; // real comment HiddenParser()\nU | take 1",
         ]
         payload = self.root / "scanner-queries.json"
