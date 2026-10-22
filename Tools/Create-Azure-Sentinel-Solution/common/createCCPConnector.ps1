@@ -437,6 +437,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
+    Assert-V31ReleaseVersion -Version $global:baseMainTemplate.variables.dataConnectorCCPVersion -ContentKind 'CCF DataConnector/Connections' -ContentPath "$solutionName/$dcFolderName (DataConnectorCCFVersion)"
 
     try {
         foreach ($ccpItem in $ccpDict) {
@@ -848,6 +849,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $fileContent.name = "[concat('" + $nameWithoutPlaceHolder + "', parameters('workspace'))]"
                 }
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
+
+                if ($fileContent.PSObject.Properties.Name -contains "dependsOn") {
+                    $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @($fileContent.dependsOn)
+                }
 
                 # location
                 ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'dataCollectionRules' -minLength 1

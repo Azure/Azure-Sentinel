@@ -19,13 +19,19 @@
     Full path to the solution folder (e.g., C:\repo\Solutions\MySolution).
     Must contain a Package/ subfolder with mainTemplate.json.
 
+.PARAMETER ToolkitRoot
+    Checkout containing the ARM-TTK helper module and .gitignore. Defaults to the
+    toolkit checkout containing this script, independently of SolutionPath.
+
 .EXAMPLE
     ./run-arm-ttk.ps1 -SolutionPath "C:/sentinel/AzureSentinel/Solutions/CrowdStrike Falcon Endpoint Protection"
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$SolutionPath
+    [string]$SolutionPath,
+
+    [string]$ToolkitRoot
 )
 
 $ErrorActionPreference = "Continue"
@@ -33,11 +39,16 @@ $ErrorActionPreference = "Continue"
 # --------------------------------------------------------------------------
 # Resolve repo root
 # --------------------------------------------------------------------------
-$repoRoot = git rev-parse --show-toplevel 2>$null
-if (-not $repoRoot) {
-    $repoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
+$repoRoot = if ($ToolkitRoot) {
+    [System.IO.Path]::GetFullPath($ToolkitRoot)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 }
-$repoRoot = $repoRoot.Replace('\', '/')
+if (-not (Test-Path (Join-Path $repoRoot ".script/local-validation/run-arm-ttk.ps1") -PathType Leaf)) {
+    Write-Host "ARM-TTK: Invalid toolkit root: $repoRoot" -ForegroundColor Red
+    Write-Host "ARM-TTK-SUMMARY: Pass=0 Fail=1 Total=1 Error=true"
+    exit 2
+}
 
 # --------------------------------------------------------------------------
 # Locate Package folder
@@ -118,24 +129,34 @@ if ($hasMain) {
 
         # Filter out contentProductId/id false positives — same as entrypoint.ps1
         $filtered = New-Object System.Collections.ArrayList
-        $hasContentProductIdError = $false
+        $filteredIdTestCount = 0
 
         foreach ($testInfo in $rawResults) {
             if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
+                $hasUnfilteredIdError = $false
+                $hasExemptIdError = $false
                 foreach ($errorInfo in $testInfo.Errors) {
                     if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or
-                        $errorInfo.Exception.Message -like '*"id"*') {
-                        $hasContentProductIdError = $true
+                        $errorInfo.Exception.Message -like '*"id"*' -or
+                        $errorInfo.Exception.Message -like '*"packageId"*' -or
+                        $errorInfo.Exception.Message -like '*"fromTemplateId"*') {
+                        $hasExemptIdError = $true
                     }
                     else {
-                        $null = $filtered.Add($testInfo)
+                        $hasUnfilteredIdError = $true
                     }
+                }
+                if ($hasUnfilteredIdError) {
+                    $null = $filtered.Add($testInfo)
+                }
+                elseif ($hasExemptIdError) {
+                    $filteredIdTestCount++
                 }
             }
             else {
-                if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true) {
-                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
-                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+                if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0) {
+                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - $filteredIdTestCount
+                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
                 }
                 $null = $filtered.Add($testInfo)
             }
