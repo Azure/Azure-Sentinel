@@ -3266,6 +3266,64 @@ def _archive_package_evidence(
     return archived
 
 
+def _unaccepted_package_receipt(
+    solution: Path,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    packaging = state["packaging"]
+    attempt = packaging.get("currentAttempt") or {}
+    consumed = packaging.get("lastConsumedAction") or {}
+    artifacts = state["stages"]["packaging"].get("artifacts") or {}
+    if (
+        not workbook_workflow.enabled(state)
+        or packaging.get("lastSuccessful") is not None
+        or attempt.get("status") not in {"blocked", "failed"}
+        or consumed.get("packageSucceeded") is not False
+        or consumed.get("bumpConsumed") is not True
+        or attempt.get("bumpConsumed") is not True
+        or not attempt.get("attemptId")
+        or attempt.get("attemptId") != consumed.get("attemptId")
+        or attempt.get("packageInputSha256") != consumed.get("packageInputSha256")
+        or artifacts.get("packageAttemptId") != attempt.get("attemptId")
+        or artifacts.get("packageReportSha256") != attempt.get("packageReportSha256")
+        or artifacts.get("packageLifecycleStatus") != "candidate-generated"
+        or not artifacts.get("packageReport")
+    ):
+        raise ValueError(
+            "changed initial release inputs require a matching unaccepted V3.1 candidate receipt"
+        )
+    report_path = resolve_artifact_reference(solution, artifacts["packageReport"])
+    report_bytes = report_path.read_bytes()
+    if hashlib.sha256(report_bytes).hexdigest() != attempt.get("packageReportSha256"):
+        raise ValueError("unaccepted V3.1 candidate report is stale or modified")
+    report = json.loads(report_bytes)
+    if (
+        report.get("packager") != "V3.1"
+        or report.get("status") != "passed"
+        or report.get("armValidationMethod") != state["context"]["armValidationMethod"]
+        or report.get("workflowRunId") != state["runId"]
+        or report.get("packageAttemptId") != attempt["attemptId"]
+        or report.get("packageAccepted") is not False
+        or report.get("packageLifecycleStatus") != "candidate-generated"
+        or report.get("version") != solution_data_version(solution)
+        or (report.get("packageInputs") or {}).get("after", {}).get("sha256")
+        != consumed.get("packageInputSha256")
+        or any(
+            report.get(name) != attempt.get(name) or attempt.get(name) != consumed.get(name)
+            for name in (
+                "requestedVersionBump", "effectiveVersionBump",
+                "requestedTargetVersion", "effectiveTargetVersion",
+            )
+        )
+    ):
+        raise ValueError("unaccepted V3.1 candidate receipt does not match its consumed attempt")
+    return {
+        **consumed,
+        "packageReport": artifacts["packageReport"],
+        "packageReportSha256": attempt["packageReportSha256"],
+    }
+
+
 def _validate_historical_package_receipt(
     solution: Path,
     state: dict[str, Any],
@@ -4671,16 +4729,16 @@ def plan_new_package_release(
             raise ValueError("cannot plan a new release while V3.1 packaging is running")
         prior = package_state.get("lastSuccessful")
         last_consumed = package_state.get("lastConsumedAction") or {}
+        unaccepted_receipt = None
         if prior is None and last_consumed.get("bumpConsumed") is True:
             if last_consumed.get("packageInputSha256") == current_identity:
                 raise ValueError(
                     "the initial version action was consumed by a failed build; retry "
                     "with --version-bump none for the matching package inputs"
                 )
-            raise ValueError(
-                "package inputs changed after the initial version action was consumed; "
-                "the failed build's retry rules must be resolved before planning a new release"
-            )
+            unaccepted_receipt = _unaccepted_package_receipt(root, state)
+            workbook_workflow.verify_inventory(root, state)
+            workbook_workflow.validate_evidence(root, state)
         if prior is None and not first_release_ready:
             raise ValueError(
                 "first release planning without a prior successful V3.1 package requires "
@@ -4722,8 +4780,20 @@ def plan_new_package_release(
 
         selected_at = _utc_now()
         historical_evidence = (
-            _archive_package_evidence(root, prior) if prior else {}
+            _archive_package_evidence(root, prior or unaccepted_receipt)
+            if prior or unaccepted_receipt else {}
         )
+        if unaccepted_receipt is not None:
+            snapshot_path = content_path(
+                root, historical_evidence["packageReport"],
+            ).parent / "unaccepted-attempt.json"
+            _atomic_json(snapshot_path, {
+                "runId": state["runId"],
+                "lastConsumedAction": last_consumed,
+                "currentAttempt": package_state["currentAttempt"],
+                "packagingStage": state["stages"]["packaging"],
+            })
+            historical_evidence["unacceptedAttempt"] = snapshot_path.relative_to(root).as_posix()
         selected_action = {
             "versionBump": version_bump,
             "packageInputSha256": current_identity,
@@ -5013,6 +5083,16 @@ def package_workflow_v3_1(
             and last_consumed.get("packageSucceeded") is False
             and last_consumed.get("packageInputSha256") == inputs["sha256"]
         )
+        if (
+            previous is None
+            and last_consumed.get("bumpConsumed") is True
+            and inputs["sha256"] != last_consumed.get("packageInputSha256")
+            and not pending_release
+        ):
+            raise ValueError(
+                "package inputs changed after the consumed version action; "
+                "select an explicit new release action before rebuilding"
+            )
         if previous is not None and inputs["sha256"] != previous.get("packageInputSha256"):
             if not pending_release and not failed_consumed_retry:
                 raise ValueError(
@@ -5093,6 +5173,7 @@ def package_workflow_v3_1(
             effective_target_version = requested_target_version
         elif (
             previous is None
+            and not pending_release
             and state["context"].get("targetVersion") is not None
             and not failed_consumed_retry
         ):
@@ -7945,4 +8026,3 @@ def verify_forwarded_approval(
             "approvalSha256": stored_sha,
             "receiptPath": str(receipt_path),
         }
-
