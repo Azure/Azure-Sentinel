@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 22d177d5-588c-4f1a-a332-2695f52079bb
+    path: Analytic Rules/ESXiMultipleFailedSSHLogin.yaml
+    version: 1.0.0
+    querySha256: 8a45fc7cb088f4f3976effbf6f54b707807f291171ea4d25448c7fec23c87df4
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity`
+      is provisionally represented by hosts.nameColumn `HostCustomEntity`; confirm
+      that this column is the intended host identifier. The original value is also
+      retained in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `HostCustomEntity`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 416ebf9f53acf7173508165753606ec619b21c4b9e8e4f6afc506fc299a82b36
+      targetQuerySha256: c4aa625bffdbd24f2752dfd4a39b2127e69b323b6a036483e760949da67f9896
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-22d177d5-588c-4f1a-a332-2695f52079bb
+  displayName: VMware ESXi - Multiple Failed Shell Login via SSH
+  status: disabled
+  queryCondition:
+    queryText: '// To Adapt to your environment
+
+      let triggerThreshold = 10;
+
+      VMwareESXi
+
+      | where SyslogMessage has "sshd"
+
+      | where SyslogMessage contains "authentication failure"
+
+      | extend SrcUsername = extract(@''\[info\]\s+\[(.*?)\]'', 1, SyslogMessage)
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | extend SrcIpAddr = extract(@''\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'', 1, SyslogMessage)
+
+      | summarize make_set(SrcUsername),count() by SrcIpAddr,DstHostname
+
+      | where count_ >= triggerThreshold
+
+      | extend HostCustomEntity = DstHostname'
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Multiple Failed Shell Login via SSH
+      description: Identifies a failed ESXi Shell login via SSH in a short TimeFrame.
+        This could be suspicious activity especially if this alert is seen triggering
+        many times within a short time frame which could be evidence of a brute-force
+        attack. TriggerThreshold can be adapted.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        HostFullName: HostCustomEntity

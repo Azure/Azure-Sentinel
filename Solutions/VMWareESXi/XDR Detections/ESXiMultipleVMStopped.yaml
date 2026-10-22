@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5fe1af14-cd40-48ff-b581-3a12a1f90785
+    path: Analytic Rules/ESXiMultipleVMStopped.yaml
+    version: 1.0.3
+    querySha256: 581274301fbc135c8ad467689201cc7a77cf4d0393222840ef5435a0b95c721d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1529
+    reviewScope:
+      sourceDocumentSha256: 56dfe26a773f6e999556b8e4645a3e164c4473d1ec57abe2c9fc5e1dc3543b49
+      targetQuerySha256: d6579a1b14774f4cb5b66f48403806cf4f6f8ac02aacba332df2cbeb5713a2fe
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 56dfe26a773f6e999556b8e4645a3e164c4473d1ec57abe2c9fc5e1dc3543b49
+      targetQuerySha256: d6579a1b14774f4cb5b66f48403806cf4f6f8ac02aacba332df2cbeb5713a2fe
+properties:
+  id: xdr-5fe1af14-cd40-48ff-b581-3a12a1f90785
+  displayName: VMware ESXi - Multiple VMs stopped
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 5;
+
+      VMwareESXi
+
+      | where SyslogMessage has (''VmPoweredOffEvent'')
+
+      | extend SrcUsername = extract(@''\[info\]\s+\[(.*?)\]'', 1, SyslogMessage)
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | summarize st_vm = make_set(DstHostname,200) by SrcUsername, bin(TimeGenerated,
+      5m)
+
+      | where array_length(st_vm) > threshold
+
+      | extend hostname = iff(array_length(st_vm) > 0, st_vm[0], "")
+
+      | extend NTDomain = tostring(split(hostname, ''\\'', 0)[0]), Name = tostring(split(SrcUsername,
+      ''\\'', 1)[0]), HostName = tostring(split(hostname, ''.'', 0)[0]), DnsDomain
+      = tostring(split(SrcUsername, ''\\'', 1)[0])
+
+      | project-away st_vm, hostname'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Multiple VMs stopped
+      description: '''Detects when multiple VMs ware stopped by user.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          dnsDomainColumn: DnsDomain
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          ntDomainColumn: NTDomain
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1529

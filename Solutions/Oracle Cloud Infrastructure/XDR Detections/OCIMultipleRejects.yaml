@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OracleCloudInfrastructureLogsConnector
+  dataTypes:
+  - OCILogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OCILogs
+    - OCI_LogsV2_CL
+    - OCI_Logs_CL
+  requiredDataConnectors:
+  - connectorId: OracleCloudInfrastructureLogsConnector
+    dataTypes:
+    - OCILogs
+    - OCI_LogsV2_CL
+    - OCI_Logs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 482c24b9-a700-4b2a-85d3-1c42110ba78c
+    path: Analytic Rules/OCIMultipleRejects.yaml
+    version: 1.0.0
+    querySha256: f54fe0d5ed68530a8cd02ab8de1f97cd4eba74bf4d0c18c5d9da405ddb760960
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1595
+    reviewScope:
+      sourceDocumentSha256: b6c37391619d9deb4af3d679ee88e6219f7b77c2f26d6a25b3ea2ba3a4d37653
+      targetQuerySha256: d276636e6c80c3c867728c3bfb4d7cfa6e18400540ef6bf0736adc3c13d74995
+    directGraphDeploymentReady: true
+properties:
+  id: xdr-482c24b9-a700-4b2a-85d3-1c42110ba78c
+  displayName: OCI - Multiple rejects on rare ports
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 50;
+
+      let r_dports =
+
+      OCILogs
+
+      | where EventType contains ''vcn.flowlogs''
+
+      | where ipv4_is_private(DstIpAddr)
+
+      | where ipv4_is_private(SrcIpAddr) == False
+
+      | summarize count() by DstPortNumber
+
+      | top 10 by count_ asc
+
+      | summarize dports = makeset(DstPortNumber)
+
+      | extend k = 1;
+
+      OCILogs
+
+      | where EventType contains ''vcn.flowlogs''
+
+      | where data_action_s =~ ''REJECT''
+
+      | where ipv4_is_private(DstIpAddr)
+
+      | where ipv4_is_private(SrcIpAddr) == False
+
+      | extend k = 1
+
+      | join kind=innerunique (r_dports) on k
+
+      | where dports has tostring(DstPortNumber)
+
+      | summarize count() by SrcIpAddr, bin(TimeGenerated, 5m)
+
+      | where count_ > threshold
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: OCI - Multiple rejects on rare ports
+      description: '''Detects multiple rejects on rare ports.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
