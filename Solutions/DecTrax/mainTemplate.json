@@ -2,24 +2,26 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "workspace": {
-      "type": "string",
-      "metadata": {
-        "description": "The name of the Log Analytics Workspace where Microsoft Sentinel is enabled."
-      }
-    },
-    "workspaceLocation": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "The geographic region of the Log Analytics Workspace."
-      }
-    },
     "location": {
       "type": "string",
+      "minLength": 1,
       "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Deployment location for solution resources."
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`. We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
     "decTraxApiEndpoint": {
@@ -62,20 +64,6 @@
       "metadata": {
         "description": "Deploy ASIM parser functions and advanced threat hunting saved searches."
       }
-    },
-    "_artifactsLocation": {
-      "type": "string",
-      "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/DecTrax/Package/",
-      "metadata": {
-        "description": "The base URI where artifacts required by this template are located."
-      }
-    },
-    "_artifactsLocationSasToken": {
-      "type": "securestring",
-      "defaultValue": "",
-      "metadata": {
-        "description": "The sasToken required to access _artifactsLocation."
-      }
     }
   },
   "variables": {
@@ -98,17 +86,17 @@
   "resources": [
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
+      "apiVersion": "2023-04-01-preview",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('solutionId'))]",
       "properties": {
-        "parentId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspace'), '/providers/Microsoft.SecurityInsights/solutions/', variables('solutionId'))]",
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/solutions', parameters('workspace'), 'Microsoft.SecurityInsights', variables('solutionId'))]",
         "contentId": "[variables('solutionId')]",
         "kind": "Solution",
         "version": "[variables('solutionVersion')]",
         "source": {
           "kind": "Solution",
           "name": "[variables('solutionName')]",
-          "sourceId": "[variables('solutionId')]"
+          "sourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/solutions', parameters('workspace'), 'Microsoft.SecurityInsights', variables('solutionId'))]"
         },
         "author": {
           "name": "[variables('solutionAuthor')]",
@@ -136,18 +124,19 @@
           "DECTRAX Inc."
         ],
         "firstPublishDate": "2026-08-20",
-        "lastPublishDate": "2026-08-23"
+        "lastPublishDate": "2026-08-23",
+        "description": "[variables('solutionDescription')]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2022-11-01-preview",
+      "apiVersion": "2022-09-01-preview",
       "name": "[variables('dataConnectorName')]",
       "kind": "RestApiPoller",
       "condition": "[parameters('enableDataConnector')]",
       "properties": {
         "connectorDefinitionName": "DecTraxThreatIntelligence",
-        "dataType": "DECTRAXThreats_CL",
+        "dataType": "[variables('customTableName')]",
         "response": {
           "eventsJsonPaths": [
             "$.attacks[*]"
@@ -178,7 +167,6 @@
           "title": "DECTRAX Active Deception & Threat Intelligence",
           "publisher": "DECTRAX Inc.",
           "descriptionMarkdown": "The **DECTRAX Solution for Microsoft Sentinel** provides automated continuous ingestion of high-fidelity threat intelligence, honeypot breach indicators, and GATE zero-trust gateway blocks directly into your Log Analytics workspace.",
-          "customImage": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/DecTrax/Package/assets/logo.png",
           "graphQueriesTableName": "DECTRAXThreats_CL",
           "graphQueries": [
             {
@@ -230,7 +218,7 @@
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2022-11-01-preview",
+      "apiVersion": "2023-02-01-preview",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('ruleId_HighSeverity'))]",
       "kind": "Scheduled",
       "condition": "[parameters('enableAnalyticRules')]",
@@ -285,16 +273,14 @@
             "matchingMethod": "Selected",
             "groupByEntities": [
               "IP"
-            ],
-            "groupByAlertDetails": [],
-            "groupByCustomDetails": []
+            ]
           }
         }
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2022-11-01-preview",
+      "apiVersion": "2023-02-01-preview",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('ruleId_VolumetricRecon'))]",
       "kind": "Scheduled",
       "condition": "[parameters('enableAnalyticRules')]",
@@ -338,16 +324,14 @@
             "matchingMethod": "Selected",
             "groupByEntities": [
               "IP"
-            ],
-            "groupByAlertDetails": [],
-            "groupByCustomDetails": []
+            ]
           }
         }
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2022-11-01-preview",
+      "apiVersion": "2023-02-01-preview",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('ruleId_GateThreat'))]",
       "kind": "Scheduled",
       "condition": "[parameters('enableAnalyticRules')]",
@@ -400,16 +384,14 @@
             "matchingMethod": "Selected",
             "groupByEntities": [
               "IP"
-            ],
-            "groupByAlertDetails": [],
-            "groupByCustomDetails": []
+            ]
           }
         }
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2022-11-01-preview",
+      "apiVersion": "2023-02-01-preview",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('ruleId_ScadaTamper'))]",
       "kind": "Scheduled",
       "condition": "[parameters('enableAnalyticRules')]",
@@ -462,32 +444,30 @@
             "matchingMethod": "Selected",
             "groupByEntities": [
               "IP"
-            ],
-            "groupByAlertDetails": [],
-            "groupByCustomDetails": []
+            ]
           }
         }
       }
     },
     {
       "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
+      "apiVersion": "2023-06-01",
       "name": "[variables('workbookId')]",
-      "location": "[parameters('workspaceLocation')]",
+      "location": "[parameters('workspace-location')]",
       "kind": "shared",
       "condition": "[parameters('enableWorkbooks')]",
       "properties": {
         "displayName": "DECTRAX Threat Intelligence & Deception Dashboard",
         "category": "sentinel",
-        "sourceId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+        "sourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
         "serializedData": "{\"version\": \"Notebook/1.0\", \"items\": [{\"type\": 1, \"content\": {\"json\": \"# \\ud83d\\udee1\\ufe0f DECTRAX Threat Intelligence & Active Deception Dashboard\\n### Real-time visibility into honeypot traps, adversary TTPs, and GATE zero-trust gateway telemetry.\"}, \"name\": \"text_header\"}, {\"type\": 9, \"content\": {\"version\": \"KqlParameterItem/1.0\", \"parameters\": [{\"id\": \"TimeRange\", \"version\": \"KqlParameterItem/1.0\", \"name\": \"TimeRange\", \"type\": 4, \"isRequired\": true, \"value\": {\"durationMs\": 86400000}, \"typeSettings\": {\"selectableValues\": [{\"durationMs\": 3600000, \"createdTime\": \"2026-08-23\"}, {\"durationMs\": 86400000, \"createdTime\": \"2026-08-23\"}, {\"durationMs\": 604800000, \"createdTime\": \"2026-08-23\"}, {\"durationMs\": 2592000000, \"createdTime\": \"2026-08-23\"}]}, \"timeContext\": {\"durationMs\": 86400000}}, {\"id\": \"MinSeverity\", \"version\": \"KqlParameterItem/1.0\", \"name\": \"MinSeverity\", \"type\": 1, \"description\": \"Filter by minimum severity score (1-10)\", \"value\": \"1\", \"timeContext\": {\"durationMs\": 86400000}}], \"style\": \"pills\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\"}, \"name\": \"parameters_filters\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"DECTRAXThreats_CL\\n| where TimeGenerated {TimeRange}\\n| where toint(Severity_d) >= toint('{MinSeverity}') or toint(Severity_s) >= toint('{MinSeverity}')\\n| summarize \\n    TotalAttacks = count(),\\n    CriticalBreaches = countif(toint(Severity_d) >= 8 or toint(Severity_s) >= 8),\\n    UniqueAttackerIPs = dcount(SourceIP_s),\\n    ActiveSensors = dcount(NodeID_s)\", \"size\": 4, \"title\": \"Threat Intelligence KPI Overview\", \"timeContext\": {\"durationMs\": 86400000}, \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"tiles\", \"tileSettings\": {\"titleContent\": {\"columnMatch\": \"TotalAttacks\", \"formatter\": 1}, \"leftContent\": {\"columnMatch\": \"TotalAttacks\", \"formatter\": 12, \"formatOptions\": {\"palette\": \"auto\"}}, \"showBorder\": true}}, \"name\": \"query_kpi_tiles\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"DECTRAXThreats_CL\\n| where TimeGenerated {TimeRange}\\n| summarize ThreatCount = count() by bin(TimeGenerated, 1h), Protocol = tostring(Protocol_s)\\n| render timechart\", \"size\": 0, \"title\": \"Threat Volume by Protocol Over Time\", \"timeContext\": {\"durationMs\": 86400000}, \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"timechart\"}, \"name\": \"query_timechart\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"DECTRAXThreats_CL\\n| where TimeGenerated {TimeRange}\\n| summarize AttackCount = count(), UniquePorts = dcount(DestinationPort_d), Signatures = make_set(Signature_s, 5) by SourceIP_s, SourceCountry_s, SourceCity_s\\n| sort by AttackCount desc\\n| take 20\", \"size\": 0, \"title\": \"Top 20 Malicious Threat Actors (Attacker IPs)\", \"timeContext\": {\"durationMs\": 86400000}, \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"table\", \"gridSettings\": {\"formatters\": [{\"columnMatch\": \"AttackCount\", \"formatter\": 8, \"formatOptions\": {\"palette\": \"red\"}}]}}, \"name\": \"query_top_attackers\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"DECTRAXThreats_CL\\n| where TimeGenerated {TimeRange}\\n| where Platform_s =~ 'GATE' or isnotempty(URL_s)\\n| project TimeGenerated, SourceIP_s, SourceCountry_s, Method_s, URL_s, Signature_s, NodeID_s\\n| sort by TimeGenerated desc\\n| take 50\", \"size\": 0, \"title\": \"GATE Zero-Trust Reverse Proxy & WAF Intercept Stream\", \"timeContext\": {\"durationMs\": 86400000}, \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"table\"}, \"name\": \"query_gate_stream\"}]}"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2020-08-01",
-      "name": "[concat(parameters('workspace'), '/DECTRAXThreats')]",
-      "location": "[parameters('workspaceLocation')]",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspace'), '/', variables('parserSavedSearchId'))]",
+      "location": "[parameters('workspace-location')]",
       "condition": "[parameters('enableHuntingQueries')]",
       "properties": {
         "category": "DECTRAX",
@@ -499,9 +479,9 @@
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2020-08-01",
-      "name": "[concat(parameters('workspace'), '/DECTRAX_Hunting_SSHBruteforce')]",
-      "location": "[parameters('workspaceLocation')]",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspace'), '/', variables('huntingQueryId_Creds'))]",
+      "location": "[parameters('workspace-location')]",
       "condition": "[parameters('enableHuntingQueries')]",
       "properties": {
         "category": "DECTRAX Hunting",
@@ -512,9 +492,9 @@
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2020-08-01",
-      "name": "[concat(parameters('workspace'), '/DECTRAX_Hunting_ZeroDayExploitation')]",
-      "location": "[parameters('workspaceLocation')]",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspace'), '/', variables('huntingQueryId_Exploit'))]",
+      "location": "[parameters('workspace-location')]",
       "condition": "[parameters('enableHuntingQueries')]",
       "properties": {
         "category": "DECTRAX Hunting",
