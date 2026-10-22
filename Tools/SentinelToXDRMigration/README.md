@@ -7,6 +7,15 @@ candidate V3.1 Defender Workbook packaging.
 See [tracked follow-up areas](FOLLOW_UPS.md) for curated capability and
 operator-experience work that may be considered separately.
 
+## Operator Flow Guides & Checklists
+
+> **No-Code / Chat-Based Agent Experience:** All three flows below can be executed end-to-end with **no code** via natural-language chat using LLM agents (`@XDR Solution Manager` / `.github/agents/xdr-solution-manager.agent.md` and the `sentinel-xdr-end-to-end-orchestrator` skill). The agent orchestrates every deterministic CLI step, approval gate, and report below automatically from chat prompts.
+
+- **[Validation Flow Guide (`docs/validation-flow-readme.md`)](docs/validation-flow-readme.md)** — Offline/CI authoring validation, mock schema validation, V3.1 packaging, `build-and-validate.ps1`, and `Validated` / `Partially Validated` rollups.
+- **[Qualification Flow Guide (`docs/qualification-flow-readme.md`)](docs/qualification-flow-readme.md)** — Live non-production lab qualification: target lock, preflight & approvals, disabled ARM/Graph deployment, DCR & shared mock ingestion, live LA/AH query validation, alert parity, workbook browser QA, and `Qualified` / `Conditionally Qualified` rollups.
+- **[Migration Flow Guide (`docs/migration-flow-readme.md`)](docs/migration-flow-readme.md)** — Sentinel-to-Defender-XDR conversion contracts (`Analytic Rules -> XDR Detections`, `Workbooks -> XDR Workbooks`), `>50%` partial selection rule, and Migration overlay integration.
+- **[PR Qualification Checklists Specification (`docs/qualification/README.md`)](docs/qualification/README.md)** — Machine-readable check definitions ([`validation-checks.md`](docs/qualification/validation-checks.md), [`qualification-checks.md`](docs/qualification/qualification-checks.md), [`migration-checks.md`](docs/qualification/migration-checks.md)).
+
 ## Package architecture (`solution_manager`)
 
 Implementation modules live under `Tools/SentinelToXDRMigration/solution_manager/`
