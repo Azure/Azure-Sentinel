@@ -143,12 +143,12 @@ namespace HoneyBucketLogParser
                     if (string.IsNullOrWhiteSpace(setting) || setting.StartsWith("http") || setting.StartsWith("@Microsoft.KeyVault"))
                     {
                         log.LogError("Invalid application setting detected.");
-                        log.LogError("Please see https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references");
+                        log.LogError("Please see https://docs.microsoft.com/azure/app-service/app-service-key-vault-references");
                         throw new InvalidOperationException("Invalid setting");
                     }
                 }
 
-                // according to the docs here: https://docs.microsoft.com/en-us/azure/storage/common/storage-analytics-logging
+                // according to the docs here: https://docs.microsoft.com/azure/storage/common/storage-analytics-logging
                 // it can take up to an hour for logs to hit blob storage. As such need to keep a list of timestamps of the last
                 // entry we've seen
                 var lastLogEntryProcessedTime = new ConcurrentDictionary<string, DateTime>();
