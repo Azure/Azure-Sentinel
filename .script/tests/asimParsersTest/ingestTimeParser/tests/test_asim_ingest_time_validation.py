@@ -165,7 +165,20 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         )
         padding_length = length - len(prefix) - len(suffix)
         self.assertGreaterEqual(padding_length, 0)
-        return prefix + ("x" * padding_length) + suffix
+        query = prefix + ("x" * padding_length) + suffix
+        self.assertEqual(length, len(VALIDATION.compact_kql(query)))
+        return query
+
+    def formatted_parser_query_with_length(self, length):
+        query = self.parser_query_with_length(length)
+        indented = "\n".join(
+            f"    {line}" for line in query.splitlines()
+        )
+        return (
+            f"// {'x' * 100}\n"
+            f"{indented}\n"
+            "// this comment is not sent to the DCR"
+        )
 
     def test_discovers_exact_pair_from_ingestion_change(self):
         query_path = (
@@ -549,11 +562,13 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
     def test_allows_parser_query_at_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
+        parser_query = self.formatted_parser_query_with_length(limit)
+        self.assertGreater(len(parser_query), limit)
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(
-                parser_query=self.parser_query_with_length(limit)
+                parser_query=parser_query
             ),
         )
 
@@ -563,11 +578,14 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
     def test_rejects_parser_query_over_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
+        parser_query = self.formatted_parser_query_with_length(
+            limit + 1
+        )
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(
-                parser_query=self.parser_query_with_length(limit + 1)
+                parser_query=parser_query
             ),
         )
 
@@ -581,6 +599,30 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn(str(limit + 1), finding["message"])
         self.assertIn(str(limit), finding["message"])
+
+    def test_compact_kql_removes_comments_and_indentation(self):
+        query = (
+            "    source // remove this comment\n"
+            '      | extend Message = "  // keep  ", '
+            "Text = '  don''t trim  ', "
+            'Path = @"C:\\logs\\//keep"\n'
+            "      // remove this whole comment\n"
+            "      | project Message, Text, Path  // remove trailing\n"
+        )
+
+        compacted = VALIDATION.compact_kql(query)
+
+        self.assertEqual(
+            (
+                "source\n"
+                '| extend Message = "  // keep  ", '
+                "Text = '  don''t trim  ', "
+                'Path = @"C:\\logs\\//keep"\n'
+                "\n"
+                "| project Message, Text, Path"
+            ),
+            compacted,
+        )
 
     def test_standalone_ingestion_parser_is_valid_without_qtp(self):
         ingest_path = self.write_yaml(

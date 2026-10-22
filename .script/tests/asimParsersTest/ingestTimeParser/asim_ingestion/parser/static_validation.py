@@ -30,6 +30,7 @@ from .kql import (
     _pipeline_operator,
     _query_uses_source_table,
     _validate_statement_shape,
+    compact_kql,
     mask_kql,
     resolve_source_specific_fixture,
     split_kql_statements,
@@ -501,19 +502,20 @@ def validate_ingest_time_parser(
             )
             findings.extend(_scan_kql(filter_query, "ParserFilterQuery"))
         if parser_query is not None:
-            if (
-                isinstance(raw_parser_query, str)
-                and len(raw_parser_query) > MAX_DCR_TRANSFORM_KQL_CHARS
-            ):
-                findings.append(
-                    Finding(
-                        "KQL044",
-                        "ParserQuery",
-                        f"ParserQuery is {len(raw_parser_query)} characters; "
-                        "Azure DCR TransformKql supports at most "
-                        f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
+            if isinstance(raw_parser_query, str):
+                compacted_length = len(compact_kql(raw_parser_query))
+                if compacted_length > MAX_DCR_TRANSFORM_KQL_CHARS:
+                    findings.append(
+                        Finding(
+                            "KQL044",
+                            "ParserQuery",
+                            f"ParserQuery is {compacted_length} characters "
+                            "after removing comments and indentation "
+                            f"({len(raw_parser_query)} before compaction); "
+                            "Azure DCR TransformKql supports at most "
+                            f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
+                        )
                     )
-                )
             _validate_pipeline_operators(
                 parser_query,
                 "ParserQuery",
