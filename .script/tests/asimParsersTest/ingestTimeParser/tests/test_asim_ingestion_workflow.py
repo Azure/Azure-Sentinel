@@ -526,6 +526,111 @@ class ReportTests(unittest.TestCase):
         )
         self.assertEqual("", report["stages"]["parserDcr"]["detail"])
 
+    def test_stage_summary_includes_nested_provider_error(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "InvalidPayload",
+                    "message": "Data collection rule is invalid",
+                    "details": [
+                        {
+                            "code": "InvalidStream",
+                            "message": (
+                                "'OutputStream' stream "
+                                "'Microsoft-SalesforceAuditTrail' must "
+                                "be a custom stream or one of the "
+                                "allowed streams."
+                            ),
+                            "target": (
+                                "Properties.DataFlows[0].OutputStream"
+                            ),
+                        }
+                    ],
+                }
+            },
+        }
+
+        report = self.build(validation)
+        detail = report["stages"]["rawDcr"]["detail"]
+        summary = WORKFLOW.render_summary(report)
+
+        self.assertIn("PUT failed with HTTP 400.", detail)
+        self.assertIn("InvalidStream:", detail)
+        self.assertIn("Microsoft-SalesforceAuditTrail", detail)
+        self.assertIn(
+            "Properties.DataFlows[0].OutputStream",
+            detail,
+        )
+        self.assertIn("Microsoft-SalesforceAuditTrail", summary)
+
+    def test_target_output_error_is_exposed_as_parity_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "target-output",
+            "message": "POST failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "BadArgumentError",
+                    "innererror": {
+                        "code": "SEM0100",
+                        "message": (
+                            "Failed to resolve scalar expression "
+                            "named 'EventSchema'"
+                        ),
+                    },
+                    "message": (
+                        "The request had some invalid properties"
+                    ),
+                }
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "passed", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["parity"]["status"]
+        )
+        self.assertIn(
+            "EventSchema",
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_cleanup_warning_exposes_cleanup_error(self):
+        report = self.build(
+            self.base_validation(),
+            cleanup={
+                "resources": [
+                    {
+                        "resourceId": "/raw",
+                        "status": "warning",
+                        "message": "DELETE failed with HTTP 503.",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(
+            "DELETE failed with HTTP 503.",
+            report["stages"]["cleanup"]["detail"],
+        )
+
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
         validation["status"] = "failed"

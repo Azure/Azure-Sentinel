@@ -31,6 +31,50 @@ def _stage(
     return result
 
 
+def _nested_error_messages(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [
+            message
+            for item in value
+            for message in _nested_error_messages(item)
+        ]
+    if not isinstance(value, Mapping):
+        return []
+
+    messages: list[str] = []
+    for key in ("details", "innererror", "error"):
+        messages.extend(_nested_error_messages(value.get(key)))
+
+    message = value.get("message")
+    if isinstance(message, str) and message.strip():
+        code = value.get("code")
+        target = value.get("target")
+        formatted = (
+            f"{code}: {message.strip()}"
+            if isinstance(code, str) and code.strip()
+            else message.strip()
+        )
+        if isinstance(target, str) and target.strip():
+            formatted += f" [{target.strip()}]"
+        messages.append(formatted)
+    return messages
+
+
+def _error_detail(error: Any) -> str:
+    if not isinstance(error, Mapping):
+        return ""
+    fragments: list[str] = []
+    message = error.get("message")
+    if isinstance(message, str) and message.strip():
+        fragments.append(message.strip())
+    fragments.extend(_nested_error_messages(error.get("details")))
+    unique: list[str] = []
+    for fragment in fragments:
+        if fragment not in unique:
+            unique.append(fragment)
+    return "; ".join(unique)
+
+
 def build_report(
     *,
     target: Mapping[str, Any],
@@ -125,11 +169,7 @@ def build_report(
         if isinstance(error, Mapping)
         else None
     )
-    error_message = (
-        error.get("message")
-        if isinstance(error, Mapping)
-        else ""
-    )
+    error_detail = _error_detail(error)
 
     if isinstance(prepared_fixture, Mapping):
         fixture = _stage(
@@ -158,7 +198,7 @@ def build_report(
         fixture = _stage(
             "failed",
             (
-                error_message
+                error_detail
                 if error_stage == "fixture-preparation"
                 else "Fixture preparation did not complete."
             ),
@@ -184,13 +224,14 @@ def build_report(
             if raw_dcr_failed
             else "not-run"
         ),
-        error_message if raw_dcr_failed else "",
+        error_detail if raw_dcr_failed else "",
         raw_dcr_value,
     )
     raw_ingestion_failed = error_stage in {
         "upload",
         "upload-reconciliation",
         "raw-visibility",
+        "source-snapshot",
     } and not validation.get("parserDcr")
     raw_ingestion = _stage(
         "failed"
@@ -198,7 +239,7 @@ def build_report(
         else "passed"
         if validation.get("rawUpload")
         else "not-run",
-        error_message if raw_ingestion_failed else "",
+        error_detail if raw_ingestion_failed else "",
         {
             "upload": validation.get("rawUpload", []),
             "snapshot": validation.get("snapshot"),
@@ -214,7 +255,7 @@ def build_report(
             if error_stage == "filter"
             else "not-run"
         ),
-        error_message if error_stage == "filter" else "",
+        error_detail if error_stage == "filter" else "",
         filter_validation,
     )
     parser_dcr = _stage(
@@ -225,7 +266,7 @@ def build_report(
             if parser_dcr_failed
             else "not-run"
         ),
-        error_message if parser_dcr_failed else "",
+        error_detail if parser_dcr_failed else "",
         parser_dcr_value,
     )
     parser_ingestion_failed = error_stage in {
@@ -239,7 +280,7 @@ def build_report(
         else "passed"
         if validation.get("parserUpload")
         else "not-run",
-        error_message if parser_ingestion_failed else "",
+        error_detail if parser_ingestion_failed else "",
         validation.get("parserUpload", []),
     )
 
@@ -268,18 +309,21 @@ def build_report(
         "passed" if validation.get("parserDcr") else (
             "failed" if error_stage == "output-validation" else "not-run"
         ),
-        error_message if error_stage == "output-validation" else "",
+        error_detail if error_stage == "output-validation" else "",
         schema_validation,
     )
     data_stage = _stage(
         (
             str(data_validation.get("status"))
             if isinstance(data_validation, Mapping)
+            else "passed"
+            if error_stage
+            in {"qtp-execution", "target-output", "parity"}
             else "failed"
             if error_stage == "asim-data"
             else "not-run"
         ),
-        error_message if error_stage == "asim-data" else "",
+        error_detail if error_stage == "asim-data" else "",
         data_validation,
     )
     if counterpart["status"] in {"not-applicable", "blocked"}:
@@ -293,12 +337,12 @@ def build_report(
                 str(qtp_execution.get("status"))
                 if isinstance(qtp_execution, Mapping)
                 else "passed"
-                if error_stage == "parity"
+                if error_stage in {"target-output", "parity"}
                 else "failed"
                 if error_stage == "qtp-execution"
                 else "not-run"
             ),
-            error_message if error_stage == "qtp-execution" else "",
+            error_detail if error_stage == "qtp-execution" else "",
             qtp_execution,
         )
         parity_stage = _stage(
@@ -306,14 +350,18 @@ def build_report(
                 str(parity_validation.get("status"))
                 if isinstance(parity_validation, Mapping)
                 else "failed"
-                if error_stage == "parity"
+                if error_stage in {"target-output", "parity"}
                 else "not-run"
             ),
-            error_message if error_stage == "parity" else "",
+            (
+                error_detail
+                if error_stage in {"target-output", "parity"}
+                else ""
+            ),
             parity_validation or (
                 error.get("details")
                 if isinstance(error, Mapping)
-                and error_stage == "parity"
+                and error_stage in {"target-output", "parity"}
                 else None
             ),
         )
@@ -332,13 +380,28 @@ def build_report(
         and item.get("status") == "warning"
         for item in cleanup_items
     )
+    cleanup_details = [
+        _error_detail(item)
+        for item in cleanup_items
+        if isinstance(item, Mapping)
+        and item.get("status") == "warning"
+    ]
+    cleanup_details = [
+        detail for detail in cleanup_details if detail
+    ]
     cleanup_stage = _stage(
         "warning"
         if cleanup_warning
         else "passed"
         if cleanup_items
         else "not-run",
-        "Cleanup reported a warning." if cleanup_warning else "",
+        (
+            "; ".join(dict.fromkeys(cleanup_details))
+            if cleanup_details
+            else "Cleanup reported a warning."
+            if cleanup_warning
+            else ""
+        ),
         cleanup_items,
     )
 
