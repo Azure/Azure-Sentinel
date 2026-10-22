@@ -91,61 +91,66 @@ themselves establish a toolkit fix is required.
   capability (`core/`, `authoring/`, `migration/`, `qualification/`,
   `packaging/`, `reporting/`, and `research/` scaffold) with `cli.py` at the
   package root and backwards-compatible `sentinel_xdr_migration` module aliases.
+- **Preserve non-Log-Analytics query types and Azure resource-protection pickers
+  in Defender workbooks by default.** Preserved Azure Resource Graph (`queryType: 1`,
+  `microsoft.resourcegraph/resources`) tiles and kept `{subscription}` /
+  resource-protection pickers active when referenced by preserved non-Log-Analytics
+  queries (`preservedByResourceProtectionQueries`).
+- **Extend conversion logic to migrate `SecurityAlert` and `SecurityIncident`
+  queries to `AlertInfo` and `AlertEvidence` (`AlertEntities`) tables.** Added
+  deterministic table and column conversion rules (`SystemAlertId -> AlertId`,
+  `AlertName/DisplayName -> Title`, `AlertSeverity -> Severity`,
+  `ProviderName -> DetectionSource`, `ProductName -> ServiceSource`,
+  `Tactics -> AttackTechniques`/`Category`, `TimeGenerated -> Timestamp`) with
+  `AlertEvidence` left-outer join synthesis across rules and workbooks.
+- **Support automatic row-level query rewrite for `kind: NRT` rules with cosmetic
+  `summarize` wrappers.** Added deterministic `rewrite_cosmetic_nrt_summarize`
+  to convert trailing timestamp/count `summarize` wrappers into row-level
+  projections while preserving `schedule.frequency: "PT0S"`, and automatically
+  fell back behavioral `summarize` NRT rules to `PT1H` / `PT4H`.
+- **Add catalog-specific validation routing for `Sample Data/Tables/` in
+  `.script/sampleDataValidator.ts`.** Routed `Sample Data/Tables/<TableName>/base-event.json`
+  and `metadata.json` through `IsValidTableCatalogSampleData` and RFC 2606 /
+  contoso / example email sanitation checks.
+- **Safely capture user decisions into the submitted work for all flows under
+  Solution Manager.** Added `solution_manager.reporting.decision_manifest`
+  (`decision-manifest-v1`) with fail-closed privacy verification and
+  `decisionManifestSummary` projection into solution reports.
+- **Deliver review-gate notifications reliably.** Added
+  `solution_manager.core.review_notifications` to persist `pending`,
+  `delivered`, `acknowledged`, and `delivery_failed` notification states bound
+  to `(runId, reviewPacketSha256)` with restart reconciliation and deduplication.
+- **Implement 5-stage end-to-end `QualificationOrchestrator` and promotion gate.**
+  Added `solution_manager.qualification.orchestrator` (`preflight`,
+  `deployment`, `mock_ingestion`, `rule_parity`, `workbook_qualification`) and
+  `evaluate_qualification_promotion_gate` to verify end-to-end qualification
+  readiness before promoting `qualification` as the default profile.
+- **Raise minimum V3.1 solution release version floor to `>= 3.2.2 and < 4.0.0`.**
+  Updated V3.1 solution version policy documentation and workflow examples to
+  require canonical solution versions in `[3.2.2, 4.0.0)`.
+- **Add cross-surface `AlertEvidence` Azure resource column compatibility aliases
+  and document deterministic `SecurityAlert`/`SecurityIncident` mappings.**
+  Added `ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS` using
+  `coalesce(tostring(column_ifexists(...)))` so migrated `SecurityAlert` and
+  `SecurityIncident` queries referencing `ResourceID`/`AzureResourceId`,
+  `ResourceType`/`AzureResourceType`, or `SubscriptionId`/`AzureSubscriptionId`
+  execute identically across Defender XDR Advanced Hunting and Azure Monitor /
+  Sentinel Log Analytics.
+- **Bundle Microsoft Graph Bicep/ARM template (`grant-graph-hunting-scopes.arm.json`)
+  and `build_missing_graph_scope_arm_offer` remediation helper.** Added bundled
+  `grant-graph-hunting-scopes.bicep` and `grant-graph-hunting-scopes.arm.json`
+  templates under `solution_manager/qualification/templates/` and
+  `build_missing_graph_scope_arm_offer` to offer explicit-approval deployment of
+  `Microsoft.Graph/applications@v1.0`, `servicePrincipals@v1.0`, and
+  `oauth2PermissionGrants@v1.0` when `ThreatHunting.Read.All` or
+  `CustomDetection.ReadWrite.All` is missing.
 
 ## Candidate follow-ups
 
-- **Preserve non-Log-Analytics query types and Azure resource-protection pickers
-  in Defender workbooks by default.** Defender workbooks should convert Sentinel
-  Log Analytics KQL queries to Advanced Hunting while leaving other query types
-  (such as Azure Resource Graph `microsoft.resourcegraph/resources`) unchanged.
-  When a resource/subscription picker scopes protected Azure resources (such as
-  AKS clusters or Azure subscriptions being protected) rather than selecting
-  Sentinel workspaces, keep that picker working unchanged after migration by
-  default.
-- **Extend conversion logic to migrate `SecurityAlert` and `SecurityIncident`
-  queries to `AlertInfo` and `AlertEvidence` (`AlertEntities`) tables.** Add
-  deterministic table and column conversion rules for `SecurityAlert` and
-  `SecurityIncident` queries into Defender XDR `AlertInfo` and `AlertEvidence`
-  (`AlertEntities`) tables across rules and workbooks.
-- **Safely capture user decisions into the submitted work for all flows under
-  Solution Manager.** Project sanitized, hash-bound reviewer decisions,
-  waivers, exclusions, and rationale across authoring, migration, qualification,
-  and future Solution Manager flows into the submitted solution PR artifacts
-  (without exposing private tenant, workspace, or environment identifiers).
-- **Add catalog-specific validation routing for `Sample Data/Tables/` in
-  `.script/sampleDataValidator.ts`.** `.script/sampleDataValidator.ts` currently
-  validates modified JSON files under `Sample Data/` as connector log arrays
-  and rejects email literals other than `sanitized@sanitized.com`. Because
-  `Sample Data/Tables/<TableName>/base-event.json` and `metadata.json` are
-  single JSON objects required by `_load_table_base`, add catalog-specific
-  schema and sanitation validation in `.script/sampleDataValidator.ts` for
-  `Sample Data/Tables/` rather than wrapping catalog objects in arrays.
-- **Promote `qualification` to the default workflow profile once end-to-end
-  qualification flow runs fluently.** All tools and agent adapters currently
-  default to `authoring` and ask before optional lab `qualification`; switch
-  the default profile to `qualification` once live workspace provisioning,
-  synthetic ingestion, and parity orchestration are fluent end-to-end.
-
-- **Deliver review-gate notifications reliably.** Add immediate coordinator-owned
-  alerts when a solution needs review or release approval, with one consolidated
-  decision request. Persist pending, delivered, and acknowledged notification
-  states bound to the run ID and current review-packet hash. Generating a status
-  summary must not count as delivery. Reconcile pending notifications after
-  restart or model changes, and use one read-only fallback reminder schedule
-  without creating another workflow executor. Deduplicate delivered unchanged
-  alerts, but do not suppress undelivered requests. Test missed notifications,
-  delivery failures, restart recovery, changed review packets, acknowledgment,
-  and single-owner execution. The current status helper does not implement
-  end-to-end scheduled notification delivery; separate maintainer implementation
-  and verification are required.
-- **Support automatic row-level query rewrite for `kind: NRT` rules with cosmetic
-  `summarize` wrappers.** While single-table `kind: NRT` rules already map to
-  `schedule.frequency: "PT0S"`, Sentinel NRT rules that include a trailing
-  `summarize min(TimeGenerated), max(TimeGenerated), count() by ...` wrapper
-  are flagged by Defender XDR's Continuous (NRT) engine restriction against
-  `summarize`. Add a deterministic rewrite option to strip cosmetic timestamp/count
-  aggregations into row-level projections when converting to `NRT`, falling back
-  to `PT1H` scheduled frequency when aggregation is required.
+- **Flip default workflow profile from `authoring` to `qualification` after live
+  lab sign-off.** `evaluate_qualification_promotion_gate` now verifies all 5
+  qualification stages end-to-end; once signed off against a live lab run,
+  switch the default profile in `workflow-init` and agent adapters.
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

@@ -99,7 +99,7 @@ def _catalog_solution(tmp_path, *, name=None, catalog=None):
     root = repository / "Solutions" / "Fixture"
     (root / "Workbooks/nested").mkdir(parents=True)
     (root / "Data").mkdir()
-    (root / "Data/Solution_Fixture.json").write_text(json.dumps({"Version": "3.2.0"}))
+    (root / "Data/Solution_Fixture.json").write_text(json.dumps({"Version": "3.2.2"}))
     source = {
         "version": "Notebook/1.0",
         "fromTemplateId": str(uuid4()),
@@ -373,7 +373,7 @@ def test_independent_authored_workbook_keeps_31_content_floor(solution):
     assert workbooks.validate_workbooks(solution)["invalid"] == 0
 
 
-@pytest.mark.parametrize("version", ["3.0.9", "3.1.999", "4.0.0", "3.2", "03.2.0", "3.2.0-preview"])
+@pytest.mark.parametrize("version", ["3.0.9", "3.1.999", "3.2.0", "3.2.1", "4.0.0", "3.2", "03.2.2", "3.2.2-preview"])
 def test_unsupported_target_versions_reject_without_mutation(solution, version):
     settings = config(solution)
     settings["targetVersion"] = version

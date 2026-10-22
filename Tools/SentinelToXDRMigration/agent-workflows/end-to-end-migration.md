@@ -412,21 +412,21 @@ validation, ARM validation, consent and acceptance gates. No prior candidate
 receipt or approval is copied into current success evidence.
 
 An author may select a canonical target version instead of a patch/minor/major
-bump. The target must satisfy `>=3.2.0` and `<4.0.0` and need not be consecutive
+bump. The target must satisfy `>= 3.2.2 and < 4.0.0` and need not be consecutive
 with the current version. For example, an initial release may go directly from
-`3.0.7` to `3.2.1`:
+`3.0.7` to `3.2.2`:
 
 ```powershell
 sentinel-xdr-migration workflow-init `
   --solution "Solutions\<solution>" `
   --workflow-profile authoring `
   --version-bump none `
-  --target-version 3.2.1
+  --target-version 3.2.2
 
 sentinel-xdr-migration package-v3-1 `
   --solution "Solutions\<solution>" `
   --version-bump none `
-  --target-version 3.2.1
+  --target-version 3.2.2
 ```
 
 For changed package inputs, plan the exact target against the current input
@@ -439,7 +439,7 @@ cannot be combined with a non-`none` bump. The persisted target/action and
 release plan retain the same review, freshness, campaign, and one-time
 consumption protections as bump actions.
 
-The resulting solution release must be `>=3.2.0` and `<4.0.0` for V3.1
+The resulting solution release must be `>= 3.2.2 and < 4.0.0` for V3.1
 packaging, including no-bump rebuilds and pipeline-calculated versions.
 An older source version is not silently promoted; select a supported target or
 bump explicitly. Independent content-version checks remain unchanged.
@@ -1167,6 +1167,53 @@ source list. Invalid or incompatible overrides fail rather than lose metadata.
 Historical single-tactic draft findings require explicit regeneration, not a
 mandatory choice of one tactic for authoring. See the
 [MITRE contract](../README.md#mitre-authoring-and-deployment-contracts).
+
+#### Deterministic `SecurityAlert` & `SecurityIncident` $\rightarrow$ `AlertInfo` + `AlertEvidence` Mappings
+
+`convert_security_alert_incident_query` deterministically rewrites
+`SecurityAlert` and `SecurityIncident` queries to `AlertInfo` and joins
+`AlertEvidence` (`| join kind=leftouter AlertEvidence on AlertId`) when entity
+or evidence fields are referenced:
+
+| Source Column | Target `AlertInfo` / `AlertEvidence` Mapping |
+| --- | --- |
+| `TimeGenerated` | `Timestamp` |
+| `SystemAlertId` / `IncidentNumber` | `AlertId` |
+| `AlertName`, `DisplayName`, `IncidentName`, `Description` | `Title` |
+| `AlertSeverity` | `Severity` |
+| `ProviderName` | `DetectionSource` |
+| `ProductName` | `ServiceSource` |
+| `Tactics` | `AttackTechniques` (or `Category` for MITRE tactic predicates) |
+| `Entities` | `AdditionalFields` (with `AlertEvidence` left-outer join) |
+| `Status` (`SecurityIncident`) | `column_ifexists("Status", "Active")` |
+| `AlertIds` (`SecurityIncident`) | `pack_array(AlertId)` |
+| `CompromisedEntity`, `HostName` | `DeviceName` |
+| `IPAddress` | `RemoteIP` |
+| `UserPrincipalName` | `AccountUpn` |
+| `ResourceId`, `AzureResourceId`, `ResourceID` | `coalesce(tostring(column_ifexists("ResourceID", "")), tostring(column_ifexists("AzureResourceId", "")))` |
+| `ResourceType`, `AzureResourceType` | `coalesce(tostring(column_ifexists("ResourceType", "")), tostring(column_ifexists("AzureResourceType", "")))` |
+| `SubscriptionId`, `AzureSubscriptionId` | `coalesce(tostring(column_ifexists("SubscriptionId", "")), tostring(column_ifexists("AzureSubscriptionId", "")))` |
+
+Because `AlertEvidence` uses `ResourceID`, `ResourceType`, and `SubscriptionId`
+in Defender XDR Advanced Hunting ([learn.microsoft.com](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertevidence-table))
+and `AzureResourceId`, `AzureResourceType`, and `AzureSubscriptionId` in Azure
+Monitor / Microsoft Sentinel Log Analytics ([learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/alertevidence)),
+`ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS` emits `coalesce(tostring(column_ifexists(...)))`
+compatibility aliases so migrated queries run on both surfaces. See also the
+[Defender XDR `AlertInfo` schema](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertinfo-table).
+
+#### Remediation for Missing Graph Scopes via Microsoft Graph Bicep/ARM Template (`grant-graph-hunting-scopes.arm.json`)
+
+When `ThreatHunting.Read.All` or `CustomDetection.ReadWrite.All` is missing
+during Qualification preflight or token diagnostics, the agent uses
+`build_missing_graph_scope_arm_offer` to present a structured remediation offer
+referencing `Tools/SentinelToXDRMigration/solution_manager/qualification/templates/grant-graph-hunting-scopes.arm.json`
+(compiled from `grant-graph-hunting-scopes.bicep`). After explicit user approval,
+the agent deploys `Microsoft.Graph/applications@v1.0`,
+`Microsoft.Graph/servicePrincipals@v1.0`, and
+`Microsoft.Graph/oauth2PermissionGrants@v1.0` via `az deployment group create`
+to grant tenant-wide delegated scopes (`User.Read`, `ThreatHunting.Read.All`,
+`CustomDetection.ReadWrite.All`).
 
 #### Metadata repair and user notification
 

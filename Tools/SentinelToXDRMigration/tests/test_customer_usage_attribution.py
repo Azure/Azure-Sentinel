@@ -45,7 +45,7 @@ class AttributionTests(unittest.TestCase):
         value = {
             "publisherId": "testpublisher",
             "offerId": "test-sentinel",
-            "version": "3.2.0",
+            "version": "3.2.2",
             "firstPublishDate": "2021-01-01",
             "providers": ["Microsoft"],
             "categories": {"domains": ["Security"]},
@@ -186,7 +186,7 @@ class AttributionTests(unittest.TestCase):
             path.write_text("---\n" + json.dumps(document), encoding="utf-8")
         self.data.write_text(json.dumps({
             "Name": "Sample", "Author": "Test", "Description": "Test package",
-            "Version": "3.2.0", "TemplateSpec": True,
+            "Version": "3.2.2", "TemplateSpec": True,
             "Analytic Rules": ["Analytic Rules/Test.yaml"],
             "XDR Detections": ["XDR Detections/Test.yaml"],
             "Metadata": "SolutionMetadata.json",
@@ -197,7 +197,7 @@ class AttributionTests(unittest.TestCase):
     def package(
         self, entry: Path, pipeline: bool, *,
         version_bump: str = "none", version_mode: str = "local",
-        calculated_version: str = "3.2.0",
+        calculated_version: str = "3.2.2",
         skip_lookup: bool = False,
     ) -> subprocess.CompletedProcess:
         extra = " -SkipAttributionLookup" if skip_lookup else ""
@@ -488,7 +488,7 @@ class AttributionTests(unittest.TestCase):
         result = self.package(entry, False, version_bump="patch")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         metadata = json.loads(self.metadata.read_text())
-        self.assertEqual("3.2.1", metadata["version"])
+        self.assertEqual("3.2.3", metadata["version"])
         self.assertEqual(TRACKING_ID, metadata["trackingId"])
 
     def test_failed_packaging_prerequisite_does_not_persist_discovery(self) -> None:
@@ -533,10 +533,10 @@ class AttributionTests(unittest.TestCase):
                                 if r.get("properties", {}).get("contentKind") == "AnalyticsRule")
                 self.assertEqual("[parameters('DeployAnalyticsRule')]", analytic["condition"])
                 self.assertEqual("3.0.0", analytic["properties"]["contentSchemaVersion"])
-                self.assertEqual("3.2.0", template["variables"]["_solutionVersion"])
+                self.assertEqual("3.2.2", template["variables"]["_solutionVersion"])
                 self.assertNotIn("trackingId", json.dumps(template))
                 self.assertNotIn("pid-stale-data", json.dumps(template))
-                with zipfile.ZipFile(package / "3.2.0.zip") as archive:
+                with zipfile.ZipFile(package / "3.2.2.zip") as archive:
                     self.assertEqual(template, json.loads(archive.read("mainTemplate.json").decode("utf-8-sig")))
                 self.assertEqual(before, (self.data.read_bytes(), self.metadata.read_bytes()))
 
@@ -582,7 +582,7 @@ class AttributionTests(unittest.TestCase):
                     template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
                     self.assertFalse(any(r["type"] == "Microsoft.Resources/deployments"
                                          for r in template["resources"]))
-                    self.assertTrue((self.solution / "Package/3.2.0.zip").exists())
+                    self.assertTrue((self.solution / "Package/3.2.2.zip").exists())
 
 
 if __name__ == "__main__":

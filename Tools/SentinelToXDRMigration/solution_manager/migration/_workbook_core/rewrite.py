@@ -541,7 +541,9 @@ def _dedupe_summarize_keys(kql: str) -> Tuple[str, List[str]]:
 
 
 def rewrite(kql: str, tables: Optional[List[str]],
-            catalog: Optional[dict] = None) -> dict:
+            catalog: Optional[dict] = None,
+            *,
+            preserve_sentinel_tables: bool = False) -> dict:
     """Deterministically rewrite a Sentinel query for Advanced Hunting.
 
     Returns:
@@ -556,6 +558,65 @@ def rewrite(kql: str, tables: Optional[List[str]],
     cat = catalog or mapping_catalog.load_mapping_catalog()
     tbl_map = cat["tables"]
     tables = list(tables or [])
+    provenance_notes: List[str] = []
+    target_tables: List[str] = []
+
+    if not preserve_sentinel_tables:
+        from solution_manager.migration.catalog import (
+            SECURITY_ALERT_DIRECT_COLUMN_MAP,
+            SECURITY_INCIDENT_DIRECT_COLUMN_MAP,
+            convert_security_alert_incident_query,
+        )
+
+        alert_converted, alert_notes, alert_renamed = convert_security_alert_incident_query(kql)
+        if alert_notes and alert_renamed:
+            provenance_notes.extend(alert_notes)
+            if not tables:
+                tables = sorted(alert_renamed.keys())
+            alert_diffs: List[dict] = []
+            for src_tbl, tgt_tbl in sorted(alert_renamed.items()):
+                alert_diffs.append({
+                    "kind": "table-rename",
+                    "before": src_tbl,
+                    "after": tgt_tbl,
+                    "count": 1,
+                    "source": "deterministic",
+                    "reason": "Migrated Sentinel alert/incident table to Defender XDR Advanced Hunting",
+                })
+            combined_col_map = {
+                **SECURITY_ALERT_DIRECT_COLUMN_MAP,
+                **SECURITY_INCIDENT_DIRECT_COLUMN_MAP,
+            }
+            src_idents = _find_identifiers(kql, set(combined_col_map.keys()))
+            for src_col in sorted(src_idents):
+                tgt_col = combined_col_map[src_col]
+                if src_col != tgt_col:
+                    alert_diffs.append({
+                        "kind": "column-rename",
+                        "before": src_col,
+                        "after": tgt_col,
+                        "count": 1,
+                        "source": "deterministic",
+                        "reason": "Column mapped to AlertInfo/AlertEvidence schema",
+                    })
+            alert_diffs.sort(key=lambda d: (d["kind"], d["before"]))
+            target_tables = ["AlertInfo"]
+            if "AlertEvidence" in _find_identifiers(alert_converted, {"AlertEvidence"}):
+                target_tables.append("AlertEvidence")
+            tiers = {t: "1to1" for t in tables}
+            return {
+                "convertedKql": alert_converted,
+                "diff": alert_diffs,
+                "renamedTables": alert_renamed,
+                "renamedAsimTables": {},
+                "targetTables": target_tables,
+                "notes": list(provenance_notes),
+                "provenanceNotes": list(provenance_notes),
+                "flags": [],
+                "tiers": tiers,
+                "overallTier": "1to1",
+                "deterministic": True,
+            }
 
     # Column renames: global + per-table for the tables present.
     col_renames: Dict[str, str] = dict(cat["global"].get("columnRenames", {}))

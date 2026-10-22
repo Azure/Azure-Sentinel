@@ -152,16 +152,19 @@ def plan_workbook_dependencies(solution, *, results_path=None, workspace_id=None
                 raw = template
                 raw_valid = False
                 blockers.append(str(exc))
-            provider_supported = surface["queryType"] in (0, None, workbook.AH) and (
-                surface["queryType"] == workbook.AH or
-                (surface["resourceType"] or "").lower() in ("", workbook.LA))
+            preserved_provider = workbook.is_preserved_provider_surface(surface)
+            provider_supported = preserved_provider or (
+                surface["queryType"] in (0, None, workbook.AH) and (
+                    surface["queryType"] == workbook.AH or
+                    (surface["resourceType"] or "").lower() in ("", workbook.LA))
+            )
             is_helper = any(surface["path"].startswith(prefix) for prefix in removed_prefixes)
             if not provider_supported and not is_helper:
                 blockers.append("Unsupported provider requires a separately reviewed source migration.")
             code = "".join(text if kind == "code" else " " * len(text) for kind, text in rewrite._segments(raw))
             if re.search(r"\b(?:workspace|app|resource|cluster|database)\s*\(", code, re.I):
                 blockers.append("Explicit cross-resource/scope function cannot be converted by dependency acceptance.")
-            aliases = sorted(workbook.opaque_functions(raw)) if provider_supported else []
+            aliases = sorted(workbook.opaque_functions(raw)) if (provider_supported and not preserved_provider) else []
             entry = entries.get((row["path"], surface["path"]))
             metadata = None
             if entry is not None:
@@ -341,8 +344,11 @@ def review_workbook_dependencies(solution, *, plan_path, decisions_path, expecte
             raise ValueError("Reviewed workspaceFunctions must match exact source aliases.")
         if not set(aliases) <= declared_aliases or set(aliases) & set(tables):
             raise ValueError("Function aliases need vetted prerequisites and separate underlying tables.")
+        preserved_provider = workbook.is_preserved_provider_surface(row)
         source_free_literal = rewrite.is_source_free_literal_query(row["queryKql"])
-        if not tables and not row["scopeHelper"] and not source_free_literal:
+        if preserved_provider and tables:
+            raise ValueError("Preserved provider query must not declare Advanced Hunting source tables.")
+        if not tables and not row["scopeHelper"] and not source_free_literal and not preserved_provider:
             raise ValueError("Accepted query requires explicit underlying source tables.")
         resolution = {"querySha256": row["querySha256"], "tables": tables,
                       "evidence": {"actor": actor, "reference": reference, "planSha256": expected_plan_sha256,
@@ -351,12 +357,13 @@ def review_workbook_dependencies(solution, *, plan_path, decisions_path, expecte
             resolution["workspaceFunctions"] = aliases
         config["workbookResolutions"].setdefault(path, {})[row["path"]] = resolution
         blockers = list(row["technicalBlockers"])
-        contract = migrator.convert(row["queryKql"], tables=tables, source_id=row["path"],
-                                    artifact_type="workbook", resolve=False)
-        if not row["scopeHelper"] and (contract["status"] != "converted" or contract["unsupported"]):
-            blockers.append(contract["blockedReason"] or "Shared conversion requires technical review.")
-        if aliases and contract["convertedKql"] != row["queryKql"]:
-            blockers.append("Shared conversion would modify preserved function KQL.")
+        if not preserved_provider:
+            contract = migrator.convert(row["queryKql"], tables=tables, source_id=row["path"],
+                                        artifact_type="workbook", resolve=False)
+            if not row["scopeHelper"] and (contract["status"] != "converted" or contract["unsupported"]):
+                blockers.append(contract["blockedReason"] or "Shared conversion requires technical review.")
+            if aliases and contract["convertedKql"] != row["queryKql"]:
+                blockers.append("Shared conversion would modify preserved function KQL.")
         branches = decision.get("optionalBranches", [])
         if not isinstance(branches, list):
             raise ValueError("optionalBranches must be an array.")

@@ -1624,7 +1624,47 @@ def _file_snapshot(path: Path) -> tuple[bytes, tuple[int, int, int, int, int]]:
     return content, before_identity
 
 
+def _exchange_paths_windows(left: Path, right: Path) -> None:
+    """Exchange two same-directory files using ReplaceFileW plus a private backup.
+
+    ReplaceFileW atomically puts ``left`` at ``right`` and moves the previous
+    ``right`` into the backup name; the backup is then renamed to ``left``. The
+    first step is the commit boundary: the displaced ``right`` bytes are exactly
+    what was replaced. ``left`` must be a private name no other writer uses.
+    """
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    replace_file = kernel32.ReplaceFileW
+    replace_file.argtypes = (
+        ctypes.c_wchar_p,
+        ctypes.c_wchar_p,
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    )
+    replace_file.restype = ctypes.c_int
+    move_file = kernel32.MoveFileExW
+    move_file.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32)
+    move_file.restype = ctypes.c_int
+    backup = left.with_name(f".{left.name}.{uuid.uuid4().hex}.bak")
+    if not replace_file(str(right), str(left), str(backup), 0, None, None):
+        error = ctypes.get_last_error()  # type: ignore[attr-defined]
+        raise OSError(None, ctypes.FormatError(error).strip(), f"{left} <-> {right}", error)
+    # MOVEFILE_WRITE_THROUGH
+    if not move_file(str(backup), str(left), 0x8):
+        error = ctypes.get_last_error()  # type: ignore[attr-defined]
+        raise OSError(
+            None,
+            ctypes.FormatError(error).strip(),
+            f"exchange completed but displaced file retained at {backup}",
+            error,
+        )
+
+
 def _exchange_paths(left: Path, right: Path) -> None:
+    if sys.platform == "win32":
+        _exchange_paths_windows(left, right)
+        return
     if sys.platform == "darwin":
         symbol = "renameatx_np"
         current_directory = -2

@@ -121,12 +121,14 @@ class PackagingTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_v31_target_version_boundaries_and_conflicting_bump(self) -> None:
-        for version in ("3.2.0", "3.2.1", "3.999.999"):
+        for version in ("3.2.2", "3.2.3", "3.999.999"):
             with self.subTest(version=version):
                 self.assertEqual(version, validate_v31_target_version(version))
         for version in (
             "3.0.999",
             "3.1.999",
+            "3.2.0",
+            "3.2.1",
             "4.0.0",
             "4.1.0",
             "3.1",
@@ -144,18 +146,18 @@ class PackagingTests(unittest.TestCase):
             package_solution_v3_1(
                 self.solution,
                 version_bump="patch",
-                target_version="3.2.1",
+                target_version="3.2.2",
             )
 
     def test_below_floor_effective_release_rejects_before_reports_or_subprocess(self) -> None:
         data = self.solution / "Data/Solution_Sample.json"
         document = json.loads(data.read_text())
-        document["Version"] = "3.1.999"
+        document["Version"] = "3.2.0"
         data.write_text(json.dumps(document))
         before = {str(path): path.read_bytes() for path in self.solution.rglob("*") if path.is_file()}
         with mock.patch("sentinel_xdr_migration.packaging.subprocess.run") as run:
             for bump in ("none", "patch"):
-                with self.subTest(bump=bump), self.assertRaisesRegex(ValueError, ">= 3.2.0"):
+                with self.subTest(bump=bump), self.assertRaisesRegex(ValueError, ">= 3.2.2"):
                     package_solution_v3_1(self.solution, version_bump=bump)
             run.assert_not_called()
         self.assertEqual(before, {
@@ -173,11 +175,11 @@ class PackagingTests(unittest.TestCase):
                 package_solution_v3_1(
                     self.solution,
                     version_bump="none",
-                    target_version="3.2.1",
+                    target_version="3.2.2",
                 )
         command = run.call_args.args[0]
         self.assertIn("-TargetVersion", command)
-        self.assertEqual("3.2.1", command[command.index("-TargetVersion") + 1])
+        self.assertEqual("3.2.2", command[command.index("-TargetVersion") + 1])
 
     def test_template_and_zip_match_partial_selection_exclusions(self) -> None:
         data_path = self.solution / "Data" / "Solution_Sample.json"
@@ -750,14 +752,14 @@ class PackagingTests(unittest.TestCase):
                     (data / "Solution_Sample.json").write_text(json.dumps({
                         "Name": "Sample",
                         "Author": "Packaging Smoke Test - test@example.invalid",
-                        "Version": "3.2.0",
+                        "Version": "3.2.2",
                         "Metadata": "SolutionMetadata.json",
                         "Description": "Synthetic V3.1 packaging smoke test.",
                         "XDR Detections": [],
                     }), encoding="utf-8")
                     (solution / "SolutionMetadata.json").write_text(json.dumps({
                         "name": "Sample",
-                        "version": "3.2.0",
+                        "version": "3.2.2",
                         "trackingId": "pid-cross-worktree-smoke-test",
                         "support": {
                             "name": "Synthetic Test",

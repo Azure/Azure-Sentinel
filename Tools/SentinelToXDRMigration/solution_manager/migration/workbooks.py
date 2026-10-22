@@ -284,10 +284,13 @@ def _dependencies(queries: list[dict], configured: dict | None, reviewed_sources
         contract = query.get("conversion")
         if not contract or query["status"] == "removed-scope-helper":
             continue
+        renamed = contract.get("renamedTables") or {}
         for table in telemetry_data_types(contract["resolvedTables"]):
-            target = catalog.get(table, {}).get("ahTable") or table
+            target = renamed.get(table) or catalog.get(table, {}).get("ahTable") or table
             source_targets[table] = target
             targets.add(target)
+        for target_table in telemetry_data_types(contract.get("targetTables") or []):
+            targets.add(target_table)
     records, unknown = workload_records(sorted(targets))
     settings = configured if configured is not None else {}
     if not isinstance(settings, dict):
@@ -407,9 +410,21 @@ def convert_workbooks(solution, *, config=None, report_directory=None, overwrite
         if set(query_resolutions) - {q["path"] for q in row["queries"]}:
             raise ValueError("Workbook resolution references a missing query pointer.")
         functions = function_dependencies.get(row["path"], [])
+        dep_cfg = dependencies.get(row["path"])
+        preserve_sentinel_tables = bool(
+            isinstance(dep_cfg, dict)
+            and any(
+                isinstance(r, dict)
+                and r.get("workload") == "sentinel"
+                and isinstance(r.get("dataTypes"), list)
+                and bool(set(r["dataTypes"]) & {"SecurityAlert", "SecurityIncident"})
+                for r in (dep_cfg.get("requiredWorkloads") or [])
+            )
+        )
         converted = workbook.convert_workbook(
             source, resolutions=query_resolutions,
-            allowed_workspace_functions=[r["functionAlias"] for r in functions])
+            allowed_workspace_functions=[r["functionAlias"] for r in functions],
+            preserve_sentinel_tables=preserve_sentinel_tables)
         target, report = converted["workbook"], converted["report"]
         used_functions = {name for q in report["queries"] for name in q.get("workspaceFunctions", [])}
         if used_functions != {r["functionAlias"] for r in functions}:
@@ -432,7 +447,7 @@ def convert_workbooks(solution, *, config=None, report_directory=None, overwrite
         if version is None:
             report["issues"].append({
                 "path": "/xdrMetadata/version", "code": "release-version-required",
-                "message": "Select targetVersion >=3.2.0 and <4.0.0; source release is unchanged."})
+                "message": "Select targetVersion >=3.2.2 and <4.0.0; source release is unchanged."})
         canonical = row["identity"]
         instance = str(uuid5(NAMESPACE_URL, f"xdr-workbook-instance:{root.name}:{canonical}"))
         target["xdrMetadata"] = {
@@ -441,13 +456,21 @@ def convert_workbooks(solution, *, config=None, report_directory=None, overwrite
             "displayName": _display_name(root, path, source),
         }
         source_metadata = source.get("metadata") or {}
+        conversion_prov = {
+            "tool": "sentinel-xdr-migration",
+            "version": __version__,
+            "reviewRequired": bool(report["issues"]),
+            "queries": report["queries"],
+        }
+        if report.get("notes"):
+            conversion_prov["notes"] = list(report["notes"])
+            conversion_prov["provenanceNotes"] = list(report["notes"])
         target["contentProvenance"] = {
             "source": {"path": row["path"], "sha256": row["sha256"],
                        "contentId": (source.get("fromTemplateId") or source.get("id") or
                                      source_metadata.get("contentId") or source_metadata.get("workbookId")),
                        "originalMetadataVersion": source_metadata.get("version")},
-            "conversion": {"tool": "sentinel-xdr-migration", "version": __version__,
-                           "reviewRequired": bool(report["issues"]), "queries": report["queries"]},
+            "conversion": conversion_prov,
             **{key: dependency[key] for key in (
                 "requiredWorkloads", "requiredDataConnectors", "dependencyReviewRequired")},
         }
@@ -680,11 +703,19 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                         or contract.get("convertedKql") != output_query["node"]["query"]):
                     errors.append("Current reviewed shared-converter query evidence is required.")
                 if source_query and not preserved_provider:
+                    preserve_sentinel_tables = any(
+                        isinstance(r, dict)
+                        and r.get("workload") == "sentinel"
+                        and isinstance(r.get("dataTypes"), list)
+                        and bool(set(r["dataTypes"]) & {"SecurityAlert", "SecurityIncident"})
+                        for r in (provenance.get("requiredWorkloads") or [])
+                    )
                     try:
                         replay = workbook.migrator.convert(
                             workbook._raw_query(source_query["node"]["query"], source_query["queryType"]),
                             tables=contract.get("resolvedTables"), source_id=source_pointer,
-                            artifact_type="workbook", resolve=False)
+                            artifact_type="workbook", resolve=False,
+                            preserve_sentinel_tables=preserve_sentinel_tables)
                         if replay != contract:
                             errors.append("Shared query contract does not match current deterministic conversion.")
                     except ValueError as exc:
@@ -693,8 +724,11 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                 if query.get("referenceInputs", []) != references:
                     errors.append("Platform reference inputs must match reviewed raw source lineage.")
                 catalog = mapping_catalog.load_mapping_catalog()["tables"]
-                expected_types = {catalog.get(table, {}).get("ahTable") or table
+                renamed = contract.get("renamedTables") or {}
+                expected_types = {renamed.get(table) or catalog.get(table, {}).get("ahTable") or table
                                   for table in telemetry_data_types(contract.get("resolvedTables", []))}
+                for target_table in telemetry_data_types(contract.get("targetTables") or []):
+                    expected_types.add(target_table)
                 declared_types = {table for record in provenance["requiredWorkloads"] for table in record["dataTypes"]}
                 if not expected_types <= declared_types:
                     errors.append("Workload prerequisites do not cover reviewed telemetry source tables.")

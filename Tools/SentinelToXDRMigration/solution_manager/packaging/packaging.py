@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import re
 import shutil
@@ -95,12 +96,12 @@ def validate_v31_target_version(version: str | None) -> str:
     if not isinstance(version, str) or not V31_TARGET_VERSION_PATTERN.fullmatch(version):
         raise ValueError(
             "target version must be canonical major.minor.patch in the V3.1 "
-            "range >= 3.2.0 and < 4.0.0"
+            "range >= 3.2.2 and < 4.0.0"
         )
-    major, minor, _patch = version.split(".")
-    if major != "3" or minor in {"0", "1"}:
+    major_i, minor_i, patch_i = (int(p) for p in version.split("."))
+    if major_i != 3 or (minor_i, patch_i) < (2, 2):
         raise ValueError(
-            "target version must be in the V3.1 range >= 3.2.0 and < 4.0.0"
+            "target version must be in the V3.1 range >= 3.2.2 and < 4.0.0"
         )
     return version
 
@@ -577,7 +578,7 @@ def _verify_package_selection(
         packaged_id: str,
     ) -> bool:
         return any(
-            str(child.get("type") or "").casefold()
+            str(child.get("type") or "").split("@", 1)[0].casefold()
             == "microsoft.security/detectionrules"
             and str(child.get("name") or "").casefold() == "detectionrule"
             and exact_token(
@@ -847,11 +848,11 @@ def _verify_workbook_package(
             _, definition = function_definition(_root(solution), record["sourcePath"])
             emitted_query = resource.get("properties", {}).get("query")
             source_query = definition["FunctionQuery"]
-            if ("condition" in resource or "copy" in resource
+            if (resource.get("condition") not in (None, "[parameters('DeployParser')]") or "copy" in resource
                     or not isinstance(emitted_query, str)
                     or emitted_query not in (source_query, f"{source_query}\n")
                     or resource.get("properties", {}).get("functionParameters", "") != function_parameters(definition)):
-                raise RuntimeError("Required workspace function must be unconditional and match current source")
+                raise RuntimeError("Required workspace function must use DeployParser condition and match current source")
             name = resource.get("name")
             if not isinstance(name, str) or not name:
                 raise RuntimeError("Required savedSearch has no exact resource identity")
@@ -1026,11 +1027,13 @@ def package_solution_v3_1(
         workbook_validation = validate_workbooks(root, selected_only=True)
         if workbook_validation["invalid"] or workbook_validation["valid"] != len(workbook_files):
             raise ValueError("selected Defender workbooks have unresolved structural or review blockers")
-        from solution_manager.authoring.workbook_publication import publication_errors
+        workbook_publication = importlib.import_module("solution_manager.authoring.workbook_publication")
         for workbook_file in workbook_files:
-            blockers = publication_errors(root, _read_json(workbook_file))
-            if blockers:
-                raise ValueError("; ".join(blockers))
+            workbook_doc = _read_json(workbook_file)
+            if workbook_publication.is_public(workbook_doc):
+                blockers = workbook_publication.publication_errors(root, workbook_doc)
+                if blockers:
+                    raise ValueError("; ".join(blockers))
     script = (
         selected_toolkit_root
         / "Tools"

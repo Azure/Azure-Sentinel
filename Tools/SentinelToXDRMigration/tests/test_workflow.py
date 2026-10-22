@@ -339,7 +339,7 @@ class WorkflowTests(unittest.TestCase):
         data = self.solution / "Data/Solution_Sample.json"
         if not data.exists():
             data.parent.mkdir(exist_ok=True)
-            data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.0"}), encoding="utf-8")
+            data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.2"}), encoding="utf-8")
 
     def _create_source_rules(self, count: int = 1) -> list[Path]:
         paths = []
@@ -1242,7 +1242,7 @@ class WorkflowTests(unittest.TestCase):
     def test_same_release_notes_refresh_rejects_non_notes_changes_and_wrong_row(self) -> None:
         data = self.solution / "Data" / "Solution_Sample.json"
         data.parent.mkdir(parents=True)
-        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.0"}), encoding="utf-8")
+        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.2"}), encoding="utf-8")
         notes = self.solution / "ReleaseNotes.md"
         notes.write_text(
             "| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |\n"
@@ -1283,7 +1283,7 @@ class WorkflowTests(unittest.TestCase):
             notes.write_text(
                 notes.read_text(encoding="utf-8").replace(
                     "|---|---|---|\n",
-                    "|---|---|---|\n| 3.2.0 | 12-10-2026 | Different description |\n",
+                    "|---|---|---|\n| 3.2.2 | 12-10-2026 | Different description |\n",
                     1,
                 ),
                 encoding="utf-8",
@@ -1361,7 +1361,7 @@ class WorkflowTests(unittest.TestCase):
         data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.1"}), encoding="utf-8")
         readme = self.solution / "README.md"
         readme.write_text("approved package content before the first build\n", encoding="utf-8")
-        initialized, _ = self._prepare_offline_authoring_validation()
+        initialized, _ = self._prepare_offline_authoring_validation(version_bump="patch")
         with using_run(self.solution, initialized["runId"]):
             complete_workflow_stage(
                 self.solution,
@@ -1482,7 +1482,7 @@ class WorkflowTests(unittest.TestCase):
         readme.write_text("before\n", encoding="utf-8")
         release_notes = self.solution / "ReleaseNotes.md"
         release_notes.write_text("baseline notes\n", encoding="utf-8")
-        initialized, _ = self._prepare_offline_authoring_validation()
+        initialized, _ = self._prepare_offline_authoring_validation(version_bump="patch")
         with using_run(self.solution, initialized["runId"]):
             complete_workflow_stage(
                 self.solution,
@@ -1583,7 +1583,7 @@ class WorkflowTests(unittest.TestCase):
         }
         for name, value in contents.items():
             (self.solution / name).write_bytes(value)
-        initialized, _ = self._prepare_offline_authoring_validation()
+        initialized, _ = self._prepare_offline_authoring_validation(version_bump="patch")
         with using_run(self.solution, initialized["runId"]):
             complete_workflow_stage(
                 self.solution,
@@ -1662,7 +1662,7 @@ class WorkflowTests(unittest.TestCase):
         data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.1"}), encoding="utf-8")
         readme = self.solution / "README.md"
         readme.write_bytes(b"legacy baseline\n")
-        initialized, _ = self._prepare_offline_authoring_validation()
+        initialized, _ = self._prepare_offline_authoring_validation(version_bump="patch")
         with using_run(self.solution, initialized["runId"]):
             complete_workflow_stage(
                 self.solution,
@@ -1803,7 +1803,7 @@ class WorkflowTests(unittest.TestCase):
         data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.1"}), encoding="utf-8")
         readme = self.solution / "README.md"
         readme.write_text("candidate input\n", encoding="utf-8")
-        initialized, _ = self._prepare_offline_authoring_validation()
+        initialized, _ = self._prepare_offline_authoring_validation(version_bump="patch")
         with using_run(self.solution, initialized["runId"]):
             complete_workflow_stage(
                 self.solution,
@@ -2086,7 +2086,7 @@ class WorkflowTests(unittest.TestCase):
     def test_same_release_notes_refresh_requires_fresh_package_receipt(self) -> None:
         data = self.solution / "Data" / "Solution_Sample.json"
         data.parent.mkdir(parents=True)
-        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.0"}), encoding="utf-8")
+        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.2"}), encoding="utf-8")
         notes = self.solution / "ReleaseNotes.md"
         notes.write_text(
             "| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |\n"
@@ -3101,7 +3101,7 @@ class WorkflowTests(unittest.TestCase):
     def test_target_release_plan_binds_exact_version_and_current_inputs(self) -> None:
         data = self.solution / "Data" / "Solution_Sample.json"
         data.parent.mkdir()
-        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.0"}), encoding="utf-8")
+        data.write_text(json.dumps({"Name": "Sample", "Version": "3.2.2"}), encoding="utf-8")
         run_id = self._prepare_workflow_for_package("none")
         with using_run(self.solution, run_id), mock.patch.object(
             workflow_module,
@@ -3115,41 +3115,41 @@ class WorkflowTests(unittest.TestCase):
             original = changed_input.read_bytes()
             planned = plan_new_package_release(
                 self.solution,
-                target_version="3.2.2",
+                target_version="3.2.3",
                 expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
             )
-            self.assertEqual("3.2.2", planned["targetVersion"])
+            self.assertEqual("3.2.3", planned["targetVersion"])
             self.assertEqual("target-version", workflow_status(self.solution)["packaging"]["pendingReleaseAction"]["actionType"])
             with self.assertRaisesRegex(ValueError, "exactly one version bump or target version"):
                 plan_new_package_release(
                     self.solution,
                     version_bump="patch",
-                    target_version="3.2.3",
+                    target_version="3.2.4",
                     expected_package_input_sha256=planned["packageInputSha256"],
                 )
             with self.assertRaisesRegex(ValueError, "differs from the explicitly selected"):
                 package_workflow_v3_1(
                     self.solution,
                     requested_version_bump="none",
-                    requested_target_version="3.2.3",
+                    requested_target_version="3.2.4",
                 )
             changed_input.write_text("kind: CustomDetection\n# input changed\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "differs from the explicitly selected"):
                 package_workflow_v3_1(
                     self.solution,
                     requested_version_bump="none",
-                    requested_target_version="3.2.2",
+                    requested_target_version="3.2.3",
                 )
             changed_input.write_bytes(original)
             built = package_workflow_v3_1(
                 self.solution,
                 requested_version_bump="none",
-                requested_target_version="3.2.2",
+                requested_target_version="3.2.3",
             )
-            self.assertEqual("3.2.2", built["version"])
+            self.assertEqual("3.2.3", built["version"])
             state = workflow_status(self.solution)["packaging"]
             self.assertEqual("consumed", state["releaseActions"][-1]["status"])
-            self.assertEqual("3.2.2", state["releaseActions"][-1]["targetVersion"])
+            self.assertEqual("3.2.3", state["releaseActions"][-1]["targetVersion"])
 
     def test_target_version_remains_compatible_with_campaign_and_notes_refresh(self) -> None:
         data = self.solution / "Data" / "Solution_Sample.json"
