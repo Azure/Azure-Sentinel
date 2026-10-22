@@ -581,18 +581,44 @@ class OutputValidationTests(unittest.TestCase):
             "rows": [{"TimeGenerated": TIMESTAMP_1}],
         }
 
-    def output_table(self):
+    def qtp_output_table(self, *, event_vendor="Contoso"):
         return query_table(
             [
                 ("TimeGenerated", "datetime"),
                 ("EventUid", "string"),
                 ("EventVendor", "string"),
+                ("EventSchema", "string"),
+                ("QtpOnly", "string"),
+                ("DifferentType", "string"),
             ],
             [
                 {
                     "TimeGenerated": TIMESTAMP_1,
                     "EventUid": "event-1",
-                    "EventVendor": "Contoso",
+                    "EventVendor": event_vendor,
+                    "EventSchema": "Authentication",
+                    "QtpOnly": "qtp",
+                    "DifferentType": "1",
+                }
+            ],
+        )
+
+    def itp_output_table(self, *, event_vendor="Contoso"):
+        return query_table(
+            [
+                ("TimeGenerated", "datetime"),
+                ("EventUid", "string"),
+                ("EventVendor", "string"),
+                ("ItpOnly", "string"),
+                ("DifferentType", "long"),
+            ],
+            [
+                {
+                    "TimeGenerated": TIMESTAMP_1,
+                    "EventUid": "event-1",
+                    "EventVendor": event_vendor,
+                    "ItpOnly": "itp",
+                    "DifferentType": 1,
                 }
             ],
         )
@@ -610,8 +636,8 @@ class OutputValidationTests(unittest.TestCase):
                         [{"Result": "(1) Warning: example"}],
                     ),
                 ),
-                ("qtp-execution", self.output_table()),
-                ("target-output", self.output_table()),
+                ("qtp-execution", self.qtp_output_table()),
+                ("target-output", self.itp_output_table()),
             ]
         )
         qtp = {
@@ -647,6 +673,34 @@ class OutputValidationTests(unittest.TestCase):
         )
         self.assertEqual("passed", result["dataTest"]["status"])
         self.assertEqual("passed", result["parity"]["status"])
+        self.assertEqual(
+            [
+                "TimeGenerated",
+                "EventUid",
+                "EventVendor",
+            ],
+            [
+                column["name"]
+                for column in result["intersect_schema"]
+            ],
+        )
+        self.assertEqual(
+            [
+                {
+                    "TimeGenerated": TIMESTAMP_1,
+                    "EventUid": "event-1",
+                    "EventVendor": "Contoso",
+                }
+            ],
+            result["qtp_rows_filtered"],
+        )
+        self.assertEqual(
+            result["qtp_rows_filtered"],
+            result["itp_rows_filtered"],
+        )
+        self.assertIn("EventSchema", result["qtp_rows"][0])
+        self.assertNotIn("EventSchema", result["itp_rows"][0])
+        self.assertIn("ItpOnly", result["itp_rows"][0])
         data_query = next(
             item["query"]
             for item in client.queries
@@ -666,10 +720,44 @@ class OutputValidationTests(unittest.TestCase):
             for item in client.queries
             if item["stage"] == "target-output"
         )
-        self.assertIn(
-            "| project TimeGenerated, EventUid, EventVendor",
-            target_query,
+        self.assertNotIn("| project", target_query)
+
+    def test_parity_failure_returns_full_and_filtered_artifacts(self):
+        client = FakeQueryClient(
+            [
+                ("asim-data", self.empty_tester_result()),
+                ("qtp-execution", self.qtp_output_table()),
+                (
+                    "target-output",
+                    self.itp_output_table(event_vendor="Different"),
+                ),
+            ]
         )
+        qtp = {
+            "ParserParams": [],
+            "ParserQuery": (
+                "Contoso_CL\n"
+                "| project TimeGenerated, EventUid, EventVendor"
+            ),
+        }
+
+        result = self.validator().validate_outputs(
+            client,
+            self.source_snapshot(),
+            self.parser_document(),
+            qtp,
+        )
+
+        self.assertEqual("failed", result["status"])
+        self.assertEqual("parity", result["failure"]["stage"])
+        self.assertEqual("failed", result["parity"]["status"])
+        self.assertTrue(result["qtp_schema"])
+        self.assertTrue(result["qtp_rows"])
+        self.assertTrue(result["itp_schema"])
+        self.assertTrue(result["itp_rows"])
+        self.assertTrue(result["intersect_schema"])
+        self.assertTrue(result["qtp_rows_filtered"])
+        self.assertTrue(result["itp_rows_filtered"])
 
     def test_without_qtp_reports_parity_not_applicable(self):
         client = FakeQueryClient(

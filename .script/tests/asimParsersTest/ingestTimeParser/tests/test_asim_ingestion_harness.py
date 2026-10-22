@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import requests
@@ -63,8 +64,9 @@ class FakeTokenProvider:
 
 
 class FakeValidationRunner:
-    def __init__(self, timestamp):
+    def __init__(self, timestamp, output_result=None):
         self.timestamp = timestamp
+        self.output_result = output_result
         self.filter_calls = 0
         self.output_calls = 0
 
@@ -87,7 +89,7 @@ class FakeValidationRunner:
         query_time_document,
     ):
         self.output_calls += 1
-        return {
+        return self.output_result or {
             "status": "passed",
             "parity": {"status": "not-applicable"},
         }
@@ -760,6 +762,132 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             result["telemetry"]["stageTimingsSeconds"],
         )
         self.assertTrue(result["telemetry"]["requestAttempts"])
+
+    def test_failed_output_validation_is_preserved_before_raise(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_table = {
+            "columns": [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Type", "type": "string"},
+                {"name": "Value", "type": "string"},
+            ],
+            "rows": [[timestamp, "Contoso_CL", "one"]],
+        }
+        harness, _, _ = self.harness([])
+        prepared = {
+            "version": 1,
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso_CL",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Value", "type": "string"},
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [
+                {
+                    "TimeGenerated": timestamp,
+                    "Type": "Contoso_CL",
+                    "Value": "one",
+                }
+            ],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "SourceRawTable": "Contoso_CL",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+        output_result = {
+            "status": "failed",
+            "failure": {
+                "stage": "parity",
+                "message": "rows differ",
+                "details": {"missingRowCount": 1},
+            },
+            "qtp_schema": [{"name": "Value", "type": "string"}],
+            "qtp_rows": [{"Value": "expected"}],
+            "itp_schema": [{"name": "Value", "type": "string"}],
+            "itp_rows": [{"Value": "actual"}],
+            "intersect_schema": [
+                {"name": "Value", "type": "string"}
+            ],
+            "qtp_rows_filtered": [{"Value": "expected"}],
+            "itp_rows_filtered": [{"Value": "actual"}],
+            "parity": {"status": "failed"},
+        }
+        validation_runner = FakeValidationRunner(
+            timestamp,
+            output_result=output_result,
+        )
+        handles = [
+            HARNESS.DcrHandle(
+                "raw",
+                "/dcr/raw",
+                "raw-immutable",
+                "Custom-raw",
+                "Custom-Contoso_CL",
+            ),
+            HARNESS.DcrHandle(
+                "parser",
+                "/dcr/parser",
+                "parser-immutable",
+                "Custom-parser",
+                "Microsoft-ASimAuthenticationEventLogs",
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                unittest.mock.patch.object(
+                    harness, "ensure_raw_table"
+                ),
+                unittest.mock.patch.object(
+                    harness,
+                    "create_dcr",
+                    side_effect=handles,
+                ),
+                unittest.mock.patch.object(
+                    harness,
+                    "upload_rows",
+                    side_effect=[
+                        [{"status": "accepted"}],
+                        [{"status": "accepted"}],
+                    ],
+                ),
+                unittest.mock.patch.object(
+                    harness,
+                    "wait_for_exact_rows",
+                    side_effect=[query_table, query_table],
+                ),
+                unittest.mock.patch.object(
+                    harness,
+                    "delete_dcr",
+                    return_value={"status": "deleted"},
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    HARNESS.HarnessError,
+                    "rows differ",
+                ):
+                    harness.run(
+                        prepared,
+                        parser,
+                        snapshot_output=(
+                            Path(directory) / "snapshot.json"
+                        ),
+                        validation_runner=validation_runner,
+                    )
+
+        self.assertEqual(
+            output_result,
+            harness.last_result["outputValidation"],
+        )
 
     def test_filter_validation_failure_still_cleans_up_raw_dcr(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"

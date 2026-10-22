@@ -57,6 +57,11 @@ discover target
   → clean up DCRs and publish the report
 ```
 
+QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
+`itp_rows` under `outputValidation`. It derives `intersect_schema`, filters
+both row sets into `qtp_rows_filtered` and `itp_rows_filtered`, and runs the
+typed duplicate-aware row comparison only across that shared schema.
+
 ## Tests
 
 Run the complete regression suite from the repository root:

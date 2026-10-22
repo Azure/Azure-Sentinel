@@ -10,6 +10,7 @@ from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
     DcrHandle,
+    HarnessError,
     ValidationRunner,
     _validate_timestamp,
     _write_json_no_clobber,
@@ -226,7 +227,7 @@ class AsimIngestionHarness(AzureMonitorClient):
                 )
             if validation_runner is not None:
                 with self._stage("output-validation"):
-                    result["outputValidation"] = dict(
+                    output_validation = dict(
                         validation_runner.validate_outputs(
                             self,
                             snapshot,
@@ -234,6 +235,28 @@ class AsimIngestionHarness(AzureMonitorClient):
                             query_time_document,
                         )
                     )
+                    result["outputValidation"] = output_validation
+                    if output_validation.get("status") != "passed":
+                        failure = output_validation.get("failure")
+                        if isinstance(failure, Mapping):
+                            stage = str(
+                                failure.get("stage")
+                                or "output-validation"
+                            )
+                            message = str(
+                                failure.get("message")
+                                or "Output validation failed."
+                            )
+                            details = failure.get("details")
+                        else:
+                            stage = "output-validation"
+                            message = "Output validation failed."
+                            details = output_validation
+                        raise HarnessError(
+                            stage,
+                            message,
+                            details=details,
+                        )
             result["status"] = "completed"
             return result
         finally:

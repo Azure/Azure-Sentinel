@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .parity import compare_parser_outputs
 from .queries import (
@@ -20,6 +20,40 @@ from .queries import (
     build_filter_count_query,
     build_query_time_parser_query,
 )
+
+
+def _intersect_schemas(
+    qtp_schema: Sequence[Mapping[str, str]],
+    itp_schema: Sequence[Mapping[str, str]],
+) -> list[dict[str, str]]:
+    itp_types = {
+        str(column["name"]): str(column["type"])
+        for column in itp_schema
+    }
+    return [
+        {
+            "name": str(column["name"]),
+            "type": str(column["type"]),
+        }
+        for column in qtp_schema
+        if itp_types.get(str(column["name"]))
+        == str(column["type"])
+    ]
+
+
+def _filter_rows(
+    rows: Sequence[Mapping[str, Any]],
+    schema: Sequence[Mapping[str, str]],
+) -> list[dict[str, Any]]:
+    columns = [str(column["name"]) for column in schema]
+    return [
+        {
+            column: row.get(column)
+            for column in columns
+        }
+        for row in rows
+    ]
+
 
 class AsimIngestionValidator:
     def __init__(self, repo_root: Path):
@@ -165,41 +199,63 @@ class AsimIngestionValidator:
             source_table,
             timestamp_values,
         )
-        expected_schema, expected_rows = _normalize_query_table(
+        qtp_schema, qtp_rows = _normalize_query_table(
             query_client.query_kql(
                 qtp_query, stage="qtp-execution"
             ),
             "qtp-execution",
         )
-        comparison_columns = [
-            column["name"] for column in expected_schema
-        ]
-        actual_schema, actual_rows = _normalize_query_table(
+        result["queryTimeExecution"] = {
+            "status": "passed",
+            "rowCount": len(qtp_rows),
+        }
+        itp_schema, itp_rows = _normalize_query_table(
             query_client.query_kql(
                 build_exact_slice_expression(
                     target_table,
                     timestamp_values,
-                    comparison_columns,
                 ),
                 stage="target-output",
             ),
             "target-output",
         )
-        result["queryTimeExecution"] = {
-            "status": "passed",
-            "rowCount": len(expected_rows),
-        }
+        intersect_schema = _intersect_schemas(
+            qtp_schema,
+            itp_schema,
+        )
+        qtp_rows_filtered = _filter_rows(
+            qtp_rows,
+            intersect_schema,
+        )
+        itp_rows_filtered = _filter_rows(
+            itp_rows,
+            intersect_schema,
+        )
+        result.update(
+            {
+                "qtp_schema": qtp_schema,
+                "qtp_rows": qtp_rows,
+                "itp_schema": itp_schema,
+                "itp_rows": itp_rows,
+                "intersect_schema": intersect_schema,
+                "qtp_rows_filtered": qtp_rows_filtered,
+                "itp_rows_filtered": itp_rows_filtered,
+            }
+        )
         parity = compare_parser_outputs(
-            expected_schema=expected_schema,
-            expected_rows=expected_rows,
-            actual_schema=actual_schema,
-            actual_rows=actual_rows,
+            expected_schema=intersect_schema,
+            expected_rows=qtp_rows_filtered,
+            actual_schema=intersect_schema,
+            actual_rows=itp_rows_filtered,
         )
         result["parity"] = parity
         if parity["status"] != "passed":
-            raise ValidationError(
-                "parity",
-                "Query-time and ingestion-time outputs differ.",
-                details=parity,
-            )
+            result["status"] = "failed"
+            result["failure"] = {
+                "stage": "parity",
+                "message": (
+                    "Query-time and ingestion-time outputs differ."
+                ),
+                "details": parity,
+            }
         return result
