@@ -131,16 +131,10 @@ def build_report(
         else ""
     )
 
-    fixture = _stage(
-        "passed" if prepared_fixture is not None else "failed",
-        (
-            f"{prepared_fixture.get('rowCount')} prepared rows"
-            if isinstance(prepared_fixture, Mapping)
-            else error_message
-            if error_stage == "fixture-preparation"
-            else "Fixture preparation did not complete."
-        ),
-        (
+    if isinstance(prepared_fixture, Mapping):
+        fixture = _stage(
+            "passed",
+            f"{prepared_fixture.get('rowCount')} prepared rows",
             {
                 "path": prepared_fixture.get("fixturePath"),
                 "rowCount": prepared_fixture.get("rowCount"),
@@ -153,18 +147,45 @@ def build_report(
                     )
                     else None
                 ),
-            }
-            if isinstance(prepared_fixture, Mapping)
-            else None
-        ),
-    )
+            },
+        )
+    elif not template_valid:
+        fixture = _stage(
+            "blocked",
+            "Blocked by template validation.",
+        )
+    else:
+        fixture = _stage(
+            "failed",
+            (
+                error_message
+                if error_stage == "fixture-preparation"
+                else "Fixture preparation did not complete."
+            ),
+        )
 
+    raw_dcr_value = validation.get("rawDcr")
+    parser_dcr_value = validation.get("parserDcr")
+    raw_dcr_failed = (
+        not raw_dcr_value
+        and error_stage
+        in {"raw-table", "dcr-create", "dcr-provisioning"}
+    )
+    parser_dcr_failed = (
+        bool(raw_dcr_value)
+        and not parser_dcr_value
+        and error_stage in {"dcr-create", "dcr-provisioning"}
+    )
     raw_dcr = _stage(
-        "passed" if validation.get("rawDcr") else (
-            "failed" if error_stage in {"raw-table", "dcr-create", "dcr-provisioning"} else "not-run"
+        (
+            "passed"
+            if raw_dcr_value
+            else "failed"
+            if raw_dcr_failed
+            else "not-run"
         ),
-        error_message if error_stage in {"raw-table", "dcr-create", "dcr-provisioning"} else "",
-        validation.get("rawDcr"),
+        error_message if raw_dcr_failed else "",
+        raw_dcr_value,
     )
     raw_ingestion_failed = error_stage in {
         "upload",
@@ -197,11 +218,15 @@ def build_report(
         filter_validation,
     )
     parser_dcr = _stage(
-        "passed" if validation.get("parserDcr") else (
-            "failed" if error_stage in {"dcr-create", "dcr-provisioning"} and validation.get("rawDcr") else "not-run"
+        (
+            "passed"
+            if parser_dcr_value
+            else "failed"
+            if parser_dcr_failed
+            else "not-run"
         ),
-        error_message if error_stage in {"dcr-create", "dcr-provisioning"} and validation.get("rawDcr") else "",
-        validation.get("parserDcr"),
+        error_message if parser_dcr_failed else "",
+        parser_dcr_value,
     )
     parser_ingestion_failed = error_stage in {
         "upload",
@@ -323,13 +348,7 @@ def build_report(
         or prepared_fixture is None
         or not validation_completed
     )
-    overall_status = (
-        "failed"
-        if required_failure and enforcement_required
-        else "shadow-only-failure"
-        if required_failure
-        else "passed"
-    )
+    overall_status = "failed" if required_failure else "passed"
     return {
         "version": WORKFLOW_RESULT_VERSION,
         "status": overall_status,
@@ -421,15 +440,15 @@ def emit_annotations(report: Mapping[str, Any]) -> None:
                 f"failure::{target_id}: "
                 f"{_github_command_message(detail)}"
             )
-    if status == "shadow-only-failure":
-        print(
-            "::warning title=ASIM ingestion validation shadow failure::"
-            f"{target_id} failed in shadow mode."
+    if status == "failed":
+        mode = (
+            "required"
+            if report.get("enforcementRequired")
+            else "shadow"
         )
-    elif status == "failed":
         print(
             "::error title=ASIM ingestion validation failed::"
-            f"{target_id} failed required validation."
+            f"{target_id} failed validation in {mode} mode."
         )
     cleanup = report.get("stages", {}).get("cleanup", {})
     if isinstance(cleanup, Mapping) and cleanup.get("status") == "warning":

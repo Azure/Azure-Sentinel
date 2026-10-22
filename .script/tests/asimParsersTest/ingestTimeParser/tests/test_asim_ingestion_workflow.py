@@ -358,7 +358,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("ASIM ingestion validation", summary)
         self.assertIn("| parity |", summary)
 
-    def test_failure_is_shadow_only_when_not_required(self):
+    def test_failure_remains_failed_when_not_required(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["error"] = {
@@ -370,8 +370,9 @@ class ReportTests(unittest.TestCase):
 
         report = self.build(validation, required=False)
 
-        self.assertEqual("shadow-only-failure", report["status"])
+        self.assertEqual("failed", report["status"])
         self.assertTrue(report["requiredFailure"])
+        self.assertFalse(report["enforcementRequired"])
         self.assertEqual(
             "failed", report["stages"]["parity"]["status"]
         )
@@ -417,6 +418,44 @@ class ReportTests(unittest.TestCase):
             "conversion failed",
             report["stages"]["fixture"]["detail"],
         )
+        self.assertEqual(
+            "failed", report["stages"]["fixture"]["status"]
+        )
+
+    def test_template_failure_blocks_fixture_preparation(self):
+        report = WORKFLOW.build_report(
+            target=target("parser-a"),
+            static_result={
+                "valid": False,
+                "findings": [
+                    {
+                        "code": "META001",
+                        "message": "Invalid parser metadata.",
+                    }
+                ],
+                "queryTimeEligibility": {"status": "blocked"},
+            },
+            prepared_fixture=None,
+            validation_result=None,
+            cleanup_result=None,
+            repository="Azure/Azure-Sentinel",
+            pull_request="123",
+            run_id="456",
+            run_attempt="1",
+            enforcement_required=False,
+        )
+
+        self.assertEqual("failed", report["status"])
+        self.assertEqual(
+            "failed", report["stages"]["template"]["status"]
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["fixture"]["status"]
+        )
+        self.assertEqual(
+            "Blocked by template validation.",
+            report["stages"]["fixture"]["detail"],
+        )
 
     def test_cleanup_warning_does_not_change_parser_result(self):
         report = self.build(
@@ -436,6 +475,56 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(
             "warning", report["stages"]["cleanup"]["status"]
         )
+
+    def test_parser_dcr_failure_does_not_add_detail_to_raw_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["parserDcr"] = None
+        validation["parserUpload"] = []
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "PUT failed with HTTP 400.",
+            report["stages"]["parserDcr"]["detail"],
+        )
+
+    def test_raw_dcr_failure_adds_detail_only_to_raw_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-provisioning",
+            "message": "Provisioning failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("failed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "Provisioning failed.",
+            report["stages"]["rawDcr"]["detail"],
+        )
+        self.assertEqual(
+            "not-run", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual("", report["stages"]["parserDcr"]["detail"])
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
@@ -644,6 +733,25 @@ class WorkflowTopologyTests(unittest.TestCase):
                 "ingestionValidation",
             ],
             jobs["report"]["needs"],
+        )
+
+    def test_workflow_never_masks_validation_failures(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("continue-on-error:", workflow)
+        self.assertIn(
+            'if [ "$REQUIRED_FAILURE" = "true" ]; then',
+            workflow,
+        )
+        self.assertIn(
+            'echo "::error::ASIM ingestion validation failed in '
+            '$mode mode."',
+            workflow,
+        )
+        self.assertIn(
+            "Merge blocking: controlled by branch protection "
+            "required-check configuration",
+            workflow,
         )
 
     def test_workflow_has_no_manual_or_pr_head_checkout(self):
