@@ -64,11 +64,18 @@ class FakeTokenProvider:
 
 
 class FakeValidationRunner:
-    def __init__(self, timestamp, output_result=None):
+    def __init__(
+        self,
+        timestamp,
+        output_result=None,
+        parity_result=None,
+    ):
         self.timestamp = timestamp
         self.output_result = output_result
+        self.parity_result = parity_result
         self.filter_calls = 0
         self.output_calls = 0
+        self.parity_calls = 0
 
     def evaluate_filter(
         self, query_client, source_snapshot, parser_document
@@ -94,6 +101,23 @@ class FakeValidationRunner:
             "parity": {"status": "not-applicable"},
         }
 
+    def validate_parity(
+        self,
+        query_client,
+        source_snapshot,
+        parser_document,
+        query_time_document,
+    ):
+        self.parity_calls += 1
+        return self.parity_result or {
+            "status": "passed",
+            "queryTimeExecution": {
+                "status": "passed",
+                "rowCount": 1,
+            },
+            "parity": {"status": "passed"},
+        }
+
 
 class FailingFilterRunner:
     def evaluate_filter(
@@ -109,6 +133,15 @@ class FailingFilterRunner:
         query_time_document,
     ):
         raise AssertionError("Output validation must not run.")
+
+    def validate_parity(
+        self,
+        query_client,
+        source_snapshot,
+        parser_document,
+        query_time_document,
+    ):
+        raise AssertionError("Parity validation must not run.")
 
 
 class FakeClock:
@@ -169,63 +202,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             1, query.count("2026-10-16T19:55:00.1234567Z")
         )
         self.assertIn("join kind=inner", query)
-
-    def test_snapshot_excludes_platform_columns_and_normalizes_types(self):
-        snapshot = HARNESS.build_source_snapshot(
-            target_id="parser-a",
-            table_name="Contoso_CL",
-            timestamps=["2026-10-16T19:55:00.1234567Z"],
-            query_table={
-                "columns": [
-                    {"name": "TimeGenerated", "type": "datetime"},
-                    {"name": "Type", "type": "string"},
-                    {"name": "TenantId", "type": "guid"},
-                    {"name": "Payload", "type": "dynamic"},
-                    {"name": "_ResourceId", "type": "string"},
-                ],
-                "rows": [
-                    [
-                        "2026-10-16T19:55:00.1234567Z",
-                        "Contoso_CL",
-                        "tenant",
-                        '{"key":"value"}',
-                        "/resource",
-                    ]
-                ],
-            },
-        )
-        schema = {
-            column["name"]: column["type"]
-            for column in snapshot["schema"]
-        }
-        self.assertEqual("string", schema["TenantId"])
-        self.assertEqual(
-            {"key": "value"}, snapshot["rows"][0]["Payload"]
-        )
-        self.assertNotIn("_ResourceId", schema)
-        self.assertIn("Type", schema)
-        self.assertEqual(["_ResourceId"], snapshot["excludedColumns"])
-
-    def test_snapshot_rejects_rows_outside_timestamp_set(self):
-        with self.assertRaisesRegex(
-            HARNESS.HarnessError, "outside the exact timestamp"
-        ):
-            HARNESS.build_source_snapshot(
-                target_id="parser-a",
-                table_name="Contoso_CL",
-                timestamps=["2026-10-16T19:55:00.1234567Z"],
-                query_table={
-                    "columns": [
-                        {
-                            "name": "TimeGenerated",
-                            "type": "datetime",
-                        }
-                    ],
-                    "rows": [
-                        ["2026-10-16T19:55:01.1234567Z"]
-                    ],
-                },
-            )
 
     def test_batches_keep_noncontiguous_equal_timestamps_together(self):
         rows = [
@@ -470,36 +446,17 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual("deleted", result["status"])
         self.assertEqual("DELETE", session.calls[0]["method"])
 
-    def test_full_run_builds_raw_and_parser_dcrs_and_snapshot(self):
+    def test_full_run_uploads_fixture_directly_to_parser_dcr(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
         query_result = query_payload(
             [
                 {"name": "TimeGenerated", "type": "datetime"},
-                {"name": "Type", "type": "string"},
-                {"name": "TenantId", "type": "guid"},
                 {"name": "Value", "type": "string"},
-                {"name": "_ResourceId", "type": "string"},
             ],
-            [[timestamp, "Contoso_CL", "tenant", "one", "/resource"]],
+            [[timestamp, "one"]],
         )
         harness, session, _ = self.harness(
             [
-                FakeResponse(202),  # custom table PUT
-                FakeResponse(200, {"properties": {"provisioningState": "Succeeded"}}),
-                FakeResponse(201),  # raw DCR PUT
-                FakeResponse(
-                    200,
-                    {
-                        "id": "/subscriptions/s/raw",
-                        "properties": {
-                            "provisioningState": "Succeeded",
-                            "immutableId": "raw-immutable",
-                        },
-                    },
-                ),
-                FakeResponse(204),  # raw upload
-                FakeResponse(200, query_result),  # raw snapshot
-                FakeResponse(200, query_result),  # raw stable
                 FakeResponse(201),  # parser DCR PUT
                 FakeResponse(
                     200,
@@ -515,7 +472,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
                 FakeResponse(204),  # parser cleanup
-                FakeResponse(404),  # raw cleanup
             ]
         )
         prepared = {
@@ -547,7 +503,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "TargetASIMTable": "ASimAuthenticationEventLogs",
             "ParserQuery": (
                 "    source // remove this comment\n"
-                "      | project TimeGenerated, Type, TenantId, Value"
+                "      | project TimeGenerated, Type, Value"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -564,16 +520,21 @@ class IngestionHarnessUnitTests(unittest.TestCase):
 
         self.assertEqual("completed", result["status"])
         self.assertEqual(
-            ["deleted", "not-found"],
+            ["deleted"],
             [entry["status"] for entry in result["cleanup"]],
         )
-        self.assertNotIn("_ResourceId", {
-            column["name"] for column in snapshot["schema"]
-        })
-        self.assertEqual("string", {
-            column["name"]: column["type"]
-            for column in snapshot["schema"]
-        }["TenantId"])
+        self.assertEqual("prepared-fixture", snapshot["authority"])
+        self.assertEqual([], snapshot["excludedColumns"])
+        self.assertEqual(
+            ["TimeGenerated", "Value", "Type"],
+            [column["name"] for column in snapshot["schema"]],
+        )
+        self.assertEqual("Contoso_CL", snapshot["rows"][0]["Type"])
+        self.assertIsNone(result["rawDcr"])
+        self.assertEqual(
+            "not-applicable",
+            result["qtpSourceReplay"]["status"],
+        )
 
         dcr_puts = [
             call
@@ -581,17 +542,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             if call["method"] == "PUT"
             and "dataCollectionRules" in call["url"]
         ]
-        self.assertEqual(2, len(dcr_puts))
-        raw_flow = dcr_puts[0]["json"]["properties"]["dataFlows"][0]
-        parser_flow = dcr_puts[1]["json"]["properties"]["dataFlows"][0]
-        self.assertEqual("source", raw_flow["transformKql"])
-        self.assertEqual(
-            "Custom-Contoso_CL", raw_flow["outputStream"]
-        )
+        self.assertEqual(1, len(dcr_puts))
+        parser_flow = dcr_puts[0]["json"]["properties"]["dataFlows"][0]
         self.assertEqual(
             (
                 "source\n"
-                "| project TimeGenerated, Type, TenantId, Value"
+                "| project TimeGenerated, Type, Value"
             ),
             parser_flow["transformKql"],
         )
@@ -604,17 +560,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         timestamp = "2026-10-16T19:55:00.1234567Z"
         harness, session, _ = self.harness(
             [
-                FakeResponse(202),  # custom table PUT
-                FakeResponse(
-                    200,
-                    {"properties": {"provisioningState": "Succeeded"}},
-                ),
-                FakeResponse(201),  # raw DCR PUT
+                FakeResponse(201),  # parser DCR PUT
                 FakeResponse(
                     200,
                     {"properties": {"provisioningState": "Failed"}},
                 ),
-                FakeResponse(204),  # cleanup attempted resource
+                FakeResponse(204),  # parser cleanup
             ]
         )
         prepared = {
@@ -630,7 +581,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 "runAttempt": 1,
                 "timestampValues": [timestamp],
             },
-            "rows": [{"TimeGenerated": timestamp}],
+            "rows": [
+                {
+                    "TimeGenerated": timestamp,
+                    "Type": "Contoso",
+                }
+            ],
         }
         parser = {
             "ParserName": "ASimAuthenticationContoso",
@@ -671,20 +627,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         harness, _, _ = self.harness(
             [
-                FakeResponse(201),  # raw DCR PUT
-                FakeResponse(
-                    200,
-                    {
-                        "id": "/subscriptions/s/raw",
-                        "properties": {
-                            "provisioningState": "Succeeded",
-                            "immutableId": "raw-immutable",
-                        },
-                    },
-                ),
-                FakeResponse(204),  # raw upload
-                FakeResponse(200, query_result),  # raw snapshot
-                FakeResponse(200, query_result),  # raw stable
                 FakeResponse(201),  # parser DCR PUT
                 FakeResponse(
                     200,
@@ -700,7 +642,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
                 FakeResponse(204),  # parser cleanup
-                FakeResponse(204),  # raw cleanup
             ]
         )
         prepared = {
@@ -762,6 +703,216 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             result["telemetry"]["stageTimingsSeconds"],
         )
         self.assertTrue(result["telemetry"]["requestAttempts"])
+
+    def test_qtp_source_replay_uses_itp_input_stream(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_result = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [[timestamp]],
+        )
+        harness, session, _ = self.harness(
+            [
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(200, query_result),  # target visibility
+                FakeResponse(200, query_result),  # target stable
+                FakeResponse(201),  # QTP raw DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/raw",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "raw-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # raw upload
+                FakeResponse(200, query_result),  # raw visibility
+                FakeResponse(200, query_result),  # raw stable
+                FakeResponse(204),  # raw cleanup
+                FakeResponse(204),  # parser cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [
+                {
+                    "TimeGenerated": timestamp,
+                    "Type": "Contoso",
+                }
+            ],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "InputStream": "Microsoft-SentinelContoso",
+            "SourceRawTable": "Contoso",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+        validation_runner = FakeValidationRunner(timestamp)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = harness.run(
+                prepared,
+                parser,
+                snapshot_output=Path(directory) / "snapshot.json",
+                validation_runner=validation_runner,
+                query_time_document={"ParserQuery": "Contoso"},
+            )
+
+        dcr_puts = [
+            call["json"]["properties"]
+            for call in session.calls
+            if call["method"] == "PUT"
+            and "dataCollectionRules" in call["url"]
+        ]
+        self.assertEqual(2, len(dcr_puts))
+        self.assertEqual(
+            "Microsoft-ASimAuthenticationEventLogs",
+            dcr_puts[0]["dataFlows"][0]["outputStream"],
+        )
+        self.assertEqual(
+            "Microsoft-SentinelContoso",
+            dcr_puts[1]["dataFlows"][0]["outputStream"],
+        )
+        parser_columns = next(
+            iter(dcr_puts[0]["streamDeclarations"].values())
+        )["columns"]
+        raw_columns = next(
+            iter(dcr_puts[1]["streamDeclarations"].values())
+        )["columns"]
+        self.assertIn(
+            "Type",
+            {column["name"] for column in parser_columns},
+        )
+        self.assertNotIn(
+            "Type",
+            {column["name"] for column in raw_columns},
+        )
+        self.assertEqual(
+            "passed", result["qtpSourceReplay"]["status"]
+        )
+        self.assertEqual(
+            "Microsoft-SentinelContoso",
+            result["rawDcr"]["outputStream"],
+        )
+        self.assertEqual(1, validation_runner.output_calls)
+        self.assertEqual(1, validation_runner.parity_calls)
+
+    def test_qtp_raw_dcr_failure_warns_and_blocks_parity(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_result = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [[timestamp]],
+        )
+        harness, _, _ = self.harness(
+            [
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(200, query_result),  # target visibility
+                FakeResponse(200, query_result),  # target stable
+                FakeResponse(
+                    400,
+                    {
+                        "error": {
+                            "code": "InvalidPayload",
+                            "details": [
+                                {
+                                    "code": "InvalidStream",
+                                    "message": "Stream is unsupported.",
+                                }
+                            ],
+                        }
+                    },
+                ),
+                FakeResponse(404),  # raw cleanup
+                FakeResponse(204),  # parser cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [{"TimeGenerated": timestamp}],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "InputStream": "Microsoft-SentinelContoso",
+            "SourceRawTable": "Contoso",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+        validation_runner = FakeValidationRunner(timestamp)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = harness.run(
+                prepared,
+                parser,
+                snapshot_output=Path(directory) / "snapshot.json",
+                validation_runner=validation_runner,
+                query_time_document={"ParserQuery": "Contoso"},
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertIsNone(result["rawDcr"])
+        self.assertEqual(
+            "warning", result["qtpSourceReplay"]["status"]
+        )
+        self.assertEqual(
+            "dcr-create",
+            result["qtpSourceReplay"]["error"]["stage"],
+        )
+        self.assertEqual(
+            "blocked",
+            result["outputValidation"]["queryTimeExecution"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            result["outputValidation"]["parity"]["status"],
+        )
+        self.assertEqual(1, validation_runner.output_calls)
+        self.assertEqual(0, validation_runner.parity_calls)
 
     def test_failed_output_validation_is_preserved_before_raise(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
@@ -827,13 +978,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         handles = [
             HARNESS.DcrHandle(
-                "raw",
-                "/dcr/raw",
-                "raw-immutable",
-                "Custom-raw",
-                "Custom-Contoso_CL",
-            ),
-            HARNESS.DcrHandle(
                 "parser",
                 "/dcr/parser",
                 "parser-immutable",
@@ -845,9 +989,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with (
                 unittest.mock.patch.object(
-                    harness, "ensure_raw_table"
-                ),
-                unittest.mock.patch.object(
                     harness,
                     "create_dcr",
                     side_effect=handles,
@@ -855,15 +996,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     harness,
                     "upload_rows",
-                    side_effect=[
-                        [{"status": "accepted"}],
-                        [{"status": "accepted"}],
-                    ],
+                    return_value=[{"status": "accepted"}],
                 ),
                 unittest.mock.patch.object(
                     harness,
                     "wait_for_exact_rows",
-                    side_effect=[query_table, query_table],
+                    return_value=query_table,
                 ),
                 unittest.mock.patch.object(
                     harness,
@@ -889,34 +1027,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             harness.last_result["outputValidation"],
         )
 
-    def test_filter_validation_failure_still_cleans_up_raw_dcr(self):
+    def test_filter_validation_failure_creates_no_dcr(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
-        query_result = query_payload(
-            [
-                {"name": "TimeGenerated", "type": "datetime"},
-                {"name": "Type", "type": "string"},
-            ],
-            [[timestamp, "Contoso"]],
-        )
-        harness, session, _ = self.harness(
-            [
-                FakeResponse(201),  # raw DCR PUT
-                FakeResponse(
-                    200,
-                    {
-                        "id": "/subscriptions/s/raw",
-                        "properties": {
-                            "provisioningState": "Succeeded",
-                            "immutableId": "raw-immutable",
-                        },
-                    },
-                ),
-                FakeResponse(204),  # raw upload
-                FakeResponse(200, query_result),  # raw snapshot
-                FakeResponse(200, query_result),  # raw stable
-                FakeResponse(204),  # raw cleanup
-            ]
-        )
+        harness, session, _ = self.harness([])
         prepared = {
             "targetId": "parser-a",
             "sourceRawTable": "Contoso",
@@ -950,7 +1063,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     validation_runner=FailingFilterRunner(),
                 )
 
-        self.assertEqual("DELETE", session.calls[-1]["method"])
+        self.assertEqual([], session.calls)
+        self.assertEqual([], harness.last_result["cleanup"])
 
     def test_full_run_rejects_incomplete_expected_count_map(self):
         harness, _, _ = self.harness([])

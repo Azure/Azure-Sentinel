@@ -499,7 +499,7 @@ class ReportTests(unittest.TestCase):
             report["stages"]["parserDcr"]["detail"],
         )
 
-    def test_raw_dcr_failure_adds_detail_only_to_raw_dcr(self):
+    def test_direct_parser_dcr_failure_adds_detail_to_parser_dcr(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["rawDcr"] = None
@@ -516,15 +516,17 @@ class ReportTests(unittest.TestCase):
 
         report = self.build(validation)
 
-        self.assertEqual("failed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
         self.assertEqual(
             "Provisioning failed.",
-            report["stages"]["rawDcr"]["detail"],
+            report["stages"]["parserDcr"]["detail"],
         )
-        self.assertEqual(
-            "not-run", report["stages"]["parserDcr"]["status"]
-        )
-        self.assertEqual("", report["stages"]["parserDcr"]["detail"])
 
     def test_stage_summary_includes_nested_provider_error(self):
         validation = self.base_validation()
@@ -562,7 +564,7 @@ class ReportTests(unittest.TestCase):
         }
 
         report = self.build(validation)
-        detail = report["stages"]["rawDcr"]["detail"]
+        detail = report["stages"]["parserDcr"]["detail"]
         summary = WORKFLOW.render_summary(report)
 
         self.assertIn("PUT failed with HTTP 400.", detail)
@@ -630,6 +632,77 @@ class ReportTests(unittest.TestCase):
             "DELETE failed with HTTP 503.",
             report["stages"]["cleanup"]["detail"],
         )
+
+    def test_qtp_raw_dcr_failure_warns_without_failing_parser(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "warning",
+            "inputStream": "Microsoft-SentinelContoso",
+            "error": {
+                "stage": "dcr-create",
+                "message": "PUT failed with HTTP 400.",
+                "details": {
+                    "error": {
+                        "code": "InvalidStream",
+                        "message": "Stream is unsupported.",
+                    }
+                },
+            },
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "warning", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertIn(
+            "InvalidStream",
+            report["stages"]["rawDcr"]["detail"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual(
+            "passed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "passed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["parity"]["detail"],
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertIn(
+            "::warning title=ASIM rawDcr warning::",
+            output.getvalue(),
+        )
+        self.assertIn("InvalidStream", output.getvalue())
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()

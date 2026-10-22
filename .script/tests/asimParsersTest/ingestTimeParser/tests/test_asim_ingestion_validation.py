@@ -53,16 +53,52 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
-    def test_builds_exact_filter_query(self):
+    def test_builds_typed_fixture_filter_query(self):
         query = VALIDATION.build_filter_count_query(
-            "Contoso_CL",
-            [TIMESTAMP_1, TIMESTAMP_2],
-            "source\n| where EventType == 'Login'",
+            "source",
+            source_schema=[
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Message", "type": "string"},
+                {"name": "Enabled", "type": "boolean"},
+                {"name": "Count", "type": "long"},
+                {"name": "Score", "type": "real"},
+                {"name": "Payload", "type": "dynamic"},
+                {"name": "CorrelationId", "type": "guid"},
+                {"name": "Column Name", "type": "string"},
+            ],
+            source_rows=[
+                {
+                    "TimeGenerated": TIMESTAMP_1,
+                    "Message": r"C:\logs\//keep 'quoted'",
+                    "Enabled": True,
+                    "Count": None,
+                    "Score": 1.5,
+                    "Payload": {"a": [1, True]},
+                    "CorrelationId": (
+                        "00000000-0000-0000-0000-000000000001"
+                    ),
+                    "Column Name": "quoted",
+                }
+            ],
         )
 
-        self.assertIn("let source = materialize(Contoso_CL", query)
-        self.assertIn(f"datetime({TIMESTAMP_1})", query)
-        self.assertIn("where EventType == 'Login'", query)
+        self.assertIn(
+            "datatable(TimeGenerated:datetime, Message:string, "
+            "Enabled:bool, Count:long, Score:real, "
+            "Payload:dynamic, CorrelationId:guid, "
+            "['Column Name']:string)",
+            query,
+        )
+        self.assertIn(
+            r"@'C:\logs\//keep ''quoted'''",
+            query,
+        )
+        self.assertIn("true, long(null), 1.5", query)
+        self.assertIn('dynamic({"a":[1,true]})', query)
+        self.assertIn(
+            "guid(00000000-0000-0000-0000-000000000001)",
+            query,
+        )
         self.assertIn("_AsimSelectedCount=count()", query)
 
     def test_qtp_query_overrides_disabled_and_pack(self):
@@ -144,6 +180,10 @@ class FilterValidationTests(unittest.TestCase):
     def snapshot(self):
         return {
             "timestampValues": [TIMESTAMP_1, TIMESTAMP_2],
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "EventType", "type": "string"},
+            ],
             "rows": [
                 {"TimeGenerated": TIMESTAMP_1, "EventType": "Login"},
                 {"TimeGenerated": TIMESTAMP_1, "EventType": "Logout"},
@@ -195,6 +235,12 @@ class FilterValidationTests(unittest.TestCase):
             {TIMESTAMP_1: 1, TIMESTAMP_2: 0},
             result["selectedCountsByTimestamp"],
         )
+        filter_query = client.queries[0]["query"]
+        self.assertIn(
+            "datatable(TimeGenerated:datetime, EventType:string)",
+            filter_query,
+        )
+        self.assertNotIn("materialize(Contoso_CL", filter_query)
 
     def test_selective_filter_requires_rejected_fixture_row(self):
         client = FakeQueryClient(
@@ -603,14 +649,20 @@ class OutputValidationTests(unittest.TestCase):
             ],
         )
 
-    def itp_output_table(self, *, event_vendor="Contoso"):
+    def itp_output_table(
+        self,
+        *,
+        event_vendor="Contoso",
+        different_type="string",
+    ):
+        different_value = "1" if different_type == "string" else 1
         return query_table(
             [
                 ("TimeGenerated", "datetime"),
                 ("EventUid", "string"),
                 ("EventVendor", "string"),
                 ("ItpOnly", "string"),
-                ("DifferentType", "long"),
+                ("DifferentType", different_type),
             ],
             [
                 {
@@ -618,7 +670,7 @@ class OutputValidationTests(unittest.TestCase):
                     "EventUid": "event-1",
                     "EventVendor": event_vendor,
                     "ItpOnly": "itp",
-                    "DifferentType": 1,
+                    "DifferentType": different_value,
                 }
             ],
         )
@@ -674,10 +726,18 @@ class OutputValidationTests(unittest.TestCase):
         self.assertEqual("passed", result["dataTest"]["status"])
         self.assertEqual("passed", result["parity"]["status"])
         self.assertEqual(
+            1,
+            sum(
+                item["stage"] == "asim-data"
+                for item in client.queries
+            ),
+        )
+        self.assertEqual(
             [
                 "TimeGenerated",
                 "EventUid",
                 "EventVendor",
+                "DifferentType",
             ],
             [
                 column["name"]
@@ -690,6 +750,7 @@ class OutputValidationTests(unittest.TestCase):
                     "TimeGenerated": TIMESTAMP_1,
                     "EventUid": "event-1",
                     "EventVendor": "Contoso",
+                    "DifferentType": "1",
                 }
             ],
             result["qtp_rows_filtered"],
@@ -697,6 +758,12 @@ class OutputValidationTests(unittest.TestCase):
         self.assertEqual(
             result["qtp_rows_filtered"],
             result["itp_rows_filtered"],
+        )
+        self.assertTrue(
+            all(
+                column["typeConsistent"]
+                for column in result["intersect_schema"]
+            )
         )
         self.assertIn("EventSchema", result["qtp_rows"][0])
         self.assertNotIn("EventSchema", result["itp_rows"][0])
@@ -758,6 +825,54 @@ class OutputValidationTests(unittest.TestCase):
         self.assertTrue(result["intersect_schema"])
         self.assertTrue(result["qtp_rows_filtered"])
         self.assertTrue(result["itp_rows_filtered"])
+
+    def test_shared_column_type_mismatch_fails_schema_parity(self):
+        client = FakeQueryClient(
+            [
+                ("asim-data", self.empty_tester_result()),
+                ("qtp-execution", self.qtp_output_table()),
+                (
+                    "target-output",
+                    self.itp_output_table(different_type="long"),
+                ),
+            ]
+        )
+        qtp = {
+            "ParserParams": [],
+            "ParserQuery": (
+                "Contoso_CL\n"
+                "| project TimeGenerated, EventUid, EventVendor"
+            ),
+        }
+
+        result = self.validator().validate_outputs(
+            client,
+            self.source_snapshot(),
+            self.parser_document(),
+            qtp,
+        )
+
+        self.assertEqual("failed", result["status"])
+        mismatch = next(
+            column
+            for column in result["intersect_schema"]
+            if column["name"] == "DifferentType"
+        )
+        self.assertEqual("string", mismatch["qtpType"])
+        self.assertEqual("long", mismatch["itpType"])
+        self.assertFalse(mismatch["typeConsistent"])
+        self.assertEqual("failed", result["parity"]["status"])
+        self.assertEqual(
+            [
+                {
+                    "column": "DifferentType",
+                    "queryTimeType": "string",
+                    "ingestTimeType": "long",
+                }
+            ],
+            result["parity"]["schema"]["typeMismatches"],
+        )
+        self.assertIsNone(result["parity"]["rows"])
 
     def test_without_qtp_reports_parity_not_applicable(self):
         client = FakeQueryClient(

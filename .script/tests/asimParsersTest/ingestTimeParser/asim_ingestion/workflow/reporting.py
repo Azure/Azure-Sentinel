@@ -206,26 +206,50 @@ def build_report(
 
     raw_dcr_value = validation.get("rawDcr")
     parser_dcr_value = validation.get("parserDcr")
-    raw_dcr_failed = (
-        not raw_dcr_value
-        and error_stage
-        in {"raw-table", "dcr-create", "dcr-provisioning"}
+    qtp_source_replay = validation.get("qtpSourceReplay")
+    qtp_replay_status = (
+        qtp_source_replay.get("status")
+        if isinstance(qtp_source_replay, Mapping)
+        else None
+    )
+    qtp_replay_error = (
+        qtp_source_replay.get("error")
+        if isinstance(qtp_source_replay, Mapping)
+        else None
+    )
+    qtp_replay_detail = _error_detail(qtp_replay_error)
+    qtp_replay_error_stage = (
+        qtp_replay_error.get("stage")
+        if isinstance(qtp_replay_error, Mapping)
+        else None
     )
     parser_dcr_failed = (
-        bool(raw_dcr_value)
-        and not parser_dcr_value
+        not parser_dcr_value
         and error_stage in {"dcr-create", "dcr-provisioning"}
     )
     raw_dcr = _stage(
         (
             "passed"
             if raw_dcr_value
-            else "failed"
-            if raw_dcr_failed
+            else "warning"
+            if qtp_replay_status == "warning"
+            else "not-applicable"
+            if qtp_replay_status == "not-applicable"
             else "not-run"
         ),
-        error_detail if raw_dcr_failed else "",
-        raw_dcr_value,
+        (
+            qtp_replay_detail
+            if qtp_replay_status == "warning"
+            else ""
+        ),
+        (
+            {
+                "dcr": raw_dcr_value,
+                "qtpSourceReplay": qtp_source_replay,
+            }
+            if isinstance(qtp_source_replay, Mapping)
+            else raw_dcr_value
+        ),
     )
     raw_ingestion_failed = error_stage in {
         "upload",
@@ -233,16 +257,44 @@ def build_report(
         "raw-visibility",
         "source-snapshot",
     } and not validation.get("parserDcr")
+    qtp_raw_ingestion_warning = (
+        qtp_replay_status == "warning"
+        and (
+            bool(raw_dcr_value)
+            or qtp_replay_error_stage
+            in {
+                "upload",
+                "upload-reconciliation",
+                "raw-visibility",
+            }
+        )
+    )
     raw_ingestion = _stage(
-        "failed"
-        if raw_ingestion_failed
-        else "passed"
-        if validation.get("rawUpload")
-        else "not-run",
-        error_detail if raw_ingestion_failed else "",
+        (
+            "warning"
+            if qtp_raw_ingestion_warning
+            else "blocked"
+            if qtp_replay_status == "warning"
+            else "failed"
+            if raw_ingestion_failed
+            else "passed"
+            if validation.get("rawUpload")
+            else "not-applicable"
+            if qtp_replay_status == "not-applicable"
+            else "not-run"
+        ),
+        (
+            qtp_replay_detail
+            if qtp_raw_ingestion_warning
+            else "Blocked by QTP raw DCR warning."
+            if qtp_replay_status == "warning"
+            else error_detail
+            if raw_ingestion_failed
+            else ""
+        ),
         {
             "upload": validation.get("rawUpload", []),
-            "snapshot": validation.get("snapshot"),
+            "qtpSourceReplay": qtp_source_replay,
         },
     )
     filter_validation = validation.get("filterValidation")
@@ -342,7 +394,13 @@ def build_report(
                 if error_stage == "qtp-execution"
                 else "not-run"
             ),
-            error_detail if error_stage == "qtp-execution" else "",
+            (
+                error_detail
+                if error_stage == "qtp-execution"
+                else str(qtp_execution.get("detail") or "")
+                if isinstance(qtp_execution, Mapping)
+                else ""
+            ),
             qtp_execution,
         )
         parity_stage = _stage(
@@ -356,6 +414,8 @@ def build_report(
             (
                 error_detail
                 if error_stage in {"target-output", "parity"}
+                else str(parity_validation.get("detail") or "")
+                if isinstance(parity_validation, Mapping)
                 else ""
             ),
             parity_validation or (
@@ -490,17 +550,32 @@ def emit_annotations(report: Mapping[str, Any]) -> None:
     stages = report.get("stages", {})
     if isinstance(stages, Mapping):
         for stage_name, stage in stages.items():
-            if (
-                not isinstance(stage, Mapping)
-                or stage.get("status") != "failed"
-            ):
+            if not isinstance(stage, Mapping):
+                continue
+            stage_status = stage.get("status")
+            if stage_status not in {"failed", "warning"}:
                 continue
             detail = _short_message(
-                stage.get("detail") or "Stage failed."
+                stage.get("detail")
+                or (
+                    "Stage failed."
+                    if stage_status == "failed"
+                    else "Stage reported a warning."
+                )
+            )
+            command = (
+                annotation_kind
+                if stage_status == "failed"
+                else "warning"
+            )
+            title_status = (
+                "failure"
+                if stage_status == "failed"
+                else "warning"
             )
             print(
-                f"::{annotation_kind} title=ASIM {stage_name} "
-                f"failure::{target_id}: "
+                f"::{command} title=ASIM {stage_name} "
+                f"{title_status}::{target_id}: "
                 f"{_github_command_message(detail)}"
             )
     if status == "failed":
@@ -512,10 +587,4 @@ def emit_annotations(report: Mapping[str, Any]) -> None:
         print(
             "::error title=ASIM ingestion validation failed::"
             f"{target_id} failed validation in {mode} mode."
-        )
-    cleanup = report.get("stages", {}).get("cleanup", {})
-    if isinstance(cleanup, Mapping) and cleanup.get("status") == "warning":
-        print(
-            "::warning title=ASIM DCR cleanup warning::"
-            f"{target_id} cleanup was incomplete."
         )
