@@ -17,7 +17,6 @@ contentProvenance:
     - CrowdStrikeDetections
     - CrowdStrikeHosts
     - CrowdStrikeVulnerabilities
-    - CrowdStrikeFalconEventStream
     - Event
   requiredDataConnectors:
   - connectorId: CefAma
@@ -88,7 +87,7 @@ contentProvenance:
     - T1499
     reviewScope:
       sourceDocumentSha256: 6b8d23c715c652e1b4ecbefdc56a141389e812e3f337a469cb82350b629ee7a5
-      targetQuerySha256: 03cdbf66dca533836f10eae7bbbac254c6a287ae718c147317e3ea2d1f8dfcef
+      targetQuerySha256: e870c32042ec9b0e95e4b71a884f671869b056aef3521f23586eb0f9de8a81b7
     reviewDecisions:
     - reason: 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally
         represented by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The
@@ -96,7 +95,7 @@ contentProvenance:
         not prove entity parity'
       decision: accepted
       sourceDocumentSha256: 6b8d23c715c652e1b4ecbefdc56a141389e812e3f337a469cb82350b629ee7a5
-      targetQuerySha256: 03cdbf66dca533836f10eae7bbbac254c6a287ae718c147317e3ea2d1f8dfcef
+      targetQuerySha256: e870c32042ec9b0e95e4b71a884f671869b056aef3521f23586eb0f9de8a81b7
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -117,7 +116,7 @@ contentProvenance:
         window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
         hour.
       sourceDocumentSha256: 6b8d23c715c652e1b4ecbefdc56a141389e812e3f337a469cb82350b629ee7a5
-      targetQuerySha256: 03cdbf66dca533836f10eae7bbbac254c6a287ae718c147317e3ea2d1f8dfcef
+      targetQuerySha256: e870c32042ec9b0e95e4b71a884f671869b056aef3521f23586eb0f9de8a81b7
     supplementalEntityDetails:
     - entityType: Account
       entityIndex: 1
@@ -158,8 +157,67 @@ properties:
   status: disabled
   queryCondition:
     queryText: |-
+      // CrowdStrikeFalconEventStream parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.
+      let CrowdStrikeFalconEvents = CommonSecurityLog
+      | where DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost"
+      | extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", long(null)),DeviceCustomNumber1),
+               DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2),
+               DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", long(null)),DeviceCustomNumber3)
+      // Additional Extensions
+      | extend EventType = extract(@"cat=([^;]+)(\;|$)",1,AdditionalExtensions),
+               Outcome = extract(@"outcome=([^;]+)(\;|$)",1,AdditionalExtensions),
+               Technique = extract(@"reason=([^;]+)(\;|$)",1,AdditionalExtensions),
+               PatternDisposition = extract(@"CSMTRPatternDisposition=([^;]+)(\;|$)",1,AdditionalExtensions),
+               SessionStartTime = unixtime_seconds_todatetime(toint(extract(@"sessionStartTimestamp=([^;]+)(\;|$)",1,AdditionalExtensions))),
+               SessionEndTime = unixtime_seconds_todatetime(toint(extract(@"sessionEndTimestamp=([^;]+)(\;|$)",1,AdditionalExtensions)))
+      | extend EventType = coalesce(column_ifexists("DeviceEventCategory",""),EventType), 
+               Outcome = coalesce(column_ifexists("EventOutcome",""),Outcome),
+               Technique = coalesce(column_ifexists("Reason",""),Technique)
+      // Device Custom Number Values
+      | extend ParentProcessId = iif(DeviceCustomNumber1Label == "ParentProcessId" , DeviceCustomNumber1, toint("")),
+               ChildProcessId = iif(DeviceCustomNumber2Label == "ProcessId" , DeviceCustomNumber2, toint("")),
+               Offset = iif(DeviceCustomNumber3Label == "Offset", DeviceCustomNumber3, toint(""))
+      | project-away DeviceCustomNumber1Label, DeviceCustomNumber1,DeviceCustomNumber2Label, DeviceCustomNumber2,DeviceCustomNumber3Label, DeviceCustomNumber3
+      // Device Custom Date Values
+      | extend EventTimestamp = iif(DeviceCustomDate1Label == "Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+               ExeWrittenTime = iif(DeviceCustomDate1Label == "ExeWrittenTimestamp", todatetime(DeviceCustomDate1), todatetime("")),
+               DnsRequestTime = iif(DeviceCustomDate1Label == "DNS Request Time", todatetime(DeviceCustomDate1), todatetime("")),
+               NetworkAccessTime = iif(DeviceCustomDate1Label == "Network Access Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+               DocAccessTime = iif(DeviceCustomDate1Label == "DocAccessTimestamp" or DeviceCustomDate1Label == "Document Accessed Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+               HashSpreadingEventTime = iif(DeviceCustomDate2Label == "HashSpreadingEventTime", todatetime(DeviceCustomDate2), todatetime("")),
+               HashSpreadingSensorTime = iif(DeviceCustomDate2Label == "HashSpreadingSensorEventTime", todatetime(DeviceCustomDate2), todatetime(""))
+      | project-away DeviceCustomDate1Label, DeviceCustomDate1, DeviceCustomDate2Label, DeviceCustomDate2
+      // Device Custom String Values
+      | extend ScanResultName = iif(DeviceCustomString1Label == "ScanResultNam", DeviceCustomString1, ""),
+               WrittenExeFileName = iif(DeviceCustomString2Label == "WrittenExeFileName", DeviceCustomString2, ""),
+               QuarantineFileSHA256 = iif(DeviceCustomString2Label == "QuarantineFileSHA256", DeviceCustomString2, ""),
+               ScanResultEngine = iif(DeviceCustomString2Label == "ScanResultEngine", DeviceCustomString2, ""),
+               AccessedDocFileName = iif(DeviceCustomString2Label == "AccessedDocFileName", DeviceCustomString2, ""),
+               WrittenExeFilePath = iif(DeviceCustomString3Label == "WrittenExeFilePath", DeviceCustomString3, ""),
+               AccessedDocFilePath = iif(DeviceCustomString3Label == "AccessedDocFilePath", DeviceCustomString3, ""),
+               QuarantineFilePath = iif(DeviceCustomString3Label == "QuarantineFilePath", DeviceCustomString3, ""),
+               ScanResultVersion = iif(DeviceCustomString4Label == "ScanResultVersion", DeviceCustomString4, ""),
+               CommandLine = iif(DeviceCustomString5Label == "CommandLine", DeviceCustomString5, ""),
+               FalconHostLink = iif(DeviceCustomString6Label == "FalconHostLink", DeviceCustomString6, "")
+      | project-away DeviceCustomString1Label, DeviceCustomString1, DeviceCustomString2Label, DeviceCustomString2, DeviceCustomString3Label, DeviceCustomString3, DeviceCustomString4Label, DeviceCustomString4, DeviceCustomString5Label, DeviceCustomString5, DeviceCustomString6Label, DeviceCustomString6
+      // Data Field Normalization
+      | project-rename DstHostName = DestinationHostName,
+               DstNtDomain = DestinationNTDomain,
+               DstUserName = DestinationUserName,
+               DstIpAddr = DestinationTranslatedAddress,
+               SrcMacAddr = SourceMACAddress,
+               SrcIpAddr = SourceIP
+      | extend EventType = iif(DeviceEventClassID == "DetectionSummaryEvent" or DeviceEventClassID contains "Detection Summary Event", "DetectionSummaryEvent", EventType), 
+               ReceiptTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+               SensorId = extract(@"/detail/([^/]+)\/",1,FalconHostLink),
+               Severity = case(LogSeverity == 1, "Informational",
+                               LogSeverity == 2, "Low",
+                               LogSeverity == 3, "Medium",
+                               LogSeverity == 4, "High",
+                               LogSeverity == 5, "Critical",
+                               LogSeverity);
       let timeframe = 1h;
-      CrowdStrikeFalconEventStream
+      CrowdStrikeFalconEvents
       | where TimeGenerated > ago(timeframe)
       | where EventType == "DetectionSummaryEvent"
       | where Severity == "Critical"

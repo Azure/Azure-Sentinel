@@ -11,8 +11,6 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - ConfidentialWatchlist
-    - SophosXGFirewall
     - Syslog
   requiredDataConnectors:
   - connectorId: SyslogAma
@@ -48,7 +46,7 @@ contentProvenance:
     - T1046
     reviewScope:
       sourceDocumentSha256: f775913433f58ed9976f8f500865ba359355c9baacf8922fb3fb1a423c17d82e
-      targetQuerySha256: 30e8c6420e03b2b270b2ecf3a714a82808d4bbc7f0e1d9e33543186dcaf8598c
+      targetQuerySha256: 70266ce10de9e7a6f14b73ccdcb8b872b4d4e84b1f463a669890247d5469f088
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -69,7 +67,7 @@ contentProvenance:
         window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
         hour.
       sourceDocumentSha256: f775913433f58ed9976f8f500865ba359355c9baacf8922fb3fb1a423c17d82e
-      targetQuerySha256: 30e8c6420e03b2b270b2ecf3a714a82808d4bbc7f0e1d9e33543186dcaf8598c
+      targetQuerySha256: 70266ce10de9e7a6f14b73ccdcb8b872b4d4e84b1f463a669890247d5469f088
 properties:
   id: xdr-427e4c9e-8cf4-4094-a684-a2d060dbca38
   displayName: Port Scan Detected
@@ -77,7 +75,14 @@ properties:
   queryCondition:
     queryText: |-
       let threshold = 50;
-      SophosXGFirewall
+      let forwarder_host_names = dynamic(["hostname1", "hostname2"]);
+      // SophosXGFirewall parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.
+      Syslog
+      | where Facility == "local0"
+      | where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names)
+      | extend Log_Type = extract(@'log_type=\"?([\w\s]+)\"?', 1, SyslogMessage),
+          Src_IP = extract(@'src_ip=\"?([\w\.]+)\"?', 1, SyslogMessage),
+          Dst_Port = extract(@'dst_port=\"?(\d+)\"?', 1, SyslogMessage)
       | where Log_Type =~ "Firewall"
       | where not(ipv4_is_match("10.0.0.0",Src_IP,8) or ipv4_is_match("172.16.0.0",Src_IP,12) or ipv4_is_match("192.168.0.0",Src_IP,16))
       | summarize dcount(Dst_Port) by Src_IP, bin(TimeGenerated, 5m)

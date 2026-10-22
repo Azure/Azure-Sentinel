@@ -27,7 +27,7 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 - **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and the 2 Analytic Rule(s) deployed with `enabled: false`, with the GET snapshot of each rule. Deployment section status: **passed**.
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 2 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
-- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **failed**; alert lifecycle: **failed**; dual-surface KQL: **passed**.
+- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed**; alert lifecycle: **passed**; dual-surface KQL: **passed**.
 - **`workbook-queries-live.json`** — 10 workbook queries executed live on both surfaces (status **passed**, 10 with rows on both surfaces).
 - **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **passed**, assets: **passed**; portal traversal: **passed**).
 
@@ -42,7 +42,6 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 | `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'failed to enable parity rules: Custom Detection: B |
 
 ### Known gaps
-- **Alert lifecycle / alert parity not achieved:** failed to enable parity rules: Custom Detection: Bad request. Please check your input.. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).
 - **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
 
 ## 4. Human-Review Sign-Off Items

@@ -11,8 +11,6 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - ConfidentialWatchlist
-    - SophosXGFirewall
     - Syslog
   requiredDataConnectors:
   - connectorId: SyslogAma
@@ -48,7 +46,7 @@ contentProvenance:
     - T1499
     reviewScope:
       sourceDocumentSha256: f112f8a813518d5b37672054a6bda4ac1afaddaa047b8a1f6e3c80603cba7e8f
-      targetQuerySha256: 7a1dead2a091a84eb86aee53a839f194d33802ee9a896247ec544ed823d246f5
+      targetQuerySha256: d33e6c2544504643ea4cd62c8183acc93616bcc01b4df4303c1bd571c5a0199b
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -69,7 +67,7 @@ contentProvenance:
         window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
         hour.
       sourceDocumentSha256: f112f8a813518d5b37672054a6bda4ac1afaddaa047b8a1f6e3c80603cba7e8f
-      targetQuerySha256: 7a1dead2a091a84eb86aee53a839f194d33802ee9a896247ec544ed823d246f5
+      targetQuerySha256: d33e6c2544504643ea4cd62c8183acc93616bcc01b4df4303c1bd571c5a0199b
 properties:
   id: xdr-3d645a88-2724-41a7-adea-db74c439cf79
   displayName: Excessive Amount of Denied Connections from a Single Source
@@ -77,7 +75,14 @@ properties:
   queryCondition:
     queryText: |-
       let threshold = 5000;
-      SophosXGFirewall
+      let forwarder_host_names = dynamic(["hostname1", "hostname2"]);
+      // SophosXGFirewall parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.
+      Syslog
+      | where Facility == "local0"
+      | where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names)
+      | extend Log_Type = extract(@'log_type=\"?([\w\s]+)\"?', 1, SyslogMessage),
+          Status = extract(@'status=\"?(\w+)\"?', 1, SyslogMessage),
+          Src_IP = extract(@'src_ip=\"?([\w\.]+)\"?', 1, SyslogMessage)
       | where Log_Type =~ "Firewall" and Status =~ "Deny"
       | summarize count() by Src_IP, bin(TimeGenerated,5m)
       | where count_ > threshold
