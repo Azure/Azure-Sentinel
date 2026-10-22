@@ -1,7 +1,7 @@
 Parser:
   Title: Process Event ASIM filtering parser for CrowdStrike Falcon Endpoint Protection
   Version: '0.1.0'
-  LastUpdated: Oct 21, 2026
+  LastUpdated: Oct 22, 2026
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -93,47 +93,48 @@ ParserQuery: |
       | where (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime)
       | where event_simpleName in ('WmiCreateProcess', 'UnsignedModuleLoad', 'TerminateProcess', 'SyntheticProcessRollup2', 'ProcessSelfDeleted', 'ProcessRollup2', 'ProcessInjection', 'ProcessBlocked', 'ModuleLoadV3DetectInfo', 'FileWrittenAndExecutedInContainer', 'ExecutableDeleted', 'EndOfProcess')
-      | extend
-          _SourceType = iff(isnotempty(event_simpleName), event_simpleName,
-              case(tostring(split(name, "V")[0]) in ("ProcessRollup2", "ProcessRollup2Lin", "ProcessRollup2Mac"), "ProcessRollup2",
-                  tostring(split(name, "V")[0]) in ("SyntheticProcessRollup2", "SyntheticProcessRollup2Lin", "SyntheticProcessRollup2Mac"), "SyntheticProcessRollup2",
-                  tostring(split(name, "V")[0]) in ("EndOfProcess", "EndOfProcessLin", "EndOfProcessMac"), "EndOfProcess",
-                  tostring(split(name, "V")[0]) in ("TerminateProcess", "TerminateProcessLin", "TerminateProcessMac"), "TerminateProcess", "")),
-          _SourceFields = bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"])))
-      | where isnotempty(_SourceType)
-      | extend
-          _IsCreate = _SourceType in ("ProcessRollup2", "SyntheticProcessRollup2"),
-          _IsTerminationRequest = _SourceType == "TerminateProcess"
+      | where isnull(hashes_has_any) or array_length(hashes_has_any) == 0
+          or iff(event_simpleName != "TerminateProcess" and strlen(MD5HashData) == 32
+              and MD5HashData != "00000000000000000000000000000000", MD5HashData, "") in~ (hashes_has_any)
+          or iff(event_simpleName != "TerminateProcess" and strlen(SHA1HashData) == 40
+              and SHA1HashData != "0000000000000000000000000000000000000000", SHA1HashData, "") in~ (hashes_has_any)
+          or iff(event_simpleName != "TerminateProcess" and strlen(SHA256HashData) == 64
+              and SHA256HashData != "0000000000000000000000000000000000000000000000000000000000000000", SHA256HashData, "") in~ (hashes_has_any)
       | where isempty(eventtype) or eventtype == "*"
-          or (_IsCreate and eventtype == "ProcessCreated")
-          or (not(_IsCreate) and eventtype == "ProcessTerminated")
+          or (event_simpleName in ("ProcessRollup2", "SyntheticProcessRollup2") and eventtype == "ProcessCreated")
+          or (event_simpleName !in ("ProcessRollup2", "SyntheticProcessRollup2") and eventtype == "ProcessTerminated")
       | where isnull(commandline_has_any) or array_length(commandline_has_any) == 0
-          or (not(_IsTerminationRequest) and CommandLine has_any (commandline_has_any))
+          or (event_simpleName != "TerminateProcess" and CommandLine has_any (commandline_has_any))
       | where isnull(commandline_has_all) or array_length(commandline_has_all) == 0
-          or (not(_IsTerminationRequest) and CommandLine has_all (commandline_has_all))
+          or (event_simpleName != "TerminateProcess" and CommandLine has_all (commandline_has_all))
       | where isnull(commandline_has_any_ip_prefix) or array_length(commandline_has_any_ip_prefix) == 0
-          or (not(_IsTerminationRequest) and has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix))
+          or (event_simpleName != "TerminateProcess" and has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix))
       | where isnull(actingprocess_has_any) or array_length(actingprocess_has_any) == 0
-          or (_IsCreate and coalesce(ParentImageFileName, ParentBaseFileName) has_any (actingprocess_has_any))
-          or (_IsTerminationRequest and ImageFileName has_any (actingprocess_has_any))
+          or (event_simpleName in ("ProcessRollup2", "SyntheticProcessRollup2") and coalesce(ParentImageFileName, ParentBaseFileName) has_any (actingprocess_has_any))
+          or (event_simpleName == "TerminateProcess" and ImageFileName has_any (actingprocess_has_any))
       | where isnull(targetprocess_has_any) or array_length(targetprocess_has_any) == 0
-          or (not(_IsTerminationRequest) and ImageFileName has_any (targetprocess_has_any))
+          or (event_simpleName != "TerminateProcess" and ImageFileName has_any (targetprocess_has_any))
       | where isnull(parentprocess_has_any) or array_length(parentprocess_has_any) == 0
       | where isempty(targetusername_has) or targetusername_has == "*"
-          or (not(_IsTerminationRequest) and UserName has targetusername_has)
+          or (event_simpleName != "TerminateProcess" and UserName has targetusername_has)
       | where isempty(actorusername_has) or actorusername_has == "*"
-          or (_IsTerminationRequest and UserName has actorusername_has)
+          or (event_simpleName == "TerminateProcess" and UserName has actorusername_has)
       | where isnull(dvcipaddr_has_any_prefix) or array_length(dvcipaddr_has_any_prefix) == 0
           or has_any_ipv4_prefix(aip, dvcipaddr_has_any_prefix)
       | where isnull(dvchostname_has_any) or array_length(dvchostname_has_any) == 0
           or tostring(column_ifexists("ComputerName", "")) has_any (dvchostname_has_any)
       | extend
+          _SourceFields = bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"])))
+      | extend
+          _IsCreate = event_simpleName in ("ProcessRollup2", "SyntheticProcessRollup2"),
+          _IsTerminationRequest = event_simpleName == "TerminateProcess",
           _EventTime = coalesce(unixtime_milliseconds_todatetime(timestamp), TimeGenerated),
           _Hostname = tostring(column_ifexists("ComputerName", "")),
           _OsPid = tostring(tolong(RawProcessId)),
           _UsernameType = case(isempty(UserName), "", UserName contains "\\", "Windows",
               UserName contains "@", "UPN", "Simple")
       | project-rename
+          EventOriginalType = event_simpleName,
           EventOriginalSubType = name,
           EventOriginalUid = CrowdStrikeId,
           DvcId = aid,
@@ -150,7 +151,6 @@ ParserQuery: |
           EventSchema = "ProcessEvent",
           EventSchemaVersion = "1.0.0",
           EventSeverity = "Informational",
-          EventOriginalType = _SourceType,
           EventUid = EventOriginalUid,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           DvcHostname = _Hostname,
@@ -173,7 +173,7 @@ ParserQuery: |
               and SHA1HashData != "0000000000000000000000000000000000000000", tolower(SHA1HashData), ""),
           TargetProcessSHA256 = iff(not(_IsTerminationRequest) and strlen(SHA256HashData) == 64
               and SHA256HashData != "0000000000000000000000000000000000000000000000000000000000000000", tolower(SHA256HashData), ""),
-          TargetProcessStatusCode = iff(_SourceType == "EndOfProcess", ExitCode, ""),
+          TargetProcessStatusCode = iff(EventOriginalType == "EndOfProcess", ExitCode, ""),
           ActingProcessId = iff(_IsTerminationRequest, _OsPid, ""),
           ActingProcessName = case(_IsCreate, coalesce(ParentImageFileName, ParentBaseFileName),
               _IsTerminationRequest, ImageFileName, ""),
@@ -199,9 +199,6 @@ ParserQuery: |
           TargetUserEntityKey = "",
           TargetUserAdditionalIds = dynamic([]),
           AdditionalEntities = dynamic([])
-      | where isnull(hashes_has_any) or array_length(hashes_has_any) == 0
-          or TargetProcessMD5 in~ (hashes_has_any) or TargetProcessSHA1 in~ (hashes_has_any)
-          or TargetProcessSHA256 in~ (hashes_has_any)
       | extend
           Dvc = coalesce(DvcHostname, DvcIpAddr, DvcId),
           TargetProcessFilename = tostring(split(replace_string(TargetProcessName, "\\", "/"), "/")[-1]),

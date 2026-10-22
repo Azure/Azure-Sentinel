@@ -1,7 +1,7 @@
 Parser:
   Title: Process Event ASIM parser for CrowdStrike Falcon Endpoint Protection
   Version: '0.1.0'
-  LastUpdated: Oct 21, 2026
+  LastUpdated: Oct 22, 2026
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -33,22 +33,17 @@ ParserQuery: |
       | where not(disabled)
       | where event_simpleName in ('WmiCreateProcess', 'UnsignedModuleLoad', 'TerminateProcess', 'SyntheticProcessRollup2', 'ProcessSelfDeleted', 'ProcessRollup2', 'ProcessInjection', 'ProcessBlocked', 'ModuleLoadV3DetectInfo', 'FileWrittenAndExecutedInContainer', 'ExecutableDeleted', 'EndOfProcess')
       | extend
-          _SourceType = iff(isnotempty(event_simpleName), event_simpleName,
-              case(tostring(split(name, "V")[0]) in ("ProcessRollup2", "ProcessRollup2Lin", "ProcessRollup2Mac"), "ProcessRollup2",
-                  tostring(split(name, "V")[0]) in ("SyntheticProcessRollup2", "SyntheticProcessRollup2Lin", "SyntheticProcessRollup2Mac"), "SyntheticProcessRollup2",
-                  tostring(split(name, "V")[0]) in ("EndOfProcess", "EndOfProcessLin", "EndOfProcessMac"), "EndOfProcess",
-                  tostring(split(name, "V")[0]) in ("TerminateProcess", "TerminateProcessLin", "TerminateProcessMac"), "TerminateProcess", "")),
           _SourceFields = bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"])))
-      | where isnotempty(_SourceType)
       | extend
-          _IsCreate = _SourceType in ("ProcessRollup2", "SyntheticProcessRollup2"),
-          _IsTerminationRequest = _SourceType == "TerminateProcess",
+          _IsCreate = event_simpleName in ("ProcessRollup2", "SyntheticProcessRollup2"),
+          _IsTerminationRequest = event_simpleName == "TerminateProcess",
           _EventTime = coalesce(unixtime_milliseconds_todatetime(timestamp), TimeGenerated),
           _Hostname = tostring(column_ifexists("ComputerName", "")),
           _OsPid = tostring(tolong(RawProcessId)),
           _UsernameType = case(isempty(UserName), "", UserName contains "\\", "Windows",
               UserName contains "@", "UPN", "Simple")
       | project-rename
+          EventOriginalType = event_simpleName,
           EventOriginalSubType = name,
           EventOriginalUid = CrowdStrikeId,
           DvcId = aid,
@@ -65,7 +60,6 @@ ParserQuery: |
           EventSchema = "ProcessEvent",
           EventSchemaVersion = "1.0.0",
           EventSeverity = "Informational",
-          EventOriginalType = _SourceType,
           EventUid = EventOriginalUid,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           DvcHostname = _Hostname,
@@ -88,7 +82,7 @@ ParserQuery: |
               and SHA1HashData != "0000000000000000000000000000000000000000", tolower(SHA1HashData), ""),
           TargetProcessSHA256 = iff(not(_IsTerminationRequest) and strlen(SHA256HashData) == 64
               and SHA256HashData != "0000000000000000000000000000000000000000000000000000000000000000", tolower(SHA256HashData), ""),
-          TargetProcessStatusCode = iff(_SourceType == "EndOfProcess", ExitCode, ""),
+          TargetProcessStatusCode = iff(EventOriginalType == "EndOfProcess", ExitCode, ""),
           ActingProcessId = iff(_IsTerminationRequest, _OsPid, ""),
           ActingProcessName = case(_IsCreate, coalesce(ParentImageFileName, ParentBaseFileName),
               _IsTerminationRequest, ImageFileName, ""),
