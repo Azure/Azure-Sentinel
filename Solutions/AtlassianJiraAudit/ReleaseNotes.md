@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.2.3 | 22-10-2026 | Fixed duplicate **Custom Detection** names and alert titles by correcting the site admin password-change rule name and description in both the **Analytic Rule** and **Custom Detection**. |
 | 3.2.2       | 20-10-2026                     | Added 10 **Defender XDR Custom Detections** migrated from **Analytic Rules**. |
 | 3.0.6       | 13-04-2026                     | Deprecate Atlassian Jira Audit (using Azure Function)  |
 | 3.0.5       | 18-03-2026                     | Rename to Atlassian Jira Audit (via Codeless Connector Framework) 	       |
