@@ -29,20 +29,26 @@ module Fluent
       desc 'The parameter to enable writing to new lines'
       config_param :add_newline, :bool, default: true
 
+      CEF_HEADER_ESCAPES = {
+        '\\' => '\\\\',
+        '|' => '\|',
+        "\r" => '\r',
+        "\n" => '\n'
+      }.freeze
+
+      CEF_VALUE_ESCAPES = {
+        '\\' => '\\\\',
+        '=' => '\=',
+        "\r" => '\r',
+        "\n" => '\n'
+      }.freeze
+
       def escape_cef_header(value)
-        value.to_s
-             .gsub('\\', '\\\\\\\\')
-             .gsub('|', '\|')
-             .gsub("\r", '\\r')
-             .gsub("\n", '\\n')
+        value.to_s.gsub(/[\\|\r\n]/, CEF_HEADER_ESCAPES)
       end
 
       def escape_cef_value(value)
-        value.to_s
-             .gsub('\\', '\\\\\\\\')
-             .gsub('=', '\\=')
-             .gsub("\r", '\\r')
-             .gsub("\n", '\\n')
+        value.to_s.gsub(/[\\=\r\n]/, CEF_VALUE_ESCAPES)
       end
 
       def format(tag, time, record)
