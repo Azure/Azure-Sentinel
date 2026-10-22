@@ -544,8 +544,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "SourceRawTable": "Contoso_CL",
             "TargetASIMTable": "ASimAuthenticationEventLogs",
             "ParserQuery": (
-                "source\n"
-                "| project TimeGenerated, Type, TenantId, Value"
+                "    source // remove this comment\n"
+                "      | project TimeGenerated, Type, TenantId, Value"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -587,7 +587,11 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Custom-Contoso_CL", raw_flow["outputStream"]
         )
         self.assertEqual(
-            parser["ParserQuery"], parser_flow["transformKql"]
+            (
+                "source\n"
+                "| project TimeGenerated, Type, TenantId, Value"
+            ),
+            parser_flow["transformKql"],
         )
         self.assertEqual(
             "Microsoft-ASimAuthenticationEventLogs",

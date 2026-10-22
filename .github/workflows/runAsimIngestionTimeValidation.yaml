@@ -350,7 +350,6 @@ jobs:
       needs.security-gate.outputs.approved == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
-    continue-on-error: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -472,6 +471,7 @@ jobs:
               echo
               echo "⚠️ Discovery failed before a target matrix could be produced."
             } >> "$GITHUB_STEP_SUMMARY"
+            exit "$matrix_exit"
           else
             echo "discovery_failed=false" >> "$GITHUB_OUTPUT"
           fi
@@ -494,7 +494,6 @@ jobs:
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
-    continue-on-error: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED != 'true' }}
     strategy:
       fail-fast: false
       max-parallel: 10
@@ -605,7 +604,6 @@ jobs:
       - name: Run static ITP and optional QTP eligibility validation
         id: static-validation
         if: steps.target.outputs.discovery_valid == 'true'
-        continue-on-error: true
         env:
           ITP_PATH: ${{ steps.target.outputs.ingest_time_path }}
           QTP_PATH: ${{ steps.target.outputs.query_time_path }}
@@ -640,7 +638,6 @@ jobs:
       - name: Prepare immutable source-specific fixture
         id: prepare
         if: steps.static-decision.outputs.itp_valid == 'true'
-        continue-on-error: true
         env:
           FIXTURE_PATH: ${{ steps.target.outputs.fixture_path }}
           SOURCE_RAW_TABLE: ${{ steps.target.outputs.source_raw_table }}
@@ -701,7 +698,6 @@ jobs:
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
-    continue-on-error: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED != 'true' }}
     strategy:
       fail-fast: false
       max-parallel: 10
@@ -739,23 +735,26 @@ jobs:
 
       - name: Download template validation artifact
         id: template-artifact
-        continue-on-error: true
+        if: always()
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: asim-ingestion-template-${{ matrix.target_id }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.ARTIFACT_DIR }}
 
       - name: Set up Python
+        if: always()
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.x"
 
       - name: Install trusted helper dependencies
+        if: always()
         run: |
           python -m pip install --disable-pip-version-check --quiet \
             azure-identity requests PyYAML
 
       - name: Restore trusted ingestion validation helpers
+        if: always()
         run: |
           trusted_root="$RUNNER_TEMP/asim-trusted-root"
           mkdir -p "$trusted_root"
@@ -770,6 +769,7 @@ jobs:
 
       - name: Export target contract
         id: target
+        if: always()
         run: |
           python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
             export-target \
@@ -821,7 +821,6 @@ jobs:
           steps.template-decision.outputs.fixture_prepared == 'true' &&
           steps.template-decision.outputs.parser_input_prepared == 'true' &&
           steps.template-decision.outputs.qtp_input_prepared == 'true'
-        continue-on-error: true
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
@@ -831,7 +830,6 @@ jobs:
       - name: Execute ingestion-time data validation and optional parity
         id: ingestion-validation
         if: steps.azure-login.outcome == 'success'
-        continue-on-error: true
         env:
           QTP_ELIGIBLE: ${{ steps.template-decision.outputs.qtp_eligible }}
         run: |
@@ -896,7 +894,6 @@ jobs:
       - name: Always attempt deterministic DCR cleanup
         id: cleanup
         if: always() && steps.azure-login.outcome == 'success'
-        continue-on-error: true
         run: |
           python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
             cleanup \
@@ -935,7 +932,7 @@ jobs:
           path: ${{ env.ARTIFACT_DIR }}
           if-no-files-found: error
 
-      - name: Enforce required validation result
+      - name: Enforce validation result
         if: always()
         env:
           REQUIRED_FAILURE: ${{ steps.target-report.outputs.required_failure }}
@@ -945,10 +942,15 @@ jobs:
             echo "::error::ASIM ingestion validation report generation failed."
             exit 1
           fi
-          required="${ENFORCEMENT_REQUIRED:-false}"
-          required="${required,,}"
-          if [ "$required" = "true" ] && [ "$REQUIRED_FAILURE" = "true" ]; then
-            echo "::error::ASIM ingestion validation failed in required mode."
+          if [ "$REQUIRED_FAILURE" = "true" ]; then
+            mode="${ENFORCEMENT_REQUIRED:-false}"
+            mode="${mode,,}"
+            if [ "$mode" = "true" ]; then
+              mode="required"
+            else
+              mode="shadow"
+            fi
+            echo "::error::ASIM ingestion validation failed in $mode mode."
             exit 1
           fi
 
@@ -962,7 +964,6 @@ jobs:
     if: |
       always() &&
       needs.security-gate.outputs.approved == 'true'
-    continue-on-error: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -987,6 +988,7 @@ jobs:
             echo "- Targets selected: \`${HAS_TARGETS:-false}\`"
             echo "- Template validation: \`${TEMPLATE_RESULT:-skipped}\`"
             echo "- Ingestion validation: \`${INGESTION_RESULT:-skipped}\`"
+            echo "- Merge blocking: controlled by branch protection required-check configuration"
           } >> "$GITHUB_STEP_SUMMARY"
 
           failed=false
@@ -1006,10 +1008,8 @@ jobs:
             failed=true
           fi
 
-          if [ "$failed" = "true" ] && [ "$required" = "true" ]; then
-            echo "::error::ASIM ingestion-time parser validation failed."
-            exit 1
-          fi
           if [ "$failed" = "true" ]; then
-            echo "::warning::ASIM ingestion-time parser validation failed in shadow mode."
+            mode="$([ "$required" = "true" ] && echo required || echo shadow)"
+            echo "::error::ASIM ingestion-time parser validation failed in $mode mode."
+            exit 1
           fi

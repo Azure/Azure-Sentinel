@@ -465,7 +465,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 if ($TemplateCounter -eq 1) {
                     #========start:dc definition resource===========
-                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
+                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath -replace "^$([regex]::Escape($solutionName + '/'))", "" -replace "^$([regex]::Escape($dcFolderName + '/'))", ""
                     $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
                     $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
                     Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
@@ -1105,6 +1105,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
     catch {
         Write-Host "Error occurred in createCCPConnector file. Error Details $_" -ForegroundColor Red
+        throw
     }
 }
 

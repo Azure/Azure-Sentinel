@@ -285,6 +285,7 @@ def _set_pair_enabled(
         "suppressionEnabled",
         "tactics",
         "techniques",
+        "subTechniques",
         "entityMappings",
         "eventGroupingSettings",
         "alertDetailsOverride",
