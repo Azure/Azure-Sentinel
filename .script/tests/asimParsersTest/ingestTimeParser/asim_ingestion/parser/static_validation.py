@@ -11,6 +11,7 @@ import yaml
 
 from .common import (
     IDENTIFIER_RE,
+    MAX_DCR_TRANSFORM_KQL_CHARS,
     PARSER_NAME_RE,
     STREAM_NAME_RE,
     TARGET_TABLE_BY_SCHEMA,
@@ -377,6 +378,7 @@ def validate_ingest_time_parser(
         parser_query = _require_string(
             document, findings, "ParserQuery", "ParserQuery"
         )
+        raw_parser_query = _get_nested(document, "ParserQuery")
         change_date = _require_string(
             document, findings, "Change.Date", "Change", "Date"
         )
@@ -499,6 +501,19 @@ def validate_ingest_time_parser(
             )
             findings.extend(_scan_kql(filter_query, "ParserFilterQuery"))
         if parser_query is not None:
+            if (
+                isinstance(raw_parser_query, str)
+                and len(raw_parser_query) > MAX_DCR_TRANSFORM_KQL_CHARS
+            ):
+                findings.append(
+                    Finding(
+                        "KQL044",
+                        "ParserQuery",
+                        f"ParserQuery is {len(raw_parser_query)} characters; "
+                        "Azure DCR TransformKql supports at most "
+                        f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
+                    )
+                )
             _validate_pipeline_operators(
                 parser_query,
                 "ParserQuery",

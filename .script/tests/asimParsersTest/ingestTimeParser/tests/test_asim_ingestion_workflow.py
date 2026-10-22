@@ -476,6 +476,56 @@ class ReportTests(unittest.TestCase):
             "warning", report["stages"]["cleanup"]["status"]
         )
 
+    def test_parser_dcr_failure_does_not_add_detail_to_raw_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["parserDcr"] = None
+        validation["parserUpload"] = []
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "PUT failed with HTTP 400.",
+            report["stages"]["parserDcr"]["detail"],
+        )
+
+    def test_raw_dcr_failure_adds_detail_only_to_raw_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-provisioning",
+            "message": "Provisioning failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("failed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "Provisioning failed.",
+            report["stages"]["rawDcr"]["detail"],
+        )
+        self.assertEqual(
+            "not-run", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual("", report["stages"]["parserDcr"]["detail"])
+
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
         validation["status"] = "failed"

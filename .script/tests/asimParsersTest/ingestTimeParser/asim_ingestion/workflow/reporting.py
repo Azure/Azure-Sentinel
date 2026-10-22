@@ -164,12 +164,28 @@ def build_report(
             ),
         )
 
+    raw_dcr_value = validation.get("rawDcr")
+    parser_dcr_value = validation.get("parserDcr")
+    raw_dcr_failed = (
+        not raw_dcr_value
+        and error_stage
+        in {"raw-table", "dcr-create", "dcr-provisioning"}
+    )
+    parser_dcr_failed = (
+        bool(raw_dcr_value)
+        and not parser_dcr_value
+        and error_stage in {"dcr-create", "dcr-provisioning"}
+    )
     raw_dcr = _stage(
-        "passed" if validation.get("rawDcr") else (
-            "failed" if error_stage in {"raw-table", "dcr-create", "dcr-provisioning"} else "not-run"
+        (
+            "passed"
+            if raw_dcr_value
+            else "failed"
+            if raw_dcr_failed
+            else "not-run"
         ),
-        error_message if error_stage in {"raw-table", "dcr-create", "dcr-provisioning"} else "",
-        validation.get("rawDcr"),
+        error_message if raw_dcr_failed else "",
+        raw_dcr_value,
     )
     raw_ingestion_failed = error_stage in {
         "upload",
@@ -202,11 +218,15 @@ def build_report(
         filter_validation,
     )
     parser_dcr = _stage(
-        "passed" if validation.get("parserDcr") else (
-            "failed" if error_stage in {"dcr-create", "dcr-provisioning"} and validation.get("rawDcr") else "not-run"
+        (
+            "passed"
+            if parser_dcr_value
+            else "failed"
+            if parser_dcr_failed
+            else "not-run"
         ),
-        error_message if error_stage in {"dcr-create", "dcr-provisioning"} and validation.get("rawDcr") else "",
-        validation.get("parserDcr"),
+        error_message if parser_dcr_failed else "",
+        parser_dcr_value,
     )
     parser_ingestion_failed = error_stage in {
         "upload",

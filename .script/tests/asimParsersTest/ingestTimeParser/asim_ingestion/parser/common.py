@@ -1,4 +1,4 @@
-"""Shared parser models, safe YAML loading, and repository evidence lookup."""
+"""Shared parser models and safe YAML loading."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import yaml
 MANIFEST_VERSION = 2
 VALIDATION_RESULT_VERSION = 2
 MAX_YAML_BYTES = 1024 * 1024
+MAX_DCR_TRANSFORM_KQL_CHARS = 15_360
 
 QUERY_TIME_PATH_RE = re.compile(
     r"^Parsers/ASim(?P<schema>[^/]+)/Parsers/(?P<name>ASim[^/]+)\.yaml$"
