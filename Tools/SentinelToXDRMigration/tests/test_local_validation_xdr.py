@@ -462,6 +462,60 @@ class LocalValidationXdrTests(unittest.TestCase):
         self.assertTrue(report["workbooks"][0]["applicable"])
         self.assertTrue(report["workbooks"][0]["liveKqlSkipped"])
 
+    def test_required_parser_gated_by_deploy_parser_is_accepted_and_other_gates_rejected(self) -> None:
+        paths = self._populate_valid_hybrid_solution(with_package=True)
+        main_template_path = paths["main_template"]
+        original = json.loads(main_template_path.read_text(encoding="utf-8"))
+        deploy_parser_condition = "[parameters('DeployParser')]"
+
+        def validate(mutate) -> str:
+            template = copy.deepcopy(original)
+            saved = next(
+                res
+                for res in template["resources"]
+                if res.get("type") == "Microsoft.OperationalInsights/workspaces/savedSearches"
+                and res.get("properties", {}).get("functionAlias") == "HelperFunction"
+            )
+            mutate(template, saved)
+            main_template_path.write_text(json.dumps(template, indent=2), encoding="utf-8")
+            report = VALIDATE_XDR.run_validation(
+                content_root=self.root,
+                solution_paths=[self.solution],
+                family="workbooks",
+            )
+            return "\n".join(
+                res.get("error") or "" for res in report["results"] if not res.get("passed", True)
+            )
+
+        def gate(template, saved) -> None:
+            template["parameters"]["DeployParser"] = {"type": "bool", "defaultValue": True}
+            saved["condition"] = deploy_parser_condition
+
+        self.assertEqual("", validate(gate))
+
+        def other_condition(template, saved) -> None:
+            gate(template, saved)
+            saved["condition"] = "[parameters('DeployDefenderWorkbook')]"
+
+        def literal_condition(template, saved) -> None:
+            gate(template, saved)
+            saved["condition"] = True
+
+        def default_false(template, saved) -> None:
+            gate(template, saved)
+            template["parameters"]["DeployParser"]["defaultValue"] = False
+
+        def missing_parameter(template, saved) -> None:
+            saved["condition"] = deploy_parser_condition
+
+        def copy_loop(template, saved) -> None:
+            gate(template, saved)
+            saved["copy"] = {"name": "parserLoop", "count": 1}
+
+        for mutate in (other_condition, literal_condition, default_false, missing_parameter, copy_loop):
+            with self.subTest(mutation=mutate.__name__):
+                self.assertIn("savedSearches resource must be unconditional or gated only by", validate(mutate))
+
     def test_xdr_detection_schema_and_provenance_failures_are_reported(self) -> None:
         paths = self._populate_valid_hybrid_solution(with_package=False)
         det_path = paths["xdr_detection"]
