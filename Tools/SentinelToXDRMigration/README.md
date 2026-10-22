@@ -230,8 +230,12 @@ Authored `contentProvenance.requiredWorkspaceFunctions` records bind each
 Function aliases are not table names: underlying source data types require
 separate evidence. The connected workspace, access, nested dependencies,
 external data, and exact parameterized execution remain runtime concerns.
-`_GetWatchlist` is a supported Sentinel built-in available in AH, not a custom
-parser to install or an unsupported-function gap. Preserve its calls and
+`_GetWatchlist` and `_GetWatchlistAlias` are supported Sentinel built-ins available
+through a connected workspace, not custom parsers to install or unsupported-function
+gaps. Both Python conversion and PowerShell packaging recognize their calls.
+Do not exempt every underscore-prefixed function: vendor-specific `_vim_*`
+parsers and arbitrary custom `_...` or `__...` functions still require reviewed
+workspace-function dependencies. Preserve supported built-in calls and
 review underlying data inputs separately; only actual execution/data failures
 are findings.
 `Watchlist` is platform reference data, not connector-fed telemetry. Retain it

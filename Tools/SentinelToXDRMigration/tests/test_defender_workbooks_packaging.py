@@ -386,6 +386,9 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
             "let UsersLocation = externaldata(ip:string)[@\"https://example.invalid/geo.csv\"] with (format='csv'); UsersLocation | take 1",
             "let UsersLocation = externaldata(ip:string)['https://example.invalid/geo.csv']; UsersLocation | join (HiddenParser()) on ip // trailing https://comment",
             "let U = datatable(u:string)[\"http://a//b\"]; // real comment HiddenParser()\nU | take 1",
+            "_GetWatchlistAlias() | take 1",
+            "let Aliases = _GetWatchlistAlias(); Aliases | take 1",
+            "_GetWatchlistAliasCustom() | take 1",
         ]
         payload = self.root / "scanner-queries.json"
         payload.write_text(json.dumps(queries), encoding="utf-8")
@@ -480,11 +483,27 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
                 ])
 
     def test_other_unknown_implicit_functions_are_still_rejected(self) -> None:
-        for name in ("_Foo_RegistryEvent", "_Im_Test", "ASim_RegistryEvent"):
+        for name in (
+            "_Foo_RegistryEvent", "_Im_Test", "ASim_RegistryEvent",
+            "_vim_FileEvent_AWSCloudTrail", "_CustomFunction", "__CustomFunction",
+            "_GetWatchlistAliasCustom",
+        ):
             with self.subTest(name=name):
                 self._set_single_query(f"{name} | take 1")
                 error = self.invoke_prerequisites(success=False)
                 self.assertIn(f"unreviewed implicit workspace function '{name}'", error)
+
+    def test_builtin_watchlist_aliases_need_no_declaration_or_saved_search(self) -> None:
+        from sentinel_xdr_migration._workbook_core import workbook
+
+        for text in (
+            "_GetWatchlistAlias() | take 1",
+            "let Aliases = _GetWatchlistAlias(); Aliases | take 1",
+        ):
+            with self.subTest(query=text):
+                self.assertEqual(set(), workbook.opaque_functions(text))
+                self._set_single_query(text)
+                self.invoke_prerequisites(success=True)
 
     def test_required_parser_dependencies_use_emitted_names_and_preserve_provenance(self) -> None:
         self.add_function()

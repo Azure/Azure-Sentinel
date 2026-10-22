@@ -551,7 +551,7 @@ function Get-DefenderWorkbookImplicitFunctions {
                     'toscalar', 'tostring', 'toint', 'tolong', 'todouble', 'todatetime', 'todecimal', 'todynamic', 'toreal', 'totable',
                     'totimespan', 'tobool', 'now', 'ago', 'startofday', 'endofday', 'startofweek', 'endofweek',
                     'startofmonth', 'endofmonth', 'startofyear', 'endofyear', 'tolower', 'toupper', 'coalesce', 'iff', 'iif', 'case',
-                    '_GetWatchlist', 'workspace', 'app', 'resource', 'cluster', 'database', 'table', 'view', 'materialize',
+                    '_GetWatchlist', '_GetWatchlistAlias', 'workspace', 'app', 'resource', 'cluster', 'database', 'table', 'view', 'materialize',
                     'abs', 'acos', 'asin', 'atan', 'atan2', 'beta_cdf', 'beta_inv', 'beta_pdf', 'bin', 'bin_at', 'ceiling',
                     'cos', 'cot', 'count', 'count_distinct', 'count_distinctif', 'countif', 'countof',
                     'dcount', 'dcount_hll', 'dcountif', 'degrees', 'exp', 'exp10', 'exp2', 'floor', 'gamma',
