@@ -173,11 +173,12 @@ function ConvertTo-CustomDetectionTemplateJson {
         [string]$Json
     )
 
-    # ARM-TTK counts delimiters inside JSON strings; Unicode escapes preserve
-    # the decoded ARM expressions and KQL without confusing that extractor.
+    # ARM-TTK's Resolve-JSONContent counts '{' and '}' inside JSON strings;
+    # Unicode escapes for braces preserve decoded KQL/ARM strings while keeping
+    # literal '[' and ']' intact for ARM-TTK's raw-text expression regexes.
     return [regex]::Replace($Json, '"(?:\\.|[^"\\])*"', [System.Text.RegularExpressions.MatchEvaluator]{
         param($Match)
-        return $Match.Value.Replace('{', '\u007b').Replace('}', '\u007d').Replace('[', '\u005b').Replace(']', '\u005d')
+        return $Match.Value.Replace('{', '\u007b').Replace('}', '\u007d')
     })
 }
 

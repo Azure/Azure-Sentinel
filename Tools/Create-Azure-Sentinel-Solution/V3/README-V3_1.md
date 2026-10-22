@@ -213,14 +213,16 @@ Graph rule/entity IDs, provenance `packageId`, and custom-detail column bindings
 whose names end in `id` are emitted as constant ARM `if` expressions. These
 preserve the exact string value, including apostrophes, without treating
 non-Azure identifiers such as `ProjectId` or `ZoneId` as Azure resource IDs.
-The projection is limited to these Custom Detection fields; resource references
-elsewhere still undergo the normal ARM-TTK checks.
+The projection is limited to these detection and provenance fields; resource
+references elsewhere still undergo the normal ARM-TTK checks.
 
-For packages containing Custom Detections, JSON string delimiters `{`, `}`, `[`,
-and `]` are written as Unicode escapes. JSON decoding restores the same ARM
-expressions, KQL, and other values. This lets ARM-TTK extract nested templates
-even when a query contains unmatched delimiters inside a string or regex.
-No validation check is skipped, and authored files remain unchanged.
+For packages containing Custom Detections, JSON string brace delimiters `{` and
+`}` are written as Unicode escapes while `[` and `]` remain literal so ARM-TTK
+raw-text expression checks see `[parameters(...)]` and `[variables(...)]`. JSON
+decoding restores the same ARM expressions, KQL, and other values. This lets
+ARM-TTK extract nested templates even when a query contains unmatched braces
+inside a string or regex. No validation check is skipped, and authored files
+remain unchanged.
 
 ### First authored tactic in V3.1 ARM payloads
 

@@ -2949,6 +2949,22 @@ function GenerateAlertRule($file, $contentResourceDetails) {
             elseif ($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2) {
                 $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
             }
+            elseif ($yamlField -eq "customDetails" -and $null -ne $alertRule.customDetails) {
+                if ($alertRule.customDetails -is [System.Collections.IDictionary]) {
+                    foreach ($detailKey in @($alertRule.customDetails.Keys)) {
+                        if ($detailKey -like '*id' -and $alertRule.customDetails[$detailKey] -is [string] -and -not $alertRule.customDetails[$detailKey].StartsWith('[')) {
+                            $alertRule.customDetails[$detailKey] = ConvertTo-CustomDetectionArmLiteral -Value $alertRule.customDetails[$detailKey]
+                        }
+                    }
+                }
+                else {
+                    foreach ($detail in $alertRule.customDetails.PSObject.Properties) {
+                        if ($detail.Name -like '*id' -and $detail.Value -is [string] -and -not $detail.Value.StartsWith('[')) {
+                            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+                        }
+                    }
+                }
+            }
         }
     }
     # Create Alert Rule Resource Object
