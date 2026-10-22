@@ -1,0 +1,149 @@
+Parser:
+  Title: Email Event ASIM filtering parser for Proofpoint POD MailLog
+  Version: '0.1.0'
+  LastUpdated: Oct 21, 2026
+Product:
+  Name: Proofpoint POD MailLog
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Proofpoint on Demand Log API
+  Link: https://proofpoint.my.site.com/community/s/article/Proofpoint-on-Demand-Pod-Log-API
+Description: |
+  Filters and normalizes ProofpointPODMailLog_CL SMTP receipt and delivery records to EmailEvent.
+  Uses the CCP table schema and repository samples; live validation is deferred.
+  Header sender, header recipients, subject and delivery location are unavailable;
+  nonempty filters for these fields return no records.
+ParserName: vimEmailEventProofpointPODMailLog
+EquivalentBuiltInParser: _Im_EmailEvent_ProofpointPODMailLog
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailfromaddress_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailrecipient_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailsubject_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildirection_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildeliverylocation_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    emailfromaddress_has_any:dynamic=dynamic([]),
+    emailrecipient_has_any:dynamic=dynamic([]),
+    emailsubject_has_any:dynamic=dynamic([]),
+    emaildirection_in:dynamic=dynamic([]),
+    emaildeliverylocation_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false,
+    pack:bool=false)
+  {
+    ProofpointPODMailLog_CL
+    | where not(disabled)
+    | where (isnull(starttime) or eventTime >= starttime or (isnull(eventTime) and TimeGenerated >= starttime))
+        and (isnull(endtime) or eventTime <= endtime or (isnull(eventTime) and TimeGenerated <= endtime))
+    | where array_length(emailfromaddress_has_any) == 0 and array_length(emailrecipient_has_any) == 0
+        and array_length(emailsubject_has_any) == 0 and array_length(emaildeliverylocation_in) == 0
+    | where array_length(emaildirection_in) == 0 or "Unknown" in (emaildirection_in)
+    | where isnotempty(tostring(sm.qid)) and (bag_has_key(sm, "from") or array_length(sm["to"]) > 0)
+    | extend
+        IsDelivery = coalesce(array_length(sm["to"]), 0) > 0,
+        Dsn = tostring(sm.dsn)
+    | extend EventResult = case(Dsn startswith "2.", "Success", Dsn startswith "4." or Dsn startswith "5.", "Failure", "NA")
+    | where eventresult == "*" or EventResult == eventresult
+    | extend
+        Relay = tostring(sm.relay),
+        Dvc = coalesce(tostring(pps.agent), tostring(metadata.origin.data.agent)),
+        EventStartTime = coalesce(eventTime, TimeGenerated),
+        EmailMailFromAddress = trim(@"[<>\s]", tostring(sm["from"])),
+        EmailSizeBytes = tolong(sm.sizeBytes),
+        DeliveryStatus = tostring(sm.stat)
+    | parse Relay with RelayHost " [" RelayIp "]" *
+    | extend
+        EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
+        RelayHost = trim_end(@"\.", coalesce(RelayHost, Relay)),
+        RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, ""),
+        EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tostring(sm.mailer) in~ ("smtp", "esmtp"), "SMTP", ""),
+        EventSubType = iff(IsDelivery, "EmailSent", "EmailReceived")
+    | extend
+        SrcIpAddr = iff(IsDelivery, "", RelayIp),
+        DstIpAddr = iff(IsDelivery, RelayIp, ""),
+        Src = iff(IsDelivery, Dvc, coalesce(RelayIp, RelayHost)),
+        Dst = iff(IsDelivery, coalesce(RelayIp, RelayHost), Dvc),
+        SrcFQDN = iff(not(IsDelivery) and RelayHost contains ".", RelayHost, ""),
+        SrcHostname = iff(IsDelivery, tostring(split(Dvc, ".")[0]), tostring(split(RelayHost, ".")[0])),
+        SrcDomain = iff(IsDelivery, substring(Dvc, indexof(Dvc, ".") + 1), substring(RelayHost, indexof(RelayHost, ".") + 1)),
+        DvcHostname = tostring(split(Dvc, ".")[0]),
+        DvcDomain = iff(Dvc contains ".", substring(Dvc, indexof(Dvc, ".") + 1), ""),
+        DvcFQDN = iff(Dvc contains ".", Dvc, ""),
+        EmailMailFromDomain = iff(EmailMailFromAddress contains "@", tostring(split(EmailMailFromAddress, "@")[1]), ""),
+        DvcAction = iff(IsDelivery and EventResult == "Success" and DeliveryStatus startswith "Sent", "Delivered", "NA")
+    | where array_length(ipaddr_has_any_prefix) == 0
+        or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix)
+        or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
+    | extend
+        SrcFQDN = iff(IsDelivery, DvcFQDN, SrcFQDN),
+        SrcDomain = iff(iff(IsDelivery, Dvc, RelayHost) contains ".", SrcDomain, ""),
+        DvcDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+        EventEndTime = EventStartTime,
+        EventCount = int(1),
+        EventVendor = "Proofpoint",
+        EventProduct = "POD MailLog",
+        EventSchema = "EmailEvent",
+        EventSchemaVersion = "1.0.0",
+        EventType = "EmailDelivery",
+        EventOriginalType = "maillog",
+        EmailDirection = "Unknown",
+        EventOriginalResultDetails = strcat(Dsn, iff(isnotempty(Dsn) and isnotempty(DeliveryStatus), "; ", ""), DeliveryStatus),
+        EventUid = iff(isnotempty(id), strcat("ProofpointPODMailLog_CL:", id), ""),
+        DvcEntityKey = "",
+        AdditionalEntities = dynamic([]),
+        AdditionalFields = iff(pack, bag_pack("sm", sm, "tls", tls, "pps", pps, "metadata", metadata), dynamic({})),
+        Type = "ProofpointPODMailLog_CL"
+    | extend SrcDomainType = iff(isnotempty(SrcDomain), "FQDN", ""), IpAddr = SrcIpAddr
+    | project-rename EventOriginalUid = id, EventMessage = data
+    | project
+        TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+        EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+        EventType, EventSubType, EventOriginalType, EventResult,
+        EventOriginalResultDetails, EventOriginalUid, EventUid, EventMessage,
+        Dvc, DvcHostname, DvcDomain, DvcDomainType, DvcFQDN, DvcAction, DvcEntityKey,
+        Src, SrcIpAddr, SrcHostname, SrcDomain, SrcDomainType, SrcFQDN, Dst, DstIpAddr, IpAddr,
+        EmailMailFromAddress, EmailMailFromDomain, EmailSizeBytes, EmailProtocolName, EmailDirection,
+        AdditionalFields, AdditionalEntities
+  };
+  parser(starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+    emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any,
+    emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in,
+    emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult, disabled=disabled, pack=pack)
