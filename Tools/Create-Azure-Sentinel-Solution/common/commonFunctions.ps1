@@ -3178,6 +3178,12 @@ function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
 
     # Replace watchlist resource id
     $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$global:watchlistCounter-id'))]"
+    if ($watchlistData.PSObject.Properties['kind'] -and [string]::IsNullOrWhiteSpace([string]$watchlistData.kind)) {
+        $watchlistData.PSObject.Properties.Remove('kind')
+    }
+    if ($watchlistData.properties -and $watchlistData.properties.PSObject.Properties['labels'] -and @($watchlistData.properties.labels).Count -eq 0) {
+        $watchlistData.properties.PSObject.Properties.Remove('labels')
+    }
 
     # Handle MainTemplate Resource
     $global:baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
