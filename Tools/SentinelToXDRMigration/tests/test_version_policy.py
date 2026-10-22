@@ -189,6 +189,74 @@ class VersionPolicyTests(unittest.TestCase):
                         result = self.package(entry, pipeline)
                         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_xdr_arm_bindings_and_query_serialization_preserve_deployment_values(self):
+        entry = self.fixture()
+        path = self.solution / "XDR Detections/Test.yaml"
+        document = json.loads(path.read_text().removeprefix("---\n"))
+        query = 'print Value = extract(@"[a-z]{2,}[", 0, "quoted \\"value\\"")'
+        document["properties"]["queryCondition"]["queryText"] = query
+        alert = document["properties"]["detectionAction"]["alertTemplate"]
+        alert["customDetails"] = {"ProjectId": "Project'Id", "ZoneId": "ZoneId", "FilePath": "FilePath"}
+        path.write_text("---\n" + json.dumps(document))
+        source_bytes = path.read_bytes()
+        source_rule = self.solution / "Analytic Rules/Test.yaml"
+        analytic = json.loads(source_rule.read_text().removeprefix("---\n"))
+        analytic["query"] = query
+        source_rule.write_text("---\n" + json.dumps(analytic))
+
+        for pipeline in (False, True):
+            with self.subTest(pipeline=pipeline):
+                result = self.package(entry, pipeline)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                template_path = self.solution / "Package/mainTemplate.json"
+                template = json.loads(template_path.read_text())
+                install = next(
+                    row for row in template["resources"]
+                    if row["type"] == "Microsoft.Resources/deployments"
+                    and "-CD-" in row["name"]
+                )
+                registration = next(
+                    row for row in template["resources"]
+                    if row.get("properties", {}).get("contentKind") == "CustomDetection"
+                )
+                for inner in (install["properties"]["template"], registration["properties"]["mainTemplate"]):
+                    properties = inner["resources"]["detectionRule"]["properties"]
+                    self.assertEqual(query, properties["queryCondition"]["queryText"])
+                    details = properties["detectionAction"]["alertTemplate"]["customDetails"]
+                    self.assertEqual("[if(true(), 'Project''Id', 'Project''Id')]", details["ProjectId"])
+                    self.assertEqual("[if(true(), 'ZoneId', 'ZoneId')]", details["ZoneId"])
+                    self.assertEqual("FilePath", details["FilePath"])
+                    self.assertEqual(
+                        "[if(true(), 'testpublisher.test-sentinel', 'testpublisher.test-sentinel')]",
+                        properties["contentProvenance"]["packageId"],
+                    )
+                self.assertEqual(source_bytes, path.read_bytes())
+
+                module = attribution.ROOT / ".arm-ttk/arm-ttk/arm-ttk.psd1"
+                if module.is_file():
+                    checked = self.run_ps(
+                        f"Import-Module {attribution.ps_literal(module)} -Force; "
+                        f"$text = Get-Content -Raw -LiteralPath {attribution.ps_literal(template_path)}; "
+                        "$doc = $text | ConvertFrom-Json -Depth 100; "
+                        "$inner = @(Find-JsonContent -InputObject $doc -Key template | "
+                        "Where-Object { $_.expressionEvaluationOptions.scope -eq 'inner' }); "
+                        "$resolved = @($inner | Resolve-JSONContent -JsonText $text); "
+                        "if ($inner.Count -ne 1 -or $resolved.Count -ne $inner.Count) { "
+                        "throw 'Nested Custom Detection template was not resolved' }; "
+                        "$template = $doc.resources | Where-Object type -eq 'Microsoft.Resources/deployments' | "
+                        "Select-Object -ExpandProperty properties | Select-Object -ExpandProperty template; "
+                        f"$test = Join-Path {attribution.ps_literal(module.parent)} "
+                        "'testcases/deploymentTemplate/IDs-Should-Be-Derived-From-ResourceIDs.test.ps1'; "
+                        "& $test -TemplateObject $template -TemplateMetadata ([pscustomobject]@{}); "
+                        "$template.resources.detectionRule.properties | Add-Member "
+                        "-NotePropertyName networkResourceId -NotePropertyValue 'not-an-Azure-resource-id'; "
+                        "$errors = @(); & $test -TemplateObject $template "
+                        "-TemplateMetadata ([pscustomobject]@{}) -ErrorAction SilentlyContinue -ErrorVariable errors; "
+                        "if (@($errors | Where-Object { $_.Exception.Message -like '*networkResourceId*' }).Count -ne 1) { "
+                        "throw 'A genuine invalid resource ID was not rejected' }"
+                    )
+                    self.assertEqual(0, checked.returncode, checked.stdout + checked.stderr)
+
     def test_bumps_persist_only_accepted_effective_versions(self):
         entry = self.fixture("3.1.0")
         for bump, current, expected in (("none", "3.2.0", "3.2.0"),

@@ -207,6 +207,21 @@ placed on the deployed Graph object. Authored YAML and source rules are not
 mutated. These emitted contract fields remain subject to live provider
 verification; offline tests are not registration/deployment acceptance.
 
+### ARM-compatible identifiers and JSON strings
+
+Graph rule/entity IDs, provenance `packageId`, and custom-detail column bindings
+whose names end in `id` are emitted as constant ARM `if` expressions. These
+preserve the exact string value, including apostrophes, without treating
+non-Azure identifiers such as `ProjectId` or `ZoneId` as Azure resource IDs.
+The projection is limited to these Custom Detection fields; resource references
+elsewhere still undergo the normal ARM-TTK checks.
+
+For packages containing Custom Detections, JSON string delimiters `{`, `}`, `[`,
+and `]` are written as Unicode escapes. JSON decoding restores the same ARM
+expressions, KQL, and other values. This lets ARM-TTK extract nested templates
+even when a query contains unmatched delimiters inside a string or regex.
+No validation check is skipped, and authored files remain unchanged.
+
 ### First authored tactic in V3.1 ARM payloads
 
 Authored YAML may retain multiple tactics. V3.1 validates a supplied, nonempty

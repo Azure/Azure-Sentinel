@@ -143,6 +143,44 @@ function ConvertTo-CustomDetectionArmLiteral {
     return "[if(true(), '$escapedValue', '$escapedValue')]"
 }
 
+function Set-CustomDetectionArmIdentifiers {
+    param(
+        [Parameter(Mandatory = $true)]
+        [psobject]$DetectionResource
+    )
+
+    $DetectionResource.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$DetectionResource.properties.id)
+    foreach ($mappingGroup in $DetectionResource.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
+        foreach ($mapping in @($mappingGroup.Value)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
+                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
+            }
+        }
+    }
+    foreach ($detail in $DetectionResource.properties.detectionAction.alertTemplate.customDetails.PSObject.Properties) {
+        if ($detail.Name -like '*id' -and $detail.Value -is [string]) {
+            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+        }
+    }
+    $DetectionResource.properties.contentProvenance.packageId = ConvertTo-CustomDetectionArmLiteral -Value (
+        [string]$DetectionResource.properties.contentProvenance.packageId
+    )
+}
+
+function ConvertTo-CustomDetectionTemplateJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Json
+    )
+
+    # ARM-TTK counts delimiters inside JSON strings; Unicode escapes preserve
+    # the decoded ARM expressions and KQL without confusing that extractor.
+    return [regex]::Replace($Json, '"(?:\\.|[^"\\])*"', [System.Text.RegularExpressions.MatchEvaluator]{
+        param($Match)
+        return $Match.Value.Replace('{', '\u007b').Replace('}', '\u007d').Replace('[', '\u005b').Replace(']', '\u005d')
+    })
+}
+
 function ConvertTo-V31CustomDetectionId {
     param(
         [Parameter(Mandatory = $true)]
@@ -334,14 +372,7 @@ function New-CustomDetectionInstallDeployment {
         throw 'Custom Detection installation requires resolved content provenance.'
     }
     $deploymentDetection = Copy-CustomDetectionObject -InputObject $DetectionResource
-    $deploymentDetection.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$deploymentDetection.properties.id)
-    foreach ($mappingGroup in $deploymentDetection.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
-        foreach ($mapping in @($mappingGroup.Value)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
-                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
-            }
-        }
-    }
+    Set-CustomDetectionArmIdentifiers -DetectionResource $deploymentDetection
 
     return [pscustomobject]@{
         type       = 'Microsoft.Resources/deployments'
@@ -389,14 +420,7 @@ function New-CustomDetectionRegistration {
     $escapedVersion = $ContentVersion.Replace("'", "''")
     $productId = "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','$escapedContentId','-','$escapedVersion')))]"
     $registrationDetection = Copy-CustomDetectionObject -InputObject $DetectionResource
-    $registrationDetection.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$registrationDetection.properties.id)
-    foreach ($mappingGroup in $registrationDetection.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
-        foreach ($mapping in @($mappingGroup.Value)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
-                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
-            }
-        }
-    }
+    Set-CustomDetectionArmIdentifiers -DetectionResource $registrationDetection
     $alertTemplate = $DetectionResource.properties.detectionAction.alertTemplate
 
     $properties = [ordered]@{
@@ -429,6 +453,7 @@ function New-CustomDetectionRegistration {
     $fullProvenance = Copy-CustomDetectionObject -InputObject $DetectionResource.properties.contentProvenance
     $fullProvenance | Add-Member -NotePropertyName requiredWorkloads -NotePropertyValue @($DetectionDocument.contentProvenance.requiredWorkloads)
     $fullProvenance | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @($DetectionDocument.contentProvenance.requiredDataConnectors)
+    $fullProvenance.packageId = ConvertTo-CustomDetectionArmLiteral -Value ([string]$fullProvenance.packageId)
     $properties['contentProvenance'] = $fullProvenance
 
     return [pscustomobject]@{
