@@ -65,6 +65,7 @@ class QueryConstructionTests(unittest.TestCase):
                 {"name": "Payload", "type": "dynamic"},
                 {"name": "CorrelationId", "type": "guid"},
                 {"name": "Column Name", "type": "string"},
+                {"name": "NullableString", "type": "string"},
             ],
             source_rows=[
                 {
@@ -78,6 +79,7 @@ class QueryConstructionTests(unittest.TestCase):
                         "00000000-0000-0000-0000-000000000001"
                     ),
                     "Column Name": "quoted",
+                    "NullableString": None,
                 }
             ],
         )
@@ -86,7 +88,7 @@ class QueryConstructionTests(unittest.TestCase):
             "datatable(TimeGenerated:datetime, Message:string, "
             "Enabled:bool, Count:long, Score:real, "
             "Payload:dynamic, CorrelationId:guid, "
-            "['Column Name']:string)",
+            "['Column Name']:string, NullableString:string)",
             query,
         )
         self.assertIn(
@@ -94,6 +96,8 @@ class QueryConstructionTests(unittest.TestCase):
             query,
         )
         self.assertIn("true, long(null), 1.5", query)
+        self.assertNotIn("string(null)", query)
+        self.assertTrue(query.count("@''") >= 1)
         self.assertIn('dynamic({"a":[1,true]})', query)
         self.assertIn(
             "guid(00000000-0000-0000-0000-000000000001)",
@@ -636,6 +640,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("EventSchema", "string"),
                 ("QtpOnly", "string"),
                 ("DifferentType", "string"),
+                ("Type", "string"),
             ],
             [
                 {
@@ -645,6 +650,7 @@ class OutputValidationTests(unittest.TestCase):
                     "EventSchema": "Authentication",
                     "QtpOnly": "qtp",
                     "DifferentType": "1",
+                    "Type": "Contoso_CL",
                 }
             ],
         )
@@ -663,6 +669,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("EventVendor", "string"),
                 ("ItpOnly", "string"),
                 ("DifferentType", different_type),
+                ("Type", "string"),
             ],
             [
                 {
@@ -671,6 +678,7 @@ class OutputValidationTests(unittest.TestCase):
                     "EventVendor": event_vendor,
                     "ItpOnly": "itp",
                     "DifferentType": different_value,
+                    "Type": "ASimAuthenticationEventLogs",
                 }
             ],
         )
@@ -768,6 +776,22 @@ class OutputValidationTests(unittest.TestCase):
         self.assertIn("EventSchema", result["qtp_rows"][0])
         self.assertNotIn("EventSchema", result["itp_rows"][0])
         self.assertIn("ItpOnly", result["itp_rows"][0])
+        self.assertEqual(
+            "Contoso_CL", result["qtp_rows"][0]["Type"]
+        )
+        self.assertEqual(
+            "ASimAuthenticationEventLogs",
+            result["itp_rows"][0]["Type"],
+        )
+        self.assertNotIn(
+            "Type",
+            {
+                column["name"]
+                for column in result["intersect_schema"]
+            },
+        )
+        self.assertNotIn("Type", result["qtp_rows_filtered"][0])
+        self.assertNotIn("Type", result["itp_rows_filtered"][0])
         data_query = next(
             item["query"]
             for item in client.queries
