@@ -51,6 +51,25 @@ def _record_qtp_observation(
     ]
 
 
+def _block_optional_parity(
+    output_validation: Mapping[str, Any],
+    *,
+    detail: str,
+    qtp_replay: Mapping[str, Any],
+) -> dict[str, Any]:
+    blocked = dict(output_validation)
+    blocked["queryTimeExecution"] = {
+        "status": "blocked",
+        "detail": detail,
+    }
+    blocked["parity"] = {
+        "status": "blocked",
+        "detail": detail,
+    }
+    blocked["qtpSourceReplay"] = qtp_replay
+    return blocked
+
+
 def _output_failure(
     output_validation: Mapping[str, Any],
 ) -> HarnessError | None:
@@ -312,44 +331,60 @@ class AsimIngestionHarness(AzureMonitorClient):
                             transform_kql="source",
                             output_stream=input_stream,
                         )
-                    result["rawDcr"] = raw_handle.to_dict()
-                    raw_counts = count_rows_by_timestamp(rows)
-                    with self._stage("raw-upload"):
-                        result["rawUpload"] = self.upload_rows(
-                            raw_handle,
-                            rows,
-                            reconcile_table=source_table,
-                            expected_counts_by_timestamp=raw_counts,
-                        )
-                    with self._stage("raw-visibility"):
-                        observed_query_table = (
-                            self.wait_for_exact_rows(
-                                source_table,
-                                timestamps,
-                                raw_counts,
-                                stage="raw-visibility",
-                            )
-                        )
-                    _record_qtp_observation(
-                        qtp_replay,
-                        observed_query_table,
-                    )
-                    qtp_replay["status"] = "passed"
                 except HarnessError as exc:
-                    details = exc.details
-                    if isinstance(details, Mapping):
-                        _record_qtp_observation(
-                            qtp_replay,
-                            details.get("observedQueryTable"),
-                        )
-                        cleaned_details = dict(details)
-                        cleaned_details.pop(
-                            "observedQueryTable",
-                            None,
-                        )
-                        exc.details = cleaned_details
                     qtp_replay["status"] = "warning"
                     qtp_replay["error"] = _error_payload(exc)
+                else:
+                    result["rawDcr"] = raw_handle.to_dict()
+                    raw_counts = count_rows_by_timestamp(rows)
+                    try:
+                        with self._stage("raw-upload"):
+                            result["rawUpload"] = self.upload_rows(
+                                raw_handle,
+                                rows,
+                                reconcile_table=source_table,
+                                expected_counts_by_timestamp=raw_counts,
+                            )
+                        with self._stage("raw-visibility"):
+                            observed_query_table = (
+                                self.wait_for_exact_rows(
+                                    source_table,
+                                    timestamps,
+                                    raw_counts,
+                                    stage="raw-visibility",
+                                )
+                            )
+                        _record_qtp_observation(
+                            qtp_replay,
+                            observed_query_table,
+                        )
+                        qtp_replay["status"] = "passed"
+                    except HarnessError as exc:
+                        details = exc.details
+                        if isinstance(details, Mapping):
+                            _record_qtp_observation(
+                                qtp_replay,
+                                details.get("observedQueryTable"),
+                            )
+                            cleaned_details = dict(details)
+                            cleaned_details.pop(
+                                "observedQueryTable",
+                                None,
+                            )
+                            exc.details = cleaned_details
+                        qtp_replay["status"] = "failed"
+                        qtp_replay["error"] = _error_payload(exc)
+                        result["outputValidation"] = (
+                            _block_optional_parity(
+                                result["outputValidation"],
+                                detail=(
+                                    "Blocked by QTP raw ingestion "
+                                    "failure."
+                                ),
+                                qtp_replay=qtp_replay,
+                            )
+                        )
+                        raise
 
             if (
                 validation_runner is not None
@@ -358,22 +393,13 @@ class AsimIngestionHarness(AzureMonitorClient):
                 with self._stage("output-validation"):
                     qtp_replay = result["qtpSourceReplay"]
                     if qtp_replay.get("status") == "warning":
-                        output_validation = dict(
-                            result["outputValidation"]
-                        )
-                        blocked_detail = (
-                            "Skipped because QTP source replay failed."
-                        )
-                        output_validation["queryTimeExecution"] = {
-                            "status": "blocked",
-                            "detail": blocked_detail,
-                        }
-                        output_validation["parity"] = {
-                            "status": "blocked",
-                            "detail": blocked_detail,
-                        }
-                        output_validation["qtpSourceReplay"] = (
-                            qtp_replay
+                        output_validation = _block_optional_parity(
+                            result["outputValidation"],
+                            detail=(
+                                "Skipped because QTP raw DCR "
+                                "creation failed."
+                            ),
+                            qtp_replay=qtp_replay,
                         )
                     else:
                         parity_validation = dict(

@@ -958,7 +958,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(0, validation_runner.parity_calls)
 
-    def test_qtp_raw_visibility_warning_persists_rows(self):
+    def test_qtp_raw_visibility_failure_fails_and_persists_rows(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
         target_result = query_payload(
             [{"name": "TimeGenerated", "type": "datetime"}],
@@ -1038,17 +1038,20 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         validation_runner = FakeValidationRunner(timestamp)
 
         with tempfile.TemporaryDirectory() as directory:
-            result = harness.run(
-                prepared,
-                parser,
-                snapshot_output=Path(directory) / "snapshot.json",
-                validation_runner=validation_runner,
-                query_time_document={"ParserQuery": "Contoso"},
-            )
+            with self.assertRaisesRegex(
+                HARNESS.HarnessError,
+                "more rows than expected",
+            ):
+                harness.run(
+                    prepared,
+                    parser,
+                    snapshot_output=Path(directory) / "snapshot.json",
+                    validation_runner=validation_runner,
+                    query_time_document={"ParserQuery": "Contoso"},
+                )
 
-        replay = result["qtpSourceReplay"]
-        self.assertEqual("completed", result["status"])
-        self.assertEqual("warning", replay["status"])
+        replay = harness.last_result["qtpSourceReplay"]
+        self.assertEqual("failed", replay["status"])
         self.assertEqual("raw-visibility", replay["error"]["stage"])
         self.assertNotIn(
             "observedQueryTable",
@@ -1061,13 +1064,13 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(
             "blocked",
-            result["outputValidation"][
+            harness.last_result["outputValidation"][
                 "queryTimeExecution"
             ]["status"],
         )
         self.assertEqual(
             "blocked",
-            result["outputValidation"]["parity"]["status"],
+            harness.last_result["outputValidation"]["parity"]["status"],
         )
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(0, validation_runner.parity_calls)

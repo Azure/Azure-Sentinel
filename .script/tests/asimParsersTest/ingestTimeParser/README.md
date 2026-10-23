@@ -58,9 +58,10 @@ discover target
 ```
 
 Parser validation does not depend on raw-table replay. QTP source replay is
-optional: if its table, DCR, upload, or visibility stage fails, the report
-records a warning and blocks QTP/parity without failing the required parser
-validation stages.
+optional. If its table or DCR cannot be established, the report records a
+warning and blocks QTP/parity without failing the required parser validation
+stages. Once the raw DCR exists, upload or visibility failures fail the target;
+QTP execution and parity also fail the target when they run and fail.
 
 `qtpSourceReplay` persists the latest `observedSchema`, `observedRows`, and
 `observedCountsByTimestamp` from raw-table visibility checks. These remain
