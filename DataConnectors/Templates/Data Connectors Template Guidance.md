@@ -101,6 +101,82 @@ A data connector can have multiple data types and these can be represented by co
 
 Expand and add multiple instructions as needed by adding more title and description elements in this block.
 
+## Storage Blob CCF V2 template
+
+Use `Connector_StorageBlob_CCF_templateV2.json` for Storage Blob connectors that
+authenticate with the first-party application using `ManagedServicePrincipal`.
+Keep the first-party application ID in the service-principal control; the
+tenant-local principal selected by that control receives the collector's blob
+and queue role assignments. Replace the solution, table, stream, and other
+authoring placeholders before deploying.
+
+### Multiple connections
+
+The connector page uses `DataConnectorsGrid` to display
+`properties.addOnAttributes.friendlyName`, with `DeleteConnector` as the row
+action. An **Add Connection** `ContextPane` of type `DataConnectorsContextPane`
+contains the connection form in its own `instructionSteps`; it replaces the
+single-connection toggle.
+
+The required `friendlyName` parameter is the connection alias. The workspace
+resource ID, connector definition, and alias determine a stable suffix used for
+the connector, metadata, notification/dead-letter queues, event subscription,
+and data-flow deployment. Use a different alias for each connection and keep it
+unchanged on retries. This isolates connections even when they use the same
+storage account or different containers/folders within it. Overlapping source
+filters can cause duplicate ingestion.
+
+The connector request includes `StorageAccountSubscriptionId` and
+`StorageAccountResourceGroupName` as well as its queue URLs, allowing the storage
+account to be in a different subscription or resource group from the workspace.
+The connector waits for the storage-side deployment to finish before creation.
+
+### Managed-identity Event Grid delivery
+
+The Event Grid system topic has a system-assigned identity. When supplying an
+existing topic name, the deployment reads the topic, validates that its source
+is the selected storage account, and preserves its location, source, topic
+type, tags, attached user-assigned identities, and existing system-assigned
+principal while enabling system-assigned identity.
+
+There can be only one system topic per storage account. If a topic already
+exists, including one created by an earlier connection, supply its exact name.
+Leave the field empty only to create a topic; the generated topic name is
+stable per storage account. Connections share the topic but have separate
+event subscriptions and queues.
+
+The `eventGridRbacMode` parameter supports:
+
+- `CreateRoleAssignment` (default): grant **Storage Queue Data Message Sender**
+  (`c6a89b2d-59bc-44d0-9896-0f6e12d7b80a`) to the topic's system-assigned
+  identity at **storage-account scope**, then create the event subscription.
+- `UseExistingRoleAssignment`: skip creating that sender grant. Use this only
+  when the same system-assigned principal already has the required
+  storage-account permission; permissions are not discovered or repaired.
+
+Both modes configure `deliveryWithResourceIdentity` with `SystemAssigned` and
+`EventGridSchema`. The event subscription waits for topic preparation and, in
+Create mode, the sender-role deployment. It retains the container/folder
+`Microsoft.Storage.BlobCreated` filter.
+
+The Event Grid identity only sends queue messages. The separate first-party
+collector retains **Storage Blob Data Contributor** on the selected container
+and **Storage Queue Data Contributor** on each connection's queues. Collector
+role-assignment names remain derived from normalized scope, tenant-local
+principal ID, and role-definition ID. Deployments remain incremental; changing
+an alias creates new connection resources rather than renaming or removing
+previous ones.
+
+The deployer needs resource deployment permissions and role-assignment write
+permissions at the relevant storage scope. Register `Microsoft.EventGrid` in
+the storage subscription. RBAC propagation may take up to ten minutes: for a
+managed-identity authorization error, wait and retry with the same values
+instead of recreating the topic or its identity.
+
+This template does not change storage networking or Network Security Perimeter
+configuration. Configure any required network access separately; see
+[Enable network security](https://learn.microsoft.com/azure/sentinel/enable-storage-network-security).
+
 ## Next steps
 
 Currently in preview, you can also publish your data connector as a Microsoft Sentinel solution. 
