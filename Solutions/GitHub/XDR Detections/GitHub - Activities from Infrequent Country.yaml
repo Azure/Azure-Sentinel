@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.5.3
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: true
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f041e01d-840d-43da-95c8-4188f6cef546
+    path: Analytic Rules/GitHub - Activities from Infrequent Country.yaml
+    version: 1.0.1
+    querySha256: 3a34a0addcdac491a0fe7b026a1cc076ff1043f8160786b07b72568456521898
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Actor`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Actor` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 72f8d1111a051a7e3817ba2d2bd2f4579ff3fc8679f5af35a7ffbc9decac5a7a
+      targetQuerySha256: 57b7c2ca0b6b7de66abb870e8be5f08ab63eac0ff7ae9e32b4b5a823585f5a37
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Actor
+      column: Actor
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-f041e01d-840d-43da-95c8-4188f6cef546
+  displayName: GitHub Activites from a New Country
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let LearningPeriod = 7d;
+      let RunTime = 1h;
+      let StartTime = 1h;
+      let EndRunTime = StartTime - RunTime;
+      let EndLearningTime = StartTime + LearningPeriod;
+      let GitHubCountryCodeLogs = (GitHubAuditData
+      | where Country != "");
+        GitHubCountryCodeLogs
+      | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+      | summarize makeset(Country) by Actor
+      | join kind=innerunique (
+        GitHubCountryCodeLogs
+        | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+        | distinct Country, Actor, TimeGenerated
+      ) on Actor
+      | where set_Country !contains Country
+      | extend timestamp = TimeGenerated
+      | extend AccountName = tostring(split(Actor, "@")[0]), AccountUPNSuffix = tostring(split(Actor, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: GitHub Activites from a New Country
+      description: '''Detect activities from a location that was not recently or was never visited by the user or by any user
+        in your organization.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: Actor

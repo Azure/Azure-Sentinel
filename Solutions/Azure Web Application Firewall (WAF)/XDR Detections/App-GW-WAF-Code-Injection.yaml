@@ -1,0 +1,101 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: true
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 912a18fc-6165-446b-8740-81ae6c3f75ee
+    path: Analytic Rules/App-GW-WAF-Code-Injection.yaml
+    version: 1.0.3
+    querySha256: 0897d8b9f785402e79ce5d99c2bda07343f5501a56e58e6b124fd88c9d915aa2
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Execution
+    - InitialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1548
+    - T1203
+    - T1190
+    - T1548
+    reviewScope:
+      sourceDocumentSha256: 6aeb5a94a5a4e9bbb51f09472e003a9dd5a773d8cda396dfee3700e8af8710c6
+      targetQuerySha256: 853a006eb87ce34ff449679eb217a407e6cded422dac5d6c6335ca72995ecfa0
+properties:
+  id: xdr-912a18fc-6165-446b-8740-81ae6c3f75ee
+  displayName: App GW WAF - Code Injection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AGWFirewallLogs
+      | where Action == "Matched"
+      | where Message has "Injection" or Message has "File Inclusion"
+      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
+      | join kind = inner(
+      AGWFirewallLogs
+      | where Action == "Blocked") on TransactionId
+      | extend Uri = strcat(Hostname,RequestUri)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId,100), Message = make_set(Message,100), Detail_Message = make_set(DetailedMessage,100), Detail_Data = make_set(DetailedData,100), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
+      | where Total_TransactionId >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: App GW WAF - Code Injection
+      description: |-
+        'Identifies a match for a Code Injection based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        References: https://owasp.org/www-community/attacks/Code_Injection'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Uri
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
