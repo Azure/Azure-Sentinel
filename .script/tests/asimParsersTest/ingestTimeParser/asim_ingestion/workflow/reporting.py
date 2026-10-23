@@ -13,6 +13,14 @@ from .contracts import (
     _short_message,
 )
 
+OPTIONAL_STAGES = {
+    "rawDcr",
+    "rawIngestion",
+    "qtpExecution",
+    "parity",
+}
+
+
 def _read_optional_json(path: Path | None) -> Any:
     if path is None or not path.is_file():
         return None
@@ -598,13 +606,13 @@ def build_report(
             "counterpart": counterpart,
             "template": template,
             "fixture": fixture,
-            "rawDcr": raw_dcr,
-            "rawIngestion": raw_ingestion,
             "filtering": filtering,
             "parserDcr": parser_dcr,
             "parserIngestion": parser_ingestion,
             "schema": schema_stage,
             "data": data_stage,
+            "rawDcr": raw_dcr,
+            "rawIngestion": raw_ingestion,
             "qtpExecution": qtp_stage,
             "parity": parity_stage,
             "cleanup": cleanup_stage,
@@ -641,10 +649,12 @@ def render_summary(report: Mapping[str, Any]) -> str:
                 continue
             stage_status = str(stage.get("status", "not-run"))
             detail = _short_message(stage.get("detail")).replace("|", "\\|")
+            label = f"*{name}" if name in OPTIONAL_STAGES else name
             lines.append(
-                f"| {name} | {STATUS_ICON.get(stage_status, '')} "
+                f"| {label} | {STATUS_ICON.get(stage_status, '')} "
                 f"`{stage_status}` | {detail} |"
             )
+    lines.extend(["", "\\* Optional QTP replay stage."])
     return "\n".join(lines) + "\n"
 
 

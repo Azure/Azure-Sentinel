@@ -356,7 +356,45 @@ class ReportTests(unittest.TestCase):
         )
         summary = WORKFLOW.render_summary(report)
         self.assertIn("ASIM ingestion validation", summary)
-        self.assertIn("| parity |", summary)
+        expected_order = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "rawDcr",
+            "rawIngestion",
+            "qtpExecution",
+            "parity",
+            "cleanup",
+        ]
+        self.assertEqual(expected_order, list(report["stages"]))
+        summary_labels = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "*rawDcr",
+            "*rawIngestion",
+            "*qtpExecution",
+            "*parity",
+            "cleanup",
+        ]
+        positions = [
+            summary.index(f"| {label} |")
+            for label in summary_labels
+        ]
+        self.assertEqual(sorted(positions), positions)
+        self.assertIn("\\* Optional QTP replay stage.", summary)
 
     def test_failure_remains_failed_when_not_required(self):
         validation = self.base_validation()
