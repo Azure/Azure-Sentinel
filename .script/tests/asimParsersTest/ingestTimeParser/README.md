@@ -48,14 +48,26 @@ asim_ingestion/
 discover target
   → static parser validation
   → prepare immutable fixture
-  → raw pass-through ingestion
-  → freeze raw-table source snapshot
-  → evaluate ParserFilterQuery
-  → execute ParserQuery through a real DCR
+  → freeze a typed parser-input snapshot from the fixture
+  → evaluate ParserFilterQuery against an inline fixture datatable
+  → upload fixture rows directly through the parser DCR
   → run ASIM data checks
-  → optionally execute the mapped QTP and compare parity
+  → optionally replay the fixture to SourceRawTable using InputStream
+  → execute the mapped QTP and compare parity when replay succeeds
   → clean up DCRs and publish the report
 ```
+
+Parser validation does not depend on raw-table replay. QTP source replay is
+optional: if its table, DCR, upload, or visibility stage fails, the report
+records a warning and blocks QTP/parity without failing the required parser
+validation stages.
+
+QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
+`itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
+column names and records both QTP and ITP types. A shared-column type mismatch
+fails schema parity. When shared types are consistent, it filters both row
+sets into `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed
+duplicate-aware row comparison across that shared schema.
 
 ## Tests
 
