@@ -356,9 +356,47 @@ class ReportTests(unittest.TestCase):
         )
         summary = WORKFLOW.render_summary(report)
         self.assertIn("ASIM ingestion validation", summary)
-        self.assertIn("| parity |", summary)
+        expected_order = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "rawDcr",
+            "rawIngestion",
+            "qtpExecution",
+            "parity",
+            "cleanup",
+        ]
+        self.assertEqual(expected_order, list(report["stages"]))
+        summary_labels = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "*rawDcr",
+            "*rawIngestion",
+            "*qtpExecution",
+            "*parity",
+            "cleanup",
+        ]
+        positions = [
+            summary.index(f"| {label} |")
+            for label in summary_labels
+        ]
+        self.assertEqual(sorted(positions), positions)
+        self.assertIn("\\* Optional QTP replay stage.", summary)
 
-    def test_failure_is_shadow_only_when_not_required(self):
+    def test_failure_remains_failed_when_not_required(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["error"] = {
@@ -370,10 +408,137 @@ class ReportTests(unittest.TestCase):
 
         report = self.build(validation, required=False)
 
-        self.assertEqual("shadow-only-failure", report["status"])
+        self.assertEqual("failed", report["status"])
         self.assertTrue(report["requiredFailure"])
+        self.assertFalse(report["enforcementRequired"])
         self.assertEqual(
             "failed", report["stages"]["parity"]["status"]
+        )
+
+    def test_parity_summary_exposes_row_counts_and_columns(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [],
+                "extraExamples": [],
+                "columnDiagnostics": {
+                    "keyColumns": [
+                        "EventOriginalUid",
+                        "TimeGenerated",
+                    ],
+                    "mismatches": [
+                        {
+                            "key": ["id", "timestamp"],
+                            "differences": [
+                                {
+                                    "column": "Type",
+                                    "expected": "Source",
+                                    "actual": "Target",
+                                }
+                            ],
+                        }
+                    ],
+                },
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            (
+                "10 QTP row(s) missing from ITP output; "
+                "10 extra ITP row(s). Differing column(s): Type."
+            ),
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_parity_summary_infers_columns_from_row_examples(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Source",
+                            },
+                        ],
+                    }
+                ],
+                "extraExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Target",
+                            },
+                        ],
+                    }
+                ],
+                "columnDiagnostics": None,
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertIn(
+            "Differing column(s): Type.",
+            report["stages"]["parity"]["detail"],
         )
 
     def test_failure_is_blocking_when_required(self):
@@ -417,6 +582,44 @@ class ReportTests(unittest.TestCase):
             "conversion failed",
             report["stages"]["fixture"]["detail"],
         )
+        self.assertEqual(
+            "failed", report["stages"]["fixture"]["status"]
+        )
+
+    def test_template_failure_blocks_fixture_preparation(self):
+        report = WORKFLOW.build_report(
+            target=target("parser-a"),
+            static_result={
+                "valid": False,
+                "findings": [
+                    {
+                        "code": "META001",
+                        "message": "Invalid parser metadata.",
+                    }
+                ],
+                "queryTimeEligibility": {"status": "blocked"},
+            },
+            prepared_fixture=None,
+            validation_result=None,
+            cleanup_result=None,
+            repository="Azure/Azure-Sentinel",
+            pull_request="123",
+            run_id="456",
+            run_attempt="1",
+            enforcement_required=False,
+        )
+
+        self.assertEqual("failed", report["status"])
+        self.assertEqual(
+            "failed", report["stages"]["template"]["status"]
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["fixture"]["status"]
+        )
+        self.assertEqual(
+            "Blocked by template validation.",
+            report["stages"]["fixture"]["detail"],
+        )
 
     def test_cleanup_warning_does_not_change_parser_result(self):
         report = self.build(
@@ -436,6 +639,234 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(
             "warning", report["stages"]["cleanup"]["status"]
         )
+
+    def test_parser_dcr_failure_does_not_add_detail_to_raw_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["parserDcr"] = None
+        validation["parserUpload"] = []
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "PUT failed with HTTP 400.",
+            report["stages"]["parserDcr"]["detail"],
+        )
+
+    def test_direct_parser_dcr_failure_adds_detail_to_parser_dcr(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-provisioning",
+            "message": "Provisioning failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "not-run", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "Provisioning failed.",
+            report["stages"]["parserDcr"]["detail"],
+        )
+
+    def test_stage_summary_includes_nested_provider_error(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "InvalidPayload",
+                    "message": "Data collection rule is invalid",
+                    "details": [
+                        {
+                            "code": "InvalidStream",
+                            "message": (
+                                "'OutputStream' stream "
+                                "'Microsoft-SalesforceAuditTrail' must "
+                                "be a custom stream or one of the "
+                                "allowed streams."
+                            ),
+                            "target": (
+                                "Properties.DataFlows[0].OutputStream"
+                            ),
+                        }
+                    ],
+                }
+            },
+        }
+
+        report = self.build(validation)
+        detail = report["stages"]["parserDcr"]["detail"]
+        summary = WORKFLOW.render_summary(report)
+
+        self.assertIn("PUT failed with HTTP 400.", detail)
+        self.assertIn("InvalidStream:", detail)
+        self.assertIn("Microsoft-SalesforceAuditTrail", detail)
+        self.assertIn(
+            "Properties.DataFlows[0].OutputStream",
+            detail,
+        )
+        self.assertIn("Microsoft-SalesforceAuditTrail", summary)
+
+    def test_target_output_error_is_exposed_as_parity_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "target-output",
+            "message": "POST failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "BadArgumentError",
+                    "innererror": {
+                        "code": "SEM0100",
+                        "message": (
+                            "Failed to resolve scalar expression "
+                            "named 'EventSchema'"
+                        ),
+                    },
+                    "message": (
+                        "The request had some invalid properties"
+                    ),
+                }
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "passed", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["parity"]["status"]
+        )
+        self.assertIn(
+            "EventSchema",
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_cleanup_warning_exposes_cleanup_error(self):
+        report = self.build(
+            self.base_validation(),
+            cleanup={
+                "resources": [
+                    {
+                        "resourceId": "/raw",
+                        "status": "warning",
+                        "message": "DELETE failed with HTTP 503.",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(
+            "DELETE failed with HTTP 503.",
+            report["stages"]["cleanup"]["detail"],
+        )
+
+    def test_qtp_raw_dcr_failure_warns_without_failing_parser(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "warning",
+            "inputStream": "Microsoft-SentinelContoso",
+            "error": {
+                "stage": "dcr-create",
+                "message": "PUT failed with HTTP 400.",
+                "details": {
+                    "error": {
+                        "code": "InvalidStream",
+                        "message": "Stream is unsupported.",
+                    }
+                },
+            },
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "warning", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertIn(
+            "InvalidStream",
+            report["stages"]["rawDcr"]["detail"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual(
+            "passed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "passed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["parity"]["detail"],
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertIn(
+            "::warning title=ASIM rawDcr warning::",
+            output.getvalue(),
+        )
+        self.assertIn("InvalidStream", output.getvalue())
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
@@ -644,6 +1075,25 @@ class WorkflowTopologyTests(unittest.TestCase):
                 "ingestionValidation",
             ],
             jobs["report"]["needs"],
+        )
+
+    def test_workflow_never_masks_validation_failures(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("continue-on-error:", workflow)
+        self.assertIn(
+            'if [ "$REQUIRED_FAILURE" = "true" ]; then',
+            workflow,
+        )
+        self.assertIn(
+            'echo "::error::ASIM ingestion validation failed in '
+            '$mode mode."',
+            workflow,
+        )
+        self.assertIn(
+            "Merge blocking: controlled by branch protection "
+            "required-check configuration",
+            workflow,
         )
 
     def test_workflow_has_no_manual_or_pr_head_checkout(self):

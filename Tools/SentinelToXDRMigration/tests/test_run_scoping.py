@@ -90,6 +90,31 @@ class RunScopingTests(unittest.TestCase):
         with using_run(self.solution, first["runId"]):
             self.assertEqual("blocked", workflow_status(self.solution)["workflowStatus"])
 
+    def test_nested_helper_without_run_id_keeps_explicit_selection_with_two_runs(self):
+        from sentinel_xdr_migration.workbook_workflow import plan_lab_deployment_preflight
+
+        first, second = self.init(), self.init(new_run=True)
+        for run in (first, second):
+            with using_run(self.solution, run["runId"]):
+                result = plan_lab_deployment_preflight(self.solution, persist=True)
+                self.assertEqual(run["runId"], result["runId"])
+                self.assertTrue((report_directory(self.solution) / "arm-deployment-preflight.json").is_file())
+        with using_run(self.solution, first["runId"]):
+            with using_run(self.solution, None):
+                self.assertEqual(first["runId"], workflow_status(self.solution)["runId"])
+            self.assertEqual(first["runId"], workflow_status(self.solution)["runId"])
+        with self.assertRaisesRegex(ValueError, "multiple migration runs"):
+            workflow_status(self.solution)
+
+    def test_json_artifacts_use_lf_line_endings_on_every_platform(self):
+        state = self.init()
+        with using_run(self.solution, state["runId"]):
+            manifest = artifact_path(self.solution, "manifest.json")
+            write_json_artifact(self.solution, manifest, {"nested": {"value": 1}})
+        raw = manifest.read_bytes()
+        self.assertNotIn(b"\r\n", raw)
+        self.assertEqual(raw, (json.dumps({"nested": {"value": 1}}, indent=2) + "\n").encode("utf-8"))
+
     def test_unknown_and_traversal_run_ids_cannot_write(self):
         with self.assertRaisesRegex(ValueError, "safe directory"):
             with using_run(self.solution, "../escape"):

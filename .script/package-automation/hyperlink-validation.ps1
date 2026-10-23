@@ -135,7 +135,7 @@ $finalFilteredFiles = @()
 foreach($item in $filteredFiles)
 {
 	$resolvedItem = Resolve-ContentFilePath $item
-	$temp = Select-String -LiteralPath $resolvedItem -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?'-AllMatches -ErrorAction Stop
+	$temp = Select-String -LiteralPath $resolvedItem -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#\{\}]*[\w\-\@?^=%&amp;/~\+#\{\}])?'-AllMatches -ErrorAction Stop
 	if ($null -ne $temp) {
 		$finalFilteredFiles += $item
 	}
@@ -151,10 +151,10 @@ foreach ($currentFile in $filterOutExclusionList)
 {
   $urlList = @()
 		$fileContent = ReadFileContent -filePath $currentfile
-        $list = $fileContent | Select-String -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?' -AllMatches 
+        $list = $fileContent | Select-String -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#\{\}]*[\w\-\@?^=%&amp;/~\+#\{\}])?' -AllMatches 
         $urlList += $list.Matches.Value
 		$urlList = $urlList | Select-Object -Unique
-		$filterOutExclusionUrlList = $urlList | Where-Object { $_ -notmatch ($exclusionDomainList -join '|')  }
+		$filterOutExclusionUrlList = $urlList | Where-Object { $_ -notmatch ($exclusionDomainList -join '|') -and $_ -notmatch '\{[^}]+\}' }
 		If ($null -ne $filterOutExclusionUrlList) {
 		validateLink $filterOutExclusionUrlList $currentFile
 		}
