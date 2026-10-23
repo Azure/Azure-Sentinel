@@ -246,6 +246,56 @@ class FilterValidationTests(unittest.TestCase):
         )
         self.assertNotIn("materialize(Contoso_CL", filter_query)
 
+    def test_filter_counts_canonicalize_trailing_zero_timestamp(self):
+        client = FakeQueryClient(
+            [
+                (
+                    "filter",
+                    query_table(
+                        [
+                            ("TimeGenerated", "datetime"),
+                            ("_AsimSelectedCount", "long"),
+                        ],
+                        [
+                            {
+                                "TimeGenerated":
+                                    "2026-10-19T20:00:00.123456Z",
+                                "_AsimSelectedCount": 1,
+                            }
+                        ],
+                    ),
+                )
+            ]
+        )
+        snapshot = {
+            "timestampValues": [
+                "2026-10-19T20:00:00.1234560Z"
+            ],
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "rows": [
+                {
+                    "TimeGenerated":
+                        "2026-10-19T20:00:00.1234560Z"
+                }
+            ],
+        }
+
+        result = self.validator().evaluate_filter(
+            client,
+            snapshot,
+            {
+                "SourceRawTable": "Contoso_CL",
+                "ParserFilterQuery": "source",
+            },
+        )
+
+        self.assertEqual(
+            {"2026-10-19T20:00:00.1234560Z": 1},
+            result["selectedCountsByTimestamp"],
+        )
+
     def test_selective_filter_requires_rejected_fixture_row(self):
         client = FakeQueryClient(
             [
