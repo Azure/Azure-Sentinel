@@ -1,0 +1,428 @@
+Parser:
+  Title: Authentication ASIM parser for CyberArk Audit
+  Version: '0.1.0'
+  LastUpdated: Oct 05, 2026
+Product:
+  Name: CyberArk Audit
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: CyberArk Audit Documentation
+  Link: https://docs.cyberark.com/audit-and-reports/latest/en/content/audit/product-audits/isp-ar-audit.htm
+- Title: CyberArk Audit SIEM Integration with Microsoft Sentinel
+  Link: https://docs.cyberark.com/setup/latest/en/content/siem-integration/siem-export-ms-sentinel.htm
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing CyberArk (rebranded to Idira under Palo Alto) Identity Security Platform audit events (Identity logins, Privilege Cloud Vault logons, PSM sessions, SIA/DPA RDP sessions and SSH sessions), stored in the CyberArk_AuditEvents_CL table, to the ASIM Authentication normalized schema.
+Exceptions:
+- Field: DvcAction
+  Warning: Missing recommended field
+  Exception: Not available in the data source. Authentication outcome is reported in EventResult.
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Not available in the data source. Device is the CyberArk SaaS tenant, identified by DvcId.
+- Field: DvcHostname
+  Warning: Missing recommended field
+  Exception: Not available in the data source. Device is the CyberArk SaaS tenant, identified by DvcId.
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Not available in the data source. Device is the CyberArk SaaS tenant, identified by DvcId.
+ParserName: ASimAuthenticationCyberArkAudit
+EquivalentBuiltInParser: _ASim_Authentication_CyberArkAudit
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+      let EventCodes = datatable(
+          auditCode: string
+          , EventType: string
+          , EventSubType: string
+          , _Family: string
+          , TargetDvcOs: string
+      )[
+          'IDP2005', 'Logon', 'Remote', 'Identity', '',
+          'IDP2006', 'Logoff', 'Remote', 'Identity', '',
+          'IDP2007', 'Logon', 'Remote', 'Identity', '',
+          'PAM00007', 'Logon', 'Remote', 'Vault', '',
+          'PAM00008', 'Logoff', 'Remote', 'Vault', '',
+          'PAM00300', 'Logon', 'RemoteInteractive', 'PSM', '',
+          'PAM00301', 'Logon', 'RemoteInteractive', 'PSM', '',
+          'PAM00302', 'Logoff', 'RemoteInteractive', 'PSM', '',
+          'PAM00303', 'Logoff', 'RemoteInteractive', 'PSM', '',
+          'PAM00378', 'Logon', 'RemoteInteractive', 'PSM', '',
+          'PAM00379', 'Logon', 'RemoteInteractive', 'PSM', '',
+          'PAM00380', 'Logoff', 'RemoteInteractive', 'PSM', '',
+          'PAM00381', 'Logoff', 'RemoteInteractive', 'PSM', '',
+          'DPAI401', 'Logon', 'RemoteInteractive', 'DPA', 'Windows',
+          'DPAI402', 'Logoff', 'RemoteInteractive', 'DPA', 'Windows',
+          'DPAE403', 'Logon', 'RemoteInteractive', 'DPA', 'Windows',
+          'PSMSTRT', 'Logon', 'RemoteInteractive', 'SSH', 'Linux',
+          'PSMTRMN', 'Logoff', 'RemoteInteractive', 'SSH', 'Linux'
+      ];
+      // Same patterns as the ASIM data tester
+      let FqdnRegex = @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)+[a-zA-Z]{2,63}$';
+      let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+      CyberArk_AuditEvents_CL
+      | where not(disabled)
+      | where auditCode in (
+          'IDP2005', 'IDP2006', 'IDP2007'
+          , 'PAM00007', 'PAM00008'
+          , 'PAM00300', 'PAM00301', 'PAM00302', 'PAM00303'
+          , 'PAM00378', 'PAM00379', 'PAM00380', 'PAM00381'
+          , 'DPAI401', 'DPAI402', 'DPAE403'
+          , 'PSMSTRT', 'PSMTRMN'
+      )
+      | lookup EventCodes on auditCode
+      | extend EventResult = iff(
+          auditCode == 'IDP2007' or auditType in ('Failure', 'System Error')
+          , 'Failure'
+          , 'Success'
+      )
+      // customData is missing in some workspaces
+      | extend _CdJson = parse_json(column_ifexists('customData', ''))
+      // customData is either flat JSON or a nested_items name/value array
+      | mv-apply _Item = _CdJson.nested_items on (
+          summarize _Nested = make_bag(bag_pack(tostring(_Item.name), _Item.value))
+      )
+      | extend _Cd = iff(isnotempty(_CdJson.nested_items), _Nested, _CdJson)
+      | extend
+          _LogonDomain = tostring(_Cd.logondomain)
+          , _SrcHostnameCd = tostring(_Cd.source_hostname)
+      | parse-kv tostring(_Cd.new_target) as (
+          ApplicationType: string
+          , DstHost: string
+          , Protocol: string
+          , PSMID: string
+          , SessionDuration: string
+          , SessionID: string
+          , SrcHost: string
+      ) with (pair_delimiter=';', kv_delimiter='=')
+      | project-rename
+          _ApplicationType = ApplicationType
+          , _DstHost = DstHost
+          , _Protocol = Protocol
+          , _PSMID = PSMID
+          , _SessionDuration = SessionDuration
+          , _SessionID = SessionID
+          , _SrcHost = SrcHost
+      | extend _TargetUser = case(
+          // PSM targetAccount is unqualified; prefix the logon domain
+          _Family == 'PSM', iff(
+              isnotempty(_LogonDomain) and isnotempty(targetAccount)
+                  and targetAccount !contains '\\'
+                  and targetAccount !contains '@'
+              , strcat(_LogonDomain, '\\', targetAccount)
+              , targetAccount
+          )
+          , _Family == 'DPA', coalesce(
+              tostring(_Cd.ephemeral_user)
+              , tostring(split(
+                  tostring(split(tostring(_Cd.connection_string), ' /u ')[1])
+                  , ' '
+              )[0])
+          )
+          , _Family == 'SSH', tostring(split(target, '@')[0])
+          , username
+      )
+      | extend _OrigDetails = case(
+          _Family == 'Identity', tostring(_Cd.failure_reason)
+          , _Family == 'DPA', tostring(_Cd.error_code)
+          , _Family == 'SSH', coalesce(
+              tostring(_Cd.terminate_error)
+              , iff(
+                  EventResult == 'Failure'
+                  , tostring(_Cd.terminate_reason)
+                  , ''
+              )
+          )
+          , iff(EventResult == 'Failure', message, '')
+      )
+      | extend EventResultDetails = case(
+          EventResult == 'Success', ''
+          , _OrigDetails in (
+              'Challenge not answered or answered incorrectly'
+              , 'User missing ability to satisfy challenge(s)'
+          ), 'MFA not satisfied'
+          , _OrigDetails == 'Auth session was abandoned or expired'
+              , 'Session expired'
+          , _OrigDetails in (
+              'User account locked'
+              , 'DPA_RDP_ACCOUNT_LOCKED_OUT_ERROR'
+          ), 'User locked'
+          , _OrigDetails == 'User password is expired', 'Password expired'
+          , _OrigDetails == 'User disabled', 'User disabled'
+          , 'Other'
+      )
+      | extend _SrcAddr = trim(@'\s+', case(
+          _Family == 'PSM', _SrcHost
+          , _Family == 'Vault', tostring(_Cd.station_ip)
+          , source
+      ))
+      | extend _SrcIsIp = isnotnull(parse_ipv4(_SrcAddr))
+          or isnotempty(parse_ipv6(_SrcAddr))
+      // DPA reports the source IP and the source hostname separately
+      | extend _SrcHostRaw = trim(@'\s+', iff(
+          _SrcIsIp or isempty(_SrcAddr)
+          , _SrcHostnameCd
+          , _SrcAddr
+      ))
+      | extend
+          _SrcIsFqdn = _SrcHostRaw matches regex FqdnRegex
+          , _SrcShort = tostring(split(_SrcHostRaw, '.')[0])
+      // Malformed host values are left unmapped
+      | extend
+          SrcIpAddr = iff(_SrcIsIp, _SrcAddr, '')
+          , SrcHostname = iff(
+              (_SrcIsFqdn or _SrcShort == _SrcHostRaw)
+                  and _SrcShort matches regex HostnameRegex
+              , _SrcShort
+              , ''
+          )
+          , SrcFQDN = iff(_SrcIsFqdn, _SrcHostRaw, '')
+          , SrcDomain = iff(
+              _SrcIsFqdn
+              , substring(_SrcHostRaw, strlen(_SrcShort) + 1)
+              , ''
+          )
+      | extend
+          _AuthMethod = tostring(_Cd.authentication_method)
+          , _IsSession = _Family in ('PSM', 'DPA', 'SSH')
+          , _IsUrl = _DstHost contains '://'
+          // uuid is missing in some workspaces
+          , EventOriginalUid = column_ifexists('uuid', '')
+      | extend _TargetHost = trim(@'\s+', case(
+          // Failed PSM sessions may lack DstHost; fall back to the account address
+          _Family == 'PSM', coalesce(
+              iff(_IsUrl, tostring(parse_url(_DstHost).Host), _DstHost)
+              , tostring(_Cd.address)
+          )
+          , _Family == 'DPA', coalesce(tostring(_Cd.target_machine), target)
+          , _Family == 'SSH', tostring(split(
+              tostring(split(target, '@')[1])
+              , '#'
+          )[0])
+          , _Family == 'Vault', tostring(_Cd.target)
+          , ''
+      ))
+      | extend _TargetIsIp = isnotnull(parse_ipv4(_TargetHost))
+          or isnotempty(parse_ipv6(_TargetHost))
+      | extend
+          _TargetIsFqdn = not(_TargetIsIp) and _TargetHost matches regex FqdnRegex
+          , _TargetShort = iff(
+              _TargetIsIp
+              , ''
+              , tostring(split(_TargetHost, '.')[0])
+          )
+      // Malformed host values are left unmapped; Dst keeps the original value
+      | extend
+          TargetIpAddr = iff(_TargetIsIp, _TargetHost, '')
+          , TargetHostname = iff(
+              (_TargetIsFqdn or _TargetShort == _TargetHost)
+                  and _TargetShort matches regex HostnameRegex
+              , _TargetShort
+              , ''
+          )
+          , TargetFQDN = iff(_TargetIsFqdn, _TargetHost, '')
+          , TargetDomain = iff(
+              _TargetIsFqdn
+              , substring(_TargetHost, strlen(_TargetShort) + 1)
+              , ''
+          )
+      | extend
+          TargetUsernameType = case(
+              isempty(_TargetUser), ''
+              , _TargetUser contains '@', 'UPN'
+              , _TargetUser contains '\\', 'Windows'
+              , 'Simple'
+          )
+          , TargetUserId = iff(_Family == 'Identity', userId, '')
+          , TargetUserType = case(
+              identityType == 'HUMAN', 'Regular'
+              , identityType == 'NON_HUMAN', 'Other'
+              , ''
+          )
+          , ActorUsername = iff(_IsSession, username, '')
+          , ActorUserId = iff(_IsSession and userId != username, userId, '')
+          , TargetUrl = iff(_IsUrl, _DstHost, '')
+          , TargetSessionId = case(
+              _Family == 'Identity', tostring(_Cd.session_guid)
+              , _Family == 'PSM', _SessionID
+              , sessionId
+          )
+          , TargetAppName = iff(_Family in ('Identity', 'Vault'), serviceName, '')
+          , ActingAppName = iff(_Family in ('Vault', 'PSM'), source, '')
+          , SrcGeoCity = tostring(_Cd.geoip_city_name)
+          , SrcGeoCountry = tostring(_Cd.geoip_country_code)
+          , SrcGeoLatitude = toreal(_Cd.geoip_latitude)
+          , SrcGeoLongitude = toreal(_Cd.geoip_longitude)
+          , SrcDvcOs = tostring(_Cd.device_os)
+          , SrcDeviceType = iff(
+              tostring(_Cd.mobile_device) =~ 'true'
+              , 'Mobile Device'
+              , ''
+          )
+          , HttpUserAgent = tostring(_Cd.user_agent)
+          , LogonMethod = case(
+              _IsSession, 'PAM'
+              , _AuthMethod == 'MultiAuth', 'Multi factor authentication'
+              , _AuthMethod == 'UserPassword', 'Username & Password'
+              , isnotempty(_AuthMethod), 'Other'
+              , ''
+          )
+          , LogonProtocol = case(
+              // 'Irrelevant' is a vendor placeholder
+              _Family == 'PSM', iff(_Protocol =~ 'Irrelevant', '', _Protocol)
+              , _Family == 'DPA', 'RDP'
+              , _Family == 'SSH', tostring(_Cd.protocol)
+              , ''
+          )
+          , EventSeverity = iff(EventResult == 'Failure', 'Low', 'Informational')
+          , EventMessage = iff(
+              isempty(message) or message startswith 'cloud.core.'
+              , action
+              , message
+          )
+          , EventCount = int(1)
+          // Identity reports the UTC event time in when_occurred
+          , EventStartTime = iff(
+              _Family == 'Identity'
+              , coalesce(todatetime(tostring(_Cd.when_occurred)), TimeGenerated)
+              , TimeGenerated
+          )
+          , EventVendor = 'CyberArk'
+          , EventProduct = 'Audit'
+          , EventSchema = 'Authentication'
+          , EventSchemaVersion = '1.0.0'
+          , DvcIdType = iff(isnotempty(CyberArkTenantId), 'Other', '')
+          , AdditionalFields = iff(
+              pack
+              , bag_pack(
+                  'ServiceName', serviceName
+                  , 'Component', component
+                  , 'Safe', safe
+                  , 'TargetPlatform', targetPlatform
+                  , 'TargetAccount', targetAccount
+                  , 'ApplicationType', _ApplicationType
+                  , 'PsmId', _PSMID
+                  , 'SessionDuration'
+                  , coalesce(_SessionDuration, tostring(_Cd.session_duration))
+                  , 'AccessMethod', tostring(_Cd.access_method)
+                  , 'AuthenticationMethod'
+                  , coalesce(_AuthMethod, tostring(_Cd.authentication_methods))
+                  , 'IdentityProvider', tostring(_Cd.identity_provider)
+                  , 'DirectoryServiceType', tostring(_Cd.directory_service_type)
+                  , 'Roles', tostring(_Cd.roles)
+                  , 'SourceHostname', _SrcHostnameCd
+                  , 'ErrorDescription', tostring(_Cd.error_description)
+              )
+              , dynamic({})
+          )
+      | project-rename
+          EventOriginalType = auditCode
+          , EventOriginalSubType = actionType
+          , EventOriginalSeverity = auditType
+          , EventOriginalResultDetails = _OrigDetails
+          , TargetUsername = _TargetUser
+          , DvcId = CyberArkTenantId
+          , DvcDescription = serviceName
+          , TargetOriginalUserType = identityType
+          , EventUid = _ItemId
+      | extend
+          EventEndTime = EventStartTime
+          , TargetAppType = iff(isnotempty(TargetAppName), 'SaaS application', '')
+          , TargetUserIdType = iff(isnotempty(TargetUserId), 'Other', '')
+          , ActorUserIdType = iff(isnotempty(ActorUserId), 'Other', '')
+          , ActorUsernameType = case(
+              isempty(ActorUsername), ''
+              , ActorUsername contains '@', 'UPN'
+              , ActorUsername contains '\\', 'Windows'
+              , 'Simple'
+          )
+          , TargetDomainType = iff(isnotempty(TargetDomain), 'FQDN', '')
+          , SrcDomainType = iff(isnotempty(SrcDomain), 'FQDN', '')
+          , Dvc = coalesce(DvcId, 'CyberArk')
+          , Src = coalesce(SrcIpAddr, SrcFQDN, SrcHostname)
+          , Dst = coalesce(TargetIpAddr, TargetFQDN, TargetHostname, _TargetHost)
+          , IpAddr = SrcIpAddr
+          , User = TargetUsername
+          , Application = TargetAppName
+      | project
+          TimeGenerated
+          , Type
+          , EventCount
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventSubType
+          , EventResult
+          , EventResultDetails
+          , EventOriginalResultDetails
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalSeverity
+          , EventOriginalUid
+          , EventUid
+          , EventSeverity
+          , EventMessage
+          , EventVendor
+          , EventProduct
+          , EventSchema
+          , EventSchemaVersion
+          , Dvc
+          , DvcId
+          , DvcIdType
+          , DvcDescription
+          , LogonMethod
+          , LogonProtocol
+          , ActorUsername
+          , ActorUsernameType
+          , ActorUserId
+          , ActorUserIdType
+          , ActingAppName
+          , TargetUsername
+          , TargetUsernameType
+          , TargetUserId
+          , TargetUserIdType
+          , TargetUserType
+          , TargetOriginalUserType
+          , TargetSessionId
+          , TargetAppName
+          , TargetAppType
+          , TargetHostname
+          , TargetFQDN
+          , TargetDomain
+          , TargetDomainType
+          , TargetIpAddr
+          , TargetUrl
+          , TargetDvcOs
+          , SrcIpAddr
+          , SrcHostname
+          , SrcFQDN
+          , SrcDomain
+          , SrcDomainType
+          , SrcGeoCity
+          , SrcGeoCountry
+          , SrcGeoLatitude
+          , SrcGeoLongitude
+          , SrcDvcOs
+          , SrcDeviceType
+          , HttpUserAgent
+          , Src
+          , Dst
+          , IpAddr
+          , User
+          , Application
+          , AdditionalFields
+  };
+  parser(disabled = disabled, pack = pack)

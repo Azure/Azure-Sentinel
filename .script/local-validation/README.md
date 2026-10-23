@@ -39,9 +39,18 @@ node .script/local-validation/validate.js --diff feature/base-branch
 # Validate everything under a solution folder
 node .script/local-validation/validate.js --path Solutions/MySolution
 
+# Same checks against a different content checkout; helper code still loads from this checkout
+node .script/local-validation/validate.js \
+  --repository-root /path/to/content-checkout \
+  --path Solutions/MySolution \
+  --only json,yaml \
+  --json-file .script/local-validation/Logs/results.json
+
 # Validate a specific connector
 node .script/local-validation/validate.js --path DataConnectors/MyConnector
 ```
+
+The validator and .NET test projects still load from the toolkit checkout. When standalone `--files`, `--diff`, or auto-discovery runs a .NET validator, `--repository-root` is passed to its content loaders through `SENTINEL_VALIDATION_CONTENT_ROOT`; standalone `--path` continues to skip repo-wide .NET tests.
 
 ### Validate Specific Files
 
@@ -91,9 +100,11 @@ node .script/local-validation/validate.js --path Solutions/MySolution --json
 | `documents-link` | Documents Link | All | All | No locale codes in documentation URLs |
 | `solution` | Solution | `.json` | `Solutions/` | Domains/verticals, support, branding, ID |
 | `id-change` | ID Change | `.yaml`, `.yml`, `.json` | `Detections/`, `Solutions/` | Template IDs must not change |
+| `xdr-detection` | XDR Detection | `.yaml`, `.yml`, `.json` | `Solutions/<Solution>/XDR Detections/`, `Data/`, `Package/` | `xdr-detection.schema.json`, `contentProvenance`, `requiredWorkloads`, `requiredDataConnectors`, source rule SHA-256 freshness, `Data/*.json` selection, and packaged `CustomDetection` resources |
+| `xdr-workbook` | XDR Workbook | `.json` | `Solutions/<Solution>/XDR Workbooks/`, `Data/`, `Package/` | `xdr-workbook.schema.json`, `contentProvenance`, `requiredWorkloads`, `requiredDataConnectors`, `requiredWorkspaceFunctions`, query contracts, and packaged `DefenderWorkbook-*` resource & `dependsOn` integrity |
 | `kql` | KQL Validation | — | — | KQL syntax and best practices (.NET, scoped to solution) |
 | `detection-schema` | Detection Template Schema | — | — | Detection YAML structure (.NET, scoped to solution) |
-| `non-ascii` | Non-ASCII | — | — | Non-ASCII character detection (.NET, entire repo) |
+| `non-ascii` | Non-ASCII | — | — | Non-ASCII character detection (.NET; scoped by the build runner) |
 | `arm-ttk` | ARM-TTK | `.json` | `Solutions/` | ARM template testing (Docker — same as GitHub CI) |
 
 ## How It Works
@@ -153,7 +164,7 @@ The local validation pipeline is designed to stay in sync with CI by **sharing c
 - **Node.js 16+** with npm dependencies installed (`npm install`)
 - **TypeScript compiled** (`npm run tsc`)
 - **Git** (for `--diff` mode file discovery)
-- **.NET SDK 6.0+** (optional — for KQL, Detection Schema, Non-ASCII validators; Detection Schema and KQL are scoped to the target solution for fast local runs)
+- **.NET SDK 6.0+** (optional — the build runner scopes KQL, Detection Schema, and Non-ASCII checks; standalone `--path` mode skips these repo-wide test projects)
 - **Docker** (optional — for ARM-TTK validator, uses the same Dockerfile as GitHub CI)
 
 ## Integration with AI Agents
@@ -221,19 +232,93 @@ The .NET validators (KQL, Detection Schema, Non-ASCII) require .NET SDK. Install
 node .script/local-validation/validate.js --skip kql,detection-schema,non-ascii
 ```
 
+The standalone `validate.js --path` command skips .NET validators because it cannot safely scope the repo-wide test projects. Use `build-and-validate.ps1 -SolutionName ... -SkipPackaging` for solution-scoped .NET checks.
+
+With an explicit solution folder, validation examines current files in that folder, including uncommitted and untracked files; deleted files are excluded. The folder must be an existing direct child of `Solutions/`. The repo-history TruffleHog check is reported as skipped because it cannot be limited to one solution.
+Solution-scoped hyperlink validation also excludes descendant path components named
+`Logs`, `Reports`, or `Evidence` (case-insensitive, whole path segments), consistent
+with the local TypeScript solution scan. Other names and path substrings remain in scope.
+
+### Cross-Checkout Build Runner
+
+`build-and-validate.ps1` derives its toolkit root from the script location. By default,
+the content root is that same checkout, preserving the normal same-worktree behavior.
+For selected content from another checkout, use `-ContentRoot <canonical-git-root>`
+with `-SkipPackaging` and the official runner; packaging is rejected when roots differ.
+The selected solution must be a non-symlink direct child of that content root's
+`Solutions/`. TypeScript and .NET helper projects, PowerShell validation scripts,
+configuration, and ARM-TTK dependencies remain in the toolkit root, while current
+solution files and scoped .NET/PowerShell validation use the selected content root.
+
+For post-V3.1 ARM deployment acceptance, run the existing validation checks in
+validation-only mode and provide the exact V3.1 package report for the selected
+workflow run:
+
+```powershell
+pwsh .script/local-validation/build-and-validate.ps1 `
+  -SolutionName "MySolution" `
+  -ContentRoot /path/to/content-checkout `
+  -SkipPackaging `
+  -PackageReportPath "Logs/sentinel-xdr-migration/<run-id>/packaging.v3_1.json" `
+  -VersionBump none `
+  -ValidationSkip ""
+```
+
+`-PackageReportPath` is optional for ordinary use. When supplied, the runner
+requires `-SkipPackaging` and active validation, verifies that the V3.1 report
+and its referenced artifacts are current, checks the report's package-input
+fingerprint against current solution inputs before validation, and records the
+package report's workflow/attempt IDs and exact artifact hashes. It fingerprints
+all package inputs and every file in `Package/` before and after the existing
+validation steps; changed content, package bytes, package report, `ContentRoot`,
+or runner scripts makes the binding fail. The ignored evidence run contains
+`build-and-validate-binding.json`, and the human-readable report contains its
+path and SHA-256. The acceptance planner independently checks those emitted
+fingerprints against current V3.1 package state and current files; it does not
+infer validated hashes from the files' current state or use report timestamps.
+This adds no validator and does not turn skipped checks into passes.
+
+V3.1 package-input identities use Python `Path` ordering, which is
+case-sensitive on POSIX and case-insensitive on Windows. The producer computes
+both component-wise orderings and records only the semantics whose full file
+fingerprint matches the package report's own `packageInputs.after.sha256`;
+it also records the validation runner's platform. A cross-host validation run
+therefore follows the packager identity rather than the runner's local sort.
+Windows ordering lowercases each path component before ordinal component
+comparison, matching `PureWindowsPath` rather than .NET's
+`OrdinalIgnoreCase` string ordering.
+If neither ordering matches, or Windows-equivalent paths make ordering
+ambiguous, evidence capture fails closed. The independent `Package/` file
+inventory retains its existing ordinal, case-sensitive path ordering.
+
+The runner accepts `-EvidenceDirectory` only under the toolkit's ignored
+`.script/local-validation/Logs/` folder. It creates a unique run subdirectory with the
+complete TypeScript results JSON, separate TypeScript stdout/stderr logs, compile
+output, complete captured output for invoked .NET/PowerShell/ARM-TTK helpers, and the
+full report. The JSON file avoids console/native-process output truncation; a missing
+or malformed report is a runner failure. A .NET invocation that exits without a test
+summary or executed tests is reported as skipped, not passed. Skipped checks are counted
+as skipped, not passed. Validation-only runs do not update solution data, release notes,
+or packages.
+
+For example:
+
+```powershell
+pwsh /path/to/toolkit/.script/local-validation/build-and-validate.ps1 `
+  -SolutionName "MySolution" `
+  -ContentRoot /path/to/content-checkout `
+  -SkipPackaging `
+  -VersionBump none `
+  -ValidationSkip "" `
+  -EvidenceDirectory ".script/local-validation/Logs/my-run"
+```
+
 ### Import errors
 Make sure TypeScript is compiled:
 ```bash
 npm run tsc
 ```
 
-## File Inventory (New Files Only)
+## Build Outputs
 
-This feature adds the following files — **no existing files are modified**:
-
-```
-.script/local-validation/
-├── validate.ts    # Main validation runner (TypeScript source)
-├── validate.js    # Compiled JavaScript (generated by tsc)
-└── README.md      # This documentation
-```
+`validate.js`, `validate.js.map`, `validate.d.ts`, and `validate.d.ts.map` are generated from `validate.ts` by `npm run tsc`.
