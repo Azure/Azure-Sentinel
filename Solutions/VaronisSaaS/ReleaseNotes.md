@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.3.0       | 23-10-2026                     | Removed the deprecated Azure Function data connector from the solution. The workbook now queries only the **VaronisAlertsV2_CL** table populated by the CCF Push data connector |
 | 3.2.0       | 20-08-2026                     | CCF Push data connector now ingests into the dedicated **VaronisAlertsV2_CL** table to avoid schema conflicts with the legacy Azure Function connector's table |
 | 3.1.1       | 29-07-2026                     | Mark Azure Function data connector as Deprecated |
 | 3.1.0       | 21-04-2026                     | Add CCF Push data connector                 |
