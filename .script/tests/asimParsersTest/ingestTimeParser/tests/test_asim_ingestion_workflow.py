@@ -817,11 +817,15 @@ class ReportTests(unittest.TestCase):
         }
         validation["outputValidation"]["queryTimeExecution"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
         validation["outputValidation"]["parity"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
 
         report = self.build(validation)
@@ -849,14 +853,14 @@ class ReportTests(unittest.TestCase):
             report["stages"]["qtpExecution"]["status"],
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["qtpExecution"]["detail"],
         )
         self.assertEqual(
             "blocked", report["stages"]["parity"]["status"]
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["parity"]["detail"],
         )
         output = io.StringIO()
@@ -867,6 +871,66 @@ class ReportTests(unittest.TestCase):
             output.getvalue(),
         )
         self.assertIn("InvalidStream", output.getvalue())
+
+    def test_qtp_raw_ingestion_failure_fails_overall(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = {"resourceId": "/raw"}
+        validation["rawUpload"] = [{"status": "accepted"}]
+        validation["qtpSourceReplay"] = {
+            "status": "failed",
+            "inputStream": "Custom-Contoso_CL",
+            "error": {
+                "stage": "raw-visibility",
+                "message": "Exact timestamp rows were duplicated.",
+            },
+            "observedSchema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "observedRows": [
+                {"TimeGenerated": "timestamp"},
+                {"TimeGenerated": "timestamp"},
+            ],
+            "observedCountsByTimestamp": {"timestamp": 2},
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["error"] = {
+            "stage": "raw-visibility",
+            "message": "Exact timestamp rows were duplicated.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(report["requiredFailure"])
+        self.assertEqual(
+            "passed", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            2,
+            len(
+                report["stages"]["rawIngestion"]["evidence"][
+                    "qtpSourceReplay"
+                ]["observedRows"]
+            ),
+        )
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()

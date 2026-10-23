@@ -9,7 +9,10 @@ from typing import Any, Mapping, Protocol, Sequence
 
 import yaml
 
-from asim_ingestion.fixtures.timestamps import parse_kusto_datetime_ticks
+from asim_ingestion.fixtures.timestamps import (
+    parse_kusto_datetime_ticks,
+    ticks_to_kusto_datetime,
+)
 from asim_ingestion.parser.kql import split_kql_statements, split_pipeline
 
 MAX_MISMATCH_EXAMPLES = 10
@@ -253,11 +256,20 @@ def _parse_filter_counts(
     timestamps: Sequence[str],
 ) -> dict[str, int]:
     _, rows = _normalize_query_table(query_table, "filter")
-    expected_timestamps = set(timestamps)
+    expected_timestamps = {
+        ticks_to_kusto_datetime(
+            parse_kusto_datetime_ticks(str(timestamp))
+        )
+        for timestamp in timestamps
+    }
     counts = {timestamp: 0 for timestamp in expected_timestamps}
     for row in rows:
         timestamp = row.get("TimeGenerated")
         count = row.get("_AsimSelectedCount")
+        if isinstance(timestamp, str):
+            timestamp = ticks_to_kusto_datetime(
+                parse_kusto_datetime_ticks(timestamp)
+            )
         if not isinstance(timestamp, str) or timestamp not in counts:
             raise ValidationError(
                 "filter",
