@@ -499,7 +499,7 @@ class ReportTests(unittest.TestCase):
             report["stages"]["parserDcr"]["detail"],
         )
 
-    def test_raw_dcr_failure_adds_detail_only_to_raw_dcr(self):
+    def test_direct_parser_dcr_failure_adds_detail_to_parser_dcr(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["rawDcr"] = None
@@ -516,15 +516,193 @@ class ReportTests(unittest.TestCase):
 
         report = self.build(validation)
 
-        self.assertEqual("failed", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual("", report["stages"]["rawDcr"]["detail"])
+        self.assertEqual(
+            "failed", report["stages"]["parserDcr"]["status"]
+        )
         self.assertEqual(
             "Provisioning failed.",
+            report["stages"]["parserDcr"]["detail"],
+        )
+
+    def test_stage_summary_includes_nested_provider_error(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = None
+        validation["parserDcr"] = None
+        validation["rawUpload"] = []
+        validation["parserUpload"] = []
+        validation["snapshot"] = None
+        validation["filterValidation"] = None
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "dcr-create",
+            "message": "PUT failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "InvalidPayload",
+                    "message": "Data collection rule is invalid",
+                    "details": [
+                        {
+                            "code": "InvalidStream",
+                            "message": (
+                                "'OutputStream' stream "
+                                "'Microsoft-SalesforceAuditTrail' must "
+                                "be a custom stream or one of the "
+                                "allowed streams."
+                            ),
+                            "target": (
+                                "Properties.DataFlows[0].OutputStream"
+                            ),
+                        }
+                    ],
+                }
+            },
+        }
+
+        report = self.build(validation)
+        detail = report["stages"]["parserDcr"]["detail"]
+        summary = WORKFLOW.render_summary(report)
+
+        self.assertIn("PUT failed with HTTP 400.", detail)
+        self.assertIn("InvalidStream:", detail)
+        self.assertIn("Microsoft-SalesforceAuditTrail", detail)
+        self.assertIn(
+            "Properties.DataFlows[0].OutputStream",
+            detail,
+        )
+        self.assertIn("Microsoft-SalesforceAuditTrail", summary)
+
+    def test_target_output_error_is_exposed_as_parity_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "target-output",
+            "message": "POST failed with HTTP 400.",
+            "details": {
+                "error": {
+                    "code": "BadArgumentError",
+                    "innererror": {
+                        "code": "SEM0100",
+                        "message": (
+                            "Failed to resolve scalar expression "
+                            "named 'EventSchema'"
+                        ),
+                    },
+                    "message": (
+                        "The request had some invalid properties"
+                    ),
+                }
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "passed", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["parity"]["status"]
+        )
+        self.assertIn(
+            "EventSchema",
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_cleanup_warning_exposes_cleanup_error(self):
+        report = self.build(
+            self.base_validation(),
+            cleanup={
+                "resources": [
+                    {
+                        "resourceId": "/raw",
+                        "status": "warning",
+                        "message": "DELETE failed with HTTP 503.",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(
+            "DELETE failed with HTTP 503.",
+            report["stages"]["cleanup"]["detail"],
+        )
+
+    def test_qtp_raw_dcr_failure_warns_without_failing_parser(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "warning",
+            "inputStream": "Microsoft-SentinelContoso",
+            "error": {
+                "stage": "dcr-create",
+                "message": "PUT failed with HTTP 400.",
+                "details": {
+                    "error": {
+                        "code": "InvalidStream",
+                        "message": "Stream is unsupported.",
+                    }
+                },
+            },
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Skipped because QTP source replay failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "warning", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertIn(
+            "InvalidStream",
             report["stages"]["rawDcr"]["detail"],
         )
         self.assertEqual(
-            "not-run", report["stages"]["parserDcr"]["status"]
+            "blocked", report["stages"]["rawIngestion"]["status"]
         )
-        self.assertEqual("", report["stages"]["parserDcr"]["detail"])
+        self.assertEqual(
+            "passed", report["stages"]["parserDcr"]["status"]
+        )
+        self.assertEqual(
+            "passed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            "Skipped because QTP source replay failed.",
+            report["stages"]["parity"]["detail"],
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertIn(
+            "::warning title=ASIM rawDcr warning::",
+            output.getvalue(),
+        )
+        self.assertIn("InvalidStream", output.getvalue())
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()

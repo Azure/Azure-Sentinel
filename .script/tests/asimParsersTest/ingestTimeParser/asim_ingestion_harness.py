@@ -40,7 +40,6 @@ from asim_ingestion.azure.common import (
     _write_json_no_clobber,
     build_exact_timestamp_query,
     build_resource_names,
-    build_source_snapshot,
     build_upload_batches,
     count_rows_by_timestamp,
 )
@@ -60,7 +59,6 @@ __all__ = [
     "ValidationRunner",
     "build_exact_timestamp_query",
     "build_resource_names",
-    "build_source_snapshot",
     "build_upload_batches",
     "count_rows_by_timestamp",
     "main",
