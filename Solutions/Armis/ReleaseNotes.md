@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.3.0       | 23-10-2026                     | Adding AuditLogs Data connector.|
 | 3.2.0       | 05-12-2025                     | Log Ingestion Support.|
 | 3.1.1       | 19-05-2025                     | Updated Armis AlertActivity and Armis Device Data connectors to add keyvault for storing Armis Access Token and Severity parameter in AlertActivity.|
 | 3.1.0       | 11-09-2024                     | Updated Armis Alerts Data connector to ingest Armis Activities associated with only Armis Alerts.|
