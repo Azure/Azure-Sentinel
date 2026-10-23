@@ -141,9 +141,11 @@ namespace Kqlvalidations.Tests
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList(); // Detection folder
-            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList()
+                .Where(s => s.Contains("Analytic Rules") && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s)));
             var AllFiles = Directory.GetFiles(detectionPath[0], "*", SearchOption.AllDirectories).ToList();
-            AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+            AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList()
+                .Where(s => s.Contains("Analytic Rules") && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s)));
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles, $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
@@ -153,7 +155,8 @@ namespace Kqlvalidations.Tests
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).Where(s => !s.Contains("CiscoUmbrella")).ToList(); // Removing duplicate CiscoUmbrella detections. already present in solution folder
-            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList()
+                .Where(s => s.Contains("Analytic Rules") && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s)));
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
@@ -201,7 +204,10 @@ namespace Kqlvalidations.Tests
         private List<string> GetYamlFilePathsByFileName(string detectionsYamlFileName)
         {
             var yamlFilePaths = new List<string>();
-            var filesList = (Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/") || s.Contains("Analytic Rules")).ToList());
+            var filesList = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories)
+                .Where(s => (s.Contains("\\Detections\\") || s.Contains("/Detections/") || s.Contains("Analytic Rules"))
+                    && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s))
+                .ToList();
 
             if (filesList.Any())
             {
@@ -217,11 +223,17 @@ namespace Kqlvalidations.Tests
             // Get file present in detection folder or else check in solution analytics rules folder
             try
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories)
+                    .Where(s => (s.Contains("\\Detections\\") || s.Contains("/Detections/"))
+                        && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s))
+                    .Single();
             }
             catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories)
+                    .Where(s => s.Contains("Analytic Rules")
+                        && !DetectionsYamlFilesTestData.IsPrivateSolutionContentPath(s))
+                    .Single();
             }
             catch (Exception e) when (e.Message.Contains("Sequence contains more than one element"))
             {

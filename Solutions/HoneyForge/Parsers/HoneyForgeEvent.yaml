@@ -1,0 +1,76 @@
+id: b1b6b693-679e-4ebf-afc8-7faf6af266ab
+Function:
+  Title: HoneyForgeEvent
+  Version: '1.0.0'
+  LastUpdated: '2026-07-20'
+  Description: |
+    ASIM NetworkSession parser for HoneyForge Threat Detection Platform events.
+    Normalises CEF events from the CommonSecurityLog table (DeviceVendor="BUI",
+    DeviceProduct="HoneyForge") to the ASIM NetworkSession schema v0.2.6.
+  FunctionName: HoneyForgeEvent
+  FunctionAlias: HoneyForgeEvent
+  Category: Microsoft Sentinel Parser
+FunctionName: HoneyForgeEvent
+FunctionAlias: HoneyForgeEvent
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+FunctionQuery: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      EventVendor           = "BUI",
+      EventProduct          = "HoneyForge",
+      EventProductVersion   = tostring(DeviceVersion),
+      EventSchema           = "NetworkSession",
+      EventSchemaVersion    = "0.2.6",
+      EventType             = "NetworkSession",
+      EventResult           = "NA",
+      EventCount            = int(1),
+      EventStartTime        = TimeGenerated,
+      EventEndTime          = TimeGenerated,
+      EventSeverity         = case(
+                                LogSeverity == "10", "High",
+                                LogSeverity == "7",  "Medium",
+                                LogSeverity == "4",  "Low",
+                                "Informational"),
+      NetworkProtocol       = case(
+                                Protocol == "6",  "TCP",
+                                Protocol == "17", "UDP",
+                                Protocol == "1",  "ICMP",
+                                tostring(Protocol)),
+      SrcIpAddr             = tostring(SourceIP),
+      SrcPortNumber         = toint(SourcePort),
+      DstIpAddr             = tostring(DestinationIP),
+      DstPortNumber         = toint(DestinationPort),
+      DstHostname           = tostring(DestinationHostName),
+      DvcHostname           = tostring(Computer),
+      DvcAction             = "Detect",
+      AdditionalFields      = bag_pack(
+                                "SensorName",    iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),
+                                "CustomerID",    tostring(DeviceCustomString2),
+                                "ThreatName",    tostring(Activity),
+                                "RuleID",        tostring(DeviceEventClassID))

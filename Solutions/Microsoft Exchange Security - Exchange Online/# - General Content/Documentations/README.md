@@ -1,21 +1,21 @@
-# Folder structure
+# Microsoft Exchange Security for Exchange Online documentation
 
-This folder contains documentations related to the deployment of solutions Microsoft Exchange Security for Exchange On-Premises and Microsoft Exchange Security for Exchange Online :
+This folder contains the documentation for deploying and operating the **Microsoft Exchange Security for Exchange Online** solution in Microsoft Sentinel.
 
-## Overview of Deployement
-[Deployment Overview](./Deployment-Overview.md)
+The Exchange Online collector runs as a PowerShell runbook in Azure Automation and uses the Automation account's system-assigned managed identity.
 
-## Deployment Microsoft Exchange Security for Exchange On-Premises
-[Deployment for On-Premises Solution](./Deployment-MES-OnPremises.md)
+## Collector deployment and configuration
 
-## Deployment Microsoft Exchange Security for Exchange Online
-[Deployment for Online Solution](./Deployment-MES-Online.md)
+- [Configure the Exchange Security Insights Online Collector with Azure Monitor](./README_LogIngestionAPI.md): Deploy or upgrade the Azure Monitor data connector and Azure Automation collector, configure the managed identity, validate ingestion, and troubleshoot the deployment.
 
-## Collectors Information
-[Collector Information](./ESICollector.md)
+- [Exchange Security Insights Collector prerequisites and permissions](./ESICollector.md): Review the required Azure Automation modules, Microsoft Graph permissions, Exchange Online permissions, Microsoft Entra directory role, and network access.
 
-## How to deploy Woorkbooks
-[Solution Workbooks information](./WorkbookDeployement.md)
+## Workbooks
 
-## VIP Management
-[VIP Management](./VIPManagement.md)
+- [Deploy the Microsoft Exchange Security workbooks](./WorkbookDeployement.md): Deploy and configure the workbooks used by the solution.
+
+- [Delegate access to the workbooks](./WorkbookDelegation.md): Configure Microsoft Entra groups, custom roles, resource group permissions, and Log Analytics access for delegated workbook users.
+
+## VIP monitoring
+
+- [Configure VIP management](./VIPManagement.md): Configure the watchlist used to identify and monitor VIP activity in the Microsoft Exchange Security workbooks.

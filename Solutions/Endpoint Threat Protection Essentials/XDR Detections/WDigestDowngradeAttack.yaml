@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f6502545-ae3a-4232-a8b0-79d87e5c98d7
+    path: Analytic Rules/WDigestDowngradeAttack.yaml
+    version: 3.1.2
+    querySha256: fa4bce6bcdb1c3184b3619365759d926c5ab29f70adaa501ebd91dda7d0aa6d9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - RegistryKey.Key value is retained as customDetails.RegistryKeyKey from query column `TargetObject`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.RegistryKeyKey column `TargetObject` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1003
+    reviewScope:
+      sourceDocumentSha256: 329f719c1896284a71fb31d4e85c1f1d99340dd137f969e8445eb6f843e3d332
+      targetQuerySha256: 97d8fa2b5b8d495abe33ae0854276700bba9a4067bedc6d3283eb5d0ca37fb0d
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 329f719c1896284a71fb31d4e85c1f1d99340dd137f969e8445eb6f843e3d332
+      targetQuerySha256: 97d8fa2b5b8d495abe33ae0854276700bba9a4067bedc6d3283eb5d0ca37fb0d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 329f719c1896284a71fb31d4e85c1f1d99340dd137f969e8445eb6f843e3d332
+      targetQuerySha256: 97d8fa2b5b8d495abe33ae0854276700bba9a4067bedc6d3283eb5d0ca37fb0d
+    supplementalEntityDetails:
+    - entityType: RegistryKey
+      entityIndex: 1
+      identifier: Key
+      sourceColumn: TargetObject
+      column: TargetObject
+      status: runtime-binding-pending
+      customDetailKey: RegistryKeyKey
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-f6502545-ae3a-4232-a8b0-79d87e5c98d7
+  displayName: WDigest downgrade attack
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+      | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" *
+      | where TargetObject=~"HKLM\\System\\CurrentControlSet\\Control\\SecurityProviders\\WDigest\\UseLogonCredential" and Details !="DWORD (0x00000000)"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: WDigest downgrade attack
+      description: |-
+        'When the WDigest Authentication protocol is enabled, plain text passwords are stored in the Local Security Authority Subsystem Service (LSASS) exposing them to theft. This setting will prevent WDigest from storing credentials in memory.
+        Ref: https://www.microsoft.com/en-us/security/blog/2022/07/27/untangling-knotweed-european-private-sector-offensive-actor-using-0-day-exploits/'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1003
+      customDetails:
+        RegistryKeyKey: TargetObject
+        HostFullName: Computer

@@ -1,0 +1,1000 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sentinel to XDR workflow state",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"context": {"required": ["workbookCapabilityVersion"]}}},
+      "then": {
+        "required": ["workbooks"],
+        "properties": {"context": {"required": ["armValidationMethod"]}}
+      },
+      "else": {
+        "not": {"required": ["workbooks"]},
+        "properties": {"context": {"not": {"anyOf": [
+          {"required": ["armValidationMethod"]}, {"required": ["workbookFullInventory"]},
+          {"required": ["workbookQualificationAfterArm"]}
+        ]}}}
+      }
+    },
+    {
+      "if": {"properties": {"context": {"required": ["workbookQualificationAfterArm"]}}},
+      "then": {"properties": {"context": {"properties": {
+        "workflowProfile": {"const": "qualification"},
+        "targetContextLocked": {"const": true}
+      }, "required": ["targetContextLocked"]}}}
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "solution",
+    "workflowStatus",
+    "createdAt",
+    "updatedAt",
+    "context",
+    "stages"
+  ],
+  "properties": {
+    "workbooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "inventory", "inventorySha256", "selection", "selectionSha256", "selectionExplicit"],
+      "properties": {
+        "schemaVersion": {"const": "1.0.0"},
+        "inventorySha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "selectionSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "selectionExplicit": {"type": "boolean"},
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            }
+          }
+        },
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["included", "excluded"],
+          "properties": {
+            "included": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "excluded": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "reason"],
+                "properties": {
+                  "path": {"type": "string", "minLength": 1},
+                  "reason": {"type": "string", "minLength": 1}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$",
+      "description": "Stable run directory identity. Added when initializing or explicitly migrating legacy state; resumption must keep this value."
+    },
+    "schemaVersion": {
+      "const": "1.2.0"
+    },
+    "solution": {
+      "type": "string",
+      "description": "Solution-relative location (normally '.'); legacy absolute locations remain readable. Artifact references resolve against the selected solution, not the shell cwd.",
+      "minLength": 1
+    },
+    "workflowStatus": {
+      "enum": [
+        "inProgress",
+        "blocked",
+        "failed",
+        "completed",
+        "partialCompleted"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspaceResourceId",
+        "versionBump",
+        "workflowProfile"
+      ],
+      "properties": {
+        "workspaceResourceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tenantId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subscriptionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspaceCustomerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetContextLocked": {
+          "type": "boolean"
+        },
+        "workbookQualificationAfterArm": {
+          "const": true,
+          "description": "New workbook-only Qualification runs validate content before ARM acceptance; query/UI proof remains mandatory before completion."
+        },
+        "versionBump": {
+          "enum": [
+            "patch",
+            "minor",
+            "major",
+            "none",
+            null
+          ]
+        },
+        "targetVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+        },
+        "workflowProfile": {
+          "enum": [
+            "authoring",
+            "qualification"
+          ]
+        },
+        "profileSelectionConfirmed": {
+          "type": "boolean"
+        },
+        "workbookCapabilityVersion": {
+          "const": 1
+        },
+        "armValidationMethod": {
+          "enum": ["arm-ttk", "lab-deployment"]
+        },
+        "workbookFullInventory": {
+          "const": true
+        }
+      }
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discovery",
+        "conversion",
+        "validation",
+        "packaging",
+        "deployment",
+        "mockIngestion",
+        "alertParity",
+        "report"
+      ],
+      "properties": {
+        "discovery": {
+          "$ref": "#/$defs/stage"
+        },
+        "conversion": {
+          "$ref": "#/$defs/stage"
+        },
+        "validation": {
+          "$ref": "#/$defs/stage"
+        },
+        "packaging": {
+          "$ref": "#/$defs/stage"
+        },
+        "deployment": {
+          "$ref": "#/$defs/stage"
+        },
+        "mockIngestion": {
+          "$ref": "#/$defs/stage"
+        },
+        "alertParity": {
+          "$ref": "#/$defs/stage"
+        },
+        "report": {
+          "$ref": "#/$defs/stage"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "campaignId",
+        "inventorySha256",
+        "status",
+        "stopReason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "campaignId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+        },
+        "inventorySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "enum": ["active", "stopped"]
+        },
+        "stopReason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "authoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "mode",
+        "status",
+        "inventorySha256",
+        "currentContract",
+        "stopReason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "mode": {
+          "const": "yolo"
+        },
+        "status": {
+          "enum": ["active", "stopped", "conflicted"]
+        },
+        "inventorySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "currentContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "revision"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^authoring-contracts/[0-9]{6}-[a-f0-9]{64}\\.json$"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "stopReason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "packaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "lastSuccessful",
+        "lastConsumedAction",
+        "currentAttempt",
+        "releaseActions",
+        "pendingReleaseAction"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "lastSuccessful": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/packageAction"
+            }
+          ]
+        },
+        "lastConsumedAction": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/packageAction"
+            }
+          ]
+        },
+        "currentAttempt": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "attemptId",
+                "attempt",
+                "status",
+                "requestedVersionBump",
+                "effectiveVersionBump",
+                "bumpConsumed",
+                "packageInputSha256",
+                "packageReportSha256",
+                "startedAt"
+              ],
+              "properties": {
+                "attemptId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "attempt": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "status": {
+                  "enum": ["running", "passed", "failed", "blocked"]
+                },
+                "requestedVersionBump": {
+                  "enum": ["none", "patch", "minor", "major"]
+                },
+                "effectiveVersionBump": {
+                  "enum": ["none", "patch", "minor", "major"]
+                },
+                "bumpConsumed": {
+                  "type": "boolean"
+                },
+                "requestedTargetVersion": {
+                  "type": ["string", "null"],
+                  "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                },
+                "effectiveTargetVersion": {
+                  "type": ["string", "null"],
+                  "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                },
+                "targetConsumed": {
+                  "type": "boolean"
+                },
+                "packageInputSha256": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "packageReportSha256": {
+                  "type": ["string", "null"],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "startedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "failure": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "releaseActions": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "versionBump",
+                  "packageInputSha256",
+                  "selectedAt",
+                  "status"
+                ],
+                "properties": {
+                  "versionBump": {"enum": ["patch", "minor", "major"]},
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "status": {"enum": ["selected", "consumed"]},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actionType",
+                  "versionBump",
+                  "basePackageInputSha256",
+                  "packageInputSha256",
+                  "releaseNotesPath",
+                  "releaseNotesOriginalSha256",
+                  "releaseNotesExpectedSha256",
+                  "releaseNotesDate",
+                  "releaseNotesVersion",
+                  "releaseNotesChangeHistory",
+                  "packageInputFilesBefore",
+                  "selectedAt",
+                  "status",
+                  "historicalEvidence"
+                ],
+                "properties": {
+                  "actionType": {"const": "release-notes-refresh"},
+                  "versionBump": {"const": "none"},
+                  "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "releaseNotesPath": {"type": "string", "minLength": 1},
+                  "releaseNotesOriginalSha256": {"$ref": "#/$defs/sha256"},
+                  "releaseNotesExpectedSha256": {"$ref": "#/$defs/sha256"},
+                  "releaseNotesDate": {"type": "string", "pattern": "^\\d{2}-\\d{2}-\\d{4}$"},
+                  "releaseNotesVersion": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+                  "releaseNotesChangeHistory": {"type": "string", "minLength": 1},
+                  "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "status": {"enum": ["selected", "consumed"]},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actionType",
+                  "versionBump",
+                  "runId",
+                  "targetVersion",
+                  "basePackageInputSha256",
+                  "packageInputSha256",
+                  "packageInputFilesBefore",
+                  "approvedChangedInputs",
+                  "priorPackageAttemptId",
+                  "priorPackageReportSha256",
+                  "inputBackupRoot",
+                  "backupId",
+                  "selectedAt",
+                  "historicalEvidence",
+                  "status"
+                ],
+                "properties": {
+                  "actionType": {"const": "same-version-content-rebuild"},
+                  "versionBump": {"const": "none"},
+                  "runId": {"type": "string", "minLength": 1},
+                  "targetVersion": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                  },
+                  "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                  "approvedChangedInputs": {"$ref": "#/$defs/packageInputChanges"},
+                  "priorPackageAttemptId": {"type": "string", "format": "uuid"},
+                  "priorPackageReportSha256": {"$ref": "#/$defs/sha256"},
+                  "inputBackupRoot": {"type": "string", "minLength": 1},
+                  "backupId": {"type": "string", "format": "uuid"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "legacyBaselineEvidence": {
+                    "$ref": "#/$defs/legacyBaselineEvidence"
+                  },
+                  "status": {"enum": ["selected", "consumed"]}
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actionType",
+                  "versionBump",
+                  "runId",
+                  "targetVersion",
+                  "basePackageInputSha256",
+                  "packageInputSha256",
+                  "packageInputFilesBefore",
+                  "basePackageInputFiles",
+                  "approvedChangedInputs",
+                  "priorPackageAttemptId",
+                  "failedCandidate",
+                  "legacyBaselineEvidence",
+                  "inputBackupRoot",
+                  "backupId",
+                  "selectedAt",
+                  "historicalEvidence",
+                  "status"
+                ],
+                "properties": {
+                  "actionType": {"const": "same-version-failed-candidate-rebuild"},
+                  "versionBump": {"const": "none"},
+                  "runId": {"type": "string", "minLength": 1},
+                  "targetVersion": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                  },
+                  "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                  "basePackageInputFiles": {"$ref": "#/$defs/packageInputFiles"},
+                  "approvedChangedInputs": {"$ref": "#/$defs/packageInputChanges"},
+                  "priorPackageAttemptId": {"type": "string", "format": "uuid"},
+                  "failedCandidate": {"$ref": "#/$defs/failedCandidate"},
+                  "legacyBaselineEvidence": {"$ref": "#/$defs/legacyBaselineEvidence"},
+                  "inputBackupRoot": {"type": "string", "minLength": 1},
+                  "backupId": {"type": "string", "format": "uuid"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"}
+                  },
+                  "status": {"enum": ["selected", "consumed"]}
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actionType",
+                  "versionBump",
+                  "targetVersion",
+                  "packageInputSha256",
+                  "selectedAt",
+                  "status"
+                ],
+                "properties": {
+                  "actionType": {"const": "target-version"},
+                  "versionBump": {"const": "none"},
+                  "targetVersion": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                  },
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "status": {"enum": ["selected", "consumed"]},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+              ,
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actionType",
+                  "versionBump",
+                  "runId",
+                  "targetVersion",
+                  "basePackageInputSha256",
+                  "packageInputSha256",
+                  "packageInputFilesBefore",
+                  "basePackageInputFiles",
+                  "approvedChangedInputs",
+                  "priorPackageAttemptId",
+                  "failedCandidate",
+                  "legacyBaselineEvidence",
+                  "inputBackupRoot",
+                  "backupId",
+                  "selectedAt",
+                  "historicalEvidence",
+                  "status"
+                ],
+                "properties": {
+                  "actionType": {"const": "same-version-failed-candidate-rebuild"},
+                  "versionBump": {"const": "none"},
+                  "runId": {"type": "string", "minLength": 1},
+                  "targetVersion": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                  },
+                  "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                  "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                  "basePackageInputFiles": {"$ref": "#/$defs/packageInputFiles"},
+                  "approvedChangedInputs": {"$ref": "#/$defs/packageInputChanges"},
+                  "priorPackageAttemptId": {"type": "string", "format": "uuid"},
+                  "failedCandidate": {"$ref": "#/$defs/failedCandidate"},
+                  "legacyBaselineEvidence": {"$ref": "#/$defs/legacyBaselineEvidence"},
+                  "inputBackupRoot": {"type": "string", "minLength": 1},
+                  "backupId": {"type": "string", "format": "uuid"},
+                  "selectedAt": {"type": "string", "format": "date-time"},
+                  "historicalEvidence": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"}
+                  },
+                  "status": {"enum": ["selected", "consumed"]}
+                }
+              }
+            ]
+          }
+        },
+        "pendingReleaseAction": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["versionBump", "packageInputSha256", "selectedAt"],
+                  "properties": {
+                    "versionBump": {"enum": ["patch", "minor", "major"]},
+                    "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "selectedAt": {"type": "string", "format": "date-time"}
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "actionType",
+                    "versionBump",
+                    "targetVersion",
+                    "packageInputSha256",
+                    "selectedAt"
+                  ],
+                  "properties": {
+                    "actionType": {"const": "target-version"},
+                    "versionBump": {"const": "none"},
+                    "targetVersion": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                    },
+                    "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "selectedAt": {"type": "string", "format": "date-time"}
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "actionType",
+                    "versionBump",
+                    "basePackageInputSha256",
+                    "packageInputSha256",
+                    "releaseNotesPath",
+                    "releaseNotesOriginalSha256",
+                    "releaseNotesExpectedSha256",
+                    "releaseNotesDate",
+                    "releaseNotesVersion",
+                    "releaseNotesChangeHistory",
+                    "packageInputFilesBefore",
+                    "selectedAt"
+                  ],
+                  "properties": {
+                    "actionType": {"const": "release-notes-refresh"},
+                    "versionBump": {"const": "none"},
+                    "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "releaseNotesPath": {"type": "string", "minLength": 1},
+                    "releaseNotesOriginalSha256": {"$ref": "#/$defs/sha256"},
+                    "releaseNotesExpectedSha256": {"$ref": "#/$defs/sha256"},
+                    "releaseNotesDate": {"type": "string", "pattern": "^\\d{2}-\\d{2}-\\d{4}$"},
+                    "releaseNotesVersion": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+                    "releaseNotesChangeHistory": {"type": "string", "minLength": 1},
+                    "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                    "selectedAt": {"type": "string", "format": "date-time"}
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "actionType",
+                    "versionBump",
+                    "runId",
+                    "targetVersion",
+                    "basePackageInputSha256",
+                    "packageInputSha256",
+                    "packageInputFilesBefore",
+                    "approvedChangedInputs",
+                    "priorPackageAttemptId",
+                    "priorPackageReportSha256",
+                    "inputBackupRoot",
+                    "backupId",
+                    "selectedAt",
+                    "historicalEvidence"
+                  ],
+                  "properties": {
+                    "actionType": {"const": "same-version-content-rebuild"},
+                    "versionBump": {"const": "none"},
+                    "runId": {"type": "string", "minLength": 1},
+                    "targetVersion": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                    },
+                    "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                    "approvedChangedInputs": {"$ref": "#/$defs/packageInputChanges"},
+                    "priorPackageAttemptId": {"type": "string", "format": "uuid"},
+                    "priorPackageReportSha256": {"$ref": "#/$defs/sha256"},
+                    "inputBackupRoot": {"type": "string", "minLength": 1},
+                    "backupId": {"type": "string", "format": "uuid"},
+                    "selectedAt": {"type": "string", "format": "date-time"},
+                    "historicalEvidence": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "legacyBaselineEvidence": {
+                      "$ref": "#/$defs/legacyBaselineEvidence"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "actionType",
+                    "versionBump",
+                    "runId",
+                    "targetVersion",
+                    "basePackageInputSha256",
+                    "packageInputSha256",
+                    "packageInputFilesBefore",
+                    "basePackageInputFiles",
+                    "approvedChangedInputs",
+                    "priorPackageAttemptId",
+                    "failedCandidate",
+                    "legacyBaselineEvidence",
+                    "inputBackupRoot",
+                    "backupId",
+                    "selectedAt",
+                    "historicalEvidence"
+                  ],
+                  "properties": {
+                    "actionType": {"const": "same-version-failed-candidate-rebuild"},
+                    "versionBump": {"const": "none"},
+                    "runId": {"type": "string", "minLength": 1},
+                    "targetVersion": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+                    },
+                    "basePackageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "packageInputSha256": {"$ref": "#/$defs/sha256"},
+                    "packageInputFilesBefore": {"$ref": "#/$defs/packageInputFiles"},
+                    "basePackageInputFiles": {"$ref": "#/$defs/packageInputFiles"},
+                    "approvedChangedInputs": {"$ref": "#/$defs/packageInputChanges"},
+                    "priorPackageAttemptId": {"type": "string", "format": "uuid"},
+                    "failedCandidate": {"$ref": "#/$defs/failedCandidate"},
+                    "legacyBaselineEvidence": {"$ref": "#/$defs/legacyBaselineEvidence"},
+                    "inputBackupRoot": {"type": "string", "minLength": 1},
+                    "backupId": {"type": "string", "format": "uuid"},
+                    "selectedAt": {"type": "string", "format": "date-time"},
+                    "historicalEvidence": {
+                      "type": "object",
+                      "additionalProperties": {"type": "string"}
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "packageInputFiles": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "packageInputChanges": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {"$ref": "#/$defs/sha256"},
+          {"type": "null"}
+        ]
+      }
+    },
+    "legacyBaselineEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "failedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attemptId",
+        "packageInputSha256",
+        "packageInputFileCount",
+        "evidencePath",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "packageInputSha256": {"$ref": "#/$defs/sha256"},
+        "packageInputFileCount": {"type": "integer", "minimum": 1},
+        "evidencePath": {"type": "string", "minLength": 1},
+        "evidenceSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "packageAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedVersionBump",
+        "effectiveVersionBump",
+        "bumpConsumed",
+        "packageInputSha256",
+        "attemptId",
+        "packageSucceeded"
+      ],
+      "properties": {
+        "requestedVersionBump": {
+          "enum": ["none", "patch", "minor", "major"]
+        },
+        "effectiveVersionBump": {
+          "enum": ["none", "patch", "minor", "major"]
+        },
+        "bumpConsumed": {
+          "type": "boolean"
+        },
+        "packageInputSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "attemptId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "packageSucceeded": {
+          "type": "boolean"
+        },
+        "packageReport": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageReportSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "packageArtifactsSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestedTargetVersion": {
+          "type": ["string", "null"],
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+        },
+        "effectiveTargetVersion": {
+          "type": ["string", "null"],
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+        },
+        "targetConsumed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "attempts",
+        "startedAt",
+        "completedAt",
+        "message",
+        "artifacts",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "passed",
+            "failed",
+            "blocked",
+            "notRequired"
+          ]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "startedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

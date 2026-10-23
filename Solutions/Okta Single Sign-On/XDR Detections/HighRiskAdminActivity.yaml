@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OktaSSO
+  dataTypes:
+  - Okta_CL
+- connectorId: OktaSSOv2
+  dataTypes:
+  - OktaSSO
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OktaV2_CL
+  requiredDataConnectors:
+  - connectorId: OktaSSOv2
+    dataTypes:
+    - OktaV2_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9f82a735-ae43-4c03-afb4-d5d153e1ace1
+    path: Analytic Rules/HighRiskAdminActivity.yaml
+    version: 1.1.3
+    querySha256: c39c728e9618e7b6ee95b1f0ba3003317bcd45da446d8b4f72a18525b981c2c5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'SessionId' column `authenticationContext_externalSessionId_s` requires runtime output-schema binding
+      verification
+    - customDetails 'AdminDisplayName' column `actor_displayName_s` requires runtime output-schema binding verification
+    - customDetails 'AdminDeviceOS' column `client_userAgent_os_s` requires runtime output-schema binding verification
+    - customDetails 'AdminDevice' column `client_device_s` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `client_userAgent_rawUserAgent_s` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 69ccf0dd70f22e46bc56cb83ec6fffd834031aa3ad6d293a02ca714f5740fd22
+      targetQuerySha256: 08c0d26912fa710d3ad4533d13ae60031f45dda6ae1a7086118c18485d498d8f
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 69ccf0dd70f22e46bc56cb83ec6fffd834031aa3ad6d293a02ca714f5740fd22
+      targetQuerySha256: 08c0d26912fa710d3ad4533d13ae60031f45dda6ae1a7086118c18485d498d8f
+properties:
+  id: xdr-9f82a735-ae43-4c03-afb4-d5d153e1ace1
+  displayName: High-Risk Admin Activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let AdminActivity = dynamic(["iam.role.create","iam.role.permissions.add","user.session.access_admin_app","user.mfa.factor.suspend", "user.account.privilege.grant", "group.privilege.grant", "system.api_token.create", "user.session.impersonation.grant"]);
+      // Define the list of allowed admins to exclude from the alert. This can be modified to include specific admin accounts that are known to perform high-risk activities as part of their job function.
+      let AllowedAdmins = dynamic([]);
+      let AdminOperations = OktaSSO
+      | where actor_alternateId_s !in (AllowedAdmins)
+      | where eventType_s in (AdminActivity)
+      | where outcome_result_s =~ 'SUCCESS'
+      | summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s;
+      let HighRiskEvents = OktaSSO
+      | where eventType_s in ('policy.evaluate_sign_on' , 'user.session.start')
+      | extend debugContext_debugData_logOnlySecurityData_s = column_ifexists('debugContext_debugData_logOnlySecurityData_s', '{}')
+      | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).level =~ "HIGH"
+      | where outcome_result_s =~ 'SUCCESS'
+      | extend reasons = tostring(parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).reasons)
+      | summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s, reasons;
+      AdminOperations
+      | join kind=inner (HighRiskEvents) on actor_displayName_s, client_ipAddress_s, authenticationContext_externalSessionId_s
+      | project StartTime, EndTime, actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s, reasons
+      | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: High-Risk Admin Activity
+      description: The Okta risk engine auto-assigns risk levels to each login attempt. This rule identifies successful admin
+        operations that correlate with successful high-risk Okta authentication or session start events.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: client_ipAddress_s
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        SessionId: authenticationContext_externalSessionId_s
+        AdminDisplayName: actor_displayName_s
+        AdminDeviceOS: client_userAgent_os_s
+        AdminDevice: client_device_s
+        UserAgent: client_userAgent_rawUserAgent_s

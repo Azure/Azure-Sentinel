@@ -1,0 +1,156 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 56f3f35c-3aca-4437-a1fb-b7a84dc4af00
+    path: Analytic Rules/PotentialFodhelperUACBypass.yaml
+    version: 1.0.2
+    querySha256: cbd7996eadc691e4bbf8a5dc74acb30a05e49c5540804f248b34376b03549fc0
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - 'Account.FullName value is not preserved: column `TargetAccount` is missing from the final query output. No invalid
+      customDetails binding was added and KQL was not rewritten'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountName`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountName` requires runtime output-schema binding verification
+    - 'Account.NTDomain value is not preserved: column `AccountNTDomain` is missing from the final query output. No invalid
+      customDetails binding was added and KQL was not rewritten'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1548.002
+    reviewScope:
+      sourceDocumentSha256: ef033d20729200bd74f7df56bc28e4c5ce04f7439bc94c39b72b89501c5510cb
+      targetQuerySha256: 1fc003ba0f24939ec9713dc3d0b6319ddf7ec895a24fa2fee6af928ad0279f4e
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: ef033d20729200bd74f7df56bc28e4c5ce04f7439bc94c39b72b89501c5510cb
+      targetQuerySha256: 1fc003ba0f24939ec9713dc3d0b6319ddf7ec895a24fa2fee6af928ad0279f4e
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: TargetAccount
+      column: TargetAccount
+      status: not-preserved
+      reason: missing
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: AccountName
+      column: AccountName
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 2
+      identifier: NTDomain
+      sourceColumn: AccountNTDomain
+      column: AccountNTDomain
+      status: not-preserved
+      reason: missing
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-56f3f35c-3aca-4437-a1fb-b7a84dc4af00
+  displayName: Potential Fodhelper UAC Bypass
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+        | where EventID == 4657
+        | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" RegistryKey
+        | project-reorder RegistryKey
+        | where RegistryKey has "Software\\Classes\\ms-settings\\shell\\open\\command"
+        | extend TimeKey = bin(TimeGenerated, 1h)
+        | join (
+        SecurityEvent
+        | where EventID == 4688
+        | where Process =~ "fodhelper.exe"
+        | where ParentProcessName endswith "cmd.exe" or ParentProcessName endswith "powershell.exe" or ParentProcessName endswith "powershell_ise.exe"
+        | extend TimeKey = bin(TimeGenerated, 1h)) on TimeKey, Computer
+        | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+        | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+        | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Potential Fodhelper UAC Bypass
+      description: '''This detection looks for the steps required to conduct a UAC bypass using Fodhelper.exe. By default
+        this detection looks for the setting of the required registry keys and the invoking of the process within 1 hour -
+        this can be tweaked as required.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
+          subTechniques:
+          - T1548.002
+      customDetails:
+        HostFullName: Computer
+        AccountName: AccountName

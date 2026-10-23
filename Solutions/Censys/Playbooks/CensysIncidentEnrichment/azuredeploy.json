@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Censys Incident Enrichment",
-        "description": "This playbook will be triggered when any automation rule is attached or manually invoked. This will fetch associated IPs, Host(Domains) and SHAs from incident and make associated API calls to retrieve Censys data and enrich incident with additional information as Incident comment.",
+        "description": "This playbook will be triggered when any automation rule is attached or manually invoked. This will fetch associated IPs, Host(Domains) and SHAs from incident and make associated API calls to retrieve Censys data and enrich incident with additional information as Incident comment. By default the playbook queries the Censys Host Enrichment API (v3/global/asset/enrichment/host) for the IP entities, which adds GreyNoise, IPinfo and Mallory data to the standard host record. A single probe call determines whether the enrichment API is entitled; on 403/409 all IPs fall back to the standard bulk host API, and individual IPs that cannot be enriched fall back on their own. Set the UseHostEnrichment parameter to false to always use the standard host API.",
         "prerequisites": [
             "1. Deploy the CensysAddIncidentComment playbook before deploying this playbook.",
             "2. Obtain a Censys API token and store it in Azure Key Vault as a secret named 'Censys-Access-Token'.",
@@ -14,22 +14,22 @@
         "postDeployment": [
             "**a. Authorize connections**",
             "Once deployment is complete, authorize each connection.",
-            "1. Go to your logic app → API connections → Select Microsoft Sentinel connection resource",
-            "2. Go to General → edit API connection",
+            "1. Go to your logic app \u2192 API connections \u2192 Select Microsoft Sentinel connection resource",
+            "2. Go to General \u2192 edit API connection",
             "3. Click Authorize",
             "4. Sign in",
             "5. Click Save",
             "6. Repeat steps for Key Vault and Log Analytics Data Collector connections",
             "**b. Add Access policy in Keyvault**",
             "Add access policy for the playbook's managed identity to read secrets from Key Vault.",
-            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
-            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "1. Go to logic app \u2192 <your logic app> \u2192 identity \u2192 System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults \u2192 <your keyvault> \u2192 Access policies \u2192 create.",
             "3. Select Get and List permissions for Secrets. Click next.",
             "4. In the principal section, search by copied object ID. Click next.",
             "5. Click review + create.",
             "**c. Assign Microsoft Sentinel Responder role**",
             "Assign Microsoft Sentinel Responder role to the playbook's managed identity.",
-            "1. Go to Log Analytics workspace → Access control (IAM) → Add role assignment.",
+            "1. Go to Log Analytics workspace \u2192 Access control (IAM) \u2192 Add role assignment.",
             "2. Select Microsoft Sentinel Responder role.",
             "3. Select Managed identity and choose the playbook's identity.",
             "4. Click Save."
@@ -51,7 +51,7 @@
         "author": {
             "name": "Censys"
         },
-        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+        "lastUpdateTime": "2026-09-29T00:00:00.000Z"
     },
     "parameters": {
         "PlaybookName": {
@@ -66,6 +66,17 @@
             "type": "string",
             "metadata": {
                 "description": "Comma-separated list of ports to use when constructing web property identifiers (e.g., 443,80,8443)"
+            }
+        },
+        "UseHostEnrichment": {
+            "type": "string",
+            "defaultValue": "True",
+            "allowedValues": [
+              "True",
+              "False"
+            ],
+            "metadata": {
+                "description": "Use the Censys Host Enrichment API (v3/global/asset/enrichment/host) to retrieve additional GreyNoise, IPinfo and Mallory data. Enter True or False. Any value other than True disables enrichment. If set to False, or if the enrichment API returns 403 (not entitled), the standard host API is used instead."
             }
         },
         "OrganizationID": {
@@ -92,7 +103,7 @@
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal → Azure AD → Overview"
+                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal \u2192 Azure AD \u2192 Overview"
             }
         }
     },
@@ -117,6 +128,10 @@
                         "ports": {
                             "type": "String",
                             "defaultValue": "[trim(parameters('Ports'))]"
+                        },
+                        "UseHostEnrichment": {
+                            "type": "String",
+                            "defaultValue": "True"
                         }
                     },
                     "triggers": {
@@ -323,7 +338,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_General_Variables": [
+                                "Initialize_General_Variables_2": [
                                     "Succeeded"
                                 ]
                             },
@@ -427,9 +442,23 @@
                             },
                             "type": "If"
                         },
-                        "CensysIncidentEnrichment": {
+                        "Merge_Enrichment_Data_into_Host_Data": {
                             "runAfter": {
                                 "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data_for_Host": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "ip_data",
+                                "value": "@union(variables('enrichment_ip_data'), variables('host_api_data'))"
+                            }
+                        },
+                        "CensysIncidentEnrichment": {
+                            "runAfter": {
+                                "Merge_Enrichment_Data_into_Host_Data": [
                                     "Succeeded",
                                     "TimedOut",
                                     "Failed"
@@ -461,7 +490,7 @@
                                         "certificate": "@variables('cert_data')"
                                     },
                                     "incident_comment_count": "@triggerBody()?['object']?['properties']?['additionalData']?['commentsCount']",
-                                    "parent_playbook": "CensysIncidentEnrichment"
+                                    "parent_playbook": "@{workflow()['name']}"
                                 }
                             }
                         },
@@ -779,6 +808,125 @@
                                                                                             },
                                                                                             "dns": {
                                                                                                 "type": "object"
+                                                                                            },
+                                                                                            "reputation": {
+                                                                                                "type": "object",
+                                                                                                "properties": {
+                                                                                                    "label": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "score": {
+                                                                                                        "type": "number"
+                                                                                                    },
+                                                                                                    "score_level": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "score_suppressed": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "model_version": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "class_probabilities": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "properties": {
+                                                                                                                "label": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "probability": {
+                                                                                                                    "type": "number"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "evidence": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "properties": {
+                                                                                                                "category": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "evidence_score": {
+                                                                                                                    "type": "number"
+                                                                                                                },
+                                                                                                                "feature": {
+                                                                                                                    "type": "object",
+                                                                                                                    "properties": {
+                                                                                                                        "id": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "name": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "value": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "contribution": {
+                                                                                                                            "type": "number"
+                                                                                                                        },
+                                                                                                                        "category": {
+                                                                                                                            "type": "string"
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "additional_fields": {
+                                                                                                                    "type": "array",
+                                                                                                                    "items": {
+                                                                                                                        "type": "object",
+                                                                                                                        "properties": {
+                                                                                                                            "field": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "value": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "external_signals": {
+                                                                                                                    "type": "array",
+                                                                                                                    "items": {
+                                                                                                                        "type": "object",
+                                                                                                                        "properties": {
+                                                                                                                            "source": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "description": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "tlp": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "threats": {
+                                                                                                                    "type": "array",
+                                                                                                                    "items": {
+                                                                                                                        "type": "object",
+                                                                                                                        "properties": {
+                                                                                                                            "threat_id": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "threat_types": {
+                                                                                                                                "type": "array",
+                                                                                                                                "items": {
+                                                                                                                                    "type": "string"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "last_observed_time": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
                                                                                             }
                                                                                         }
                                                                                     },
@@ -803,8 +951,8 @@
                                                             },
                                                             "type": "SetVariable",
                                                             "inputs": {
-                                                                "name": "ip_data",
-                                                                "value": "@body('Parse_JSON_for_Host_Response')?['result']"
+                                                                "name": "host_api_data",
+                                                                "value": "@coalesce(body('Parse_JSON_for_Host_Response')?['result'], json('[]'))"
                                                             }
                                                         },
                                                         "Set_Break_Loop_True_for_Successful_Data_Fetch_for_Host": {
@@ -2254,6 +2402,831 @@
                             },
                             "type": "If"
                         },
+                        "Initialize_Break_Loop_Flag_for_Web_Property_as_False": {
+                            "runAfter": {
+                                "Get_Censys_API_Token": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "break_domain_loop",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_to_Check_Host_Enrichment_is_Enabled": {
+                            "runAfter": {
+                                "Get_Censys_API_Token": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "actions": {
+                                "Set_Probe_IP": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "probe_ip",
+                                        "value": "@first(variables('IPs'))"
+                                    }
+                                },
+                                "Probe_Enrichment_API_Connectivity": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/enrichment/host/@{encodeURIComponent(variables('probe_ip'))}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "X-Organization-ID": "@{variables('org_id')}",
+                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}",
+                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Probe_IP": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Switch_Case_for_Probe_Status": {
+                                    "runAfter": {
+                                        "Probe_Enrichment_API_Connectivity": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_Probe_200": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Parse_JSON_for_Probe_Response": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Probe_Enrichment_API_Connectivity')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "result": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "resource": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "ip": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "location": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "autonomous_system": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "whois": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "services": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "service_count": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "dns": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "labels": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "reputation": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "greynoise": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "actor": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "classification": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "last_observed_time": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "network": {
+                                                                                    "type": "array",
+                                                                                    "items": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                            "hosting": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "mobile": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "satellite": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "source": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "privacy": {
+                                                                                    "type": "array",
+                                                                                    "items": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                            "anonymous": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "tor": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "proxy": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "relay": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "vpn": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "source": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "third_party": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "mallory": {
+                                                                                            "type": "array",
+                                                                                            "items": {
+                                                                                                "type": "object",
+                                                                                                "properties": {
+                                                                                                    "observable": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "description": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "updated_at": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "opinions": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "properties": {
+                                                                                                                "verdict": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "confidence": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "source": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "extensions": {
+                                                                            "type": "object"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Probe_Result_to_Enrichment_Data": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_for_Probe_Response": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_ip_data",
+                                                        "value": "@body('Parse_JSON_for_Probe_Response')?['result']"
+                                                    }
+                                                },
+                                                "Set_Enrichment_Available_After_Probe_200": {
+                                                    "runAfter": {
+                                                        "Append_Probe_Result_to_Enrichment_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_429": {
+                                            "case": 429,
+                                            "actions": {
+                                                "Set_Enrichment_Available_429": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_429": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_429": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_404": {
+                                            "case": 404,
+                                            "actions": {
+                                                "Set_Enrichment_Available_404": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_404": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_404": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_500": {
+                                            "case": 500,
+                                            "actions": {
+                                                "Set_Enrichment_Available_500": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_500": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_500": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_502": {
+                                            "case": 502,
+                                            "actions": {
+                                                "Set_Enrichment_Available_502": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_502": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_502": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_503": {
+                                            "case": 503,
+                                            "actions": {
+                                                "Set_Enrichment_Available_503": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_503": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_503": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_504": {
+                                            "case": 504,
+                                            "actions": {
+                                                "Set_Enrichment_Available_504": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Append_Probe_IP_to_Enrichment_Fallback_List_for_504": {
+                                                    "runAfter": {
+                                                        "Set_Enrichment_Available_504": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_fallback_ips",
+                                                        "value": "@variables('probe_ip')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_403": {
+                                            "case": 403,
+                                            "actions": {
+                                                "Set_Enrichment_Unavailable_403": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_409": {
+                                            "case": 409,
+                                            "actions": {
+                                                "Set_Enrichment_Unavailable_409": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "enrichment_api_available",
+                                                        "value": false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Probe_401": {
+                                            "case": 401,
+                                            "actions": {
+                                                "Set_Auth_Error_True": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "auth_error",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                            "Set_Enrichment_Unavailable_Default": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "enrichment_api_available",
+                                                    "value": false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": "@outputs('Probe_Enrichment_API_Connectivity')?['statusCode']",
+                                    "type": "Switch"
+                                },
+                                "Condition_Enrichment_Available_After_Probe": {
+                                    "runAfter": {
+                                        "Switch_Case_for_Probe_Status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "actions": {
+                                        "For_Each_IP_For_Enrichment": {
+                                            "foreach": "@skip(variables('IPs'), 1)",
+                                            "actions": {
+                                                "HTTP_Call_to_Fetch_Host_Enrichment_Data": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/enrichment/host/@{encodeURIComponent(items('For_Each_IP_For_Enrichment'))}",
+                                                        "method": "GET",
+                                                        "headers": {
+                                                            "X-Organization-ID": "@{variables('org_id')}",
+                                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}",
+                                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Switch_Case_for_Enrichment_API_Status_Codes": {
+                                                    "runAfter": {
+                                                        "HTTP_Call_to_Fetch_Host_Enrichment_Data": [
+                                                            "Succeeded",
+                                                            "TimedOut",
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "cases": {
+                                                        "Case_for_200_for_Enrichment": {
+                                                            "case": 200,
+                                                            "actions": {
+                                                                "Parse_JSON_for_Enrichment_Response": {
+                                                                    "type": "ParseJson",
+                                                                    "inputs": {
+                                                                        "content": "@body('HTTP_Call_to_Fetch_Host_Enrichment_Data')",
+                                                                        "schema": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "result": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "resource": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "ip": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "location": {
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "autonomous_system": {
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "whois": {
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "services": {
+                                                                                                    "type": "array"
+                                                                                                },
+                                                                                                "service_count": {
+                                                                                                    "type": "integer"
+                                                                                                },
+                                                                                                "dns": {
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "labels": {
+                                                                                                    "type": "array"
+                                                                                                },
+                                                                                                "reputation": {
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "greynoise": {
+                                                                                                    "type": "object",
+                                                                                                    "properties": {
+                                                                                                        "actor": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "classification": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "last_observed_time": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "network": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "hosting": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "mobile": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "satellite": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "source": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "privacy": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "anonymous": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "tor": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "proxy": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "relay": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "vpn": {
+                                                                                                                "type": "boolean"
+                                                                                                            },
+                                                                                                            "source": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "third_party": {
+                                                                                                    "type": "object",
+                                                                                                    "properties": {
+                                                                                                        "mallory": {
+                                                                                                            "type": "array",
+                                                                                                            "items": {
+                                                                                                                "type": "object",
+                                                                                                                "properties": {
+                                                                                                                    "observable": {
+                                                                                                                        "type": "object",
+                                                                                                                        "properties": {
+                                                                                                                            "name": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "description": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "updated_at": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "opinions": {
+                                                                                                                        "type": "array",
+                                                                                                                        "items": {
+                                                                                                                            "type": "object",
+                                                                                                                            "properties": {
+                                                                                                                                "verdict": {
+                                                                                                                                    "type": "string"
+                                                                                                                                },
+                                                                                                                                "confidence": {
+                                                                                                                                    "type": "string"
+                                                                                                                                },
+                                                                                                                                "source": {
+                                                                                                                                    "type": "string"
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "extensions": {
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Append_Enrichment_Result_to_Host_Data": {
+                                                                    "runAfter": {
+                                                                        "Parse_JSON_for_Enrichment_Response": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "enrichment_ip_data",
+                                                                        "value": "@body('Parse_JSON_for_Enrichment_Response')?['result']"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Case_for_403_for_Enrichment": {
+                                                            "case": 403,
+                                                            "actions": {
+                                                                "Append_IP_to_Enrichment_Fallback_List": {
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "enrichment_fallback_ips",
+                                                                        "value": "@items('For_Each_IP_For_Enrichment')"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "default": {
+                                                        "actions": {
+                                                            "Append_IP_to_Enrichment_Fallback_List_for_Other_Status": {
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "enrichment_fallback_ips",
+                                                                    "value": "@items('For_Each_IP_For_Enrichment')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": "@outputs('HTTP_Call_to_Fetch_Host_Enrichment_Data')?['statusCode']",
+                                                    "type": "Switch"
+                                                }
+                                            },
+                                            "type": "Foreach",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_All_IPs_for_Fallback_After_Probe_Failed": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "enrichment_fallback_ips",
+                                                    "value": "@variables('IPs')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('enrichment_api_available')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_All_IPs_for_Fallback_When_Enrichment_Disabled": {
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "enrichment_fallback_ips",
+                                            "value": "@variables('IPs')"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                          "@toLower(trim(parameters('UseHostEnrichment')))",
+                                          "true"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(variables('IPs'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_Terminate_if_Authentication_Error": {
+                            "runAfter": {
+                                "Condition_to_Check_Host_Enrichment_is_Enabled": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "actions": {
+                                "Terminate_Due_to_Authentication_Error": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "401",
+                                            "message": "Authentication Error: The Censys API returned 401 Unauthorized. Verify that the 'Censys-Access-Token' secret in Key Vault contains a valid API token and that the Organization ID is correct."
+                                        }
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('auth_error')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_WebProperty_Chunks": {
+                            "runAfter": {
+                                "For_Each_Domain": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "web_chunks",
+                                        "type": "array",
+                                        "value": "@chunk(variables('web_property'), 100)"
+                                    }
+                                ]
+                            }
+                        },
+                        "Ingest_Censys_Web_Property_Data": {
+                            "runAfter": {
+                                "Ingest_Censys_Host_Data": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@{variables('web_data')}",
+                                "headers": {
+                                    "Log-Type": "CensysWebProperty"
+                                },
+                                "path": "/api/logs"
+                            }
+                        },
                         "Initialize_General_Variables": {
                             "runAfter": {},
                             "type": "InitializeVariable",
@@ -2345,28 +3318,47 @@
                                 ]
                             }
                         },
-                        "Initialize_Break_Loop_Flag_for_Web_Property_as_False": {
+                        "Initialize_General_Variables_2": {
                             "runAfter": {
-                                "Get_Censys_API_Token": [
-                                    "Succeeded",
-                                    "TimedOut",
-                                    "Failed"
+                                "Initialize_General_Variables": [
+                                    "Succeeded"
                                 ]
                             },
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "break_domain_loop",
+                                        "name": "enrichment_ip_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_api_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "enrichment_api_available",
                                         "type": "boolean",
                                         "value": false
+                                    },
+                                    {
+                                        "name": "auth_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "probe_ip",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "enrichment_fallback_ips",
+                                        "type": "array"
                                     }
                                 ]
                             }
                         },
                         "Initialize_IP_Chunks": {
                             "runAfter": {
-                                "Get_Censys_API_Token": [
+                                "Condition_to_Terminate_if_Authentication_Error": [
                                     "Succeeded",
                                     "TimedOut",
                                     "Failed"
@@ -2383,7 +3375,7 @@
                                     {
                                         "name": "ip_chunks",
                                         "type": "array",
-                                        "value": "@chunk(variables('IPs'), 100)"
+                                        "value": "@chunk(variables('enrichment_fallback_ips'), 100)"
                                     }
                                 ]
                             }
@@ -2411,51 +3403,14 @@
                                     }
                                 ]
                             }
-                        },
-                        "Initialize_WebProperty_Chunks": {
-                            "runAfter": {
-                                "For_Each_Domain": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "web_chunks",
-                                        "type": "array",
-                                        "value": "@chunk(variables('web_property'), 100)"
-                                    }
-                                ]
-                            }
-                        },
-                        "Ingest_Censys_Web_Property_Data": {
-                            "runAfter": {
-                                "Ingest_Censys_Host_Data": [
-                                    "Succeeded",
-                                    "TimedOut",
-                                    "Failed"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "body": "@{variables('web_data')}",
-                                "headers": {
-                                    "Log-Type": "CensysWebProperty"
-                                },
-                                "path": "/api/logs"
-                            }
                         }
                     },
                     "outputs": {}
                 },
                 "parameters": {
+                    "UseHostEnrichment": {
+                        "value": "[parameters('UseHostEnrichment')]"
+                    },
                     "$connections": {
                         "value": {
                             "azuresentinel": {
