@@ -1,0 +1,397 @@
+Parser:
+  DisplayName: 'AuditEvent ASIM ingestion-time parser for Salesforce Audit Trail'
+  Version: '0.1.1'
+  LastUpdated: '2026-10-21'
+Product:
+  Name: 'Salesforce Audit Trail'
+Normalization:
+  Schema: 'AuditEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes Salesforce setup audit trail events from the SalesforceAuditTrailV2_CL raw table into ASimAuditEventLogs during ingestion.
+ParserName: 'ASimAuditEventSalesforceAuditTrailV2_CL'
+DCRType: 'Standard'
+InputStream: 'Custom-SalesforceAuditTrailV2_CL'
+SourceRawTable: 'SalesforceAuditTrailV2_CL'
+TargetASIMTable: 'ASimAuditEventLogs'
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "SalesforceAuditTrail"
+  | extend
+      EventTime = iif(isnotnull(CreatedDate), CreatedDate, TimeGenerated),
+      ActorUsername = iif(
+          isnotempty(CreatedByUsername),
+          CreatedByUsername,
+          iif(isnotempty(CreatedByEmail), CreatedByEmail, CreatedByName)),
+      Operation = iif(isnotempty(Action), Action, Display),
+      Object = iif(isnotempty(Section), Section, Action)
+  | extend ObjectTypeFromSection = case(
+      Section == "Customize Service Resources", "Directory Service Object",
+      Section == "Customize Users", "Directory Service Object",
+      Section == "Department to Roles", "Directory Service Object",
+      Section == "Experiences network Member Group", "Directory Service Object",
+      Section == "Groupe d'ensembles d'autorisations", "Directory Service Object",
+      Section == "Groupes", "Directory Service Object",
+      Section == "Groups", "Directory Service Object",
+      Section == "G\u00e9rer les utilisateurs", "Directory Service Object",
+      Section == "Manage Users", "Directory Service Object",
+      Section == "OAuth Client Credentials User", "Directory Service Object",
+      Section == "Permission Set Group", "Directory Service Object",
+      Section == "Personnaliser les utilisateurs", "Directory Service Object",
+      Section == "Profiles", "Directory Service Object",
+      Section == "Teams", "Directory Service Object",
+      Section == "User Permission Mappings", "Directory Service Object",
+      Section == "Approval Process", "Policy Rule",
+      Section == "Bypass Rules Configurations", "Policy Rule",
+      Section == "Cancellation Approval Rules", "Policy Rule",
+      Section == "Case Allocation To Queues", "Policy Rule",
+      Section == "Case Closure Email Rules", "Policy Rule",
+      Section == "Connected App Session Policy", "Policy Rule",
+      Section == "Custom Permissions", "Policy Rule",
+      Section == "Data Integration Rule", "Policy Rule",
+      Section == "Duplicate Rule", "Policy Rule",
+      Section == "eHS Naming and SSID Rules", "Policy Rule",
+      Section == "Field Dependencies", "Policy Rule",
+      Section == "Key Attachment Document Rules", "Policy Rule",
+      Section == "Keyword Routing Rules", "Policy Rule",
+      Section == "Matching Rule", "Policy Rule",
+      Section == "Password Policies", "Policy Rule",
+      Section == "Portal Case Visibility", "Policy Rule",
+      Section == "Routing Exclusions", "Policy Rule",
+      Section == "R\u00e8gles de partage", "Policy Rule",
+      Section == "Security Controls", "Policy Rule",
+      Section == "Session Settings", "Policy Rule",
+      Section == "Sharing Defaults", "Policy Rule",
+      Section == "Sharing Rules", "Policy Rule",
+      Section == "Sharing Sets", "Policy Rule",
+      Section == "Transaction Security", "Policy Rule",
+      Section == "User Access Configurations", "Policy Rule",
+      Section == "Validation Rules", "Policy Rule",
+      Section == "Workflow Rule", "Policy Rule",
+      Section == "Customize Historical Entity Trending", "Event Log",
+      Section == "Customize Historical Field Trending", "Event Log",
+      Section == "Entity History", "Event Log",
+      Section == "Feed Tracking", "Event Log",
+      Section == "Suivre l'historique des champs", "Event Log",
+      Section == "Track Field History", "Event Log",
+      Section == "Customer Journey Tasks", "Scheduled Task",
+      Section == "Data Export", "Scheduled Task",
+      Section == "Duplicate Jobs", "Scheduled Task",
+      Section == "Application", "Service",
+      Section == "Application cliente externe", "Service",
+      Section == "Applications Inbox mobiles et pour le bureau h\u00e9rit\u00e9es", "Service",
+      Section == "Applications personnalis\u00e9es", "Service",
+      Section == "Auth Providers", "Service",
+      Section == "Call Centers", "Service",
+      Section == "Change Data Capture", "Service",
+      Section == "Connected Apps", "Service",
+      Section == "Custom Apps", "Service",
+      Section == "Customer Portal", "Service",
+      Section == "Event Bus Relay", "Service",
+      Section == "Event Manager", "Service",
+      Section == "External Client Application", "Service",
+      Section == "Identity Provider", "Service",
+      Section == "Inbox mobile and legacy desktop apps", "Service",
+      Section == "Omni-Channel", "Service",
+      Section == "Partner Relationship Management", "Service",
+      Section == "Portail client", "Service",
+      Section == "Remote Access", "Service",
+      Section == "Salesforce Voice", "Service",
+      Section == "SIS SF Teacher Integrations", "Service",
+      Section == "Third Party Check Service Messages", "Service",
+      Section == "Certificate and Key Management", "Cloud Resource",
+      Section == "Custom Objects", "Cloud Resource",
+      Section == "Encription Keys", "Cloud Resource",
+      Section == "External Objects", "Cloud Resource",
+      Section == "My Domain", "Cloud Resource",
+      Section == "Objets personnalis\u00e9s", "Cloud Resource",
+      Section == "PowerBI Reports", "Cloud Resource",
+      Section == "Private Connections", "Cloud Resource",
+      Section == "Ressources statiques", "Cloud Resource",
+      Section == "Sandbox", "Cloud Resource",
+      Section == "Sandboxes", "Cloud Resource",
+      Section == "Second Generation Package Version", "Cloud Resource",
+      Section == "Sites", "Cloud Resource",
+      Section == "Static Resource", "Cloud Resource",
+      "")
+  | extend ActionKey = tolower(Action)
+  | extend ObjectType = case(
+      isnotempty(ObjectTypeFromSection), ObjectTypeFromSection,
+      isnotempty(Section), "Configuration Atom",
+      ActionKey startswith_cs "permset"
+          or ActionKey contains_cs "permissionsetgroup"
+          or ActionKey contains_cs "setupentityaccessaudit_permissionset"
+          or ActionKey contains_cs "setupentityaccessaudit_profile"
+          or ActionKey startswith_cs "profile"
+          or ActionKey startswith_cs "createduser"
+          or ActionKey startswith_cs "deleteduser"
+          or ActionKey startswith_cs "activateduser"
+          or ActionKey startswith_cs "deactivateduser"
+          or ActionKey startswith_cs "frozeuser"
+          or ActionKey startswith_cs "unfrozeuser"
+          or ActionKey startswith_cs "unlockeduser"
+          or ActionKey startswith_cs "changedusername"
+          or ActionKey startswith_cs "changedemail"
+          or ActionKey startswith_cs "changedpassword"
+          or ActionKey startswith_cs "changedprofile"
+          or ActionKey startswith_cs "changedrole"
+          or ActionKey == "resetpassword"
+          or ActionKey startswith_cs "groupmember"
+          or ActionKey startswith_cs "groupmembership"
+          or ActionKey startswith_cs "queuemember"
+          or ActionKey startswith_cs "queuemembership"
+          or ActionKey startswith_cs "team_"
+          or ActionKey startswith_cs "tm2_user",
+          "Directory Service Object",
+      ActionKey contains_cs "rule"
+          or ActionKey contains_cs "policy"
+          or ActionKey contains_cs "sharing"
+          or ActionKey startswith_cs "changedvalidation"
+          or ActionKey startswith_cs "newvalidation"
+          or ActionKey startswith_cs "removedvalidation"
+          or ActionKey startswith_cs "passwordcomplexity"
+          or ActionKey startswith_cs "passwordexpiry"
+          or ActionKey startswith_cs "passwordlockout"
+          or ActionKey startswith_cs "passwordmaxinvalid"
+          or ActionKey startswith_cs "sessiontimeout"
+          or ActionKey startswith_cs "locksessiondomain"
+          or ActionKey startswith_cs "updatesessionsecuritylevel"
+          or ActionKey startswith_cs "loginiprange",
+          "Policy Rule",
+      ActionKey contains_cs "historytrack"
+          or ActionKey contains_cs "historytracking"
+          or ActionKey contains_cs "entity_history"
+          or ActionKey contains_cs "historicaltrending"
+          or ActionKey contains_cs "feed_field_tracked",
+          "Event Log",
+      ActionKey in (
+          "bulkjobactions",
+          "createbulkjobdefinition",
+          "datacategorybatchcomplete"
+      ),
+          "Scheduled Task",
+      ActionKey in (
+          "deletesandbox",
+          "discardsandbox",
+          "sandboxlicensematch",
+          "sandboxlicensematchsuccess",
+          "archivedmasterencryptionkey",
+          "changedstaticresource",
+          "createnewsalesforcesite",
+          "createdstaticresource",
+          "deletescratchorg",
+          "deletedstaticresource",
+          "insertcertificate"
+      ),
+          "Cloud Resource",
+      ActionKey contains_cs "application"
+          or ActionKey contains_cs "connectedapp"
+          or ActionKey contains_cs "ecapp"
+          or ActionKey contains_cs "authprovider"
+          or ActionKey contains_cs "callcenter"
+          or ActionKey contains_cs "credential"
+          or ActionKey contains_cs "oauth"
+          or ActionKey contains_cs "saml"
+          or ActionKey contains_cs "idp"
+          or ActionKey contains_cs "servicechannel"
+          or ActionKey contains_cs "presenceuserconfig"
+          or ActionKey contains_cs "queuerouting"
+          or ActionKey contains_cs "privateconnection"
+          or ActionKey contains_cs "remoteproxy"
+          or ActionKey contains_cs "packagingapp"
+          or ActionKey contains_cs "loginflow",
+          "Service",
+      "Configuration Atom")
+  | extend EventType = case(
+      (Action has "created" or Action has "added" or Action has "inserted" or Action has "provisioned")
+          or (Display has "created" or Display has "added" or Display has "inserted" or Display has "provisioned"), "Create",
+      (Action has "deleted" or Action has "removed" or Action has "deprovisioned")
+          or (Display has "deleted" or Display has "removed" or Display has "deprovisioned"), "Delete",
+      (Action has "enabled" or Action has "activated" or Action has "unfrozen")
+          or (Display has "enabled" or Display has "activated" or Display has "unfrozen"), "Enable",
+      (Action has "disabled" or Action has "deactivated" or Action has "frozen")
+          or (Display has "disabled" or Display has "deactivated" or Display has "frozen"), "Disable",
+      (Action has "installed" or Action has "upgraded")
+          or (Display has "installed" or Display has "upgraded"), "Install",
+      (Action has "initialized" or Action has "initialised")
+          or (Display has "initialized" or Display has "initialised"), "Initialize",
+      (Action has "started" or Action has "launched")
+          or (Display has "started" or Display has "launched"), "Start",
+      (Action has "stopped" or Action has "paused")
+          or (Display has "stopped" or Display has "paused"), "Stop",
+      (Action has "terminated" or Action has "killed")
+          or (Display has "terminated" or Display has "killed"), "Terminate",
+      (Action has "cleared" or Action has "reset" or Action has "purged")
+          or (Display has "cleared" or Display has "reset" or Display has "purged"), "Clear",
+      (Action has "executed" or Action has "invoked" or Action has "ran")
+          or (Display has "executed" or Display has "invoked" or Display has "ran"), "Execute",
+      (Action has "viewed" or Action has "read" or Action has "downloaded" or Action has "exported")
+          or (Display has "viewed" or Display has "read" or Display has "downloaded" or Display has "exported"), "Read",
+      "Set")
+  | parse Display with * " from " ParsedOldValue: string " to " ParsedNewValue: string
+  | parse Display with CreatedValue: string " was created"
+  | parse Display with DeletedValue: string " was deleted"
+  | parse Display with * " assigned to " AssignedValue: string
+  | parse Display with * " removed from " RemovedValue: string
+  | extend
+      OldValue = case(
+          isnotempty(ParsedOldValue),
+              replace(@"^\s+|\s+$", "", ParsedOldValue),
+          Action startswith "deactivated"
+              or Display contains " was deactivated",
+              "Active",
+          Action startswith "activated"
+              or Display contains " was activated",
+              "Inactive",
+          Action startswith "disable"
+              or Action endswith "Disabled"
+              or Display contains " was disabled",
+              "Enabled",
+          Action startswith "enable"
+              or Action endswith "Enabled"
+              or Display contains " was enabled",
+              "Disabled",
+          Action startswith "unfroze"
+              or Action contains "Unfreeze"
+              or Display contains " was unfrozen",
+              "Frozen",
+          Action startswith "froze"
+              or Action contains "Freeze"
+              or Display contains " was frozen",
+              "Unfrozen",
+          isnotempty(DeletedValue),
+              replace(@"^\s+|\s+$", "", DeletedValue),
+          isnotempty(RemovedValue),
+              replace(@"^\s+|\s+$", "", RemovedValue),
+          ""),
+      NewValue = case(
+          isnotempty(ParsedNewValue),
+              replace(@"^\s+|\s+$", "", ParsedNewValue),
+          Action startswith "deactivated"
+              or Display contains " was deactivated",
+              "Inactive",
+          Action startswith "activated"
+              or Display contains " was activated",
+              "Active",
+          Action startswith "disable"
+              or Action endswith "Disabled"
+              or Display contains " was disabled",
+              "Disabled",
+          Action startswith "enable"
+              or Action endswith "Enabled"
+              or Display contains " was enabled",
+              "Enabled",
+          Action startswith "unfroze"
+              or Action contains "Unfreeze"
+              or Display contains " was unfrozen",
+              "Unfrozen",
+          Action startswith "froze"
+              or Action contains "Freeze"
+              or Display contains " was frozen",
+              "Frozen",
+          isnotempty(CreatedValue),
+              replace(@"^\s+|\s+$", "", CreatedValue),
+          isnotempty(AssignedValue),
+              replace(@"^\s+|\s+$", "", AssignedValue),
+          "")
+  | extend _srcHost1 = SalesforceDomain
+  | extend DomainType = case(
+      indexof(_srcHost1, "\\") >= 0, "Windows",
+      indexof(_srcHost1, ".") >= 0,  "FQDN",
+      "")
+  | extend
+      FQDN = iif(DomainType == "", "", _srcHost1),
+      Domain = case(
+          DomainType == "Windows", substring(_srcHost1, 0, indexof(_srcHost1, "\\")),
+          DomainType == "FQDN",    substring(_srcHost1, indexof(_srcHost1, ".") + 1, strlen(_srcHost1)),
+          ""),
+      ExtractedHostname = case(
+          DomainType == "Windows", substring(_srcHost1, indexof(_srcHost1, "\\") + 1, strlen(_srcHost1)),
+          DomainType == "FQDN",    substring(_srcHost1, 0, indexof(_srcHost1, ".")),
+          _srcHost1)
+  | project-away _srcHost1
+  | extend
+      EventUid = iif(
+          isnotempty(Id),
+          Id,
+          hash_sha256(strcat(
+              tostring(EventTime), "|",
+              CreatedById, "|",
+              Action, "|",
+              Section, "|",
+              Display))),
+      ActorUsernameType = (case(
+                ActorUsername contains "@",  "UPN",
+                ActorUsername contains "\\", "Windows",
+                (ActorUsername has "CN=" or ActorUsername has "OU=" or ActorUsername has "DC="), "DN",
+                isempty(ActorUsername), "",
+                "Simple")),
+      ActorUserType = case(
+          CreatedByContext =~ "User", "Regular",
+          isempty(CreatedByContext), "",
+          "Other"),
+      AdditionalFields = pack(
+              "CreatedByIssuer", CreatedByIssuer,
+              "CreatedByName", CreatedByName,
+              "DelegateUser", DelegateUser,
+              "CreatedDate", CreatedDate
+      )
+  | project-rename
+      ActorOriginalUserType = CreatedByContext,
+      ActorUserId = CreatedById,
+      ActorUserUpn = CreatedByEmail,
+      EventOriginalUid = Id
+  | project
+      TimeGenerated,
+      Type,
+      EventCount = toint(1),
+      EventEndTime = EventTime,
+      EventMessage = Display,
+      EventOriginalSubType = Section,
+      EventOriginalType = Action,
+      EventOriginalUid,
+      EventProduct = "Salesforce Audit Trail",
+      EventResult = "Success",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventStartTime = EventTime,
+      EventSubType = Section,
+      EventType,
+      EventUid,
+      EventVendor = "Salesforce",
+      ActorOriginalUserType,
+      ActorUserId,
+      ActorUserIdType = iff(
+          isnotempty(ActorUserId),
+          "SalesforceId",
+          ""),
+      ActorUsername,
+      ActorUsernameType,
+      ActorUserType,
+      ActorUserUpn,
+      AdditionalFields,
+      Dst = iif(isnotempty(FQDN), FQDN, tostring(ExtractedHostname)),
+      Dvc = "Salesforce Audit Trail",
+      NewValue,
+      Object,
+      ObjectType,
+      OldValue,
+      Operation,
+      OriginalObjectType = Section,
+      TargetDescription = Display,
+      TargetDomain = tostring(Domain),
+      TargetDomainType = DomainType,
+      TargetFQDN = FQDN,
+      TargetHostname = tostring(ExtractedHostname),
+      TargetUrl = iff(
+          isnotempty(SalesforceDomain),
+          strcat("https://", SalesforceDomain),
+          ""),
+      User = ActorUsername,
+      Value = NewValue
+Change:
+  Date: '2026-10-21'
+  Description: 'Initial ingestion-time conversion for the Salesforce Audit Trail V2 connector route.'
