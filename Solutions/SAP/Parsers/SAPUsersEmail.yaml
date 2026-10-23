@@ -1,0 +1,30 @@
+Contentkind: Function
+Description: SAPUsersEmail
+Function:
+  Title: SAPUsersEmail
+  Version: 3.3.04
+  LastUpdated: '2025-02-19'
+Category: SAPFunctions
+FunctionName: SAPUsersEmail
+FunctionQuery: |
+  let UserMDLookBack = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));
+  // older agents have to use USR21 to get the ADDRNUMBER, PERSNUMBER before getting the email address from ADR6
+  let AgentEmailsV1= SAP_USR21 | where TimeGenerated > ago(UserMDLookBack)
+  | summarize arg_max(TimeGenerated, ADDRNUMBER, PERSNUMBER) by BNAME, MANDT, SystemID
+  | project-rename CLIENT= MANDT
+  | join kind= leftouter hint.strategy=shuffle
+  (SAP_ADR6 | where TimeGenerated > ago(UserMDLookBack)
+  | summarize arg_max(TimeGenerated, CONSNUMBER ) by CLIENT, DATE_FROM, ADDRNUMBER, PERSNUMBER, SystemID, SMTP_ADDR)
+   on ADDRNUMBER, PERSNUMBER, SystemID, CLIENT
+  | project SystemID, ClientID= CLIENT, User= BNAME, Email= iff(isempty(SMTP_ADDR), BNAME, SMTP_ADDR)
+  | summarize Email= anyif(Email, isnotempty(Email) ) by ClientID, SystemID, User;
+  // agents from version 60075287 have the join of USR21 and ADR6 performed
+  let AgentEmailsV2= SAP_ADR6 | where TimeGenerated > ago(UserMDLookBack)
+  | summarize arg_max(TimeGenerated, SMTP_ADDR) by BNAME, ClientID= CLIENT, SystemID
+  | project SystemID, ClientID, User= BNAME, Email= iff(isempty(SMTP_ADDR), BNAME, SMTP_ADDR)
+  | summarize Email= anyif(Email, isnotempty(Email) ) by ClientID, SystemID, User;
+  // get the user email coming from an agentless data connector
+  let AgentLessEmails= ABAPUserDetails | where TimeGenerated > ago(UserMDLookBack)
+  | summarize arg_max(TimeGenerated, Email) by User, ClientID= ClientId, SystemID= SystemId
+  | extend Email= coalesce(Email, User);
+  AgentEmailsV1 | union AgentEmailsV2, AgentLessEmails

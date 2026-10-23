@@ -1,0 +1,71 @@
+id: 4d66b748-d415-43f6-ae03-e1bee011b670
+kind: Scheduled
+name: SAP - (Preview) Dormant users detected
+description: |
+  Lists all dialog users with valid credentials which have not logged in for the last 150 days (configurable).
+
+  *Data Sources: SAPcon - User master data*Lists all dialog users with valid credentials which have not logged in for the last 150 days (configurable).
+
+  *Data Sources: SAPcon - User master data*
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+      - SAPUsersHeader
+queryFrequency: 1d
+queryPeriod: 1dt12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1212
+query: |
+  // SAP - Dormant users detected
+  // !!!IMPORTANT!!!
+  // Please keep "Lookup data from the last" to be > = 36 hours to allow reading of user authorization data
+  let AlertOnUsersInactiveForOverDays= 150;
+  let SelectedSystemRoles = dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey, SystemRole;
+  // here you can exclude system users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'DormantOK'
+  // can also specify relevant SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['DormantOK']);// dynamic(['DormantOK']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User=SAPUser;
+  SAPUsersHeader()
+  | where SystemID  in ((SelectedSystems | distinct SystemID))
+  | join kind=leftantisemi excludedUsers on User
+  | where LastSeenDaysAgo> AlertOnUsersInactiveForOverDays and CreatedDaysAgo > AlertOnUsersInactiveForOverDays
+  | where UserType == "A" // dialog users
+  | where LockedStatus in (dynamic([0, 128])) // unlocked, locked by incorrect password
+  // additional config options using SAP user groups
+  // | where UserGroup !in (dynamic(["USRGRP-BASIS", "USRGRP-TERM"])) and UserGroup containscs "USRGRP"
+  | where ValidityDate >= startofday(now())
+  // if validity extended in the last X days, we are OK
+  | where ValidFrom < startofday(now()) - AlertOnUsersInactiveForOverDays*1d
+  | extend ValidFromDaysAgo= datetime_diff('day', startofday(now()), ValidFrom)
+  | summarize  ValidFrom=min(ValidFrom), ValidFromDaysAgo=max(ValidFromDaysAgo), LastSeen=max(LastSeen), LastSeenDaysAgo= min(LastSeenDaysAgo), ValidityDate= max(ValidityDate), CreatedOn=take_any(CreatedOn), CreatedDaysAgo= take_any(CreatedDaysAgo) by User, SystemID, Client, LockedStatusDescription
+  | extend UserRecord= bag_pack("User", User, "Status", LockedStatusDescription, "SeenXDaysAgo", LastSeenDaysAgo, "LastSeen", LastSeen, "ValidityDate", ValidityDate, "CreatedOn", CreatedOn, "CreatedDaysAgo", CreatedDaysAgo, "ValidFrom", ValidFrom, "ValidFromDaysAgo", ValidFromDaysAgo)
+  | summarize RecordCount= count(), Users= make_set(User, 1024), UserRecords= make_set(UserRecord, 1024) by SystemID, ClientID= Client
+  | extend AlertName= strcat("System " ,SystemID, "-", ClientID, " contains ", RecordCount, " users with unused valid credentials")
+  | extend Users=tostring(Users), UserRecords= tostring(UserRecords)
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}} '
+  alertDescriptionFormat: Lists all dialog users with valid credentials which have
+    not logged in for the last 150 days (configurable).
+customDetails:
+  UserRecords: UserRecords
+  Users: Users
+version: 3.5.09
