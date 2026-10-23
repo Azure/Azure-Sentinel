@@ -13,6 +13,14 @@ from .contracts import (
     _short_message,
 )
 
+OPTIONAL_STAGES = {
+    "rawDcr",
+    "rawIngestion",
+    "qtpExecution",
+    "parity",
+}
+
+
 def _read_optional_json(path: Path | None) -> Any:
     if path is None or not path.is_file():
         return None
@@ -73,6 +81,106 @@ def _error_detail(error: Any) -> str:
         if fragment not in unique:
             unique.append(fragment)
     return "; ".join(unique)
+
+
+def _row_payload(example: Any) -> dict[str, Any]:
+    if not isinstance(example, Mapping):
+        return {}
+    row = example.get("row")
+    if not isinstance(row, list):
+        return {}
+    return {
+        str(item["column"]): item.get("value")
+        for item in row
+        if isinstance(item, Mapping)
+        and isinstance(item.get("column"), str)
+    }
+
+
+def _parity_detail(
+    parity: Any,
+    fallback: str,
+) -> str:
+    if not isinstance(parity, Mapping):
+        return fallback
+    schema = parity.get("schema")
+    if isinstance(schema, Mapping):
+        type_mismatches = schema.get("typeMismatches")
+        if isinstance(type_mismatches, list) and type_mismatches:
+            columns = [
+                str(item.get("column"))
+                for item in type_mismatches
+                if isinstance(item, Mapping)
+            ]
+            return (
+                "Shared-column type mismatch: "
+                + ", ".join(columns[:5])
+                + "."
+            )
+        missing = schema.get("missingInIngestTime")
+        if isinstance(missing, list) and missing:
+            return (
+                "Columns missing from ingestion-time output: "
+                + ", ".join(str(column) for column in missing[:5])
+                + "."
+            )
+
+    rows = parity.get("rows")
+    if not isinstance(rows, Mapping):
+        return fallback
+    missing_count = int(rows.get("missingRowCount") or 0)
+    extra_count = int(rows.get("extraRowCount") or 0)
+    differing_columns: list[str] = []
+    diagnostics = rows.get("columnDiagnostics")
+    if isinstance(diagnostics, Mapping):
+        mismatches = diagnostics.get("mismatches")
+        if isinstance(mismatches, list):
+            for mismatch in mismatches:
+                if not isinstance(mismatch, Mapping):
+                    continue
+                differences = mismatch.get("differences")
+                if not isinstance(differences, list):
+                    continue
+                for difference in differences:
+                    if (
+                        isinstance(difference, Mapping)
+                        and isinstance(
+                            difference.get("column"), str
+                        )
+                        and difference["column"]
+                        not in differing_columns
+                    ):
+                        differing_columns.append(
+                            difference["column"]
+                        )
+    if not differing_columns:
+        missing_examples = rows.get("missingExamples")
+        extra_examples = rows.get("extraExamples")
+        if (
+            isinstance(missing_examples, list)
+            and missing_examples
+            and isinstance(extra_examples, list)
+            and extra_examples
+        ):
+            expected = _row_payload(missing_examples[0])
+            actual = _row_payload(extra_examples[0])
+            differing_columns = [
+                column
+                for column in expected
+                if column in actual
+                and expected[column] != actual[column]
+            ]
+    detail = (
+        f"{missing_count} QTP row(s) missing from ITP output; "
+        f"{extra_count} extra ITP row(s)."
+    )
+    if differing_columns:
+        detail += (
+            " Differing column(s): "
+            + ", ".join(differing_columns[:5])
+            + "."
+        )
+    return detail
 
 
 def build_report(
@@ -412,8 +520,13 @@ def build_report(
                 else "not-run"
             ),
             (
-                error_detail
-                if error_stage in {"target-output", "parity"}
+                _parity_detail(
+                    parity_validation,
+                    error_detail,
+                )
+                if error_stage == "parity"
+                else error_detail
+                if error_stage == "target-output"
                 else str(parity_validation.get("detail") or "")
                 if isinstance(parity_validation, Mapping)
                 else ""
@@ -493,13 +606,13 @@ def build_report(
             "counterpart": counterpart,
             "template": template,
             "fixture": fixture,
-            "rawDcr": raw_dcr,
-            "rawIngestion": raw_ingestion,
             "filtering": filtering,
             "parserDcr": parser_dcr,
             "parserIngestion": parser_ingestion,
             "schema": schema_stage,
             "data": data_stage,
+            "rawDcr": raw_dcr,
+            "rawIngestion": raw_ingestion,
             "qtpExecution": qtp_stage,
             "parity": parity_stage,
             "cleanup": cleanup_stage,
@@ -536,10 +649,12 @@ def render_summary(report: Mapping[str, Any]) -> str:
                 continue
             stage_status = str(stage.get("status", "not-run"))
             detail = _short_message(stage.get("detail")).replace("|", "\\|")
+            label = f"*{name}" if name in OPTIONAL_STAGES else name
             lines.append(
-                f"| {name} | {STATUS_ICON.get(stage_status, '')} "
+                f"| {label} | {STATUS_ICON.get(stage_status, '')} "
                 f"`{stage_status}` | {detail} |"
             )
+    lines.extend(["", "\\* Optional QTP replay stage."])
     return "\n".join(lines) + "\n"
 
 

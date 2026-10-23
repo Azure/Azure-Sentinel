@@ -64,10 +64,11 @@ validation stages.
 
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
-column names and records both QTP and ITP types. A shared-column type mismatch
-fails schema parity. When shared types are consistent, it filters both row
-sets into `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed
-duplicate-aware row comparison across that shared schema.
+column names, excluding the platform-managed `Type` column, and records both
+QTP and ITP types. A shared-column type mismatch fails schema parity. When
+shared types are consistent, it filters both row sets into
+`qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
+row comparison across that shared schema.
 
 ## Tests
 

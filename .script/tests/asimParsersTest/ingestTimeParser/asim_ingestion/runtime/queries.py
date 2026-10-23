@@ -74,6 +74,8 @@ def _datatable_type(value: str) -> str:
 def _datatable_value(value: Any, column_type: str) -> str:
     normalized = _normalize_column_type(column_type)
     if value is None:
+        if normalized == "string":
+            return "@''"
         return f"{_datatable_type(normalized)}(null)"
     if normalized == "string":
         return "@'" + str(value).replace("'", "''") + "'"
