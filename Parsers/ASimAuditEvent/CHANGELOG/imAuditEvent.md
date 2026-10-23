@@ -2,7 +2,7 @@
 
 ## Version 0.1.13
 
-- (2026-10-23) Add the CrowdStrike Falcon Data Replicator AuditEvent filtering parser.
+- (2026-10-23) Add the CrowdStrike Falcon Data Replicator AuditEvent filtering parser - [PR #15414](https://github.com/Azure/Azure-Sentinel/pull/15414)
 - Forward all AuditEvent filters and pack; honor its source-specific disable watchlist key.
 
 ## Version 0.1.12
