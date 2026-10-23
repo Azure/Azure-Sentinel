@@ -14,13 +14,26 @@ namespace NonAsciiValidations.Tests
 			foreach (string folder in FolderName)
 			{
 				string rootPath = GetFilesRootPath(folder);
-				var files = Directory.GetFiles(rootPath, FileExtension, SearchOption.AllDirectories).ToList();
+				var files = Directory.GetFiles(rootPath, FileExtension, SearchOption.AllDirectories)
+					.Where(file => !IsPrivateSolutionContentPath(file))
+					.ToList();
 				files.ForEach(f => Add(Path.GetFileName(f), f));
 			}
 		}
 
 		private string GetFilesRootPath(string folderName)
 		{
+			var contentRoot = Environment.GetEnvironmentVariable("SENTINEL_VALIDATION_CONTENT_ROOT");
+			if (!string.IsNullOrWhiteSpace(contentRoot))
+			{
+				var resolvedRoot = Path.GetFullPath(contentRoot);
+				if (!Directory.Exists(resolvedRoot) || !Directory.Exists(Path.Combine(resolvedRoot, "Solutions")))
+				{
+					throw new DirectoryNotFoundException($"SENTINEL_VALIDATION_CONTENT_ROOT is not a repository root containing Solutions/: {contentRoot}");
+				}
+				return Path.Combine(resolvedRoot, folderName);
+			}
+
 			var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
 			var testFolderDepth = 6;
 			for (int i = 0; i < testFolderDepth; i++)
@@ -29,6 +42,26 @@ namespace NonAsciiValidations.Tests
 			}
 			var detectionPath = Path.Combine(rootDir.FullName, folderName);
 			return detectionPath;
+		}
+
+		private static bool IsPrivateSolutionContentPath(string filePath)
+		{
+			var contentRoot = Environment.GetEnvironmentVariable("SENTINEL_VALIDATION_CONTENT_ROOT");
+			if (string.IsNullOrWhiteSpace(contentRoot))
+			{
+				return false;
+			}
+			var solutionsRoot = Path.GetFullPath(Path.Combine(contentRoot, "Solutions"));
+			var relativePath = Path.GetRelativePath(solutionsRoot, Path.GetFullPath(filePath));
+			if (relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+			{
+				return false;
+			}
+			return relativePath.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+					StringSplitOptions.RemoveEmptyEntries)
+				.Any(segment => segment.Equals("Logs", StringComparison.OrdinalIgnoreCase)
+					|| segment.Equals("Reports", StringComparison.OrdinalIgnoreCase)
+					|| segment.Equals("Evidence", StringComparison.OrdinalIgnoreCase));
 		}
 
 		public string GetCustomTablesPath(string folderName)

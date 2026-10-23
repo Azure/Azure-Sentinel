@@ -1,5 +1,9 @@
 # Changelog for vimDnsMicrosoftSysmonWindowsEvent.yaml
 
+## Version 0.5.22
+
+- (2026-10-08) Updated the DNS schema version to 1.0.0, changed internal event type defaults from `lookup` to `Query`, and retained case-insensitive compatibility with both values when filtering.
+
 ## Version 0.5.1
 
 - (2024-07-22) ASimDnsMicrosoftSysmon.yaml-22 - [PR #10611](https://github.com/Azure/Azure-Sentinel/pull/10611)
@@ -27,4 +31,3 @@
 ## Version 0.1
 
 - (2021-09-13) Dev/normalization/sysmon dns parser - [PR #3015](https://github.com/Azure/Azure-Sentinel/pull/3015)
-

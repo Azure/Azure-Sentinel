@@ -1,0 +1,59 @@
+id: 9ecbc6e0-e40d-4fa3-8d6a-2652418f9c77
+name: Delinea - Authentication failures ranked by account
+description: |
+  Surfaces every account with failed authentication activity over the lookback window, ranked by
+  failure count and distinct source IPs - with no alerting threshold applied. The 'Failed
+  authentication spike' analytic rule only fires above a tuned threshold (e.g. 10 in 15m); this
+  hunting query deliberately shows everything below that line so an analyst can spot low-and-slow
+  brute-force or credential-stuffing that stays under the radar. Scoped to authentication events
+  to match that rule; for failures across every service use 'Delinea - Failed operations'. Pivot
+  on accounts with many failures from several IPs, or a single IP hitting many accounts (password
+  spraying).
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let lookback = 24h;
+  // Authentication events only. Matched against eventType.name, falling back to
+  // internalName, the same way ASimAuditEventDelineaPlatform resolves the event name.
+  let authEventPattern = @"(?i)mfa|multifactor|\blogin\b|\blogon\b|signin|authentication";
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | extend d = parse_json(RawData)
+  | extend Attr = d.additionalAttributes
+  | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))
+  | where EventName matches regex authEventPattern
+  // The attributes bag carries either scalars or single element arrays depending on
+  // the reporting service, so both shapes are read - see ASimAuditEventDelineaPlatform.
+  | extend Actor = tostring(coalesce(d.actor.email, d.actor.name, d.actor.displayName)),
+           RawSrcIP = tostring(d.source.host.network.ipAddress),
+           MfaResult = tostring(coalesce(Attr.MfaResult[0], Attr.MfaResult)),
+           FactorPassword = tostring(coalesce(Attr.FactorPassword[0], Attr.FactorPassword)),
+           FailReason = tostring(coalesce(Attr.FailReason[0], Attr.FailReason))
+  | where MfaResult =~ "Failed" or FactorPassword =~ "Failed" or isnotempty(FailReason)
+  | where isnotempty(Actor)
+  // '0.0.0.0' is the placeholder reported for events that have no network origin.
+  | extend SrcIP = iff(RawSrcIP in ("", "0.0.0.0"), "", RawSrcIP)
+  | summarize Failures = count(), DistinctSourceIPs = dcountif(SrcIP, isnotempty(SrcIP)),
+              SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),
+              FailReasons = make_set_if(FailReason, isnotempty(FailReason), 10),
+              SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),
+              StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor
+  | extend WindowMinutes = round(todouble(datetime_diff('second', EndTime, StartTime)) / 60, 1)
+  | project Actor, Failures, DistinctSourceIPs, SourceIPs, FailReasons, SrcIP, WindowMinutes, StartTime, EndTime
+  | sort by Failures desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.1.0

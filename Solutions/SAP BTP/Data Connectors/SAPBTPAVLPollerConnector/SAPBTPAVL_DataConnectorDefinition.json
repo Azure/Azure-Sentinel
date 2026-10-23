@@ -1,0 +1,214 @@
+{
+    "name": "SAPBTPAVL",
+    "apiVersion": "2025-07-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "title": "Application Vulnerability Report for SAP BTP",
+            "logo": "SapLogo.svg",
+            "id": "SAPBTPAVL",
+            "publisher": "Microsoft",
+            "descriptionMarkdown": "The SAP Application Vulnerability Report Service connector ingests vulnerability findings in custom apps deployed on SAP BTP into Microsoft Sentinel. The findings can be correlated with SAP BTP audit activity to identify risky applications and investigate related security events.",
+            "graphQueriesTableName": "SAPBTPAVL_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Total findings received",
+                    "legend": "SAP BTP AVL findings",
+                    "baseQuery": "{{graphQueriesTableName}}"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "Get the latest SAP BTP application vulnerability findings",
+                    "query": "{{graphQueriesTableName}}\n| summarize arg_max(LastFound, *) by FindingId\n| order by MaxCvss desc"
+                },
+                {
+                    "description": "Summarize findings by severity and application",
+                    "query": "{{graphQueriesTableName}}\n| summarize Findings = dcount(FindingId), MaxCvss = max(MaxCvss) by Severity, AppName\n| order by MaxCvss desc"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "availability": {
+                "isPreview": true
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    },
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "action": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Client Id and Client Secret for Application Vulnerability Report Service",
+                        "description": "Enable API access in BTP."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "description": "**Step 1 - Configuration steps for the SAP Application Vulnerability Report Service**\n\nConfigure SAP Application Vulnerability Report Service and create a dedicated service key for this connector [see Finding Provider Service API](https://api.sap.com/api/sap-FindingProviderService-v1/resource/get_Findings). Take a note of the **url** (Finding Provider API URL), **uaa.url** (User Account and Authentication Server url) and the associated **uaa.clientid**.\n\n>**NOTE:** This connector uses separate credentials and does not share the service key used by the SAP BTP audit log connector."
+                },
+                {
+                    "description": "Connect using OAuth client credentials",
+                    "title": "Connect SAP BTP AVL findings to Microsoft Sentinel",
+                    "instructions": [
+                        {
+                            "type": "ContextPane",
+                            "parameters": {
+                                "contextPaneType": "DataConnectorsContextPane",
+                                "label": "Add account",
+                                "isPrimary": true,
+                                "title": "SAP BTP AVL connection",
+                                "instructionSteps": [
+                                    {
+                                        "title": "Account Details",
+                                        "instructions": [
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Subaccount name (e.g. Contoso).",
+                                                    "placeholder": "no space or special character allowed!",
+                                                    "type": "text",
+                                                    "name": "subaccountName"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Subaccount ID (GUID)",
+                                                    "placeholder": "SubaccountId property from the BTP service key JSON",
+                                                    "type": "text",
+                                                    "name": "subaccountId"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "SAP BTP AVL Client ID",
+                                                    "placeholder": "Client ID",
+                                                    "type": "text",
+                                                    "name": "clientId"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "SAP BTP AVL Client Secret",
+                                                    "placeholder": "Client Secret",
+                                                    "type": "password",
+                                                    "name": "clientSecret"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Authorization server URL (UAA server)",
+                                                    "placeholder": "https://your-tenant.authentication.region.hana.ondemand.com",
+                                                    "type": "text",
+                                                    "name": "authServerUrl"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Finding Provider API URL",
+                                                    "placeholder": "https://application-vulnerability-report.cfapps.region.hana.ondemand.com",
+                                                    "type": "text",
+                                                    "name": "findingsApiUrl"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "title": "Advanced",
+                                        "instructions": [
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Polling Frequency (minutes, 60-120)",
+                                                    "placeholder": "60",
+                                                    "type": "text",
+                                                    "description": "Frequency to poll for new BTP AVL findings.",
+                                                    "name": "pollingFrequencyMinutes",
+                                                    "defaultValue": "60"
+                                                }
+                                            },
+                                            {
+                                                "type": "Textbox",
+                                                "parameters": {
+                                                    "label": "Log Ingest Delay (minutes, 120-300)",
+                                                    "placeholder": "300",
+                                                    "type": "text",
+                                                    "description": "Delay to account for SAP BTP AVL findings published late.",
+                                                    "name": "ingestDelayMinutes",
+                                                    "defaultValue": "300"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "title": "Connections",
+                    "description": "Each row represents a connected subaccount",
+                    "instructions": [
+                        {
+                            "type": "DataConnectorsGrid",
+                            "parameters": {
+                                "mapping": [
+                                    {
+                                        "columnName": "Subaccount Name",
+                                        "columnValue": "properties.addOnAttributes.SubaccountName"
+                                    },
+                                    {
+                                        "columnName": "Subaccount ID",
+                                        "columnValue": "properties.addOnAttributes.SubaccountId"
+                                    },
+                                    {
+                                        "columnName": "Polling Frequency (minutes)",
+                                        "columnValue": "properties.request.queryWindowInMin"
+                                    }
+                                ],
+                                "menuItems": [
+                                    "DeleteConnector"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
