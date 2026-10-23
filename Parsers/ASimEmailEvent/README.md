@@ -71,11 +71,6 @@ supports IPv4 prefixes only; IPv6 addresses remain available in unfiltered outpu
 Recipient filtering covers the normalized To-header array, not envelope-only
 recipients or unverified Cc/Bcc fields.
 
-The parser applies `parse_json(tostring(...))` to the connector's dynamic
-objects before reading nested fields. This supports both normal dynamic
-objects and JSON strings produced when the repository's CSV-based ASIM
-sample-data ingester transports dynamic fixture columns.
-
 Only `eventresult='*'` or `'NA'` can match these inspection events. A nonempty
 `emaildeliverylocation_in` returns no rows because delivery location is not
 available. Empty arrays and null time bounds leave the corresponding filter
@@ -93,6 +88,9 @@ live filter-behavior tests have not passed and remain deferred. Synthetic
 fixtures are regression inputs, not observed workspace telemetry. The current
 ASIM filter-validation script does not support EmailEvent, so its CI filter
 job fails before testing parser behavior; its implementation was not changed.
+The ASIM data-test catalog declares `EmailToRecipients` as a dynamic array but
+does not specify its element type, so `ASimDataTester` reports valid populated
+recipient arrays as invalid. That catalog was not changed.
 The Azure DevOps task details and vendor API documentation require sign-in;
 task-specific acceptance criteria and source enumerations remain unverified.
 The implementation is tracked in [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409).

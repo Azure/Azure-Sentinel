@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Email Event parser for Proofpoint POD messages
   Version: '0.1.0'
-  LastUpdated: Oct 23, 2026
+  LastUpdated: Oct 21, 2026
 Product:
   Name: Proofpoint On Demand Email Security
 Normalization:
@@ -33,13 +33,6 @@ ParserQuery: |
   let parser = (disabled:bool=false, pack:bool=false) {
     ProofpointPODMessage_CL
     | where not(disabled)
-    | extend
-        _connection=parse_json(tostring(connection)),
-        _envelope=parse_json(tostring(envelope)),
-        _msg=parse_json(tostring(msg)),
-        _pps=parse_json(tostring(pps)),
-        _metadata=parse_json(tostring(metadata)),
-        _filter=parse_json(tostring(['filter']))
     | project-rename EventStartTime=eventTime, EventOriginalUid=guid
     | extend
         EventVendor="Proofpoint",
@@ -50,30 +43,30 @@ ParserQuery: |
         EventCount=int(1),
         EventEndTime=EventStartTime,
         EventResult="NA",
-        EventProductVersion=coalesce(tostring(_pps.version), tostring(_metadata.origin.data.version)),
-        DvcFQDN=coalesce(tostring(_pps.agent), tostring(_metadata.origin.data.agent)),
-        DvcOriginalAction=tostring(_filter.disposition),
-        SrcIpAddr=tostring(_connection.ip),
-        SrcFQDN=tostring(_connection.host),
-        SrcGeoCountry=tostring(_connection.country),
-        Dst=iff(array_length(_envelope.rcpts) == 1, tostring(_envelope.rcpts[0]), tostring(_envelope.rcpts)),
-        EmailMailFromAddress=tostring(_envelope.from),
-        EmailFromAddress=iff(array_length(_msg.parsedAddresses.from) == 1, tostring(_msg.parsedAddresses.from[0]), ""),
-        EmailToRecipients=iff(isnull(_msg.parsedAddresses['to']), dynamic([]), _msg.parsedAddresses['to']),
-        EmailSubject=iff(array_length(_msg.normalizedHeader.subject) == 1, tostring(_msg.normalizedHeader.subject[0]), ""),
-        EmailSizeBytes=tolong(_msg.sizeBytes),
-        EmailLanguage=tostring(_msg.lang),
+        EventProductVersion=coalesce(tostring(pps.version), tostring(metadata.origin.data.version)),
+        DvcFQDN=coalesce(tostring(pps.agent), tostring(metadata.origin.data.agent)),
+        DvcOriginalAction=tostring(['filter'].disposition),
+        SrcIpAddr=tostring(connection.ip),
+        SrcFQDN=tostring(connection.host),
+        SrcGeoCountry=tostring(connection.country),
+        Dst=iff(array_length(envelope.rcpts) == 1, tostring(envelope.rcpts[0]), tostring(envelope.rcpts)),
+        EmailMailFromAddress=tostring(envelope.from),
+        EmailFromAddress=iff(array_length(msg.parsedAddresses.from) == 1, tostring(msg.parsedAddresses.from[0]), ""),
+        EmailToRecipients=iff(isnull(msg.parsedAddresses['to']), dynamic([]), msg.parsedAddresses['to']),
+        EmailSubject=iff(array_length(msg.normalizedHeader.subject) == 1, tostring(msg.normalizedHeader.subject[0]), ""),
+        EmailSizeBytes=tolong(msg.sizeBytes),
+        EmailLanguage=tostring(msg.lang),
         EmailDirection=case(
-            _filter.routeDirection =~ "inbound", "Inbound",
-            _filter.routeDirection =~ "outbound", "Outbound",
-            _filter.routeDirection =~ "internal", "Internal",
-            _filter.routeDirection =~ "local", "Local",
+            ['filter'].routeDirection =~ "inbound", "Inbound",
+            ['filter'].routeDirection =~ "outbound", "Outbound",
+            ['filter'].routeDirection =~ "internal", "Internal",
+            ['filter'].routeDirection =~ "local", "Local",
             "Unknown"),
-        EmailProtocolName=iff(tostring(_connection.protocol) =~ "smtp:smtp", "SMTP", ""),
-        EmailSpfOriginalResult=tostring(_filter.modules.spf.result),
-        EmailDmarcOriginalResult=tostring(_filter.modules.dmarc.filterdResult),
-        EmailDkimOriginalResult=iff(array_length(_filter.modules.dkimv) == 1, tostring(_filter.modules.dkimv[0].result), ""),
-        EmailDkimDomain=iff(array_length(_filter.modules.dkimv) == 1, tostring(_filter.modules.dkimv[0].domain), ""),
+        EmailProtocolName=iff(tostring(connection.protocol) =~ "smtp:smtp", "SMTP", ""),
+        EmailSpfOriginalResult=tostring(['filter'].modules.spf.result),
+        EmailDmarcOriginalResult=tostring(['filter'].modules.dmarc.filterdResult),
+        EmailDkimOriginalResult=iff(array_length(['filter'].modules.dkimv) == 1, tostring(['filter'].modules.dkimv[0].result), ""),
+        EmailDkimDomain=iff(array_length(['filter'].modules.dkimv) == 1, tostring(['filter'].modules.dkimv[0].domain), ""),
         DvcEntityKey="",
         AdditionalEntities=dynamic([]),
         AdditionalFields=iff(pack, bag_pack(

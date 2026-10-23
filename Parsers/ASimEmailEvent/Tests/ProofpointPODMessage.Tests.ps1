@@ -73,8 +73,8 @@ Assert-Parser ($multi.parsedAddresses.from.Count -gt 1) 'Multi-valued sender cov
 $multiRecipients = @($multi.parsedAddresses.'to')
 Assert-Parser ($multiRecipients.Count -eq 2 -and @($multiRecipients | Where-Object { $_ -isnot [string] -or $_ -match '^\[' }).Count -eq 0) 'To recipients must remain an array of email strings after JSON parsing.'
 Assert-Parser (($rows[1].filter | ConvertFrom-Json).modules.dkimv.Count -gt 1) 'Multiple DKIM signature coverage is missing.'
-Assert-Parser ($query -match 'array_length\(_msg.parsedAddresses.from\) == 1') 'Multiple senders must not silently select the first.'
-Assert-Parser ($query -match 'array_length\(_filter.modules.dkimv\) == 1') 'Multiple signatures must not silently select the first.'
+Assert-Parser ($query -match 'array_length\(msg.parsedAddresses.from\) == 1') 'Multiple senders must not silently select the first.'
+Assert-Parser ($query -match "array_length\(\['filter'\].modules.dkimv\) == 1") 'Multiple signatures must not silently select the first.'
 Assert-Parser ($query -notmatch 'Email(File|Url)(Count|s)\s*=') 'MIME parts must not be mislabeled as attachments or URLs.'
 $change = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\CHANGELOG\ASimEmailEventProofpointPODMessage.md') -Raw
 Assert-Parser ($change.StartsWith('# Changelog for ASimEmailEventProofpointPODMessage.yaml')) 'Changelog filename does not match.'
@@ -131,10 +131,6 @@ foreach ($parser in @($source, $vim)) {
     $body = $parser['ParserQuery']
     Assert-Parser ($body -notmatch '(?i)\|\s*(mv-\w+|summarize|distinct|join|union|externaldata)\b') "$name violates source-row integrity."
     Assert-Parser (-not ($body.ToCharArray() | Where-Object { [int]$_ -gt 127 })) "$name query must be ASCII."
-    foreach ($column in @('connection', 'envelope', 'msg', 'pps', 'metadata')) {
-        Assert-Parser ($body -match "_$column=parse_json\(tostring\($column\)\)") "$name does not normalize JSON-backed $column data."
-    }
-    Assert-Parser ($body -match "_filter=parse_json\(tostring\(\['filter'\]\)\)") "$name does not normalize JSON-backed filter data."
     $preamble = Get-KqlParameters $parser
     $analysis = [Kusto.Language.KustoCode]::ParseAndAnalyze("$preamble`n$body", $globals)
     $diagnostics = @($analysis.GetDiagnostics() | Where-Object Severity -EQ 'Error')
