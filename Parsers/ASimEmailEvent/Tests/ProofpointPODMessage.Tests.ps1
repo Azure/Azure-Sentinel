@@ -203,21 +203,4 @@ foreach ($parser in @($unifier, $filteringUnifier)) {
     Assert-Parser ($history -match "## Version $([regex]::Escape($parser['Parser']['Version']))") "$name changelog version mismatch."
 }
 
-foreach ($parser in @($source, $vim, $unifier, $filteringUnifier)) {
-    $name = $parser['ParserName']
-    $armPath = Join-Path $PSScriptRoot "..\ARM\$name\$name.json"
-    $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
-    $properties = $arm.resources[0].properties
-    Assert-Parser ($properties.query -ceq $parser['ParserQuery']) "$name ARM query differs from YAML."
-    Assert-Parser ($properties.FunctionAlias -ceq $name) "$name ARM function alias differs."
-    Assert-Parser ($properties.functionParameters -ieq (Get-KqlParameters $parser -Declarations)) "$name ARM parameters differ."
-    $armQuery = "$functionDefinitions`nlet DeployedParser=($($properties.functionParameters)){$($properties.query)}; DeployedParser()"
-    $analysis = [Kusto.Language.KustoCode]::ParseAndAnalyze($armQuery, $globals)
-    $errors = @($analysis.GetDiagnostics() | Where-Object Severity -EQ 'Error')
-    Assert-Parser ($errors.Count -eq 0) "$name generated ARM signature/query fails semantic analysis."
-}
-$fullArm = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\ARM\FullDeploymentEmailEvent.json') -Raw | ConvertFrom-Json
-foreach ($name in @($source['ParserName'], $vim['ParserName'])) {
-    Assert-Parser ($fullArm.resources.name -ccontains "linked$name") "$name is absent from full deployment."
-}
-Write-Output "PASS: $checks offline contract, KQL semantic/type, registration and ARM checks. Live execution and ASIM data/filter tests are deferred."
+Write-Output "PASS: $checks offline contract, KQL semantic/type and registration checks. Live execution and ASIM data/filter tests are deferred."

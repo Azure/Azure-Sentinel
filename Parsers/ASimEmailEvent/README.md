@@ -79,7 +79,8 @@ unrestricted. Multiple nonempty parameters are combined with AND.
 ### Deferred validation and publication
 
 The user explicitly deferred live validation and authorized completing both
-source parsers, unifier registration, and generated ARM assets offline.
+source parsers and unifier registration offline. ARM artifacts are generated
+by the repository's GitHub action and are not included in this change.
 The supplied workspace did not contain `ProofpointPODMessage_CL`; live sampling,
 KQL execution, `ASimSchemaTester`, `ASimDataTester`, and filter-behavior tests
 have not passed and remain deferred. Synthetic fixtures are regression inputs,
@@ -91,7 +92,7 @@ The implementation is tracked in [PR #15409](https://github.com/Azure/Azure-Sent
 
 The `Tests/ProofpointPODMessage.Tests.ps1` checks the source contract, metadata,
 field projection, forbidden operators, fixture coverage, parameter bindings,
-unifier registrations, generated-template synchronization, and inferred KQL
+unifier registrations and inferred KQL
 output types offline using the repository's Kusto.Language dependency:
 
 ```powershell
@@ -106,6 +107,6 @@ types for future canary ingestion; creating fixtures does not ingest them.
 The existing repository xUnit KQL tests were also attempted for these two
 source parsers. Both report `KS204` because their table catalog does not define
 `ProofpointPODMessage_CL`. The focused test above binds the connector's exact
-schema and checks both parsers, representative filter calls, unifiers and ARM
+schema and checks both parsers, representative filter calls and unifiers
 offline. Updating the protected validator table catalog requires a separate
 maintainer-authorized change; this implementation does not modify that tooling.
