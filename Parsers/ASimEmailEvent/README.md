@@ -84,8 +84,8 @@ been performed. The Proofpoint API reference requires sign-in; task-specific
 Azure DevOps acceptance criteria were also unavailable. SMTP status meanings
 follow [RFC 3463](https://www.rfc-editor.org/rfc/rfc3463).
 Before release, verify the source shape and mixed receipt/delivery mappings
-against real CCP records, run both ASIM testers and filter tests, and add the
-actual pull-request links to the four affected changelogs. Missing recommended
+against real CCP records and run both ASIM testers and filter tests. The change
+is tracked in [draft PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410). Missing recommended
 header/security fields are intentional source limitations, not evidence of
 empty headers or zero attachments.
 

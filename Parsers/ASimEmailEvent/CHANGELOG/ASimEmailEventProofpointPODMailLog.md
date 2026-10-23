@@ -2,6 +2,6 @@
 
 ## Version 0.1.0
 
-- (2026-10-21) Added a Proofpoint POD MailLog EmailEvent parser using the CCP table schema and repository samples.
+- (2026-10-21) Added a Proofpoint POD MailLog EmailEvent parser using the CCP table schema and repository samples - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
 - Preserves individual SMTP receipt and delivery records without correlation or recipient expansion.
-- Live schema and data validation are deferred. No pull request has been created for this change.
+- Live schema and data validation are deferred.

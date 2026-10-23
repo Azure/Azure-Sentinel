@@ -2,8 +2,7 @@
 
 ## Version 1.0.1
 
-- (2026-10-21) Registered the Proofpoint POD MailLog source parser and forwarded packing and disable controls.
-- No pull request has been created for this change.
+- (2026-10-21) Registered the Proofpoint POD MailLog source parser and forwarded packing and disable controls - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
 
 ## Version 0.1.0
 
