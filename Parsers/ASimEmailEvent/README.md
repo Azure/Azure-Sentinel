@@ -71,6 +71,11 @@ supports IPv4 prefixes only; IPv6 addresses remain available in unfiltered outpu
 Recipient filtering covers the normalized To-header array, not envelope-only
 recipients or unverified Cc/Bcc fields.
 
+The parser applies `parse_json(tostring(...))` to the connector's dynamic
+objects before reading nested fields. This supports both normal dynamic
+objects and JSON strings produced when the repository's CSV-based ASIM
+sample-data ingester transports dynamic fixture columns.
+
 Only `eventresult='*'` or `'NA'` can match these inspection events. A nonempty
 `emaildeliverylocation_in` returns no rows because delivery location is not
 available. Empty arrays and null time bounds leave the corresponding filter
@@ -82,10 +87,11 @@ The user explicitly deferred live validation and authorized completing both
 source parsers and unifier registration offline. ARM artifacts are generated
 by the repository's GitHub action and are not included in this change.
 The supplied workspace did not contain `ProofpointPODMessage_CL`; live sampling,
-KQL execution, `ASimSchemaTester`, `ASimDataTester`, and filter-behavior tests
-have not passed and remain deferred. Synthetic fixtures are regression inputs,
-not observed workspace telemetry. The filter-validator skill does not currently
-advertise EmailEvent support; its protected implementation was not changed.
+Log Analytics KQL execution, `ASimSchemaTester`, `ASimDataTester`, and
+live filter-behavior tests have not passed and remain deferred. Synthetic
+fixtures are regression inputs, not observed workspace telemetry. The current
+ASIM filter-validation script does not support EmailEvent, so its CI filter
+job fails before testing parser behavior; its implementation was not changed.
 The Azure DevOps task details and vendor API documentation require sign-in;
 task-specific acceptance criteria and source enumerations remain unverified.
 The implementation is tracked in [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409).
@@ -101,12 +107,6 @@ dotnet build .script\tests\KqlvalidationsTests\Kqlvalidations.Tests.csproj
 ```
 
 These checks do not execute records and are not a substitute for the live ASIM
-schema/data/filter testers. The source-schema CSV fixes the dynamic column
-types for future canary ingestion; creating fixtures does not ingest them.
-
-The existing repository xUnit KQL tests were also attempted for these two
-source parsers. Both report `KS204` because their table catalog does not define
-`ProofpointPODMessage_CL`. The focused test above binds the connector's exact
-schema and checks both parsers, representative filter calls and unifiers
-offline. Updating the protected validator table catalog requires a separate
-maintainer-authorized change; this implementation does not modify that tooling.
+schema/data/filter testers. The source-schema CSV and KQL validation catalog
+fixture mirror the connector's table definition; creating fixtures does not
+ingest data.

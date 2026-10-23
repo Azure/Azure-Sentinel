@@ -45,6 +45,14 @@ foreach ($column in $table.properties.schema.columns) {
     Assert-Parser ($fixtureColumn.Count -eq 1 -and $fixtureColumn[0].ColumnType -ceq $column.type) "Fixture schema differs from source: $($column.name)"
 }
 Assert-Parser ($fixtureSchema.Count -eq $table.properties.schema.columns.Count) 'Fixture schema adds undeclared source columns.'
+$catalogPath = Join-Path $repo '.script\tests\KqlvalidationsTests\CustomTables\ProofpointPODMessage_CL.json'
+$catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
+Assert-Parser ($catalog.Name -ceq $table.name) 'KQL validation catalog table name differs from connector.'
+Assert-Parser ($catalog.Properties.Count -eq $table.properties.schema.columns.Count) 'KQL validation catalog column count differs from connector.'
+foreach ($column in $table.properties.schema.columns) {
+    $catalogColumn = @($catalog.Properties | Where-Object Name -CEQ $column.name)
+    Assert-Parser ($catalogColumn.Count -eq 1 -and $catalogColumn[0].Type -ceq $column.type) "KQL validation catalog differs from connector: $($column.name)"
+}
 $dcr = Get-Content -LiteralPath (Join-Path $connector 'ProofpointPOD_DCR.json') -Raw | ConvertFrom-Json
 $flow = $dcr.properties.dataFlows | Where-Object outputStream -EQ 'Custom-ProofpointPODMessage_CL'
 Assert-Parser ($flow.transformKql -match 'eventTime = todatetime\(ts\)') 'Source event-time transform changed.'
@@ -62,9 +70,11 @@ foreach ($row in $rows) {
 }
 $multi = $rows[1].msg | ConvertFrom-Json
 Assert-Parser ($multi.parsedAddresses.from.Count -gt 1) 'Multi-valued sender coverage is missing.'
+$multiRecipients = @($multi.parsedAddresses.'to')
+Assert-Parser ($multiRecipients.Count -eq 2 -and @($multiRecipients | Where-Object { $_ -isnot [string] -or $_ -match '^\[' }).Count -eq 0) 'To recipients must remain an array of email strings after JSON parsing.'
 Assert-Parser (($rows[1].filter | ConvertFrom-Json).modules.dkimv.Count -gt 1) 'Multiple DKIM signature coverage is missing.'
-Assert-Parser ($query -match 'array_length\(msg.parsedAddresses.from\) == 1') 'Multiple senders must not silently select the first.'
-Assert-Parser ($query -match "array_length\(\['filter'\].modules.dkimv\) == 1") 'Multiple signatures must not silently select the first.'
+Assert-Parser ($query -match 'array_length\(_msg.parsedAddresses.from\) == 1') 'Multiple senders must not silently select the first.'
+Assert-Parser ($query -match 'array_length\(_filter.modules.dkimv\) == 1') 'Multiple signatures must not silently select the first.'
 Assert-Parser ($query -notmatch 'Email(File|Url)(Count|s)\s*=') 'MIME parts must not be mislabeled as attachments or URLs.'
 $change = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\CHANGELOG\ASimEmailEventProofpointPODMessage.md') -Raw
 Assert-Parser ($change.StartsWith('# Changelog for ASimEmailEventProofpointPODMessage.yaml')) 'Changelog filename does not match.'
@@ -121,6 +131,10 @@ foreach ($parser in @($source, $vim)) {
     $body = $parser['ParserQuery']
     Assert-Parser ($body -notmatch '(?i)\|\s*(mv-\w+|summarize|distinct|join|union|externaldata)\b') "$name violates source-row integrity."
     Assert-Parser (-not ($body.ToCharArray() | Where-Object { [int]$_ -gt 127 })) "$name query must be ASCII."
+    foreach ($column in @('connection', 'envelope', 'msg', 'pps', 'metadata')) {
+        Assert-Parser ($body -match "_$column=parse_json\(tostring\($column\)\)") "$name does not normalize JSON-backed $column data."
+    }
+    Assert-Parser ($body -match "_filter=parse_json\(tostring\(\['filter'\]\)\)") "$name does not normalize JSON-backed filter data."
     $preamble = Get-KqlParameters $parser
     $analysis = [Kusto.Language.KustoCode]::ParseAndAnalyze("$preamble`n$body", $globals)
     $diagnostics = @($analysis.GetDiagnostics() | Where-Object Severity -EQ 'Error')
