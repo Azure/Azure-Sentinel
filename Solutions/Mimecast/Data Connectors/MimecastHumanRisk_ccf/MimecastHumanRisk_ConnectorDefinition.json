@@ -1,0 +1,254 @@
+{
+  "name": "MimecastHumanRiskCCFDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "MimecastHumanRiskCCF",
+      "title": "Mimecast Human Risk (via Codeless Connector Framework)",
+      "publisher": "Mimecast",
+      "logo": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Mimecast.svg",
+      "descriptionMarkdown": "The data connector for [Mimecast Human Risk](https://integrations.mimecast.com/tech-partners/microsoft-sentinel/) provides customers with visibility into the human risk posture of their organization within Microsoft Sentinel. The data connector provides pre-created dashboards to allow analysts to view risk trends, understand which behaviors and attacks drive risk, and identify the individuals, departments and locations with the highest human risk.  \nThe Mimecast Human Risk data included within the connector are: \n- Organization risk trends \n- Behaviors \n- Attacks \n- Individuals\n",
+      "graphQueriesTableName": "MimecastHumanRisk_Organization_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total organization risk records",
+          "legend": "Organization",
+          "baseQuery": "MimecastHumanRisk_Organization_CL"
+        },
+        {
+          "metricName": "Total behavior records",
+          "legend": "Behaviors",
+          "baseQuery": "MimecastHumanRisk_Behaviors_CL"
+        },
+        {
+          "metricName": "Total attack records",
+          "legend": "Attacks",
+          "baseQuery": "MimecastHumanRisk_Attacks_CL"
+        },
+        {
+          "metricName": "Total individual risk records",
+          "legend": "Individuals",
+          "baseQuery": "MimecastHumanRisk_Individuals_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Organization risk score by month (latest snapshot per month)",
+          "query": "MimecastHumanRisk_Organization_CL\n| summarize arg_max(TimeGenerated, *) by Month\n| project Month, HumanRiskScore, HumanRiskFactor, HumanRiskScoreTrend, AttackScore, AttackFactor\n| sort by Month desc"
+        },
+        {
+          "description": "Latest behavior scores",
+          "query": "MimecastHumanRisk_Behaviors_CL\n| summarize arg_max(TimeGenerated, *) by BehaviorType\n| project BehaviorType, Score, Factor, EventCount, Trend, Events"
+        },
+        {
+          "description": "Latest attack summary by type",
+          "query": "MimecastHumanRisk_Attacks_CL\n| summarize arg_max(TimeGenerated, *)\n| mv-expand AttackTypes\n| project AttackType = tostring(AttackTypes.type), AttackScore = toint(AttackTypes.attackScore), AttackTotal = toint(AttackTypes.attackTotal), Events = AttackTypes.events"
+        },
+        {
+          "description": "Highest-risk individuals (latest snapshot)",
+          "query": "MimecastHumanRisk_Individuals_CL\n| summarize arg_max(TimeGenerated, *) by IndividualId\n| project DisplayName, EmailAddress, Department, Location, HumanRiskScore, HumanRiskFactor, AttackScore\n| top 50 by HumanRiskScore desc"
+        },
+        {
+          "description": "Human risk score trend per individual",
+          "query": "MimecastHumanRisk_Individuals_CL\n| summarize Score = max(HumanRiskScore) by IndividualId, bin(TimeGenerated, 1d)\n| render timechart"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "MimecastHumanRisk_Organization_CL",
+          "lastDataReceivedQuery": "MimecastHumanRisk_Organization_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "MimecastHumanRisk_Behaviors_CL",
+          "lastDataReceivedQuery": "MimecastHumanRisk_Behaviors_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "MimecastHumanRisk_Attacks_CL",
+          "lastDataReceivedQuery": "MimecastHumanRisk_Attacks_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "MimecastHumanRisk_Individuals_CL",
+          "lastDataReceivedQuery": "MimecastHumanRisk_Individuals_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Mimecast API 2.0 application",
+            "description": "A Mimecast API 2.0 application (Client ID and Client Secret) with the Human Risk READ permission. Create it in the Mimecast Administration Console under Integrations > API and Platform Integrations."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create a Mimecast API 2.0 application",
+          "description": "1. Sign in to the Mimecast Administration Console.\n2. Go to **Integrations** > **API and Platform Integrations** and create (or open) an API 2.0 application.\n3. Grant the application the **Human Risk - Read** permission.\n4. Copy the **Client ID** and **Client Secret**.\n5. Identify your regional API base URL: `https://api.services.mimecast.com` (global), `https://uk-api.services.mimecast.com` (UK) or `https://us-api.services.mimecast.com` (US)."
+        },
+        {
+          "title": "2. Connect",
+          "description": "Enter the Mimecast API 2.0 credentials and base URL, choose how many months of data to request and how often to poll, then click Connect.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Mimecast API Base URL",
+                "placeholder": "https://api.services.mimecast.com",
+                "type": "text",
+                "name": "mimecastBaseUrl",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. Base URL of the Mimecast API 2.0 for your region, including https:// and without a trailing slash (for example https://api.services.mimecast.com, https://us-api.services.mimecast.com or https://uk-api.services.mimecast.com).",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Client ID",
+                "placeholder": "Mimecast API 2.0 Client ID",
+                "type": "text",
+                "name": "clientId",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Client Secret",
+                "placeholder": "Mimecast API 2.0 Client Secret",
+                "type": "password",
+                "name": "clientSecret",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. The Client ID and Client Secret of a Mimecast API 2.0 application that has the Human Risk READ permission.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Months of data to request",
+                "placeholder": "3",
+                "type": "number",
+                "name": "monthsBack",
+                "defaultValue": "3",
+                "validations": {
+                  "required": true
+                },
+                "toolTip": "Minimum value is 1 (maximum accepted by the Mimecast API is 12)."
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. Whole number of months, minimum 1 (the Mimecast API accepts 1 to 12; default 3), sent as monthsBack to the organization, behaviors and attacks endpoints. For behaviors and attacks it counts calendar months from the 1st of the starting month through today (1 = month-to-date). It does not apply to the individuals search.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Polling interval",
+                "name": "pollingInterval",
+                "options": [
+                  {
+                    "key": "60",
+                    "text": "1 hour"
+                  },
+                  {
+                    "key": "240",
+                    "text": "4 hours"
+                  },
+                  {
+                    "key": "480",
+                    "text": "8 hours"
+                  },
+                  {
+                    "key": "720",
+                    "text": "12 hours"
+                  },
+                  {
+                    "key": "1440",
+                    "text": "24 hours"
+                  },
+                  {
+                    "key": "2880",
+                    "text": "48 hours"
+                  },
+                  {
+                    "key": "10080",
+                    "text": "7 days"
+                  }
+                ],
+                "placeholder": "Select polling interval (recommended: 12 hours)",
+                "isMultiSelect": false,
+                "defaultAllSelected": false,
+                "required": true,
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Required. Select how often Sentinel queries the Mimecast Human Risk API (12 hours is recommended). Each poll writes a new snapshot, so shorter intervals increase ingestion volume. The Mimecast rate limits are far above what this connector uses.",
+                "visible": true,
+                "inline": false
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "disconnectLabel": "Disconnect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
