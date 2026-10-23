@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **QualysVM (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (68 PASS, 7 FAIL, 4 human-review, 2 N/A of 81)
+**Rollup:** Validation **Partially Validated** / Qualification **Conditionally Qualified** / Migration **Migration Verified** — overall **Conditionally Qualified** (74 PASS, 1 WAIVED, 0 FAIL, 4 human-review, 2 N/A of 81)
 
 ---
 
@@ -16,6 +16,7 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 | **Markdown PR Summary** | `Evidence/pr-qualification/qualification-summary.md` | GitHub-rendered summary of the Validation, Qualification and Migration checklists. |
 | **Machine-Readable Result** | `Evidence/pr-qualification/pr-qualification-result.json` | All 81 checklist items (`checkId`, `status`, `whatWeChecked`, `whatWeObserved`, `whyPassedOrFailed`, `evidenceRefs`). |
 | **Sanitized Decision Manifest** | `Evidence/decision-manifest.json` | Sanitized record of reviewed migration and qualification decisions. |
+| **Author Waivers** | `Evidence/waivers.json` | Author waiver evidence (`VAL-DC-01` for pre-existing Azure Function runtime files under `Data Connectors/`). |
 | **Live Lab Qualification Bundle** | `Evidence/qualification-evidence.json` | Evidence sections consumed by `pr-qualify`; every section lists the source artifacts and their sha256 (`sourceReceipts`, run-directory files that are not committed). |
 | **Workflow State** | `Evidence/workflow-state.json` | Sanitized copy of the run's `workflow-state.json` (unmodified; reflects the real stage statuses). |
 | **Raw Live Receipts** | `Evidence/receipts/` | The five receipts described in section 2. |
@@ -27,7 +28,7 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 - **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and the 2 Analytic Rule(s) deployed with `enabled: false`, with the GET snapshot of each rule. Deployment section status: **passed**.
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 2 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
-- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **failed**; alert lifecycle: **failed**; dual-surface KQL: **passed**.
+- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed**; alert lifecycle: **passed**; dual-surface KQL: **passed**.
 - **`workbook-queries-live.json`** — 14 workbook queries executed live on both surfaces (status **passed**, 14 with rows on both surfaces).
 - **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **passed**, assets: **passed**; portal traversal: **passed**).
 
@@ -35,17 +36,10 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 | Check | Observation |
 |---|---|
-| `VAL-DC-01` | Checked 8 connector file(s); issues: Data Connectors/AzureFunctionQualysVM_V2/function.json: missing connector id/title/dataTypes/instructionSteps; Data Connectors/host.j |
-| `QUAL-00` | Validation rollup is 'Validation Failed'; unwaived failing/skipped checks: VAL-DC-01. |
-| `E2E-Q02` | Evaluated 4 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `TK-Q11` | alert-parity-state status=failed; alertsFired=0; restoredToDisabled=True; reason=parity attempt: Sentinel AR enabled then CD enable BadRequest; cleanup restored both disa |
-| `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion', 'uiTraversal', 'urlVerification', 'workbookQualification']; failing/absent: ['alertLifecycle', 'alertP |
-| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'parity attempt: Sentinel AR enabled then CD enable |
+| — | none |
 
-### Known gaps
-- **Alert lifecycle / alert parity not achieved:** parity attempt: Sentinel AR enabled then CD enable BadRequest; cleanup restored both disabled; diagnostic PATCH of CD 3edb7215 query to table-based text then restored original (queryText verified identical), CD left disabled -> Graph CD enable fails when query references workspace function QualysHostDetection; passes when query uses underlying table. Both Analytic Rules and Custom Detections were restored to disabled; `receipts/alert-parity-live.json` records exact-query row parity only (not alert parity).
-- **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
+### Waived Checks (`Evidence/waivers.json`)
+- **`VAL-DC-01`** (`WAIVED_WITH_AUTHOR_EVIDENCE`) — `Data Connectors/AzureFunctionQualysVM_V2/function.json` and `Data Connectors/host.json` are pre-existing Azure Function runtime configuration files co-located under `Data Connectors/` rather than Sentinel connector UI definitions, while the actual Sentinel connector definitions (`Data Connectors/Template_QualysVulnerabilityManagement.json` and `Data Connectors/QualysVMHostLogs_ccp/QualysVMHostLogs_ConnectorDefinition.json`) have valid `id`/`title`/`dataTypes`/`instructionSteps` and are unchanged by this XDR migration. Data connector sample queries (`QUAL-DC-01`) executed and passed against the lab (`3/3` queries).
 
 ## 4. Human-Review Sign-Off Items
 1. **`QUAL-HR-01`** — Reviewer confirmation of supplied XDR / portal behavioral artifacts

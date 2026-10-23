@@ -1,5 +1,5 @@
 {
-  "allAnalyticRulesDisabledVerified": false,
+  "allAnalyticRulesDisabledVerified": true,
   "deployedAnalyticRules": [
     {
       "displayName": "Brute force attack against user credentials",
@@ -17,7 +17,7 @@
       ],
       "file": "Analytic Rules/Salesforce-BruteForce.yaml",
       "getReadbackResponse": {
-        "etag": "\"4804ffaf-0000-0100-0000-6ad8c7f00000\"",
+        "etag": "\"5f0448b4-0000-0100-0000-6adac0d30000\"",
         "id": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/5a6ce089-e756-40fb-b022-c8e8864a973a",
         "kind": "Scheduled",
         "name": "5a6ce089-e756-40fb-b022-c8e8864a973a",
@@ -57,7 +57,7 @@
               "reopenClosedIncident": false
             }
           },
-          "lastModifiedUtc": "2026-10-21T14:10:56.1048006Z",
+          "lastModifiedUtc": "2026-10-23T02:05:07.2077827Z",
           "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\nSalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses\n",
           "queryFrequency": "PT1H",
           "queryPeriod": "PT1H",
@@ -78,7 +78,7 @@
       },
       "getReadbackSource": "GET snapshot taken by the toolkit alert-parity step after deployment (alert-parity-state.json rules[].sentinelResource)",
       "putOperation": "upsert",
-      "putStatusCode": 201,
+      "putStatusCode": 200,
       "resourceId": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/5a6ce089-e756-40fb-b022-c8e8864a973a",
       "ruleId": "5a6ce089-e756-40fb-b022-c8e8864a973a",
       "severity": "Medium",
@@ -91,18 +91,89 @@
     },
     {
       "displayName": "Potential Password Spray Attack",
-      "enabled": null,
-      "entityMappings": null,
+      "enabled": false,
+      "entityMappings": [
+        {
+          "entityType": "IP",
+          "fieldMappings": [
+            {
+              "columnName": "ClientIp",
+              "identifier": "Address"
+            }
+          ]
+        }
+      ],
       "file": "Analytic Rules/Salesforce-PasswordSpray.yaml",
-      "getReadbackResponse": null,
+      "getReadbackResponse": {
+        "etag": "\"5f0464b4-0000-0100-0000-6adac0d60000\"",
+        "id": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+        "kind": "Scheduled",
+        "name": "64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+        "properties": {
+          "alertRuleTemplateName": "64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
+          "customDetails": {
+            "Users": "Users"
+          },
+          "description": "'This query searches for failed attempts to log in from more than 15 various users within a 5 minutes timeframe from the same source. This is a potential indication of a password spray attack.'\n",
+          "displayName": "Potential Password Spray Attack",
+          "enabled": false,
+          "entityMappings": [
+            {
+              "entityType": "IP",
+              "fieldMappings": [
+                {
+                  "columnName": "ClientIp",
+                  "identifier": "Address"
+                }
+              ]
+            }
+          ],
+          "eventGroupingSettings": {
+            "aggregationKind": "SingleAlert"
+          },
+          "incidentConfiguration": {
+            "createIncident": true,
+            "groupingConfiguration": {
+              "enabled": false,
+              "groupByAlertDetails": null,
+              "groupByCustomDetails": null,
+              "groupByEntities": [],
+              "lookbackDuration": "PT5M",
+              "matchingMethod": "AllEntities",
+              "reopenClosedIncident": false
+            }
+          },
+          "lastModifiedUtc": "2026-10-23T02:05:10.810008Z",
+          "query": "let FailureThreshold = 15;  \nSalesforceServiceCloud\n| where EventType =~ 'Login' and  LoginStatus != 'LOGIN_NO_ERROR'\n| where LoginStatus  in~ ('LOGIN_ERROR_INVALID_PASSWORD', 'LOGIN_ERROR_SSO_PWD_INVALID')\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize UserCount=dcount(UserId), Users = make_set(UserId,100) by ClientIp, bin(TimestampDerived, 5m)\n| where UserCount > FailureThreshold\n",
+          "queryFrequency": "PT1H",
+          "queryPeriod": "PT1H",
+          "severity": "Medium",
+          "suppressionDuration": "PT5H",
+          "suppressionEnabled": false,
+          "tactics": [
+            "CredentialAccess"
+          ],
+          "techniques": [
+            "T1110"
+          ],
+          "templateVersion": "1.0.4",
+          "triggerOperator": "GreaterThan",
+          "triggerThreshold": 0
+        },
+        "type": "Microsoft.SecurityInsights/alertRules"
+      },
       "getReadbackSource": "GET snapshot taken by the toolkit alert-parity step after deployment (alert-parity-state.json rules[].sentinelResource)",
       "putOperation": "upsert",
-      "putStatusCode": 201,
-      "resourceId": null,
+      "putStatusCode": 200,
+      "resourceId": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
       "ruleId": "64d16e62-1a17-4a35-9ea7-2b9fe6f07118",
-      "severity": null,
-      "tactics": null,
-      "techniques": null
+      "severity": "Medium",
+      "tactics": [
+        "CredentialAccess"
+      ],
+      "techniques": [
+        "T1110"
+      ]
     },
     {
       "displayName": "User Sign in from different countries",
@@ -120,7 +191,7 @@
       ],
       "file": "Analytic Rules/Salesforce-SigninsMultipleCountries.yaml",
       "getReadbackResponse": {
-        "etag": "\"480413b0-0000-0100-0000-6ad8c7f10000\"",
+        "etag": "\"5f0474b4-0000-0100-0000-6adac0d80000\"",
         "id": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
         "kind": "Scheduled",
         "name": "3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
@@ -155,7 +226,7 @@
               "reopenClosedIncident": false
             }
           },
-          "lastModifiedUtc": "2026-10-21T14:10:57.4469725Z",
+          "lastModifiedUtc": "2026-10-23T02:05:12.6269329Z",
           "query": "let threshold = 2;\nlet Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = SalesforceServiceCloud\n| where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'\n| project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;\nUsersLocation\n| extend Dummy=1\n| extend TimestampDerived = todatetime(TimestampDerived)\n| summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy\n| partition by Hour(\n                lookup (Countrydb|extend Dummy=1) on Dummy\n              | where ipv4_is_match(ClientIp, Network)\n              )\n| summarize NumOfCountries = dcount(country_name) by User, Hour\n| where NumOfCountries >= threshold\n",
           "queryFrequency": "PT1H",
           "queryPeriod": "PT1H",
@@ -176,7 +247,7 @@
       },
       "getReadbackSource": "GET snapshot taken by the toolkit alert-parity step after deployment (alert-parity-state.json rules[].sentinelResource)",
       "putOperation": "upsert",
-      "putStatusCode": 201,
+      "putStatusCode": 200,
       "resourceId": "/subscriptions/<subscription-id>/resourceGroups/OptimizeSentinelResourceGroup/providers/Microsoft.OperationalInsights/workspaces/OptimizeSentinelWorkspace/providers/Microsoft.SecurityInsights/alertRules/3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
       "ruleId": "3094e036-e5ae-4d6e-8626-b0f86ebc71f2",
       "severity": "Medium",
@@ -190,11 +261,11 @@
   ],
   "deployedWorkbook": null,
   "dryRun": false,
-  "generatedAtUtc": "2026-10-21T14:31:35Z",
+  "generatedAtUtc": "2026-10-23T06:18:54Z",
   "mainTemplateValidation": {
-    "armAcceptanceStatus": "unknown",
-    "commandExitCode": 1,
-    "deploymentName": "workbook-arm-76021fb13b1612ba029fb465802d45db",
+    "armAcceptanceStatus": "passed",
+    "commandExitCode": 0,
+    "deploymentName": "xdrq-pr-template-6dbc7a74ce9cbbd4",
     "expectedContentCounts": {
       "customDetectionsCount": 3,
       "defenderWorkbooksCount": 1,
@@ -206,11 +277,11 @@
       },
       "workbooksCount": 2
     },
-    "installationVerified": false,
-    "mainTemplateSha256": "06924fa6e23048b6a2ff2575364a140db68f6de3206e730fdf9d31b8a134754e",
+    "installationVerified": true,
+    "mainTemplateSha256": "6dbc7a74ce9cbbd43f488ab78183e753cdf4e0116383f84c69d1ff29ca54d9e4",
     "note": "Per-resource validatedResources list is not produced by the toolkit's lab-deployment evidence and is therefore omitted.",
-    "provisioningState": null,
-    "registrationVerified": false,
+    "provisioningState": "Succeeded",
+    "registrationVerified": true,
     "templatePath": "Package/mainTemplate.json"
   },
   "mode": "live",
@@ -224,7 +295,7 @@
       "origin": "evidence-run",
       "path": "Logs/sentinel-xdr-migration/20261021T135849Z-a87e8352a4124e51867153d6cc93b38d/arm-deployment-validation-evidence.json",
       "role": "arm-deployment",
-      "sha256": "1027f52e3e9722754873b106b927f7ffa8e45ea1d3cd899a1be85e07a809e089"
+      "sha256": "e1f5d6305afbdef262a4ec87c28fb1c41b2a216b172ad3c02b509aed4668fced"
     },
     {
       "contentEquivalence": "same: 6 files identical",
@@ -238,14 +309,14 @@
       "origin": "evidence-run",
       "path": "Logs/sentinel-xdr-migration/20261021T135849Z-a87e8352a4124e51867153d6cc93b38d/deployment.sentinel.json",
       "role": "sentinel-deploy",
-      "sha256": "77c52d03da521cc64151f1a2e671462472a30274aef99e738a09e848db56e267"
+      "sha256": "6819f6c2c7218cc9dfbf61b26c870af9090f40a934df8889df6892f530153000"
     },
     {
       "contentEquivalence": "same: 6 files identical",
       "origin": "evidence-run",
       "path": "Logs/sentinel-xdr-migration/20261021T135849Z-a87e8352a4124e51867153d6cc93b38d/alert-parity-state.json",
       "role": "alert-parity-state",
-      "sha256": "aa5970398dedac81ff6bf0215632aa14ccc93187284e941f3a30811122ec953a"
+      "sha256": "4f9070603afe3700d0e3b44ddd34b8c4773cc2c4a06bee7ddabbef23e43618db"
     }
   ],
   "subscriptionId": "<subscription-id>",
