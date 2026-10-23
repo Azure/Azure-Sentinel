@@ -87,7 +87,7 @@ not observed workspace telemetry. The filter-validator skill does not currently
 advertise EmailEvent support; its protected implementation was not changed.
 The Azure DevOps task details and vendor API documentation require sign-in;
 task-specific acceptance criteria and source enumerations remain unverified.
-Changelog PR links must be added when a pull request is authorized and created.
+The implementation is tracked in [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409).
 
 The `Tests/ProofpointPODMessage.Tests.ps1` checks the source contract, metadata,
 field projection, forbidden operators, fixture coverage, parameter bindings,
