@@ -2,7 +2,7 @@
 
 ## Version 0.5.7
 
-- (2026-10-23) Added the CrowdStrike Falcon Data Replicator DNS filtering parser, forwarding all DNS filters, the disable-watchlist setting, and `pack`.
+- (2026-10-23) Added the CrowdStrike Falcon Data Replicator DNS filtering parser, forwarding all DNS filters, the disable-watchlist setting, and `pack` - [PR #15417](https://github.com/Azure/Azure-Sentinel/pull/15417)
 
 ## Version 0.5.6
 
