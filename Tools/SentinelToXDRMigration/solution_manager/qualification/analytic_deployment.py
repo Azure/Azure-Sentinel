@@ -60,7 +60,6 @@ def analytic_rule_payload(document: dict[str, Any]) -> dict[str, Any]:
     }
     for source, target in (
         ("tactics", "tactics"),
-        ("relevantTechniques", "techniques"),
         ("entityMappings", "entityMappings"),
         ("customDetails", "customDetails"),
         ("alertDetailsOverride", "alertDetailsOverride"),
@@ -69,6 +68,23 @@ def analytic_rule_payload(document: dict[str, Any]) -> dict[str, Any]:
         value = document.get(source)
         if value is not None:
             properties[target] = value
+    relevant = document.get("relevantTechniques")
+    if relevant is not None:
+        # Sentinel alertRules reject sub-technique IDs in `techniques`; split like the V3.1 packager.
+        techniques: list[str] = []
+        sub_techniques: list[str] = []
+        for item in relevant if isinstance(relevant, list) else [relevant]:
+            item = str(item).replace(" ", "")
+            if not item:
+                continue
+            if "." in item and item not in sub_techniques:
+                sub_techniques.append(item)
+            parent = item.split(".", 1)[0]
+            if parent not in techniques:
+                techniques.append(parent)
+        properties["techniques"] = techniques
+        if sub_techniques:
+            properties["subTechniques"] = sub_techniques
     return {"kind": "Scheduled", "properties": properties}
 
 
