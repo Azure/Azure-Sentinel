@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.29
+
+- (2026-10-23) Add the CrowdStrike Falcon Data Replicator Authentication parser, including disable-watchlist and pack parameter support.
+
 ## Version 0.2.28
 
 - (2026-10-13) Add the Okta Auth0 Authentication parser. [PR #15254](https://github.com/Azure/Azure-Sentinel/pull/15254)
