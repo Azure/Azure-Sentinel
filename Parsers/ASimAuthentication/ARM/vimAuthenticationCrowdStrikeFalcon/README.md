@@ -2,6 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for CrowdStrike Falcon.
 
+Filters and normalizes CrowdStrike Falcon Data Replicator authentication events from CrowdStrike_Auth_Events_CL to the ASIM Authentication schema.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 

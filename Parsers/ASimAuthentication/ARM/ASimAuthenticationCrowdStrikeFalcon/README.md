@@ -2,6 +2,10 @@
 
 ARM template for ASIM Authentication schema parser for CrowdStrike Falcon.
 
+Normalizes CrowdStrike Falcon Data Replicator authentication events from CrowdStrike_Auth_Events_CL to the ASIM Authentication schema.
+This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+
+
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
