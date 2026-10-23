@@ -1,0 +1,206 @@
+Parser:
+  Title: Audit Event ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: '0.1.0'
+  LastUpdated: Oct 23, 2026
+Product:
+  Name: CrowdStrike Falcon Data Replicator
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Data Replicator connector documentation
+  Link: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdStrikeS3FDR_ccp/DataConnectorDefinition.json
+Description: |
+  Normalizes CrowdStrike_Audit_Events_CL to the ASIM Audit Event schema, including
+  configuration, policy, account, file, share, and device audit operations.
+  Only event_simpleName identifies operations; records with an empty value are excluded.
+  Unknown event names map to Other. Undocumented numeric enumerations are retained
+  without guessing their meanings. Missing device or object values remain empty.
+  Use pack=true to retain original source fields, including currently empty columns.
+  The source-IP prefix parameter in the filtering parser supports IPv4 prefixes.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAuditEventCrowdStrikeFalconDataReplicator
+EquivalentBuiltInParser: _ASim_AuditEvent_CrowdStrikeFalconDataReplicator
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventMap = datatable(event_simpleName:string, EventType:string, ObjectType:string, ObjectCategory:string) [
+      "FirewallDeleteRule", "Delete", "Policy Rule", "FirewallRule",
+      "FirewallSetRule", "Set", "Policy Rule", "FirewallRule",
+      "FirewallChangeOption", "Set", "Configuration Atom", "FirewallOption",
+      "FirewallEnabled", "Enable", "Configuration Atom", "Firewall",
+      "FirewallDisabled", "Disable", "Configuration Atom", "Firewall",
+      "ConfigStateUpdate", "Set", "Configuration Atom", "Configuration",
+      "CriticalEnvironmentVariableChanged", "Set", "Configuration Atom", "EnvironmentVariable",
+      "HostnameChanged", "Set", "Configuration Atom", "Hostname",
+      "MemoryScanEnabled", "Enable", "Configuration Atom", "MemoryScan",
+      "FileVaultStatus", "Read", "Configuration Atom", "FileVault",
+      "ActiveDirectoryAccountCreated", "Create", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountEnabled", "Enable", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountDisabled", "Disable", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountLocked", "Set", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountUnlocked", "Set", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountPasswordUpdate", "Set", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountDepartmentUpdate", "Set", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountNameUpdate", "Set", "Directory Service Object", "Account",
+      "ActiveDirectoryAccountOuUpdate", "Set", "Directory Service Object", "Account",
+      "NetShareAdd", "Create", "Other", "Share",
+      "NetShareDelete", "Delete", "Other", "Share",
+      "NetShareSecurityModify", "Set", "Other", "Share",
+      "EventLogCleared", "Clear", "Event Log", "EventLog",
+      "VolumeSnapshotCreated", "Create", "Other", "VolumeSnapshot",
+      "VolumeSnapshotDeleted", "Delete", "Other", "VolumeSnapshot",
+      "DcUsbDeviceWhitelisted", "Set", "Policy Rule", "UsbDevice",
+      "DcUsbDeviceDisconnected", "Stop", "Other", "UsbDevice",
+      "DcBluetoothDeviceConnected", "Start", "Other", "BluetoothDevice",
+      "DcBluetoothDeviceDisconnected", "Stop", "Other", "BluetoothDevice",
+      "IOServiceRegister", "Create", "Service", "IOService",
+      "ProvisioningStarted", "Start", "Service", "Provisioning",
+      "ProvisioningEnded", "Stop", "Service", "Provisioning",
+      "ManifestDownloadComplete", "Other", "Other", "ManifestDownload",
+      "InstallBundleDownloadComplete", "Other", "Other", "InstallBundleDownload",
+      "InstallServiceDownloadComplete", "Other", "Other", "InstallServiceDownload",
+      "OsfmDownloadComplete", "Other", "Other", "OsfmDownload",
+      "LfoUploadStart", "Start", "Other", "Upload",
+      "FileCreateInfo", "Create", "Other", "File",
+      "FileDeleteInfo", "Delete", "Other", "File",
+      "FileRenameInfo", "Set", "Other", "File",
+      "FileOpenInfo", "Read", "Other", "File",
+      "SmbClientShareOpenedEtw", "Start", "Other", "SmbShare",
+      "SmbClientShareClosedEtw", "Stop", "Other", "SmbShare",
+      "SmbServerShareOpenedEtw", "Start", "Other", "SmbShare",
+      "IoSessionConnected", "Start", "Other", "IoSession"
+  ];
+  CrowdStrike_Audit_Events_CL
+  | where not(disabled)
+  | where isnotempty(event_simpleName)
+  | lookup kind=leftouter EventMap on event_simpleName
+  | extend EventType=coalesce(EventType, "Other"), ObjectType=coalesce(ObjectType, "Other"),
+      ObjectCategory=coalesce(ObjectCategory, "Unclassified")
+  | extend _Host=coalesce(ComputerName, tostring(AdditionalFields.ComputerName)),
+      _LocalIp=tostring(AdditionalFields.LocalAddressIP4),
+      _RemoteIp=coalesce(RemoteAddressIP4, RemoteAddressIP6),
+      _EventTime=coalesce(unixtime_milliseconds_todatetime(timestamp), TimeGenerated)
+  | extend _Hostname=tostring(split(_Host, ".")[0]),
+      _SrcHostname=tostring(split(coalesce(ClientComputerName, SmbClientName), ".")[0])
+  | extend DvcHostname=iff(_Hostname matches regex @"^[a-zA-Z0-9-]{1,61}$", _Hostname, ""),
+      DvcDomain=iff(_Host contains ".", substring(_Host, indexof(_Host, ".")+1), ""),
+      DvcFQDN=iff(_Host contains ".", _Host, ""),
+      DvcIpAddr=coalesce(_LocalIp, aip),
+      SrcHostname=iff(_SrcHostname matches regex @"^[a-zA-Z0-9-]{1,61}$", _SrcHostname, ""),
+      SrcFQDN=iff(coalesce(ClientComputerName, SmbClientName) contains ".", coalesce(ClientComputerName, SmbClientName), ""),
+      SrcDomain=iff(coalesce(ClientComputerName, SmbClientName) contains ".", substring(coalesce(ClientComputerName, SmbClientName), indexof(coalesce(ClientComputerName, SmbClientName), ".")+1), ""),
+      ActorUsernameType=case(isempty(UserName), "", UserName contains "\\", "Windows", UserName contains "@", "UPN", "Simple"),
+      DvcOs=case(event_platform == "Win", "Windows", event_platform == "Mac", "macOS", event_platform == "Lin", "Linux", ""),
+      EventResult=case(Status in~ ("Success", "Succeeded"), "Success", Status in~ ("Failure", "Failed"), "Failure", "NA")
+  | extend Object=case(
+      ObjectCategory == "FirewallRule", coalesce(FirewallRule, FirewallRuleId),
+      ObjectCategory == "FirewallOption", FirewallOption,
+      ObjectCategory == "EnvironmentVariable", EnvironmentVariableName,
+      ObjectCategory == "Account", coalesce(SamAccountName, AccountObjectSid, AccountObjectGuid),
+      ObjectCategory in ("Share", "SmbShare"), coalesce(SharePath, ShareName, SmbShareName),
+      ObjectCategory == "File", coalesce(SourceFileName, TargetFileName),
+      ObjectCategory == "VolumeSnapshot", coalesce(VolumeSnapshotName, VolumeName),
+      ObjectCategory == "UsbDevice", coalesce(DeviceInstanceId, DeviceSerialNumber, DeviceProduct),
+      ObjectCategory == "BluetoothDevice", coalesce(BluetoothDeviceAddress, DeviceInstanceId),
+      ObjectCategory == "IOService", coalesce(IOServiceName, IOServicePath),
+      ObjectCategory == "Upload", UploadId,
+      ObjectCategory == "IoSession", SessionId,
+      ObjectCategory == "Unclassified", "",
+      ObjectCategory),
+      ObjectId=case(
+      ObjectCategory == "FirewallRule", FirewallRuleId,
+      ObjectCategory == "Account", coalesce(AccountObjectGuid, AccountObjectSid),
+      ObjectCategory in ("UsbDevice", "BluetoothDevice"), DeviceInstanceId,
+      ""),
+      NewValue=case(
+      event_simpleName == "FirewallChangeOption", coalesce(FirewallOptionStringValue, FirewallOptionNumericValue),
+      event_simpleName == "CriticalEnvironmentVariableChanged", EnvironmentVariableValue,
+      event_simpleName == "ConfigStateUpdate", ConfigStateData,
+      event_simpleName == "FileRenameInfo", TargetFileName,
+      event_simpleName == "ActiveDirectoryAccountDepartmentUpdate", ActiveDirectoryDepartment,
+      event_simpleName == "ActiveDirectoryAccountOuUpdate", ActiveDirectoryOuDn,
+      event_simpleName == "ActiveDirectoryAccountNameUpdate", SamAccountName,
+      event_simpleName == "NetShareSecurityModify", ShareData,
+      event_simpleName == "FileVaultStatus" and isnotnull(FileVaultIsEnabled), tostring(FileVaultIsEnabled),
+      event_simpleName in ("FirewallEnabled", "MemoryScanEnabled", "ActiveDirectoryAccountEnabled"), "true",
+      event_simpleName in ("FirewallDisabled", "ActiveDirectoryAccountDisabled"), "false",
+      event_simpleName == "HostnameChanged", _Host,
+      "")
+  | extend _Packed=iff(pack, bag_pack(
+      "timestamp", timestamp, "aip", aip, "aid", aid, "UserName", UserName, "event_platform", event_platform,
+      "ContextTimeStamp", ContextTimeStamp, "name", name, "ConfigBuild", ConfigBuild, "CrowdStrikeId", CrowdStrikeId,
+      "ConfigStateHash", ConfigStateHash, "ContextProcessId", ContextProcessId, "ContextThreadId", ContextThreadId,
+      "BoundingLimitCount", BoundingLimitCount, "BoundingLimitDuration", BoundingLimitDuration, "Entitlements", Entitlements,
+      "EffectiveTransmissionClass", EffectiveTransmissionClass, "cid", cid, "OciContainerId", OciContainerId,
+      "TreeId", TreeId, "VolumeSnapshotName", VolumeSnapshotName, "SmbShareName", SmbShareName, "ShareName", ShareName,
+      "UploadId", UploadId, "SessionId", SessionId, "ComputerName", ComputerName, "FirewallRule", FirewallRule,
+      "FirewallRuleId", FirewallRuleId, "FirewallOption", FirewallOption, "SourceFileName", SourceFileName,
+      "TargetFileName", TargetFileName, "DeviceVendorId", DeviceVendorId, "DeviceProductId", DeviceProductId,
+      "DeviceSerialNumber", DeviceSerialNumber, "BluetoothDeviceAddress", BluetoothDeviceAddress,
+      "EnvironmentVariableName", EnvironmentVariableName, "SamAccountName", SamAccountName,
+      "FirewallOptionNumericValue", FirewallOptionNumericValue, "FirewallOptionStringValue", FirewallOptionStringValue,
+      "FileVaultIsEnabled", FileVaultIsEnabled, "EnvironmentVariableValue", EnvironmentVariableValue,
+      "ConfigStateData", ConfigStateData, "ActiveDirectoryOuDn", ActiveDirectoryOuDn,
+      "ActiveDirectoryDepartment", ActiveDirectoryDepartment, "SHA256HashData", SHA256HashData, "CommandLine", CommandLine,
+      "VolumeName", VolumeName, "VolumeDriveLetter", VolumeDriveLetter, "TokenType", TokenType, "InterfaceGuid", InterfaceGuid,
+      "RpcClientProcessId", RpcClientProcessId, "InterfaceVersion", InterfaceVersion, "RpcClientThreadId", RpcClientThreadId,
+      "AuthenticationId", AuthenticationId, "ImageFileName", ImageFileName, "RpcOpNum", RpcOpNum,
+      "RpcNestingLevel", RpcNestingLevel, "ClientComputerName", ClientComputerName, "DomainName", DomainName,
+      "RemoteAddressIP6", RemoteAddressIP6, "RemoteAddressIP4", RemoteAddressIP4, "SmbClientName", SmbClientName,
+      "AgentLoadFlags", AgentLoadFlags, "ProvisioningDuration", ProvisioningDuration, "Status", Status,
+      "ErrorText", ErrorText, "CloudErrorCode", CloudErrorCode, "SharePath", SharePath, "ShareMaxCount", ShareMaxCount,
+      "ShareRemark", ShareRemark, "ShareData", ShareData, "IntelTDTEnabled", IntelTDTEnabled,
+      "FalconServiceState", FalconServiceState, "LfoUploadFlags", LfoUploadFlags, "AttemptNumber", AttemptNumber,
+      "Size", Size, "Tags", Tags, "CloudRequestId", CloudRequestId, "LocalSession", LocalSession,
+      "IOServiceClass", IOServiceClass, "IOServicePath", IOServicePath, "IOServiceProperties", IOServiceProperties,
+      "IOServiceName", IOServiceName, "Protocol", Protocol, "ChannelDiffStatusList", ChannelDiffStatusList,
+      "AccountDomain", AccountDomain, "AccountObjectGuid", AccountObjectGuid, "AccountObjectSid", AccountObjectSid,
+      "TotalCount", TotalCount, "ErrorCode", ErrorCode, "EventOrigin", EventOrigin, "AddressFamily", AddressFamily,
+      "BluetoothDeviceType", BluetoothDeviceType, "DeviceTimeStamp", DeviceTimeStamp, "DeviceInstanceId", DeviceInstanceId,
+      "BluetoothDeviceAddressType", BluetoothDeviceAddressType, "DeviceVersion", DeviceVersion,
+      "DeviceDescriptorSetHash", DeviceDescriptorSetHash, "DeviceManufacturer", DeviceManufacturer,
+      "DeviceProduct", DeviceProduct, "DeviceUserSid", DeviceUserSid, "DeviceUserAuthenticationId", DeviceUserAuthenticationId,
+      "FirewallProfile", FirewallProfile, "ShareAccess", ShareAccess, "DesiredAccess", DesiredAccess, "GID", GID,
+      "UID", UID, "UnixMode", UnixMode, "OriginalAdditionalFields", AdditionalFields), dynamic({}))
+  | project-rename Operation=event_simpleName, DvcId=aid, DvcScopeId=cid, ActorUsername=UserName,
+      ActorSessionId=AuthenticationId, ActingAppId=ContextProcessId, ActingAppName=ImageFileName,
+      EventOriginalUid=CrowdStrikeId, EventMessage=ErrorText
+  | extend Dvc=coalesce(_Host, DvcId, DvcIpAddr), DvcIdType=iff(isnotempty(DvcId), "Other", ""),
+      DvcDomainType=iff(isnotempty(DvcDomain), "FQDN", ""),
+      SrcIpAddr=_RemoteIp, SrcDomainType=iff(isnotempty(SrcDomain), "FQDN", ""),
+      Src=coalesce(SrcFQDN, SrcHostname, _RemoteIp),
+      ActingAppType=iff(isnotempty(ActingAppId) or isnotempty(ActingAppName), "Process", ""),
+      EventOriginalResultDetails=coalesce(Status, ErrorCode, CloudErrorCode),
+      EventStartTime=_EventTime, EventEndTime=_EventTime,
+      EventCount=int(1), EventSchema="AuditEvent", EventSchemaVersion="1.0.0",
+      EventVendor="CrowdStrike", EventProduct="Falcon Data Replicator", EventSeverity="Informational",
+      TargetHostname=DvcHostname, TargetFQDN=DvcFQDN, TargetDomain=DvcDomain,
+      TargetDomainType=iff(isnotempty(DvcDomain), "FQDN", ""), TargetIpAddr=DvcIpAddr,
+      TargetDvcId=DvcId, TargetDvcIdType=iff(isnotempty(DvcId), "Other", ""), TargetDvcOs=DvcOs,
+      TargetDvcScopeId=DvcScopeId, OriginalObjectType=ObjectCategory,
+      ActorUserEntityKey="", SrcSystemEntityKey="", TargetSystemEntityKey="", DvcEntityKey="",
+      ActingApplicationEntityKey="", TargetApplicationEntityKey="",
+      ActorUserAdditionalIds=dynamic([]), AdditionalEntities=dynamic([])
+  | extend User=ActorUsername, IpAddr=SrcIpAddr, Value=NewValue, Dst=Dvc
+  | project TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventType, EventResult,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, EventSeverity,
+      EventOriginalUid, EventOriginalResultDetails, EventMessage, Operation,
+      Object, ObjectId, ObjectType, OriginalObjectType, NewValue, Value,
+      Dvc, DvcId, DvcIdType, DvcScopeId, DvcHostname, DvcFQDN, DvcDomain, DvcDomainType, DvcIpAddr, DvcOs,
+      ActorUsername, ActorUsernameType, ActorSessionId, User, ActingAppId, ActingAppName, ActingAppType,
+      Src, SrcIpAddr, SrcHostname, SrcFQDN, SrcDomain, SrcDomainType, IpAddr,
+      TargetHostname, TargetFQDN, TargetDomain, TargetDomainType, TargetIpAddr,
+      TargetDvcId, TargetDvcIdType, TargetDvcOs, TargetDvcScopeId, Dst,
+      ActorUserEntityKey, SrcSystemEntityKey, TargetSystemEntityKey, DvcEntityKey,
+      ActingApplicationEntityKey, TargetApplicationEntityKey, ActorUserAdditionalIds, AdditionalEntities,
+      AdditionalFields=_Packed
