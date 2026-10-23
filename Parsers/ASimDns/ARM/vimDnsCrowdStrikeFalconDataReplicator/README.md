@@ -2,6 +2,11 @@
 
 ARM template for ASIM Dns schema parser for CrowdStrike Falcon Data Replicator.
 
+Filters and normalizes DnsRequest and SuspiciousDnsRequest records from
+CrowdStrike_DNS_Events_CL to the ASIM DNS schema.
+This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+
+
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
