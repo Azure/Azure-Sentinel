@@ -959,6 +959,28 @@ def _http_retry_after(exc: urllib.error.HTTPError) -> float | None:
     return _retry_after_seconds(value)
 
 
+def _is_odata_annotation(key: Any) -> bool:
+    """Graph adds per-row annotations such as ``count_@odata.type: "#Int64"``."""
+    return isinstance(key, str) and key.endswith("@odata.type")
+
+
+def _strip_odata_annotations(rows: list[Any], schema: Any) -> list[Any]:
+    declared = {
+        str(column.get("name", column.get("Name"))).casefold()
+        for column in (schema if isinstance(schema, list) else [])
+        if isinstance(column, dict)
+    }
+    return [
+        {
+            key: value
+            for key, value in row.items()
+            if not (_is_odata_annotation(key) and key.casefold() not in declared)
+        }
+        if isinstance(row, dict) else row
+        for row in rows
+    ]
+
+
 def _hunting_query_response_error(body: Any) -> str | None:
     if not isinstance(body, dict):
         return "Graph Advanced Hunting returned a JSON value instead of an object"
@@ -994,7 +1016,8 @@ def _hunting_query_response_error(body: Any) -> str | None:
     if any(not isinstance(row, dict) for row in rows):
         return "Graph Advanced Hunting results contain a non-object row"
     if any(
-        not isinstance(name, str) or name.casefold() not in seen_names
+        not isinstance(name, str)
+        or (name.casefold() not in seen_names and not _is_odata_annotation(name))
         for row in rows
         for name in row
     ):
@@ -1092,6 +1115,7 @@ def run_advanced_hunting_query(
                 }
             rows = body.get("results", body.get("Results"))
             schema = body.get("schema", body.get("Schema"))
+            rows = _strip_odata_annotations(rows, schema)
             return {
                 "ok": True,
                 "statusCode": status_code,

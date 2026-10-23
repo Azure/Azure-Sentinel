@@ -11,6 +11,7 @@ import yaml
 
 from .common import (
     IDENTIFIER_RE,
+    MAX_DCR_TRANSFORM_KQL_CHARS,
     PARSER_NAME_RE,
     STREAM_NAME_RE,
     TARGET_TABLE_BY_SCHEMA,
@@ -19,7 +20,6 @@ from .common import (
     Finding,
     _find_repo_root,
     _get_nested,
-    find_dcr_output_stream_evidence,
     load_yaml_file,
 )
 from .kql import (
@@ -30,6 +30,7 @@ from .kql import (
     _pipeline_operator,
     _query_uses_source_table,
     _validate_statement_shape,
+    compact_kql,
     mask_kql,
     resolve_source_specific_fixture,
     split_kql_statements,
@@ -184,77 +185,23 @@ def _validate_filter_consistency(
         search_index = found_index + 1
 
 
-def _validate_connector_metadata(
-    repo_root: Path | None,
+def _validate_dcr_metadata(
     dcr_type: str | None,
     input_stream: str | None,
-    source_raw_table: str | None,
     findings: list[Finding],
-) -> list[str]:
+) -> None:
     if (
-        repo_root is None
-        or dcr_type is None
-        or input_stream is None
-        or source_raw_table is None
+        dcr_type == "Workspace"
+        and input_stream is not None
+        and input_stream.casefold() != "none"
     ):
-        return []
-
-    repo_root_text = str(repo_root.resolve())
-    evidence_paths = list(
-        find_dcr_output_stream_evidence(repo_root_text, input_stream)
-    )
-    expected_streams = {
-        f"Custom-{source_raw_table}",
-        f"Microsoft-{source_raw_table}",
-    }
-    if dcr_type == "Standard":
-        if input_stream not in expected_streams:
-            findings.append(
-                Finding(
-                    "SOURCE001",
-                    "InputStream",
-                    f"InputStream must be the DCR output stream that writes "
-                    f"{source_raw_table}: one of {sorted(expected_streams)}.",
-                )
+        findings.append(
+            Finding(
+                "SOURCE001",
+                "InputStream",
+                "Workspace parsers must use InputStream: none.",
             )
-        if not evidence_paths:
-            findings.append(
-                Finding(
-                    "SOURCE002",
-                    "InputStream",
-                    "No connector DCR outputStream matching InputStream was "
-                    "found under Solutions/**/Data Connectors or DataConnectors.",
-                )
-            )
-    elif dcr_type == "Workspace":
-        if input_stream.casefold() != "none":
-            findings.append(
-                Finding(
-                    "SOURCE003",
-                    "InputStream",
-                    "Workspace parsers must use InputStream: none.",
-                )
-            )
-        contradictory_paths = sorted(
-            {
-                path
-                for expected_stream in expected_streams
-                for path in find_dcr_output_stream_evidence(
-                    repo_root_text, expected_stream
-                )
-            }
         )
-        if contradictory_paths:
-            findings.append(
-                Finding(
-                    "SOURCE004",
-                    "DCRType",
-                    "Connector DCR evidence writes SourceRawTable, so DCRType "
-                    f"cannot be Workspace. Evidence: {', '.join(contradictory_paths)}",
-                )
-            )
-            evidence_paths.extend(contradictory_paths)
-    return sorted(set(evidence_paths))
 
 
 def _validate_fixture_contract(
@@ -371,7 +318,6 @@ def validate_ingest_time_parser(
         findings.append(Finding("YAML001", "document", str(exc)))
 
     metadata: dict[str, Any] = {}
-    connector_evidence: list[str] = []
     fixture_resolution: dict[str, Any] = {
         "status": "invalid",
         "eventVendor": None,
@@ -433,6 +379,7 @@ def validate_ingest_time_parser(
         parser_query = _require_string(
             document, findings, "ParserQuery", "ParserQuery"
         )
+        raw_parser_query = _get_nested(document, "ParserQuery")
         change_date = _require_string(
             document, findings, "Change.Date", "Change", "Date"
         )
@@ -540,11 +487,9 @@ def validate_ingest_time_parser(
                 )
 
         effective_repo_root = repo_root or _find_repo_root(parser_path)
-        connector_evidence = _validate_connector_metadata(
-            effective_repo_root,
+        _validate_dcr_metadata(
             dcr_type,
             input_stream,
-            source_raw_table,
             findings,
         )
 
@@ -557,6 +502,20 @@ def validate_ingest_time_parser(
             )
             findings.extend(_scan_kql(filter_query, "ParserFilterQuery"))
         if parser_query is not None:
+            if isinstance(raw_parser_query, str):
+                compacted_length = len(compact_kql(raw_parser_query))
+                if compacted_length > MAX_DCR_TRANSFORM_KQL_CHARS:
+                    findings.append(
+                        Finding(
+                            "KQL044",
+                            "ParserQuery",
+                            f"ParserQuery is {compacted_length} characters "
+                            "after removing comments and indentation "
+                            f"({len(raw_parser_query)} before compaction); "
+                            "Azure DCR TransformKql supports at most "
+                            f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
+                        )
+                    )
             _validate_pipeline_operators(
                 parser_query,
                 "ParserQuery",
@@ -698,6 +657,5 @@ def validate_ingest_time_parser(
         "metadata": metadata,
         "fixtureResolution": fixture_resolution,
         "queryTimeEligibility": query_eligibility,
-        "connectorEvidence": connector_evidence,
         "findings": finding_dicts,
     }

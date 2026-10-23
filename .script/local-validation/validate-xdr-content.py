@@ -122,10 +122,14 @@ def _load_solution_data(solution_root: Path) -> tuple[Path | None, dict[str, Any
         return data_file, None, str(exc)
 
 
+DEPLOY_PARSER_CONDITION = "[parameters('DeployParser')]"
+
+
 def _find_saved_search_dependency(
     resources: list[dict[str, Any]],
     variables: dict[str, Any],
     function_alias: str,
+    parameters: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None, str | None]:
     """Locate the savedSearches resource for function_alias and compute its expected dependsOn expression."""
     saved = [
@@ -146,11 +150,28 @@ def _find_saved_search_dependency(
             f"(found {len(saved)})",
         )
     resource = saved[0]
-    if "condition" in resource or "copy" in resource:
+    # The packager gates parsers by DeployParser (defaultValue true); no other condition or copy is valid.
+    condition = resource.get("condition")
+    deploy_parser = parameters.get("DeployParser") if isinstance(parameters, dict) else None
+    if "copy" in resource or (
+        "condition" in resource
+        and (
+            condition != DEPLOY_PARSER_CONDITION
+            or (
+                parameters is not None
+                and not (
+                    isinstance(deploy_parser, dict)
+                    and deploy_parser.get("type") == "bool"
+                    and deploy_parser.get("defaultValue") is True
+                )
+            )
+        )
+    ):
         return (
             resource,
             None,
-            f"Required workspace function '{function_alias}' savedSearches resource must be unconditional",
+            f"Required workspace function '{function_alias}' savedSearches resource must be unconditional "
+            f"or gated only by {DEPLOY_PARSER_CONDITION} (bool parameter, defaultValue true)",
         )
     name = resource.get("name")
     if not isinstance(name, str) or not name:
@@ -1162,7 +1183,7 @@ def _validate_packaged_defender_workbooks(
                                 )
                                 continue
                             _, dep_expr, dep_err = _find_saved_search_dependency(
-                                resources, variables, fn_rec["functionAlias"]
+                                resources, variables, fn_rec["functionAlias"], parameters
                             )
                             if dep_err:
                                 errors.append(dep_err)
@@ -1215,7 +1236,7 @@ def _validate_packaged_defender_workbooks(
                         if not isinstance(alias, str) or not isinstance(src_path, str):
                             continue
                         saved_res, _, dep_err = _find_saved_search_dependency(
-                            resources, variables, alias
+                            resources, variables, alias, parameters
                         )
                         if dep_err and dep_err not in errors:
                             errors.append(dep_err)
@@ -1231,7 +1252,7 @@ def _validate_packaged_defender_workbooks(
                                     != function_parameters(definition)
                                 ):
                                     errors.append(
-                                        "Required workspace function must be unconditional and match current source"
+                                        "Required workspace function must be unconditional or DeployParser-gated and match current source"
                                     )
                             except (ValueError, KeyError) as exc:
                                 errors.append(str(exc))
