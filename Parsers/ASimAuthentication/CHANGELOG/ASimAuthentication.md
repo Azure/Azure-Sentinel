@@ -2,7 +2,7 @@
 
 ## Version 0.2.29
 
-- (2026-10-23) Add the CrowdStrike Falcon Data Replicator Authentication parser, including disable-watchlist and pack parameter support.
+- (2026-10-23) Add the CrowdStrike Falcon Data Replicator Authentication parser, including disable-watchlist and pack parameter support. - [PR #15415](https://github.com/Azure/Azure-Sentinel/pull/15415)
 
 ## Version 0.2.28
 

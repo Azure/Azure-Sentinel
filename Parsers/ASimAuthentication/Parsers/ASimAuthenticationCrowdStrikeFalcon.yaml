@@ -30,19 +30,16 @@ ParserQuery: |
   let parser = (disabled:bool = false, pack:bool = false) {
       CrowdStrike_Auth_Events_CL
       | where not(disabled)
-      | extend EventName = coalesce(event_simpleName, tostring(split(name, "V")[0]))
-      | where EventName in~ ("UserLogon", "UserLogonMac", "UserLogonLin", "UserLogoff", "UserLogoffMac", "UserLogoffLin", "UserLogonFailed", "UserLogonFailed2", "UserLogonFailed2Mac", "UserLogonFailed2Lin", "IoSessionLoggedOn")
       | extend SourceFields = iff(pack, pack_all(), dynamic({}))
       | extend
-          EventType = iff(EventName startswith "UserLogoff", "Logoff", "Logon"),
-          EventResult = iff(EventName startswith "UserLogonFailed", "Failure", "Success"),
-          EventOriginalType = EventName,
+          EventType = iff(event_simpleName startswith "UserLogoff", "Logoff", "Logon"),
+          EventResult = iff(event_simpleName startswith "UserLogonFailed", "Failure", "Success"),
           EventOriginalSubType = LogonType,
           EventOriginalResultDetails = strcat(Status, iff(isnotempty(SubStatus), strcat("/", SubStatus), "")),
           EventStartTime = coalesce(
               unixtime_seconds_todatetime(ContextTimeStamp),
               unixtime_milliseconds_todatetime(timestamp),
-              unixtime_seconds_todatetime(iff(EventName startswith "UserLogoff", LogoffTime, LogonTime)),
+              unixtime_seconds_todatetime(iff(event_simpleName startswith "UserLogoff", LogoffTime, LogonTime)),
               TimeGenerated),
           DvcIpAddr = coalesce(tostring(AdditionalFields.LocalAddressIP4), tostring(AdditionalFields.LocalAddressIP6), aip),
           ComputerName = tostring(AdditionalFields.ComputerName),
@@ -65,6 +62,7 @@ ParserQuery: |
           SrcDomain = iff(ClientComputerName contains ".", substring(ClientComputerName, indexof(ClientComputerName, ".") + 1), ""),
           SrcFQDN = iff(ClientComputerName contains ".", ClientComputerName, "")
       | project-rename
+          EventOriginalType = event_simpleName,
           DvcId = aid,
           DvcScopeId = cid,
           TargetUserSid = UserSid,
