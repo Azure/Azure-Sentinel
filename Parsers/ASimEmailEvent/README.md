@@ -85,7 +85,8 @@ unrestricted. Multiple nonempty parameters are combined with AND.
 
 The user explicitly deferred live validation and authorized completing both
 source parsers and unifier registration offline. ARM artifacts are generated
-by the repository's GitHub action and are not included in this change.
+and committed by the repository's GitHub action; no manual ARM edits are part
+of this change.
 The supplied workspace did not contain `ProofpointPODMessage_CL`; live sampling,
 Log Analytics KQL execution, `ASimSchemaTester`, `ASimDataTester`, and
 live filter-behavior tests have not passed and remain deferred. Synthetic
