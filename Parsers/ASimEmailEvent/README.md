@@ -92,10 +92,16 @@ is tracked in [draft PR #15410](https://github.com/Azure/Azure-Sentinel/pull/154
 header/security fields are intentional source limitations, not evidence of
 empty headers or zero attachments.
 
-The repository's focused `Validate_ParsersFunctions_HaveValidKql` tests currently
-fail with `KS204`: their custom-table catalog does not define
-`ProofpointPODMailLog_CL`. The standalone offline compiler checks use the
-connector's declared schema and pass, but do not replace those repository tests.
-A maintainer must add the CCP table definition to the protected validation
-catalog before those tests can pass; this parser task does not modify tooling
-or test implementation.
+The current CCP table schema is registered in
+`.script/tests/KqlvalidationsTests/CustomTables/ProofpointPODMailLog_CL.json`,
+separately from the legacy flattened table. Missing catalog registration caused
+the earlier KQL validation `KS204` errors.
+
+ASIM CI's sample-ingestion script excludes reserved columns including `id`
+from the table schema and payload. This caused the earlier schema/data and
+filtering jobs to fail with `SEM0100` when compiling references to `id`.
+Both parsers now read this optional identifier with `column_ifexists`:
+connector-provided IDs are preserved, while missing IDs produce empty
+`EventOriginalUid` and `EventUid` rather than fabricated identifiers. Required
+source columns remain required. The ingestion script and validation gates
+are unchanged; user-workspace live validation remains deferred.
