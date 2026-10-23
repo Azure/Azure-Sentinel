@@ -14,19 +14,41 @@ from .common import (
     _validate_timestamp,
     _write_json_no_clobber,
     build_fixture_snapshot,
+    build_observed_query_rows,
     build_resource_names,
     count_rows_by_timestamp,
 )
 
 
 def _error_payload(exc: HarnessError) -> dict[str, Any]:
+    details = exc.details
+    if isinstance(details, Mapping) and "observedQueryTable" in details:
+        details = dict(details)
+        details.pop("observedQueryTable", None)
     return {
         "type": type(exc).__name__,
         "stage": exc.stage,
         "message": str(exc),
         "statusCode": exc.status_code,
-        "details": exc.details,
+        "details": details,
     }
+
+
+def _record_qtp_observation(
+    qtp_replay: dict[str, Any],
+    query_table: Any,
+) -> None:
+    if not isinstance(query_table, Mapping):
+        return
+    observed = build_observed_query_rows(
+        query_table,
+        stage="raw-visibility",
+    )
+    qtp_replay["observedSchema"] = observed["schema"]
+    qtp_replay["observedRows"] = observed["rows"]
+    qtp_replay["observedCountsByTimestamp"] = observed[
+        "countsByTimestamp"
+    ]
 
 
 def _output_failure(
@@ -143,6 +165,9 @@ class AsimIngestionHarness(AzureMonitorClient):
                 ),
                 "inputStream": input_stream or None,
                 "error": None,
+                "observedSchema": [],
+                "observedRows": [],
+                "observedCountsByTimestamp": {},
             },
             "cleanup": cleanup,
             "telemetry": {
@@ -288,9 +313,7 @@ class AsimIngestionHarness(AzureMonitorClient):
                             output_stream=input_stream,
                         )
                     result["rawDcr"] = raw_handle.to_dict()
-                    raw_counts = count_rows_by_timestamp(
-                        rows
-                    )
+                    raw_counts = count_rows_by_timestamp(rows)
                     with self._stage("raw-upload"):
                         result["rawUpload"] = self.upload_rows(
                             raw_handle,
@@ -299,14 +322,32 @@ class AsimIngestionHarness(AzureMonitorClient):
                             expected_counts_by_timestamp=raw_counts,
                         )
                     with self._stage("raw-visibility"):
-                        self.wait_for_exact_rows(
-                            source_table,
-                            timestamps,
-                            raw_counts,
-                            stage="raw-visibility",
+                        observed_query_table = (
+                            self.wait_for_exact_rows(
+                                source_table,
+                                timestamps,
+                                raw_counts,
+                                stage="raw-visibility",
+                            )
                         )
+                    _record_qtp_observation(
+                        qtp_replay,
+                        observed_query_table,
+                    )
                     qtp_replay["status"] = "passed"
                 except HarnessError as exc:
+                    details = exc.details
+                    if isinstance(details, Mapping):
+                        _record_qtp_observation(
+                            qtp_replay,
+                            details.get("observedQueryTable"),
+                        )
+                        cleaned_details = dict(details)
+                        cleaned_details.pop(
+                            "observedQueryTable",
+                            None,
+                        )
+                        exc.details = cleaned_details
                     qtp_replay["status"] = "warning"
                     qtp_replay["error"] = _error_payload(exc)
 

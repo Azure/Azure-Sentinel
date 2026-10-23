@@ -62,6 +62,11 @@ optional: if its table, DCR, upload, or visibility stage fails, the report
 records a warning and blocks QTP/parity without failing the required parser
 validation stages.
 
+`qtpSourceReplay` persists the latest `observedSchema`, `observedRows`, and
+`observedCountsByTimestamp` from raw-table visibility checks. These remain
+available in `validation-result.json` when visibility detects unexpected,
+duplicate, or incomplete rows.
+
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
 column names, excluding the platform-managed `Type` column, and records both

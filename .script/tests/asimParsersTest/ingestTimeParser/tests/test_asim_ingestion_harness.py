@@ -319,6 +319,36 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(1, len(table["rows"]))
         self.assertEqual([1, 5], clock.sleeps)
 
+    def test_wait_for_rows_canonicalizes_returned_timestamp(self):
+        harness, _, clock = self.harness(
+            [
+                FakeResponse(
+                    200,
+                    query_payload(
+                        [{"name": "TimeGenerated", "type": "datetime"}],
+                        [["2026-10-16T19:55:00.123456Z"]],
+                    ),
+                ),
+                FakeResponse(
+                    200,
+                    query_payload(
+                        [{"name": "TimeGenerated", "type": "datetime"}],
+                        [["2026-10-16T19:55:00.123456Z"]],
+                    ),
+                ),
+            ]
+        )
+
+        table = harness.wait_for_exact_rows(
+            "Contoso_CL",
+            ["2026-10-16T19:55:00.1234560Z"],
+            {"2026-10-16T19:55:00.1234560Z": 1},
+            stage="raw-visibility",
+        )
+
+        self.assertEqual(1, len(table["rows"]))
+        self.assertEqual([5], clock.sleeps)
+
     def test_wait_for_rows_fails_on_contamination(self):
         harness, _, _ = self.harness(
             [
@@ -818,6 +848,20 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Microsoft-SentinelContoso",
             result["rawDcr"]["outputStream"],
         )
+        self.assertEqual(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            result["qtpSourceReplay"]["observedSchema"],
+        )
+        self.assertEqual(
+            [{"TimeGenerated": timestamp}],
+            result["qtpSourceReplay"]["observedRows"],
+        )
+        self.assertEqual(
+            {timestamp: 1},
+            result["qtpSourceReplay"][
+                "observedCountsByTimestamp"
+            ],
+        )
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(1, validation_runner.parity_calls)
 
@@ -906,6 +950,120 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(
             "blocked",
             result["outputValidation"]["queryTimeExecution"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            result["outputValidation"]["parity"]["status"],
+        )
+        self.assertEqual(1, validation_runner.output_calls)
+        self.assertEqual(0, validation_runner.parity_calls)
+
+    def test_qtp_raw_visibility_warning_persists_rows(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        target_result = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [[timestamp]],
+        )
+        duplicate_source_result = query_payload(
+            [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Value", "type": "string"},
+            ],
+            [
+                [timestamp, "one"],
+                [timestamp, "one"],
+            ],
+        )
+        harness, _, _ = self.harness(
+            [
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(200, target_result),
+                FakeResponse(200, target_result),
+                FakeResponse(201),  # raw DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/raw",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "raw-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # raw upload
+                FakeResponse(200, duplicate_source_result),
+                FakeResponse(204),  # raw cleanup
+                FakeResponse(204),  # parser cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Value", "type": "string"},
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [
+                {
+                    "TimeGenerated": timestamp,
+                    "Value": "one",
+                }
+            ],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "InputStream": "Microsoft-SentinelContoso",
+            "SourceRawTable": "Contoso",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+        validation_runner = FakeValidationRunner(timestamp)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = harness.run(
+                prepared,
+                parser,
+                snapshot_output=Path(directory) / "snapshot.json",
+                validation_runner=validation_runner,
+                query_time_document={"ParserQuery": "Contoso"},
+            )
+
+        replay = result["qtpSourceReplay"]
+        self.assertEqual("completed", result["status"])
+        self.assertEqual("warning", replay["status"])
+        self.assertEqual("raw-visibility", replay["error"]["stage"])
+        self.assertNotIn(
+            "observedQueryTable",
+            replay["error"]["details"],
+        )
+        self.assertEqual(2, len(replay["observedRows"]))
+        self.assertEqual(
+            {timestamp: 2},
+            replay["observedCountsByTimestamp"],
+        )
+        self.assertEqual(
+            "blocked",
+            result["outputValidation"][
+                "queryTimeExecution"
+            ]["status"],
         )
         self.assertEqual(
             "blocked",
