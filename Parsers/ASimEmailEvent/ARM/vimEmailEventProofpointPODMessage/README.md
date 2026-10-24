@@ -5,6 +5,11 @@ ARM template for ASIM EmailEvent schema parser for Proofpoint On Demand Email Se
 Filters and normalizes message inspection records from ProofpointPODMessage_CL
 to ASIM EmailEvent without expanding recipients or MIME parts. Filter disposition
 is not delivery confirmation. IPv4 prefix filtering uses has_any_ipv4_prefix.
+DMARC quarantine/reject normalize to Fail and retain their policy; pass/none normalize
+case-insensitively. DMARC temperror/permerror retain their original value but have no
+normalized result because EmailEvent has no matching error enumeration.
+Dispositions reject/discard map to Blocked, hold to Quarantined, redirect to Redirected,
+and continue/accept/retry to NA without asserting successful delivery.
 Delivery location is unavailable; a nonempty delivery-location filter returns no rows.
 Live source sampling and schema/data/filter validation are deferred by user direction.
 

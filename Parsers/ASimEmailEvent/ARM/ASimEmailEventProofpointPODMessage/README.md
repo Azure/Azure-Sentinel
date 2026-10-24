@@ -5,8 +5,12 @@ ARM template for ASIM EmailEvent schema parser for Proofpoint On Demand Email Se
 Normalizes message inspection records from the CCP connector's ProofpointPODMessage_CL
 table to ASIM EmailEvent. Each source message remains one event, including messages
 with multiple recipients or MIME parts. Filter disposition is not delivery confirmation.
+DMARC quarantine/reject normalize to Fail and retain their policy; pass/none normalize
+case-insensitively. DMARC temperror/permerror retain their original value but have no
+normalized result because EmailEvent has no matching error enumeration.
+Dispositions reject/discard map to Blocked, hold to Quarantined, redirect to Redirected,
+and continue/accept/retry to NA without asserting successful delivery.
 Live source sampling and schema/data validation are deferred by user direction.
-See the schema README for mapping limitations and validation status.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
