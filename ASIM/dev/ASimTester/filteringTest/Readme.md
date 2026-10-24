@@ -60,7 +60,7 @@ python ASimFilteringTest.py 123-456 C:\parsers\vimDnsMicrosoftOMSfict.yaml 99
 
 ## Results
 
-The filtering tests support EmailEvent parsers, including recipient matching across the To, CC, and BCC arrays. If a workspace has only constant or unavailable field values, the validator reports partial coverage while still checking defaults, matching values when present, and absent values. Datetime filters are checked against the mapped EventStartTime and EventEndTime columns.
+The filtering tests support EmailEvent parsers, including recipient matching across the To, CC, and BCC arrays. If a workspace has only constant or unavailable field values, the validator reports partial coverage while still checking defaults, matching values when present, and absent values. Datetime validation retains its previous behavior: this legacy script does not exercise available datetime columns, while the shared `.script` validator checks datetime filters against TimeGenerated.
 
 - If all the validations that the test script performed have passed you will receive an "ok" message:
 

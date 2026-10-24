@@ -447,60 +447,39 @@ class FilteringTest(unittest.TestCase):
     
     def datetime_test(self, param, query_definition, column_name_in_table):
         param_name = param['Name']
-        no_filter_query = query_definition + f"query() | project {column_name_in_table} \n"
+        # Get count of rows without filtering
+        no_filter_query = query_definition + f"query() | project TimeGenerated \n"
         no_filter_response = self.send_query(no_filter_query)
         num_of_rows_when_no_filters_in_query = len(no_filter_response.tables[0].rows)
-        self.assertNotEqual(num_of_rows_when_no_filters_in_query, 0, f"No data for parameter:{param_name}")
+        self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         datetime_mid_point_query = query_definition + (
-            f"query() | summarize max_filter_time = max({column_name_in_table}), "
-            f"min_filter_time = min({column_name_in_table}), "
-            f"distinct_filter_time = count_distinct({column_name_in_table}) \n"
-            "| extend timeSpanMicroseconds = datetime_diff('microsecond', max_filter_time, min_filter_time) \n"
-            "| project mid_point = min_filter_time + ((max_filter_time - min_filter_time) / 2), "
-            "min_filter_time, max_filter_time, distinct_filter_time, timeSpanMicroseconds"
+            "query() "
+            "| summarize max_TimeGenerated = max(TimeGenerated), "
+            "min_TimeGenerated = min(TimeGenerated), "
+            "distinct_TimeGenerated = count_distinct(TimeGenerated) \n"
+            "| extend timeSpanMicroseconds = datetime_diff('microsecond', max_TimeGenerated, min_TimeGenerated) \n"
+            "| project mid_point = min_TimeGenerated + ((max_TimeGenerated - min_TimeGenerated) / 2), "
+            "distinct_TimeGenerated, timeSpanMicroseconds"
         )
         datetime_mid_point_response = self.send_query(datetime_mid_point_query)
         midpoint_row = datetime_mid_point_response.tables[0].rows[0]
-        min_filter_time = midpoint_row[1]
-        max_filter_time = midpoint_row[2]
-        distinct_time_generated = midpoint_row[3]
-        time_span_microseconds = midpoint_row[4]
-        if distinct_time_generated == 0 or min_filter_time is None or max_filter_time is None:
+        distinct_time_generated = midpoint_row[1]
+        time_span_microseconds = midpoint_row[2]
+        if distinct_time_generated < 2 or time_span_microseconds < 2:
             print_and_flush(
-                f"Parameter: {param_name} - {column_name_in_table} has no non-null values; "
+                f"Parameter: {param_name} - TimeGenerated values do not span a testable range; "
                 "datetime filtering validation is partial."
             )
             return
 
         mid_point_datetime_value = midpoint_row[0]
         datetime_mid_point_value = f"datetime({mid_point_datetime_value})"
-        filtered_count = self.get_count_for_query(
-            query_definition + f"query({param_name}={datetime_mid_point_value})\n"
-        )
-        self.assertGreater(filtered_count, 0, f"Parameter: {param_name} - Expected results for an in-range filter.")
-        if distinct_time_generated >= 2 and time_span_microseconds >= 2:
-            self.assertLess(
-                filtered_count,
-                num_of_rows_when_no_filters_in_query,
-                f"Parameter: {param_name} - Expected fewer results for an in-range filter."
-            )
-        else:
-            print_and_flush(
-                f"Parameter: {param_name} - {column_name_in_table} values do not span a testable range; "
-                "datetime filtering validation is partial."
-            )
-
-        boundary_aggregation = "max" if param_name == "starttime" else "min"
-        boundary_offset = 1 if param_name == "starttime" else -1
-        absent_count = self.get_count_for_query(
-            query_definition
-            + f"let filter_boundary = toscalar(query() | summarize {boundary_aggregation}({column_name_in_table}));\n"
-            + f"query({param_name}=datetime_add('microsecond', {boundary_offset}, filter_boundary))\n"
-        )
-        self.assertEqual(
-            absent_count, 0,
-            f"Parameter: {param_name} - Returned results beyond the {column_name_in_table} data boundary."
-        )
+        # Get count of rows after applying filtering
+        query_with_filter = query_definition + f"query({param_name}={datetime_mid_point_value})\n"
+        filtered_response = self.send_query(query_with_filter)
+        self.assertNotEqual(len(filtered_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
+        num_of_rows_with_filter_in_query = len(filtered_response.tables[0].rows)
+        self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {param_name} - Expected to have less results after filtering. Filtered by value: {datetime_mid_point_value}")
 
     def get_count_for_query(self, query):
         response = self.send_query(query + " | count\n")

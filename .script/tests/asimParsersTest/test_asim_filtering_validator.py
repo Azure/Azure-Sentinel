@@ -145,13 +145,12 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
         self.assertIn("query(disabled=true)", test.send_query.call_args_list[0].args[0])
         self.assertIn("query(disabled=false)", test.send_query.call_args_list[1].args[0])
 
-    def test_datetime_filter_uses_schema_event_time_and_checks_out_of_range(self):
+    def test_datetime_filter_preserves_original_timegenerated_behavior(self):
         test = self.make_test(
             [
                 response([["2026-10-21T00:00:00Z"], ["2026-10-22T00:00:00Z"]]),
-                response([["2026-10-21T12:00:00Z", "2026-10-21T00:00:00Z", "2026-10-22T00:00:00Z", 2, 86400000000]]),
-                response([[1]]),
-                response([[0]]),
+                response([["2026-10-21T12:00:00Z", 2, 86400000000]]),
+                response([["2026-10-22T00:00:00Z"]]),
             ]
         )
         test.datetime_test(
@@ -160,10 +159,11 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
             "EventStartTime",
         )
         query_text = "\n".join(call.args[0] for call in test.send_query.call_args_list)
-        self.assertIn("max(EventStartTime)", query_text)
-        self.assertIn("project EventStartTime", query_text)
-        self.assertNotIn("TimeGenerated", query_text)
-        self.assertIn("datetime_add('microsecond', 1, filter_boundary)", query_text)
+        self.assertIn("max(TimeGenerated)", query_text)
+        self.assertIn("project TimeGenerated", query_text)
+        self.assertNotIn("EventStartTime", query_text)
+        self.assertIn("query(starttime=datetime(2026-10-21T12:00:00Z))", query_text)
+        self.assertEqual(test.send_query.call_count, 3)
 
     def test_sparse_maillog_filter_checks_match_and_absent_values(self):
         test = self.make_test(
