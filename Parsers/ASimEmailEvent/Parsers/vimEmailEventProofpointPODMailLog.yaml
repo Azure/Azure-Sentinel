@@ -90,10 +90,12 @@ ParserQuery: |
         EmailSizeBytes = tolong(sm.sizeBytes),
         DeliveryStatus = tostring(sm.stat)
     | parse Relay with RelayHost " [" RelayIp "]" *
+    | extend RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, "")
+    | where array_length(ipaddr_has_any_prefix) == 0
+        or has_any_ipv4_prefix(RelayIp, ipaddr_has_any_prefix)
     | extend
         EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
         RelayHost = trim_end(@"\.", coalesce(RelayHost, Relay)),
-        RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, ""),
         EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tostring(sm.mailer) in~ ("smtp", "esmtp"), "SMTP", ""),
         EventSubType = iff(IsDelivery, "EmailSent", "EmailReceived")
     | extend
@@ -109,9 +111,6 @@ ParserQuery: |
         DvcFQDN = iff(Dvc contains ".", Dvc, ""),
         EmailMailFromDomain = iff(EmailMailFromAddress contains "@", tostring(split(EmailMailFromAddress, "@")[1]), ""),
         DvcAction = iff(IsDelivery and EventResult == "Success" and DeliveryStatus startswith "Sent", "Delivered", "NA")
-    | where array_length(ipaddr_has_any_prefix) == 0
-        or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix)
-        or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
     | extend
         SrcFQDN = iff(IsDelivery, DvcFQDN, SrcFQDN),
         SrcDomain = iff(iff(IsDelivery, Dvc, RelayHost) contains ".", SrcDomain, ""),
