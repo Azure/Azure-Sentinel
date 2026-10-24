@@ -1,7 +1,7 @@
 Parser:
   Title: Email Event ASIM filtering parser for Proofpoint POD MailLog
-  Version: '0.1.1'
-  LastUpdated: Oct 23, 2026
+  Version: '0.1.2'
+  LastUpdated: Oct 24, 2026
 Product:
   Name: Proofpoint POD MailLog
 Normalization:
@@ -95,14 +95,14 @@ ParserQuery: |
         or has_any_ipv4_prefix(RelayIp, ipaddr_has_any_prefix)
     | extend
         EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
-        RelayHost = trim_end(@"\.", coalesce(RelayHost, Relay)),
+        RelayHost = trim_end(@"\.", tostring(split(coalesce(RelayHost, Relay), "@")[-1])),
         EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tostring(sm.mailer) in~ ("smtp", "esmtp"), "SMTP", ""),
         EventSubType = iff(IsDelivery, "EmailSent", "EmailReceived")
     | extend
         SrcIpAddr = iff(IsDelivery, "", RelayIp),
         DstIpAddr = iff(IsDelivery, RelayIp, ""),
         Src = iff(IsDelivery, Dvc, coalesce(RelayIp, RelayHost)),
-        Dst = iff(IsDelivery, coalesce(RelayIp, RelayHost), Dvc),
+        Dst = iff(IsDelivery, coalesce(RelayIp, RelayHost, iff(tostring(sm.mailer) =~ "local", Dvc, "")), Dvc),
         SrcFQDN = iff(not(IsDelivery) and RelayHost contains ".", RelayHost, ""),
         SrcHostname = iff(IsDelivery, tostring(split(Dvc, ".")[0]), tostring(split(RelayHost, ".")[0])),
         SrcDomain = iff(IsDelivery, substring(Dvc, indexof(Dvc, ".") + 1), substring(RelayHost, indexof(RelayHost, ".") + 1)),

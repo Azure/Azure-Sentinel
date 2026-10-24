@@ -1,5 +1,10 @@
 # Changelog for vimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.2
+
+- (2026-10-24) Normalize mailbox-form relay hosts and identify relay-less local delivery destinations - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
+- Preserve filtering while extracting the relay host and using the reporting device for local delivery without a relay endpoint.
+
 ## Version 0.1.1
 
 - (2026-10-23) Handle missing optional source IDs in CI-ingested records without changing filtering or inventing event identifiers - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)

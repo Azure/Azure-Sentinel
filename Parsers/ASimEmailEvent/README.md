@@ -31,7 +31,9 @@ and [DCR transform](../../Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20
 The [20 existing raw samples](../../Sample%20Data/Custom/ProofpointPOD_maillog_CL.json)
 provide the observed `sm` and device fields. The ASIM fixture
 `Sample Data/ASIM/Proofpoint_POD MailLog_EmailEvent_IngestedLogs.csv` is a
-local transformation of those samples into the CCP shape, not a workspace export.
+local transformation of those samples into the CCP shape, not a workspace export,
+plus three explicitly synthetic local-endpoint regression rows based on the
+user-provided relay shapes (23 rows total).
 Its timestamps use the source `ts` value for reproducibility; the real DCR
 sets `TimeGenerated` to ingestion time and `eventTime` to `todatetime(ts)`.
 
@@ -45,6 +47,8 @@ sets `TimeGenerated` to ingestion time and `eventTime` to `todatetime(ts)`.
 | Presence of `sm.from` or nonempty `sm.to`, with `sm.qid` | Select receipt/delivery records; nonempty `sm.to` identifies `EmailSent`, otherwise `EmailReceived` |
 | `sm.relay` | Remote host/IP; source on receipt, destination on delivery |
 | Reporting device | Destination on receipt, source on delivery |
+| Mailbox-form `sm.relay` (for example, `pps@localhost`) | Host portion (`localhost`), not the mailbox, in endpoint hostname fields |
+| `sm.mailer=local` with no relay endpoint | Reporting device as `Dst`; no destination IP is inferred |
 | `sm.from` | `EmailMailFromAddress`, `EmailMailFromDomain` after removing surrounding whitespace/angle brackets |
 | `sm.sizeBytes` | `EmailSizeBytes` as a long |
 | `sm.proto`, `sm.mailer` | `EmailProtocolName` (`SMTP` for SMTP/esmtp) |
@@ -56,6 +60,12 @@ sets `TimeGenerated` to ingestion time and `eventTime` to `todatetime(ts)`.
 The reporting device may be either endpoint of an SMTP hop; `EmailDirection`
 is therefore `Unknown`, not an inferred organizational inbound/outbound direction.
 Receipt rows do not contain a delivery result and return `EventResult=NA`.
+User-provided validation samples also show local submissions with mailbox-form
+relay values and local deliveries without a relay. The parser extracts the host
+portion of a mailbox-form relay. Only the explicit `local` mailer permits a
+missing delivery endpoint to fall back to the reporting device; missing remote
+endpoints remain unmapped. Original relay values remain in `AdditionalFields.sm`
+when packing is enabled.
 The parser does not repair the truncated sender present in one repository sample:
 sender strings without `@` are left unmapped, with the original in
 `AdditionalFields.sm` when packing is enabled. This is not full RFC mailbox validation.
