@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.7.2       | 21-10-2026                     | Added Microsoft Defender XDR custom detections and an XDR workbook migrated from the solution's Microsoft Sentinel analytic rules and workbook; updated the **Brute force attack against user credentials** analytic rule custom details to reference projected output columns |
 | 3.7.1       | 01-10-2026                     | Promoted the Salesforce Marketing Cloud connector to GA |
 | 3.7.0       | 01-09-2026                     | Added the Salesforce Marketing Cloud CCF connector with audit and security event ingestion, custom tables, DCR transformations, and parser aliases. |
 | 3.6.1       | 26-08-2026                     | Corrected the Salesforce Service Cloud parser metadata version |
