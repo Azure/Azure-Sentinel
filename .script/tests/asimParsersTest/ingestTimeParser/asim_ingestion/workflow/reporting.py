@@ -326,11 +326,6 @@ def build_report(
         else None
     )
     qtp_replay_detail = _error_detail(qtp_replay_error)
-    qtp_replay_error_stage = (
-        qtp_replay_error.get("stage")
-        if isinstance(qtp_replay_error, Mapping)
-        else None
-    )
     parser_dcr_failed = (
         not parser_dcr_value
         and error_stage in {"dcr-create", "dcr-provisioning"}
@@ -359,32 +354,12 @@ def build_report(
             else raw_dcr_value
         ),
     )
-    raw_ingestion_failed = error_stage in {
-        "upload",
-        "upload-reconciliation",
-        "raw-visibility",
-        "source-snapshot",
-    } and not validation.get("parserDcr")
-    qtp_raw_ingestion_warning = (
-        qtp_replay_status == "warning"
-        and (
-            bool(raw_dcr_value)
-            or qtp_replay_error_stage
-            in {
-                "upload",
-                "upload-reconciliation",
-                "raw-visibility",
-            }
-        )
-    )
     raw_ingestion = _stage(
         (
-            "warning"
-            if qtp_raw_ingestion_warning
+            "failed"
+            if qtp_replay_status == "failed"
             else "blocked"
             if qtp_replay_status == "warning"
-            else "failed"
-            if raw_ingestion_failed
             else "passed"
             if validation.get("rawUpload")
             else "not-applicable"
@@ -393,11 +368,9 @@ def build_report(
         ),
         (
             qtp_replay_detail
-            if qtp_raw_ingestion_warning
-            else "Blocked by QTP raw DCR warning."
+            if qtp_replay_status == "failed"
+            else "Blocked by QTP raw DCR creation warning."
             if qtp_replay_status == "warning"
-            else error_detail
-            if raw_ingestion_failed
             else ""
         ),
         {
