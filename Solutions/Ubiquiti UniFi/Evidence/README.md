@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Ubiquiti UniFi (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (60 PASS, 13 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validation Failed** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (61 PASS, 12 FAIL, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -35,22 +35,20 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 | Check | Observation |
 |---|---|
-| `VAL-URL-01` | Checked 216 URL(s) (23 aka.ms); found 3 invalid URL(s): Data Connectors/Logo/ubiquiti.svg: insecure HTTP URL http://www.w3.org/2000/svg; Workbooks/Images/Logo/ubiquiti.sv |
+| `VAL-URL-01` | Checked 216 URL(s) (23 aka.ms); found 3 invalid URL(s): Data Connectors/Logo/ubiquiti.svg: insecure HTTP URL http[:]//www.w3.org/2000/svg; Workbooks/Images/Logo/ubiquiti.sv |
 | `QUAL-00` | Validation rollup is 'Validation Failed'; unwaived failing/skipped checks: VAL-URL-01. |
 | `E2E-Q02` | Evaluated 20 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
 | `E2E-Q04` | Executed 10 workbook query/queries; totalRows=51, zeroOrFailedQueries=['WB-Q10']. |
 | `E2E-Q05` | UI traversal incomplete: domVerified=False, screenshotCount=19. |
-| `TK-Q11` | alert-parity-state status=failed; alertsFired=0; restoredToDisabled=True; reason=None. |
+| `QUAL-MOCK-01` | expected keys landed=True; pairs satisfied=9/10 (not satisfied: ['UbiquitiUnknownMacJoined']; zero-row pairs accepted by decision/no declared scenario: ['UbiquitiDestinat |
+| `TK-Q11` | alert-parity-state status=failed; alertsFired=0 (per resource: [('sentinel-analytic-rule', 0), ('defender-xdr-custom-detection', 0), ('sentinel-analytic-rule', 0), ('defe |
 | `TK-G06` | uiTraversal: failed. |
 | `TK-Q06` | uiTraversal: status=failed, screenshots=19, failedItems=['azure-portal-sentinel-workbooks', 'defender-cd-detail:xdr-0998a19d-8451-4cdd-8493-fc342816a197', 'defender-cd-de |
-| `TK-Q07` | ARM provisioningState=Succeeded; installationVerified=False; registrationVerified=False; status=arm-accepted-contract-pending. |
 | `QUAL-TI-01` | Scanned 10 Analytic Rule(s) and 10 XDR Detection(s); TI references: ['UbiquitiDestinationInTiList.yaml', 'UbiquitiDestinationInTiList.yaml']. |
-| `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'dataConnectorIngestion', 'uiTra |
+| `E2E-V04` | Passing sections: ['dataConnectorIngestion', 'deployment', 'imageRendering', 'mockIngestion', 'urlVerification']; failing/absent: ['alertLifecycle', 'alertParity', 'uiTra |
 | `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': None, 'matchedPairCount': 0, 'mode': 'live', 'note' |
 
 ### Known gaps
-- **Installed workbook readback missing:** the ARM deployment succeeded, but installation/registration of the packaged (Defender) workbook could not be read back (Graph `security/workbooks` GET returned 403), so `TK-Q07` is reported as FAIL.
 - **Workbook queries:** 9/10 returned rows on both surfaces; 10/10 executed without error. Zero-row panels are listed in `receipts/workbook-queries-live.json`.
 - **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
 
