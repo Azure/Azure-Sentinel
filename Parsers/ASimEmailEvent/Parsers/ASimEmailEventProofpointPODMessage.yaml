@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Email Event parser for Proofpoint POD messages
-  Version: '0.1.0'
-  LastUpdated: Oct 21, 2026
+  Version: '0.1.1'
+  LastUpdated: Oct 23, 2026
 Product:
   Name: Proofpoint On Demand Email Security
 Normalization:
@@ -18,8 +18,12 @@ Description: |
   Normalizes message inspection records from the CCP connector's ProofpointPODMessage_CL
   table to ASIM EmailEvent. Each source message remains one event, including messages
   with multiple recipients or MIME parts. Filter disposition is not delivery confirmation.
+  DMARC quarantine/reject normalize to Fail and retain their policy; pass/none normalize
+  case-insensitively. DMARC temperror/permerror retain their original value but have no
+  normalized result because EmailEvent has no matching error enumeration.
+  Dispositions reject/discard map to Blocked, hold to Quarantined, redirect to Redirected,
+  and continue/accept/retry to NA without asserting successful delivery.
   Live source sampling and schema/data validation are deferred by user direction.
-  See the schema README for mapping limitations and validation status.
 ParserName: ASimEmailEventProofpointPODMessage
 EquivalentBuiltInParser: _ASim_EmailEvent_ProofpointPODMessage
 ParserParams:
@@ -77,7 +81,12 @@ ParserQuery: |
         Dvc=coalesce(DvcFQDN, EventProduct),
         DvcHostname=tostring(split(DvcFQDN, ".")[0]),
         DvcDomain=iff(indexof(DvcFQDN, ".") >= 0, substring(DvcFQDN, indexof(DvcFQDN, ".") + 1), ""),
-        DvcAction=iff(DvcOriginalAction in~ ("reject", "discard"), "Blocked", "NA"),
+        DvcAction=case(
+            DvcOriginalAction in~ ("reject", "discard"), "Blocked",
+            DvcOriginalAction =~ "hold", "Quarantined",
+            DvcOriginalAction =~ "redirect", "Redirected",
+            DvcOriginalAction in~ ("continue", "accept", "retry"), "NA",
+            "NA"),
         Src=coalesce(SrcIpAddr, SrcFQDN),
         SrcHostname=tostring(split(SrcFQDN, ".")[0]),
         SrcDomain=iff(indexof(SrcFQDN, ".") >= 0, substring(SrcFQDN, indexof(SrcFQDN, ".") + 1), ""),
@@ -93,7 +102,11 @@ ParserQuery: |
             EmailSpfOriginalResult =~ "permerror", "PermanentError", ""),
         EmailDmarcResult=case(
             EmailDmarcOriginalResult =~ "pass", "Pass",
-            EmailDmarcOriginalResult =~ "fail", "Fail",
+            EmailDmarcOriginalResult in~ ("fail", "quarantine", "reject"), "Fail",
+            EmailDmarcOriginalResult =~ "none", "None", ""),
+        EmailDmarcPolicy=case(
+            EmailDmarcOriginalResult =~ "quarantine", "Quarantine",
+            EmailDmarcOriginalResult =~ "reject", "Reject",
             EmailDmarcOriginalResult =~ "none", "None", ""),
         EmailDkimResult=case(
             EmailDkimOriginalResult =~ "pass", "Pass",
@@ -113,7 +126,7 @@ ParserQuery: |
         Src, SrcIpAddr, SrcFQDN, SrcHostname, SrcDomain, SrcDomainType, SrcGeoCountry, IpAddr, Dst,
         EmailMailFromAddress, EmailMailFromDomain, EmailFromAddress, EmailFromDomain,
         EmailToRecipients, EmailSubject, EmailSizeBytes, EmailLanguage, EmailDirection, EmailProtocolName,
-        EmailSpfOriginalResult, EmailSpfResult, EmailDmarcOriginalResult, EmailDmarcResult,
+        EmailSpfOriginalResult, EmailSpfResult, EmailDmarcOriginalResult, EmailDmarcResult, EmailDmarcPolicy,
         EmailDkimOriginalResult, EmailDkimResult, EmailDkimDomain,
         AdditionalEntities, AdditionalFields
   };
