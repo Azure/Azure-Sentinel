@@ -1,5 +1,10 @@
 # Changelog for ASimEmailEventProofpointPODMessage.yaml
 
+## Version 0.1.2
+
+- (2026-10-24) Validate Proofpoint connection hosts before mapping ASIM source hostname and domain fields - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)
+- Retain valid single-label hostnames; leave IP-shaped, malformed, and non-FQDN values out of SrcFQDN and SrcDomain.
+
 ## Version 0.1.1
 
 - (2026-10-23) Map observed DMARC outcomes and message dispositions case-insensitively - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)

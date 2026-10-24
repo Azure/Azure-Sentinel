@@ -1,5 +1,10 @@
 # Changelog for vimEmailEventProofpointPODMessage.yaml
 
+## Version 0.1.2
+
+- (2026-10-24) Match the parameterless parser's validated Proofpoint connection-host mapping - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)
+- Keep valid single-label hostnames and avoid classifying IP-shaped or malformed host values as ASIM FQDNs.
+
 ## Version 0.1.1
 
 - (2026-10-23) Match the parameterless parser's DMARC and disposition mappings - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)

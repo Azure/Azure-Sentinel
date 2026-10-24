@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Email Event filtering parser for Proofpoint POD messages
-  Version: '0.1.1'
-  LastUpdated: Oct 23, 2026
+  Version: '0.1.2'
+  LastUpdated: Oct 24, 2026
 Product:
   Name: Proofpoint On Demand Email Security
 Normalization:
@@ -110,7 +110,10 @@ ParserQuery: |
         DvcFQDN=coalesce(tostring(pps.agent), tostring(metadata.origin.data.agent)),
         DvcOriginalAction=tostring(['filter'].disposition),
         SrcIpAddr=tostring(connection.ip),
-        SrcFQDN=tostring(connection.host),
+        SrcFQDN=iff(
+            tostring(connection.host) matches regex @'^([_a-zA-Z0-9][_a-zA-Z0-9-]{0,62}\.)+[a-zA-Z]{2,63}$'
+                and tostring(split(tostring(connection.host), ".")[0]) matches regex @'^[a-zA-Z0-9-]{1,61}$',
+            tostring(connection.host), ""),
         SrcGeoCountry=tostring(connection.country),
         Dst=iff(array_length(envelope.rcpts) == 1, tostring(envelope.rcpts[0]), tostring(envelope.rcpts)),
         EmailMailFromAddress=tostring(envelope.from),
@@ -138,7 +141,10 @@ ParserQuery: |
             DvcOriginalAction in~ ("continue", "accept", "retry"), "NA",
             "NA"),
         Src=coalesce(SrcIpAddr, SrcFQDN),
-        SrcHostname=tostring(split(SrcFQDN, ".")[0]),
+        SrcHostname=case(
+            isnotempty(SrcFQDN), tostring(split(SrcFQDN, ".")[0]),
+            tostring(connection.host) matches regex @'^[a-zA-Z0-9-]{1,61}$', tostring(connection.host),
+            ""),
         SrcDomain=iff(indexof(SrcFQDN, ".") >= 0, substring(SrcFQDN, indexof(SrcFQDN, ".") + 1), ""),
         EmailMailFromDomain=tostring(split(EmailMailFromAddress, "@")[1]),
         EmailFromDomain=tostring(split(EmailFromAddress, "@")[1]),
