@@ -128,7 +128,7 @@ contentProvenance:
     dataTypes:
     - CiscoMerakiNativePoller
     - Syslog
-  dependencyReviewRequired: true
+  dependencyReviewRequired: false
   source:
     platform: Microsoft Sentinel
     kind: AnalyticsRule
@@ -142,24 +142,24 @@ contentProvenance:
   conversion:
     tool: sentinel-to-xdr-migration
     version: 0.1.0
-    status: needsReview
-    reviewRequired: true
+    status: converted
+    reviewRequired: false
     reviewReasons: []
     requiredWorkloads:
     - sentinel
     warnings:
-    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
-      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
-    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
-      and the service drops all custom details if exceeded
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
     informational:
-    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
-      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
-      single tactic.
-    errors:
-    - customDetails 'AllDstIpAddr' column `set_DstIpAddr` is missing from the final query output; explicit binding retained
-      for correction
-    - no supported entity mappings were produced
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
     originalTactics:
     - Reconnaissance
     - Discovery
@@ -168,7 +168,7 @@ contentProvenance:
     - T1046
     reviewScope:
       sourceDocumentSha256: d982d3f5ba26d5a9c2426983f6ae8883f3e568a1b4a3c6f6fbf4a2c967439ccd
-      targetQuerySha256: ba6401fc18c94f2080ccfccdac848a781b82b3e2ce26d43f46324bb484ac47fe
+      targetQuerySha256: 1de9a0b4c777e733ae80c00a65283c2ae02bf8e1c7b82003959f298f7f22a90e
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -183,35 +183,44 @@ contentProvenance:
       parityClaimed: false
       hasAggregation: true
       aggregationWindowDifference: true
-      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
-        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
-      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
-        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
-        hour.
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
       sourceDocumentSha256: d982d3f5ba26d5a9c2426983f6ae8883f3e568a1b4a3c6f6fbf4a2c967439ccd
-      targetQuerySha256: ba6401fc18c94f2080ccfccdac848a781b82b3e2ce26d43f46324bb484ac47fe
+      targetQuerySha256: 1de9a0b4c777e733ae80c00a65283c2ae02bf8e1c7b82003959f298f7f22a90e
 properties:
   id: xdr-cd8faa84-4464-4b4e-96dc-b22f50c27541
   displayName: Network Port Sweep from External Network (ASIM Network Session schema)
   status: disabled
   queryCondition:
-    queryText: |-
-      let lookback = 1h;
+    queryText: 'let lookback = 1h;
+
       let threshold = 20;
+
       _Im_NetworkSession(starttime=ago(lookback),endtime=now())
+
       | where NetworkDirection == "Inbound"
-      | summarize make_set(DstIpAddr,100) by SrcIpAddr, DstPortNumber
-      | where array_length(set_DstIpAddr) > threshold
+
+      | summarize set_DstIpAddr = make_set(DstIpAddr,100) by SrcIpAddr, DstPortNumber
+
+      | where array_length(set_DstIpAddr) > threshold'
   schedule:
     frequency: PT1H
   detectionAction:
     alertTemplate:
       title: Network Port Sweep from External Network (ASIM Network Session schema)
-      description: '''This detection rule detects scenarios when a particular port is being scanned by multiple external sources.
-        The rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM
-        Network Session schema.'''
+      description: '''This detection rule detects scenarios when a particular port
+        is being scanned by multiple external sources. The rule utilize [ASIM](https://aka.ms/AboutASIM)
+        normalization, and is applied to any source which supports the ASIM Network
+        Session schema.'''
       severity: high
-      entityMappings: {}
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
       tactics:
       - tactic: Reconnaissance
         techniques:

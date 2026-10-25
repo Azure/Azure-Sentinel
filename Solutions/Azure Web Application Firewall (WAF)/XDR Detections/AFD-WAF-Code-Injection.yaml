@@ -55,7 +55,7 @@ contentProvenance:
     - T1548
     reviewScope:
       sourceDocumentSha256: cd1ec1a89cd54d3baced5122793d7bc509143dc742ce65b09dec246a82053f7c
-      targetQuerySha256: 0af0de875054dc5b1683bdc79b8a5f464eeb354c0fe7c7d23b1c83c7ad65ead8
+      targetQuerySha256: 9023f0d19e41ac547e1592a2f275947a7b9c22b897a38362734e55e89bb90801
 properties:
   id: xdr-ded8168e-c806-4772-af30-10576e0a7529
   displayName: AFD WAF - Code Injection
@@ -65,6 +65,7 @@ properties:
       let Threshold = 3;
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | extend action_s = column_ifexists("action_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "AnomalyScoring"
       | where details_msg_s has "Injection" or details_msg_s has "File Inclusion"
       | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
@@ -72,6 +73,7 @@ properties:
       | join kind = inner(
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | extend action_s = column_ifexists("action_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "Block") on trackingReference_s
       | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
       | where Total_TrackingReference >= Threshold

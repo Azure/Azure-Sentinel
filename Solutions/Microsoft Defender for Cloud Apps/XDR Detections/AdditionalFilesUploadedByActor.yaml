@@ -11,7 +11,12 @@ contentProvenance:
   requiredWorkloads:
   - workload: mtp
     dataTypes:
-    - AlertInfo
+    - AlertEvidence
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+    - StorageBlobLogs
+    - StorageFileLogs
   requiredDataConnectors:
   - connectorId: MicrosoftCloudAppSecurity
     dataTypes:
@@ -30,11 +35,9 @@ contentProvenance:
   conversion:
     tool: sentinel-to-xdr-migration
     version: 0.1.0
-    status: needsReview
-    reviewRequired: true
-    reviewReasons:
-    - Original Sentinel lookback is shorter than the native XDR service window, but source and target table inputs cannot
-      be proven equivalent
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
     requiredWorkloads:
     - sentinel
     warnings:
@@ -67,21 +70,21 @@ contentProvenance:
     - T1567
     reviewScope:
       sourceDocumentSha256: be0bbd643349505d4a7db294380d17fe78cb164fc7aca228e922398e1376c5b3
-      targetQuerySha256: d4d7332c5be64d5fa4162b897ebb1137276a7c79d0438a5ab28f800c9d71cc80
+      targetQuerySha256: 5782fc651853f12d3b89f767c39eeff3d0803f5ad01c6444e62dad3207b045d3
     supplementalEntityDetails:
     - entityType: FileHash
       entityIndex: 2
       identifier: Algorithm
       sourceColumn: HashAlgorithm
       column: HashAlgorithm
-      status: runtime-binding-pending
+      status: verified
       customDetailKey: FileHashAlgorithm
     - entityType: FileHash
       entityIndex: 2
       identifier: Value
       sourceColumn: LinkedMaliciousFileHash
       column: LinkedMaliciousFileHash
-      status: runtime-binding-pending
+      status: verified
       customDetailKey: FileHashValue
 properties:
   id: xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d
@@ -90,22 +93,21 @@ properties:
   queryCondition:
     queryText: |-
       //Collect the alert events
-      let alertData = AlertInfo
+      let alertData = AlertEvidence
       | where Title has "Potential malware uploaded to"
-      | extend AdditionalFields = parse_json(AdditionalFields)
-      | mv-expand AdditionalFields;
+      | extend AdditionalFields = parse_json(AdditionalFields);
       //Parse the IP address data
       let ipData = alertData
-      | where AdditionalFields['Type'] =~ "ip"
-      | extend AttackerIP = tostring(AdditionalFields['Address']), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);
+      | where EntityType =~ "Ip" or tostring(AdditionalFields['Type']) =~ "ip"
+      | extend AttackerIP = coalesce(RemoteIP, tostring(AdditionalFields['Address'])), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);
       //Parse the file data
       let FileData = alertData
-      | where AdditionalFields['Type'] =~ "file"
-      | extend MaliciousFileDirectory = tostring(AdditionalFields['Directory']), MaliciousFileName = tostring(AdditionalFields['Name']), MaliciousFileHashes = tostring(AdditionalFields['FileHashes']);
+      | where EntityType =~ "File" or tostring(AdditionalFields['Type']) =~ "file"
+      | extend MaliciousFileDirectory = coalesce(FolderPath, tostring(AdditionalFields['Directory'])), MaliciousFileName = coalesce(FileName, tostring(AdditionalFields['Name'])), MaliciousFileHashes = coalesce(SHA256, SHA1, tostring(AdditionalFields['FileHashes']));
       //Combine the File and IP data together
       ipData
-      | join (FileData) on VendorOriginalId
-      | summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId, AlertType, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes
+      | join (FileData) on AlertId
+      | summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId = ResourceID, AlertType = ServiceSource, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes
       //Create a type column so we can track if it was a File storage or blobl storage upload
       | extend type = iff(Title has "file", "File", "Blob")
       | join (
@@ -125,10 +127,10 @@ properties:
         | extend hexChar = tohex(toint(base64Char))
         | extend hexChar = iff(strlen(hexChar) < 2, strcat("0", hexChar), hexChar)
         | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
-        | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, Timestamp, RequestBodySize, ClientIP, SourceTable
+        | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable
         | extend Md5Hash = strcat_array(list_hexChar, "")
         //Pack the file information the summarise into a ClientIP row
-        | extend p = pack("FileName", FileName, "FileSize", RequestBodySize, "Md5Hash", Md5Hash, "Time", Timestamp, "SourceTable", SourceTable)
+        | extend p = pack("FileName", FileName, "FileSize", RequestBodySize, "Md5Hash", Md5Hash, "Time", TimeGenerated, "SourceTable", SourceTable)
         | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP
             | join kind=leftouter (
               union
@@ -138,7 +140,7 @@ properties:
               | extend ClientIP = tostring(split(CallerIpAddress, ":", 0)[0])
               | extend FileName = extract(@"\/([\w\-. ]+)\?", 1, Uri)
               | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
-              | extend p = pack("FileName", FileName, "Time", Timestamp, "SourceTable", SourceTable)
+              | extend p = pack("FileName", FileName, "Time", TimeGenerated, "SourceTable", SourceTable)
               | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP
               ) on ClientIP
         ) on $left.AttackerIP == $right.ClientIP

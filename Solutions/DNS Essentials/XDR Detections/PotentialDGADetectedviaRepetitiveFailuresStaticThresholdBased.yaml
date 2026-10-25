@@ -27,13 +27,11 @@ contentProvenance:
     requiredWorkloads:
     - sentinel
     warnings:
-    - 'Schedule assessment: source frequency=1d, lookback=10d; target frequency=P1D, native lookback=unknown/unconfigured;
-      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Schedule assessment: source frequency=1d, lookback=10d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
     - customDetails 'DNSQueries' column `DNSQueries` requires runtime output-schema binding verification
     - customDetails 'DNSQueryThreshold' column `DNSQueryThreshold` requires runtime output-schema binding verification
     - customDetails 'DNSQueryCount' column `DNSQueryCount` requires runtime output-schema binding verification
-    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
-      and the service drops all custom details if exceeded
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
     informational: []
     errors: []
     originalTactics:
@@ -46,52 +44,17 @@ contentProvenance:
       targetQuerySha256: ddfa7dd6d15c47a5ac182c095cfbfebdf8b888ac013c77394667ad882449d6ef
 properties:
   id: xdr-89ba52fa-96a7-4653-829a-ca49bb13336c
-  displayName: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM
-    DNS Solution)
+  displayName: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS Solution)
   status: disabled
   queryCondition:
-    queryText: |-
-      let threshold = 100;
-      let lookback = 10d;
-      let referenceendtime = 1d;
-      let nxDomainDnsEvents = (stime: datetime, etime: datetime) {
-        _Im_Dns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
-        | where DnsQueryTypeName in ("A", "AAAA")
-        | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
-        | where DnsQuery !contains "/" and DnsQuery contains "."
-      };
-      nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
-      | summarize
-        StartTimeUtc = min(TimeGenerated),
-        EndTimeUtc = max(TimeGenerated),
-        DNSQueryCount=dcount(DnsQuery)
-        by SrcIpAddr
-      | where DNSQueryCount > threshold
-      // Filter out previously seen IPs
-      | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
-        | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated,1d)
-        | where DNSQueryCount > threshold)
-        on SrcIpAddr
-      // Pull out sample NXDomain responses for those remaining potentially infected IPs
-      | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
-        | summarize by DnsQuery, SrcIpAddr)
-        on SrcIpAddr
-      | summarize
-        StartTimeUtc = min(StartTimeUtc),
-        EndTimeUtc = max(EndTimeUtc),
-        DNSQueries=make_list(DnsQuery, 100)
-        by SrcIpAddr, DNSQueryCount
-      | extend DNSQueryThreshold=threshold
+    queryText: "let threshold = 100;\nlet lookback = 10d;\nlet referenceendtime = 1d;\nlet nxDomainDnsEvents = (stime: datetime, etime: datetime) {\n  _Im_Dns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)\n  | where DnsQueryTypeName in (\"A\", \"AAAA\")\n  | where ipv4_is_match(\"127.0.0.1\", SrcIpAddr) == False\n  | where DnsQuery !contains \"/\" and DnsQuery contains \".\"\n};\nnxDomainDnsEvents (stime=ago(referenceendtime), etime=now())\n| summarize\n  StartTimeUtc = min(TimeGenerated),\n  EndTimeUtc = max(TimeGenerated),\n  DNSQueryCount=dcount(DnsQuery)\n  by SrcIpAddr\n| where DNSQueryCount > threshold\n// Filter out previously seen IPs\n| join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))\n  | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated,1d)\n  | where DNSQueryCount > threshold)\n  on SrcIpAddr\n// Pull out sample NXDomain responses for those remaining potentially infected IPs\n| join kind = inner (nxDomainDnsEvents\
+      \ (stime=ago(lookback), etime=now())\n  | summarize by DnsQuery, SrcIpAddr)\n  on SrcIpAddr\n| summarize\n  StartTimeUtc = min(StartTimeUtc),\n  EndTimeUtc = max(EndTimeUtc),\n  DNSQueries=make_list(DnsQuery, 100)\n  by SrcIpAddr, DNSQueryCount\n| extend DNSQueryThreshold=threshold"
   schedule:
     frequency: P1D
   detectionAction:
     alertTemplate:
-      title: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS
-        Solution)
-      description: '''This rule identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling
-        through possible C2 domains where most C2s are not live). An alert is generated when a new IP address is seen (based
-        on not being seen associated with NXDomain records in prior 10-day baseline period). It utilizes [ASIM](https://aka.ms/AboutASIM)
-        normalization and is applied to any source that supports the ASIM DNS schema.'''
+      title: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS Solution)
+      description: '''This rule identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period). It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'''
       severity: medium
       entityMappings:
         ips:

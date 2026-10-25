@@ -1,13 +1,22 @@
 schemaVersion: 1.0.0
-version: 3.5.3
+version: 3.2.2
 kind: CustomDetection
 resourceType: Microsoft.Security/detectionRules
 apiVersion: 2026-06-01-preview
 requiredDataConnectors: []
 contentProvenance:
-  requiredWorkloads: []
-  requiredDataConnectors: []
-  dependencyReviewRequired: true
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GitHubAuditData
+    - GitHubAuditLogPolling_CL
+    - GitHubAuditLogsV2_CL
+    - GitHubAuditLogsV3_CL
+  requiredDataConnectors:
+  - connectorId: GitHub
+    dataTypes:
+    - GitHubAuditLogPolling_CL
+  dependencyReviewRequired: false
   source:
     platform: Microsoft Sentinel
     kind: AnalyticsRule
@@ -27,13 +36,10 @@ contentProvenance:
     requiredWorkloads:
     - sentinel
     warnings:
-    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured;
-      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
-    - Account.FullName value is retained as customDetails.AccountFullName from query column `Actor`, but its target output
-      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Actor`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
     - Supplemental customDetails.AccountFullName column `Actor` requires runtime output-schema binding verification
-    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
-      and the service drops all custom details if exceeded
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
     informational: []
     errors: []
     originalTactics:
@@ -49,39 +55,20 @@ contentProvenance:
       identifier: FullName
       sourceColumn: Actor
       column: Actor
-      status: runtime-binding-pending
+      status: available
       customDetailKey: AccountFullName
 properties:
   id: xdr-f041e01d-840d-43da-95c8-4188f6cef546
   displayName: GitHub Activites from a New Country
   status: disabled
   queryCondition:
-    queryText: |-
-      let LearningPeriod = 7d;
-      let RunTime = 1h;
-      let StartTime = 1h;
-      let EndRunTime = StartTime - RunTime;
-      let EndLearningTime = StartTime + LearningPeriod;
-      let GitHubCountryCodeLogs = (GitHubAuditData
-      | where Country != "");
-        GitHubCountryCodeLogs
-      | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
-      | summarize makeset(Country) by Actor
-      | join kind=innerunique (
-        GitHubCountryCodeLogs
-        | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
-        | distinct Country, Actor, TimeGenerated
-      ) on Actor
-      | where set_Country !contains Country
-      | extend timestamp = TimeGenerated
-      | extend AccountName = tostring(split(Actor, "@")[0]), AccountUPNSuffix = tostring(split(Actor, "@")[1])
+    queryText: "let LearningPeriod = 7d;\nlet RunTime = 1h;\nlet StartTime = 1h;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet GitHubCountryCodeLogs = (GitHubAuditData\n| where Country != \"\");\n  GitHubCountryCodeLogs\n| where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))\n| summarize makeset(Country) by Actor\n| join kind=innerunique (\n  GitHubCountryCodeLogs\n  | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n  | distinct Country, Actor, TimeGenerated\n) on Actor\n| where set_Country !contains Country\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(Actor, \"@\")[0]), AccountUPNSuffix = tostring(split(Actor, \"@\")[1])"
   schedule:
     frequency: P1D
   detectionAction:
     alertTemplate:
       title: GitHub Activites from a New Country
-      description: '''Detect activities from a location that was not recently or was never visited by the user or by any user
-        in your organization.'''
+      description: '''Detect activities from a location that was not recently or was never visited by the user or by any user in your organization.'''
       severity: medium
       entityMappings:
         accounts:

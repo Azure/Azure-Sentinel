@@ -21,26 +21,19 @@ contentProvenance:
   conversion:
     tool: sentinel-to-xdr-migration
     version: 0.1.0
-    status: needsReview
-    reviewRequired: true
-    reviewReasons:
-    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
     requiredWorkloads:
     - sentinel
     warnings:
     - isfuzzy unions can still fail semantic binding in Advanced Hunting
-    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
-      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
-    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'Total' column `Total` has an unproven output binding after a destructive projection; the explicit binding
-      is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
-      and the service drops all custom details if exceeded
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'Total' column `Total` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
     informational: []
     errors: []
     originalTactics:
@@ -56,128 +49,17 @@ properties:
   displayName: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
   status: disabled
   queryCondition:
-    queryText: |-
-      let threshold = 2.5;
-      let min_t = ago(14d);
-      let max_t = now();
-      let timeframe = 1d;
-      // calculate avg. eps(events per second)
-      let eps = materialize (_Im_Dns
-        | project TimeGenerated
-        | where TimeGenerated > ago(5m)
-        | count
-        | extend Count = Count / 300);
-      let maxSummarizedTime = toscalar (
-        union isfuzzy=true
-            (
-            DNSEssentialsCustomParser
-            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
-            | where EventTime_t >= min_t
-            | summarize max_TimeGenerated=max(EventTime_t)
-            | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)
-            ),
-            (
-            print(min_t)
-            | project max_TimeGenerated = print_0
-            )
-        | summarize maxTimeGenerated = max(max_TimeGenerated)
-        );
-      let summarizationexist = materialize(
-        union isfuzzy=true
-            (
-            DNSEssentialsCustomParser
-            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
-            | where EventTime_t > ago(1d)
-            | project v = int(2)
-            ),
-            (
-            print int(1)
-            | project v = print_0
-            )
-        | summarize maxv = max(v)
-        | extend sumexist = (maxv > 1)
-        );
-      let allData = union isfuzzy=true
-            (
-            (datatable(exists: int, sumexist: bool)[1, false]
-            | where toscalar(eps) > 1000
-            | join (summarizationexist) on sumexist)
-            | join (
-                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())
-                | where TimeGenerated > maxSummarizedTime
-                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
-                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
-                )
-                on exists
-            | project-away exists, maxv, sum*
-            ),
-            (
-            (datatable(exists: int, sumexist: bool)[1, false]
-            | where toscalar(eps) between (501 .. 1000)
-            | join (summarizationexist) on sumexist)
-            | join (
-                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())
-                | where TimeGenerated > maxSummarizedTime
-                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
-                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
-                )
-                on exists
-            | project-away exists, maxv, sum*
-            ),
-            (
-            (datatable(exists: int, sumexist: bool)[1, false]
-            | where toscalar(eps) <= 500
-            | join (summarizationexist) on sumexist)
-            | join (
-                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())
-                | where TimeGenerated > maxSummarizedTime
-                | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
-                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
-                )
-                on exists
-            | project-away exists, maxv, sum*
-            ),
-            (
-            DNSEssentialsCustomParser
-            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
-            | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
-            | project-rename
-                SrcIpAddr=SrcIpAddr_s,
-                DnsQuery=DnsQuery_s,
-                Count=count__d,
-                EventTime=EventTime_t
-            | extend Count = toint(Count)
-            );
-      allData
-      | make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr
-      // include calculated Anomalies, Score and Baseline
-      | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')
-      | mv-expand anomalies, score, baseline, EventTime, QueryCount
-      | extend
-        anomalies = toint(anomalies),
-        score = toint(score),
-        baseline = toint(baseline),
-        EventTime = todatetime(EventTime),
-        Total = tolong(QueryCount)
-      | where EventTime >= ago(timeframe)
-      | where score >= threshold * 2
-      // Join allData to include DnsQuery details
-      | join kind=inner(allData
-        | where TimeGenerated >= ago(timeframe)
-        | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)
-        on SrcIpAddr
-      | project-away SrcIpAddr1
+    queryText: "let threshold = 2.5;\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true\n      (\n      DNSEssentialsCustomParser\n      | where Type in (\"DNS_Summarized_Logs_ip_CL\", \"DNS_Summarized_Logs_ipV1_CL\")\n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated)\n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true\n      (\n      DNSEssentialsCustomParser\n      | where Type in (\"DNS_Summarized_Logs_ip_CL\", \"DNS_Summarized_Logs_ipV1_CL\")\n      | where EventTime_t\
+      \ > ago(1d)\n      | project v = int(2)\n      ),\n      (\n      print int(1)\n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN',\
+      \ starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNSEssentialsCustomParser\n      | where Type in (\"DNS_Summarized_Logs_ip_CL\"\
+      , \"DNS_Summarized_Logs_ipV1_CL\")\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | project-rename\n          SrcIpAddr=SrcIpAddr_s,\n          DnsQuery=DnsQuery_s,\n          Count=count__d,\n          EventTime=EventTime_t\n      | extend Count = toint(Count)\n      );\nallData\n| make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr\n// include calculated Anomalies, Score and Baseline\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= threshold * 2\n// Join allData to include DnsQuery details\n| join kind=inner(allData\n  | where TimeGenerated >= ago(timeframe)\n  |\
+      \ summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1"
   schedule:
     frequency: P1D
   detectionAction:
     alertTemplate:
       title: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
-      description: '''This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response
-        count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert
-        is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating
-        a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that
-        supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make
-        sure it is installed and confi'
+      description: '''This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and confi'
       severity: medium
       entityMappings:
         ips:

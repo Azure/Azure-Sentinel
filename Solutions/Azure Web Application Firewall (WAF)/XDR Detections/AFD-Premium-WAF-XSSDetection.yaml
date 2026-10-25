@@ -52,7 +52,7 @@ contentProvenance:
     - T0853
     reviewScope:
       sourceDocumentSha256: 7ba46869487601324a7c850995a9cf8c4a3444be1a6ea5afb4fb37aa77b58b01
-      targetQuerySha256: 53acabfe7f3ae07a52bff037bfac146023357a80456e24395f6ea75a2ca82916
+      targetQuerySha256: c9ab54d23e28af4a7dde891a0de455b7c5224779c39bc0037039959059f5efe4
 properties:
   id: xdr-b7643904-5081-4920-917e-a559ddc3448f
   displayName: Front Door Premium WAF - XSS Detection
@@ -62,6 +62,7 @@ properties:
       let Threshold = 1;
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | extend action_s = column_ifexists("action_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "AnomalyScoring"
       | where details_msg_s has "XSS"
       | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
@@ -69,6 +70,7 @@ properties:
       | join kind = inner(
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
+      | extend action_s = column_ifexists("action_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "Block") on trackingReference_s
       | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
       | where Total_TrackingReference >= Threshold

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.2       | 25-10-2026                     | Added Defender XDR **Custom Detections** and **XDR Workbooks** for Amazon Web Services migration, and repackaged the V3.1 solution. |
 | 3.0.13      | 03-09-2026                     | Added new AWS GuardDuty **Hunting Queries** for high-severity findings, EKS privilege escalation and credential access, and S3 public exposure; repackaged the solution after incorporating the latest upstream changes. |
 | 3.0.12      | 26-08-2026                     | Updated **Analytic Rules** AWS_LogTampering.yaml (successful log-tampering, High) and AWS_ClearStopChangeTrailLogs.yaml (failed log-tampering attempts, Low) with expanded event coverage and tiered severity; removed duplicate **Analytic Rule** AWS_ConfigServiceResourceDeletion.yaml; refreshed the Data Connectors section in the solution UI (createUiDefinition) |
 | 3.0.11      | 11-08-2026                     | Fixed the AWS WAF Data Connector last-data-received query by removing an invalid test filter. |

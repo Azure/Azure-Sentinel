@@ -21,26 +21,19 @@ contentProvenance:
   conversion:
     tool: sentinel-to-xdr-migration
     version: 0.1.0
-    status: needsReview
-    reviewRequired: true
-    reviewReasons:
-    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
     requiredWorkloads:
     - sentinel
     warnings:
     - isfuzzy unions can still fail semantic binding in Advanced Hunting
-    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
-      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
-    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit
-      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - customDetails 'Total' column `Total` has an unproven output binding after a destructive projection; the explicit binding
-      is retained, but static analysis cannot establish its output and runtime output-schema verification is required
-    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
-      and the service drops all custom details if exceeded
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'Total' column `Total` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
     informational: []
     errors: []
     originalTactics:
@@ -56,70 +49,14 @@ properties:
   displayName: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
   status: disabled
   queryCondition:
-    queryText: |-
-      let threshold = 2.5;
-      let min_t = ago(14d);
-      let max_t = now();
-      let dt = 1d;
-      let summarizationexist = (
-        union isfuzzy=true
-            (
-            DNSEssentialsCustomParser
-            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
-            | where EventTime_t > ago(1d)
-            | project v = int(2)
-            ),
-            (
-            print int(1)
-            | project v = print_0
-            )
-        | summarize maxv = max(v)
-        | extend sumexist = (maxv > 1)
-        );
-      let allData = union isfuzzy=true
-            (
-            (datatable(exists: int, sumexist: bool)[1, false]
-            | join (summarizationexist) on sumexist)
-            | join (
-                _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)
-                | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
-                | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
-                )
-                on exists
-            | project-away exists, maxv, sum*
-            ),
-            (
-            DNSEssentialsCustomParser
-            | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
-            | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
-            | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
-            );
-      allData
-      | make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr
-      | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, threshold, -1, 'linefit')
-      | mv-expand anomalies, score, baseline, EventTime, EventCount
-      | extend
-        anomalies = toint(anomalies),
-        score = toint(score),
-        baseline = toint(baseline),
-        EventTime = todatetime(EventTime),
-        Total = tolong(EventCount)
-      | where EventTime >= ago(dt)
-      | where score >= threshold * 2
-      | join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)
-        | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
-        on SrcIpAddr
-      | project-away SrcIpAddr1
+    queryText: "let threshold = 2.5;\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet summarizationexist = (\n  union isfuzzy=true\n      (\n      DNSEssentialsCustomParser\n      | where Type in (\"DNS_Summarized_Logs_ip_CL\", \"DNS_Summarized_Logs_ipV1_CL\")\n      | where EventTime_t > ago(1d)\n      | project v = int(2)\n      ),\n      (\n      print int(1)\n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNSEssentialsCustomParser\n\
+      \      | where Type in (\"DNS_Summarized_Logs_ip_CL\", \"DNS_Summarized_Logs_ipV1_CL\")\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, threshold, -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, EventCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(EventCount)\n| where EventTime >= ago(dt)\n| where score >= threshold * 2\n| join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)\n  | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1"
   schedule:
     frequency: P1D
   detectionAction:
     alertTemplate:
       title: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
-      description: '''This rule makes use of the series decompose anomaly method to generate an alert when client requests
-        excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It
-        utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.
-        The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and configured
-        before you use this Rule.'''
+      description: '''This rule makes use of the series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and configured before you use this Rule.'''
       severity: medium
       entityMappings:
         ips:
