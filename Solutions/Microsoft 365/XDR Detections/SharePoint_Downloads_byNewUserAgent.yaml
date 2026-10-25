@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5dd76a87-9f87-4576-bab3-268b0e2b338b
+    path: Analytic Rules/SharePoint_Downloads_byNewUserAgent.yaml
+    version: 2.2.4
+    querySha256: 8b35c7ecbfab51c017f85ae8253e269c4fc616a7aa2493e33fa4edd0d4b5764f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserId` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1030
+    reviewScope:
+      sourceDocumentSha256: ca1babc98925411a28da10d4a3053a3d5f61bf9b0a3845a253b559f2550106a2
+      targetQuerySha256: fb59eea5efec315048c25b813fbc7bafb1a9be0511f62e0c7e0cf6744cc3ef26
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-5dd76a87-9f87-4576-bab3-268b0e2b338b
+  displayName: SharePointFileOperation via devices with previously unseen user agents
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Set threshold for the number of downloads/uploads from a new user agent
+      let threshold = 5;
+      // Define constants for SharePoint file operations
+      let szSharePointFileOperation = "SharePointFileOperation";
+      let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+      // Define the historical activity for analysis
+      let starttime = 14d; // Define the start time for historical data (14 days ago)
+      let endtime = 1d;   // Define the end time for historical data (1 day ago)
+      // Extract the base events for analysis
+      let Baseevents =
+        OfficeActivity
+        | where TimeGenerated between (ago(starttime) .. ago(endtime))
+        | where RecordType =~ szSharePointFileOperation
+        | where Operation in~ (szOperations)
+        | where isnotempty(UserAgent);
+      // Identify frequently occurring user agents
+      let FrequentUA = Baseevents
+        | summarize FUACount = count() by UserAgent, RecordType, Operation
+        | where FUACount >= threshold
+        | distinct UserAgent;
+      // Calculate a user baseline for further analysis
+      let UserBaseLine = Baseevents
+        | summarize Count = count() by UserId, Operation, Site_Url
+        | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+      // Extract recent activity for analysis
+      let RecentActivity = OfficeActivity
+        | where TimeGenerated > ago(endtime)
+        | where RecordType =~ szSharePointFileOperation
+        | where Operation in~ (szOperations)
+        | where isnotempty(UserAgent)
+        | where UserAgent in~ (FrequentUA)
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count()
+        by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
+      // Analyze user behavior based on baseline and recent activity
+      let UserBehaviorAnalysis = UserBaseLine
+        | join kind=inner (RecentActivity) on UserId, Operation, Site_Url
+        | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
+      // Filter and format results for specific user behavior analysis
+      UserBehaviorAnalysis
+        | where Deviation > 25
+        | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])
+        | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
+        | project-away Site_Url1, UserId1, Operation1
+        | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: SharePointFileOperation via devices with previously unseen user agents
+      description: '''Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with
+        a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25).'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: UserIdName
+          upnSuffixColumn: UserIdUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        urls:
+        - id: url1
+          addressColumn: Site_Url
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1030

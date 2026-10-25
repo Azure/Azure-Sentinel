@@ -1,0 +1,166 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c6608467-3678-45fe-b038-b590ce6d00fb
+    path: Analytic Rules/RequestToPotentiallyHarmfulFileTypes.yaml
+    version: 1.0.0
+    querySha256: 23b9f1c25f90a13a5361bf4c39868e4722d4ec3680ef1a04ea22d985b9969ca6
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'EventStartTime' column `EventStartTime` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'EventEndTime' column `EventEndTime` has an unproven output binding after a destructive projection; the
+      explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'DstIpAddr' column `DstIpAddr` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - Execution
+    originalTechniques:
+    - T1133
+    - T1203
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 97d9111ffef7ec6aff09488758a6c65358cfdd97398d46c61ebe5428abb1d0fb
+      targetQuerySha256: a17ed98f8d632f3f0794e885b75a5f5933de514531e0e1f9819357c96261184a
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 97d9111ffef7ec6aff09488758a6c65358cfdd97398d46c61ebe5428abb1d0fb
+      targetQuerySha256: a17ed98f8d632f3f0794e885b75a5f5933de514531e0e1f9819357c96261184a
+properties:
+  id: xdr-c6608467-3678-45fe-b038-b590ce6d00fb
+  displayName: Detect web requests to potentially harmful files (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 5m;
+      let RiskyFileExtensions = materialize(externaldata(Extensions: string)
+          [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
+          with(format="csv", ignoreFirstRecord=True));
+      let CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw("Web_RiskyFileExtensions") // Create new Watchlist and add your custom indicators(Optional)
+          | extend
+              Extensions = tostring(WatchlistItem["Extensions"])
+          | project Extensions
+          | where isnotempty(Extensions));
+      let CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;
+      let knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions
+          | where isnotempty(Extensions)
+          | summarize make_set(Extensions, 1000));
+      let Whitelisted_Domains = materialize(externaldata(WhiteListedDomains: string)
+          [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/WhiteListedDomainsForWebSessionUseCases.csv"]
+          with(format="csv", ignoreFirstRecord=True));
+      let CustomWhiteListedDomains = (_ASIM_GetWatchlistRaw("Web_WhiteListedDomains") // Create new Watchlist and add your white listed domains(Optional)
+          | extend
+              WhiteListedDomains = tostring(WatchlistItem["WhiteListedDomains"])
+          | project WhiteListedDomains
+          | where isnotempty(WhiteListedDomains));
+      let CombinedWhitelisted_Domains = union Whitelisted_Domains, CustomWhiteListedDomains;
+      let knownWhitelisted_Domains=toscalar(CombinedWhitelisted_Domains
+          | where isnotempty(WhiteListedDomains)
+          | summarize make_set(WhiteListedDomains, 1000));
+      _Im_WebSession (starttime=ago(lookback), url_has_any=knownRiskyFileExtensions, eventresult='Success')
+      | project
+          Url,
+          SrcIpAddr,
+          TimeGenerated,
+          SrcUsername,
+          SrcHostname,
+          DstIpAddr,
+          DstPortNumber
+      | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]), '/')[-1])
+      | extend requestedFileExt=extract(@'(\.\w+)$', 1, requestedFileName, typeof(string))
+      | where requestedFileExt in~ (knownRiskyFileExtensions)
+      | summarize
+          EventCount=count(),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated)
+          by
+          SrcUsername,
+          SrcIpAddr,
+          SrcHostname,
+          DstIpAddr,
+          DstPortNumber,
+          Url,
+          requestedFileName
+      | extend FQDN = split(parse_url(Url)["Host"], '.')
+      | extend Domain = iif(array_length(FQDN) > 1, strcat(FQDN[-2], '.', FQDN[-1]), FQDN)
+      | where Domain !in~ (knownWhitelisted_Domains)
+      | project-away FQDN
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Detect web requests to potentially harmful files (ASIM Web Session)
+      description: '''This rule detects web requests made to URLs containing file types such as .ps1, .bat, .vbs,.scr etc.
+        which have the potential to be harmful if downloaded. This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+        and supports any web session source that complies with ASIM.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        urls:
+        - id: url1
+          addressColumn: Url
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+        - technique: T1566
+      - tactic: Persistence
+        techniques:
+        - technique: T1133
+      - tactic: Execution
+        techniques:
+        - technique: T1203
+      customDetails:
+        EventCount: EventCount
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        DstIpAddr: DstIpAddr
