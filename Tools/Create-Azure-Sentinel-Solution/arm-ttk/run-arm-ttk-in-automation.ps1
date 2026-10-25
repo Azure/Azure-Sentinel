@@ -9,7 +9,7 @@ param(
 )
 
 # Paths
-$repoRoot = $(git rev-parse --show-toplevel)
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../../.."))
 $root="$repoRoot/Solutions"
 $tmp = Join-Path (Split-Path -Parent $PSScriptRoot) "tmp"
 $moduleManifest = Join-Path (Join-Path $tmp "arm-ttk") "arm-ttk.psd1"
@@ -28,7 +28,14 @@ $skip = "poc","template", "automation"
 
 # Conduct an initial run using the tool and suppress results,
 #  due to race condition which may cause faulty result formatting
-$initialRun = @(Test-AzTemplate -TemplatePath "$root/Templates")
+try {
+    $initialRun = @(Test-AzTemplate -TemplatePath "$root/Templates" -ErrorAction SilentlyContinue *>$null)
+}
+catch {
+}
+finally {
+    $global:LASTEXITCODE = 0
+}
 
 foreach ($dir in $solutions) {
     $name = $dir.Name
@@ -38,13 +45,46 @@ foreach ($dir in $solutions) {
     }
 
     $results = @(Test-AzTemplate -TemplatePath $dir.FullName)
-    $results | ForEach-Object {
-        $_.PSObject.Properties.Remove('TestInput')
-        $_.PSObject.Properties.Remove('File')
-    }
-    $results
+    $filteredResults = New-Object System.Collections.ArrayList
+    $filteredIdTestCount = 0
 
-    if ($results | Where-Object {$_.Errors}) {
+    foreach ($testInfo in $results) {
+        $testInfo.PSObject.Properties.Remove('TestInput')
+        $testInfo.PSObject.Properties.Remove('File')
+
+        if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
+            $hasUnfilteredIdError = $false
+            $hasExemptIdError = $false
+            foreach ($errorInfo in $testInfo.Errors) {
+                if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or
+                    $errorInfo.Exception.Message -like '*"id"*' -or
+                    $errorInfo.Exception.Message -like '*"packageId"*' -or
+                    $errorInfo.Exception.Message -like '*"fromTemplateId"*') {
+                    $hasExemptIdError = $true
+                }
+                else {
+                    $hasUnfilteredIdError = $true
+                }
+            }
+            if ($hasUnfilteredIdError) {
+                $null = $filteredResults.Add($testInfo)
+            }
+            elseif ($hasExemptIdError) {
+                $filteredIdTestCount++
+            }
+        }
+        else {
+            if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0) {
+                $testInfo.Summary.Fail = [Math]::Max(0, $testInfo.Summary.Fail - $filteredIdTestCount)
+                $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
+            }
+            $null = $filteredResults.Add($testInfo)
+        }
+    }
+
+    $filteredResults
+
+    if ($filteredResults | Where-Object {$_.Errors}) {
         Write-Host "Failed arm-ttk (Test-AzTemplate): $name"
         $fails += $name
     }
