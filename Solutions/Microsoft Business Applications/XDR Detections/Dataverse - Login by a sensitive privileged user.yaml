@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f327816b-9328-4b17-9290-a02adc2f4928
+    path: Analytic Rules/Dataverse - Login by a sensitive privileged user.yaml
+    version: 3.2.0
+    querySha256: 81257a3d91bfd7ed97704a9986bd74dbbc86621bf9cb8434f444cf7cc2d0b91d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CredentialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1133
+    - T1190
+    - T1078
+    - T1212
+    reviewScope:
+      sourceDocumentSha256: c0820235330d929322626785c4d9edf09e7e435436a61d062cb11cfbaa6171ad
+      targetQuerySha256: 67d5779bdbae08508548af7a5ce365966a3ac1b90dd4d24619e21ec3c01bbaf4
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-f327816b-9328-4b17-9290-a02adc2f4928
+  displayName: Dataverse - Login by a sensitive privileged user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Sensitive users are marked in the VIP Users watchlist using the Tags field.
+      // Enter the tags values to monitor
+      let monitored_tags = dynamic(["DataverseSensitive"]);
+      let query_frequency = 1h;
+      let sensitive_users = MSBizAppsVIPUsers()
+          | where Tags in (monitored_tags);
+      sensitive_users
+      | join kind=inner (DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "UserSignIn")
+          on $left.UserPrincipalName == $right.UserId
+      | summarize FirstSeen = arg_max(TimeGenerated, *) by UserId
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstSeen,
+          UserId,
+          ClientIp,
+          UserAgent,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Login by a sensitive privileged user
+      description: Identifies Dataverse and Dynamics 365 logons by sensitive users.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+        - technique: T1190
+        - technique: T1078
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1212
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

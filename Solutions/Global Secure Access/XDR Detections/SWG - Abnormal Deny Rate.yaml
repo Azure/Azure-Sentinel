@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e3b6a9e7-4c3a-45e6-8baf-1d3bfa8e0c2b
+    path: Analytic Rules/SWG - Abnormal Deny Rate.yaml
+    version: 1.0.4
+    querySha256: 447ca5c3d7b1d42dc1cb5333468981fa96cb971495a49bade3d069954c7963e1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1571
+    reviewScope:
+      sourceDocumentSha256: 40df06daf160c781b1a6aab333e5aae6307305f829977296466118a12cbc2b05
+      targetQuerySha256: 40a1955536a4962db3e8fc6ed11e36b79ea69cef45c3dde07d7c7a9417404a65
+properties:
+  id: xdr-e3b6a9e7-4c3a-45e6-8baf-1d3bfa8e0c2b
+  displayName: GSA - Detect Abnormal Deny Rate for Source to Destination IP
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let NumOfStdsThreshold = 3;
+      let LearningPeriod = 5d;
+      let BinTime = 1h;
+      let MinThreshold = 5.0;
+      let MinLearningBuckets = 5;
+      let TrafficLogs = NetworkAccessTraffic
+        | where Action == "Denied"
+        | where isnotempty(DestinationIp) and isnotempty(SourceIp);
+      let LearningSrcIpDenyRate = TrafficLogs
+        | where TimeGenerated between (ago(LearningPeriod + 1d) .. ago(1d))
+        | summarize count_ = count() by SourceIp, bin(TimeGenerated, BinTime), DestinationIp
+        | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, DestinationIp
+        | where LearningTimeBuckets > MinLearningBuckets;
+      let AlertTimeSrcIpDenyRate = TrafficLogs
+        | where TimeGenerated between (ago(1h) .. now())
+        | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp, DestinationIp;
+      AlertTimeSrcIpDenyRate
+        | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp, DestinationIp
+        | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
+        | where AlertTimeSrcIpDenyRateCount > LearningThreshold
+        | project SourceIp, DestinationIp, AlertTimeSrcIpDenyRateCount, LearningThreshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GSA - Detect Abnormal Deny Rate for Source to Destination IP
+      description: Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and
+        standard deviation learned during a configured period. This can indicate potential exfiltration, initial access, or
+        C2, where an attacker tries to exploit the same vulnerability on machines in the organization but is being blocked
+        by firewall rules.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        - id: ip2
+          addressColumn: DestinationIp
+      tactics:
+      - tactic: InitialAccess
+      - tactic: Exfiltration
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1571

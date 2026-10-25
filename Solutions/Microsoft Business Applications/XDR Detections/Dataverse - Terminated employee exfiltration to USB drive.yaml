@@ -1,0 +1,147 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceInfo
+  - DeviceEvents
+  - DeviceFileEvents
+contentProvenance:
+  requiredWorkloads:
+  - workload: mde
+    dataTypes:
+    - DeviceEvents
+    - DeviceFileEvents
+    - DeviceInfo
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceEvents
+    - DeviceFileEvents
+    - DeviceInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c5e75cb6-cea0-49c2-a998-da414035aac1
+    path: Analytic Rules/Dataverse - Terminated employee exfiltration to USB drive.yaml
+    version: 3.2.0
+    querySha256: 95daf3299e042e7e8f6349e915bf937efd077a3729924dfb8ca88b80e83195b0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName output column `InstanceUrl` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1052
+    reviewScope:
+      sourceDocumentSha256: 3d691dd03ed34af2279b0d6e52d6c417256e61f18682052dbc89bc95d137babe
+      targetQuerySha256: 90f62e9a005918b26cfe3b105e480e38b29e45683f58ba14818b3bb7487e592b
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is ambiguous
+      decision: accepted
+      sourceDocumentSha256: 3d691dd03ed34af2279b0d6e52d6c417256e61f18682052dbc89bc95d137babe
+      targetQuerySha256: 90f62e9a005918b26cfe3b105e480e38b29e45683f58ba14818b3bb7487e592b
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-c5e75cb6-cea0-49c2-a998-da414035aac1
+  displayName: Dataverse - Terminated employee exfiltration to USB drive
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let drive_mount_lookback = 14d;
+      let query_frequency = 1h;
+      DataverseActivity
+      | distinct InstanceUrl
+      | join kind=inner (DeviceFileEvents
+          | where TimeGenerated >= ago(query_frequency))
+          on $left.InstanceUrl == $right.FileOriginUrl
+      | join kind=inner (MSBizAppsTerminatedEmployees()) on $left.InitiatingProcessAccountUpn == $right.UserPrincipalName
+      | join kind=inner (DeviceEvents
+          | where TimeGenerated >= ago(drive_mount_lookback)
+          | where ActionType == "UsbDriveMounted"
+          | extend DriveLetter = tostring(parse_json(AdditionalFields).DriveLetter)
+          | summarize MountedDriveLetters = make_set(DriveLetter, 26) by DeviceId, DeviceName)
+          on DeviceId
+      | extend TargetDriveLetter = tostring(split(FolderPath, "\\")[0])
+      | where set_has_element(MountedDriveLetters, TargetDriveLetter)
+      | join kind=inner (DeviceInfo
+          | summarize arg_max(TimeGenerated, DeviceId, PublicIP) by DeviceName)
+          on DeviceId
+      | project-rename
+          UserId = UserPrincipalName
+      | summarize LatestEvent = arg_max(TimeGenerated, *), Files = make_set(FileName, 100) by UserId, InstanceUrl
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          LatestEvent,
+          UserId,
+          PublicIP,
+          Files,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Terminated employee exfiltration to USB drive
+      description: Identifies files downloaded from Dataverse by departing or terminated employees which are copied to USB
+        mounted drives.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: PublicIP
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1052
+      customDetails: {}

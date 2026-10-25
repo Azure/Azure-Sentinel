@@ -1,0 +1,151 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e44a58b2-b63a-4eb9-92da-85660d73495c
+    path: Analytic Rules/Dataverse - Suspicious security role modifications.yaml
+    version: 3.2.0
+    querySha256: 27126f50743b16b90618aa61fe35717c437cf20188049286171605699c57699d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1404
+    - T1626
+    - T1548
+    reviewScope:
+      sourceDocumentSha256: 79d8117fd8083119869530278cbdac67b58d8c22b3d05ca471745f6e66366a29
+      targetQuerySha256: 97593331932072afc11d20fcaa575580b0164225d43bcc7ec404b03a7e5d437f
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-e44a58b2-b63a-4eb9-92da-85660d73495c
+  displayName: Dataverse - Suspicious security role modifications
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let role_create_watch_period = 2d;
+      let query_frequency = 1h;
+      let role_create_add_events= DataverseActivity
+          | where Message == "Create" and EntityName == "role"
+          | mv-expand Role = Fields
+          | extend RoleName = Role.Value
+          | where Role.Name == "name"
+          | mv-expand Role = Fields
+          | extend RoleCreateTime = TimeGenerated, RoleId = tostring(Role.Value)
+          | where Role.Name == "roleid"
+          | join kind=inner (
+              DataverseActivity
+              | where Message == "Associate" and EntityName == "systemuser"
+              | mv-expand Role = Fields
+              | where Role.Name == "role"
+              | extend RoleMemberAddedTime = TimeGenerated, MemberAddedRoleId = tostring(Role.Value))
+              on $left.RoleId == $right.MemberAddedRoleId, InstanceUrl, UserId
+          | where RoleMemberAddedTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));
+      let remove_role_member_events = DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "Disassociate" and EntityName == "systemuser"
+          | mv-expand Role = Fields
+          | where Role.Name == "role"
+          | extend ActionTime = TimeGenerated, MemberRemovedRoleId = tostring(Role.Value);
+      let role_delete_events = DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "Delete" and EntityName == "role"
+          | extend DeletedRoleID = EntityId, Action = "Role deleted within defined time window"
+          | project Action, ActionTime = TimeGenerated, UserId, ClientIp, DeletedRoleID, InstanceUrl;
+      let role_member_removals = role_create_add_events
+          | join kind=inner (remove_role_member_events) on $left.RoleId == $right.MemberRemovedRoleId
+          | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period))
+          | extend Action = "Role membership removed within defined time window";
+      let role_deletions = role_create_add_events
+          | join kind=inner (role_delete_events) on $left.RoleId == $right.DeletedRoleID
+          | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));
+      union role_member_removals, role_deletions
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          UserId,
+          InstanceUrl,
+          ClientIp,
+          Action,
+          RoleCreateTime,
+          RoleName,
+          ActionTime,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Suspicious security role modifications
+      description: Identifies an unusual pattern of events whereby a new role is created followed by the creator adding members
+        to the role and subsequently removing the member or deleting the role after a short time period.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1404
+        - technique: T1626
+        - technique: T1548
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

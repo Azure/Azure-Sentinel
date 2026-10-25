@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (SharePoint)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (SharePoint)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ba5e608f-7879-4927-8b0d-a9948b4fe6f3
+    path: Analytic Rules/Dataverse - Executable uploaded to SharePoint document management site.yaml
+    version: 3.2.0
+    querySha256: 8a7134e6a28e79a2b0c23112740219d5eabc866820895838937666d461dab492
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName_2 from query column `SharePointUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName_2 column `SharePointUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - Persistence
+    originalTechniques:
+    - T0863
+    - T0873
+    reviewScope:
+      sourceDocumentSha256: 42557a7f730132a0bbcd06b3e81c1f9acd152629bc3825173440e44e08fe36c0
+      targetQuerySha256: 3faa0c143e243b7aa9a1097e95aaac26d92d746e63e1fdbac505a2eff71e5369
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+    - entityType: CloudApplication
+      entityIndex: 5
+      identifier: InstanceName
+      sourceColumn: SharePointUrl
+      column: SharePointUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName_2
+properties:
+  id: xdr-ba5e608f-7879-4927-8b0d-a9948b4fe6f3
+  displayName: Dataverse - Executable uploaded to SharePoint document management site
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let file_extensions = dynamic(['com', 'exe', 'bat', 'cmd', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'msc', 'cpl', 'ps1', 'scr']);
+      let query_frequency = 1h;
+      DataverseSharePointSites
+      | join kind=inner (
+          OfficeActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where OfficeWorkload == "SharePoint" and Operation == "FileUploaded")
+          on $left.SharePointUrl == $right.Site_Url
+      | where SourceFileExtension in (file_extensions)
+      | extend
+          CloudAppId = int(32780),
+          SharePointId = int(20892),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIP,
+          InstanceUrl,
+          SourceFileName,
+          SharePointUrl,
+          CloudAppId,
+          SharePointId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Executable uploaded to SharePoint document management site
+      description: Identifies executable files and scripts uploaded to SharePoint sites used for Dynamics document management,
+        circumventing native file extension restrictions in Dataverse.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        - id: cloudApplication2
+          appIdColumn: SharePointId
+        files:
+        - id: file1
+          nameColumn: SourceFileName
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T0863
+      - tactic: Persistence
+        techniques:
+        - technique: T0873
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl
+        CloudApplicationInstanceName_2: SharePointUrl

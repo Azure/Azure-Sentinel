@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dynamics365Finance
+  dataTypes:
+  - FinanceOperationsActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5ab00fbb-ba2c-44dc-b02e-f119639b9a11
+    path: Analytic Rules/F&O - Mass update or deletion of user records.yaml
+    version: 3.2.0
+    querySha256: 9501b53026607ed64ae86484c9730d241823e91ac27d9f41d33b2f03629670b1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    - T1565
+    - T1491
+    reviewScope:
+      sourceDocumentSha256: 3214fe12dcff2cd13683dcc9c5168c258fbb500310297995402090da114e612c
+      targetQuerySha256: a9050fc270299b11bff72e619627cebcfabda2a9a7f8a50c35f450a3cd19ed64
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 3214fe12dcff2cd13683dcc9c5168c258fbb500310297995402090da114e612c
+      targetQuerySha256: a9050fc270299b11bff72e619627cebcfabda2a9a7f8a50c35f450a3cd19ed64
+properties:
+  id: xdr-5ab00fbb-ba2c-44dc-b02e-f119639b9a11
+  displayName: F&O - Mass update or deletion of user records
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Set threshold for number of updated or deleted records
+      let update_detection_threshold = 50;
+      let deleted_detection_threshold = 10;
+      FinanceOperationsActivity_CL
+      | where TableName == "UserInfo" and LogType in ("Update", "Delete")
+      | summarize
+          TotalEvents = count(),
+          StartTime = min(LogCreatedDateTime),
+          EndTime = max(LogCreatedDateTime)
+          by TableName, Username, LogType
+      | where (LogType == "Update" and TotalEvents > update_detection_threshold) or (LogType == "Delete" and TotalEvents > deleted_detection_threshold)
+      | extend
+          FinOpsAppId = 32780,
+          AccountName = tostring(split(Username, '@')[0]),
+          UPNSuffix = tostring(split(Username, '@')[1])
+      | project StartTime, EndTime, Username, AccountName, UPNSuffix, LogType, TableName, TotalEvents, FinOpsAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: F&O - Mass update or deletion of user records
+      description: Identifies large delete or update operations on Finance & Operations user records based on predefined thresholds.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: FinOpsAppId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T1565
+        - technique: T1491

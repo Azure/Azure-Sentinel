@@ -1,0 +1,191 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerPlatformAdmin
+  dataTypes:
+  - PowerPlatformAdminActivity
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - PowerPlatformAdminActivity
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+    - PowerPlatformAdminActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 39efbf4b-b347-4cc7-895e-99a868bf29ea
+    path: Analytic Rules/Dataverse - Guest user exfiltration following Power Platform defense impairment.yaml
+    version: 3.2.0
+    querySha256: 34343f98a271c0cbb02e04a9d04d67942444a31062dbcc29ef7f40116e22b0d8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'Environment' column `EnvironmentId` requires runtime output-schema binding verification
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Exfiltration
+    originalTechniques:
+    - T1629
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: f8ce53a19b12c343c45e104b53ead4ae45e151102a5041965fce1ec586dae0be
+      targetQuerySha256: d42a8de75ab2026d4046c4bfcd557a35cf1edfc490256e50a7a8c11a21dfbfb3
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-39efbf4b-b347-4cc7-895e-99a868bf29ea
+  displayName: Dataverse - Guest user exfiltration following Power Platform defense impairment
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_lookback = 14d;
+      let query_frequncy = 1h;
+      let defense_evasion_events = PowerPlatformAdminActivity
+          | where TimeGenerated >= ago(query_lookback)
+          | where EventOriginalType == "TenantIsolationOperation"
+          | mv-expand PropertyCollection
+          | where PropertyCollection.Name == "powerplatform.analytics.resource.tenant.isolation_policy.enabled"
+          | where PropertyCollection.Value == "False"
+          | summarize
+              TenantIsolationRemovalTimestamp = max(TimeGenerated)
+              by SecurityDisablingUser = ActorName
+          | join kind=inner (
+              PowerPlatformAdminActivity
+              | where TimeGenerated >= ago(query_lookback)
+              | where EventOriginalType == "EnvironmentPropertyChange"
+              | where PropertyCollection has "Property: SecurityGroupId, Old Value: , New Value: "
+              | mv-expand PropertyCollection
+              | extend
+                  GroupRemovalTimestamp = TimeGenerated,
+                  InstanceUrl = tostring(iif(PropertyCollection.Name == "powerplatform.analytics.resource.environment.url", PropertyCollection.Value, "")),
+                  EnvironmentId = tostring(iif(PropertyCollection.Name == "powerplatform.analytics.resource.environment.name", PropertyCollection.Value, ""))
+              | summarize InstanceUrl = max(InstanceUrl), EnvironmentId = max(EnvironmentId) by GroupRemovalTimestamp, SecurityDisablingUser = ActorName)
+              on SecurityDisablingUser
+          | summarize
+              GroupRemovalTimestamp = max(GroupRemovalTimestamp),
+              TenantIsolationRemovalTimestamp = max(TenantIsolationRemovalTimestamp)
+              by SecurityDisablingUser, InstanceUrl, EnvironmentId;
+      let exfiltration_alerts = SecurityAlert
+          | where TimeGenerated >= ago(query_frequncy)
+          | where Tactics has "Exfiltration"
+          | where Entities has ('"AppId":32780')
+          | mv-expand todynamic(Entities)
+          | extend AlertUPN = iif(Entities.Type == "account", strcat(Entities.Name, "@", Entities.UPNSuffix), "")
+          | extend InstanceUrl = tostring(iif(Entities.AppId == 32780, Entities.InstanceName, ""))
+          | join kind=inner defense_evasion_events on InstanceUrl
+          | where StartTime > TenantIsolationRemovalTimestamp and StartTime > GroupRemovalTimestamp
+          | summarize InstanceUrl = max(InstanceUrl), AlertUPN = max(AlertUPN) by AlertName, SystemAlertId
+          | extend AlertDetails = bag_pack("AlertName", AlertName, "SystemAlertId", SystemAlertId)
+          | summarize AlertDetails = make_set(AlertDetails, 100) by AlertUPN, InstanceUrl
+          | join kind=inner (
+              AuditLogs
+              | where OperationName == "Update user"
+              | where Identity == "Microsoft Invitation Acceptance Portal"
+              | mv-expand TargetResources
+              | extend ModifiedProperties = TargetResources.modifiedProperties
+              | mv-expand ModifiedProperties
+              | where ModifiedProperties.displayName == "AcceptedAs"
+              | summarize RedeemTime = max(TimeGenerated) by GuestUser = tostring(parse_json(replace_regex(tostring(ModifiedProperties.newValue), "\\r", ""))[0]))
+              on $left.AlertUPN == $right.GuestUser;
+      defense_evasion_events
+      | join kind=inner exfiltration_alerts on InstanceUrl
+      | extend
+          AccountName = tostring(split(SecurityDisablingUser, "@")[0]),
+          UPNSuffix = tostring(split(SecurityDisablingUser, "@")[1]),
+          GuestAccountName = tostring(split(GuestUser, "@")[0]),
+          GuestUPNSuffix = tostring(split(GuestUser, "@")[1]),
+          DataverseId = 32780
+      | project
+          SecurityDisablingUser,
+          GuestUser,
+          AlertDetails,
+          TenantIsolationRemovalTimestamp,
+          GroupRemovalTimestamp,
+          InstanceUrl,
+          EnvironmentId,
+          AccountName,
+          UPNSuffix,
+          GuestAccountName,
+          GuestUPNSuffix,
+          DataverseId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Guest user exfiltration following Power Platform defense impairment
+      description: |-
+        Identifies a chain of events starting with disablement of Power Platform tenant isolation and removal of an environment's access security group. These events are correlated with Dataverse exfiltration alerts associated with the impacted environment and recently created Microsoft Entra guest users.
+
+        Note: Activate other Dataverse analytics rules with the MITRE tactic 'Exfiltration' before enabling this rule.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          nameColumn: GuestAccountName
+          upnSuffixColumn: GuestUPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: DataverseId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1629
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        Environment: EnvironmentId
+        CloudApplicationInstanceName: InstanceUrl

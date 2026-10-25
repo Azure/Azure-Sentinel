@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4c9f0a9e-44d7-4c9b-b7f0-f6a6e0d8f8fa
+    path: Analytic Rules/Identity - AfterHoursActivity.yaml
+    version: 1.0.2
+    querySha256: 9f94a27a961360c503a0b3828e8b4dc1a37802e88109e2f215e9dcb303ea0879
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=24h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was repaired from projected column `UserPrincipalName`
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 90a04a2c44c55b90869684aac2c36aa45f1b98f5bbc136e161eea8da4e945932
+      targetQuerySha256: 8924250be13d78493b6dac850d872bafe6cb1a68a09cb3d74381ab50c9facfd2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-4c9f0a9e-44d7-4c9b-b7f0-f6a6e0d8f8fa
+  displayName: GSA - Detect Connections Outside Operational Hours
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let endtime = now();
+      let starttime = endtime - 1d;
+      let operational_start_hour = 8; // Start of operational hours (8 AM)
+      let operational_end_hour = 18; // End of operational hours (6 PM)
+      NetworkAccessTraffic
+      | where TimeGenerated between (starttime .. endtime)
+      | extend HourOfDay = datetime_part('hour', TimeGenerated)
+      | where HourOfDay < operational_start_hour or HourOfDay >= operational_end_hour
+      | project TimeGenerated, UserPrincipalName, SourceIp, DestinationIp, DestinationPort, Action, DeviceId, DeviceOperatingSystem, ConnectionId
+      | extend IPCustomEntity = SourceIp, AccountCustomEntity = UserPrincipalName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GSA - Detect Connections Outside Operational Hours
+      description: This query identifies connections that occur outside of the defined operational hours. It helps in monitoring
+        and flagging any unusual activity that may occur during non-business hours, indicating potential security concerns
+        or policy violations.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: UserPrincipalName
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1133
+      customDetails:
+        AccountName: AccountCustomEntity
