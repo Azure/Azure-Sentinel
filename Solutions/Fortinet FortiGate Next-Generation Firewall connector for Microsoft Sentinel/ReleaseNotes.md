@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 |-------------|--------------------------------|-----------------------------------------------------------------------------------------|
-| 3.0.10      | 23-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the Sync-CommentsFunctionApp playbook deployment configuration.|
+| 3.0.10      | 23-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the FortinetFortigateFunctionApp **Playbook** deployment configuration.|
 | 3.0.9       | 21-05-2026                     |Updated Fortinetfortigate **Playbook** Function app to fix authlevel                     |                         |
 | 3.0.8       | 26-02-2025                     |**Playbook** functionApp code change                                                     |
 | 3.0.7       | 11-11-2024                     |Removed Deprecated data connectors                                                       |

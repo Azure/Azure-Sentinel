@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
-| 3.0.6       | 23-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the Sync-CommentsFunctionApp playbook deployment configuration. |
+| 3.0.7       | 25-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the Sync-CommentsFunctionApp **Playbook** deployment configuration. |
 | 3.0.6       | 13-04-2026                     | Deprecate Atlassian Jira Audit (using Azure Function)  |
 | 3.0.5       | 18-03-2026                     | Rename to Atlassian Jira Audit (via Codeless Connector Framework) 	       |
 | 3.0.4       | 30-08-2024                     | Updated parameters for CCP **Data Connector**							   |
