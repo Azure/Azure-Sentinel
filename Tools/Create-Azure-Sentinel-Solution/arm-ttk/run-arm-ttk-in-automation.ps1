@@ -13,6 +13,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../../.."))
 $root="$repoRoot/Solutions"
 $tmp = Join-Path (Split-Path -Parent $PSScriptRoot) "tmp"
 $moduleManifest = Join-Path (Join-Path $tmp "arm-ttk") "arm-ttk.psd1"
+. (Join-Path $repoRoot ".script/package-automation/arm-ttk-sentinel-filters.ps1")
 
 if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
     Import-Module $moduleManifest
@@ -44,47 +45,21 @@ foreach ($dir in $solutions) {
         continue
     }
 
-    $results = @(Test-AzTemplate -TemplatePath $dir.FullName)
-    $filteredResults = New-Object System.Collections.ArrayList
-    $filteredIdTestCount = 0
+    $templateText = (Get-ChildItem -LiteralPath $dir.FullName -Filter mainTemplate.json -Recurse |
+        ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+    $testParameter = Get-SentinelArmTtkTestParameter -TemplateText $templateText
+    $results = @(Test-AzTemplate -TemplatePath $dir.FullName -TestParameter $testParameter)
+    $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results $results
 
-    foreach ($testInfo in $results) {
+    foreach ($testInfo in $resolved.Results) {
         $testInfo.PSObject.Properties.Remove('TestInput')
         $testInfo.PSObject.Properties.Remove('File')
-
-        if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
-            $hasUnfilteredIdError = $false
-            $hasExemptIdError = $false
-            foreach ($errorInfo in $testInfo.Errors) {
-                if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or
-                    $errorInfo.Exception.Message -like '*"id"*' -or
-                    $errorInfo.Exception.Message -like '*"packageId"*' -or
-                    $errorInfo.Exception.Message -like '*"fromTemplateId"*') {
-                    $hasExemptIdError = $true
-                }
-                else {
-                    $hasUnfilteredIdError = $true
-                }
-            }
-            if ($hasUnfilteredIdError) {
-                $null = $filteredResults.Add($testInfo)
-            }
-            elseif ($hasExemptIdError) {
-                $filteredIdTestCount++
-            }
-        }
-        else {
-            if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0) {
-                $testInfo.Summary.Fail = [Math]::Max(0, $testInfo.Summary.Fail - $filteredIdTestCount)
-                $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
-            }
-            $null = $filteredResults.Add($testInfo)
-        }
     }
 
-    $filteredResults
+    $resolved.Results
+    Write-Host "ARM-TTK: Pass=$($resolved.Pass) Fail=$($resolved.Fail) ExemptedIdErrors=$($resolved.ExemptedErrors)"
 
-    if ($filteredResults | Where-Object {$_.Errors}) {
+    if ($resolved.Fail -gt 0) {
         Write-Host "Failed arm-ttk (Test-AzTemplate): $name"
         $fails += $name
     }

@@ -129,7 +129,7 @@ else {
       "apiVersion": "2023-02-01-preview",
       "name": "fixture-rule",
       "kind": "Scheduled",
-      "properties": { "customDetails": { "UserId": "AccountId" } }
+      "properties": { "requiredDataConnectors": [], "customDetails": { "UserId": "AccountId" } }
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -152,7 +152,7 @@ else {
                 "content": {
                   "version": "Notebook/1.0",
                   "fromTemplateId": "fixture-template",
-                  "items": [ { "type": 10, "content": { "chartId": "workbook-chart-1", "splitBy": null, "min": null, "max": null } } ]
+                  "items": [ { "type": 10, "content": { "chartId": "workbook-chart-1", "columnId": "workbook-column-1", "splitBy": null, "min": null, "max": null } } ]
                 }
               }
             }
@@ -173,9 +173,38 @@ else {
             $tests = @('IDs Should Be Derived From ResourceIDs', 'Template Should Not Contain Blanks')
             $raw = @(Test-AzTemplate -TemplatePath $dir -File mainTemplate.json -Test $tests -TestParameter (Get-SentinelArmTtkTestParameter -TemplateText $TemplateText))
             $baseline = @(Test-AzTemplate -TemplatePath $dir -File mainTemplate.json -Test $tests)
+            $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+            $runnerDir = Join-Path $dir 'automation/Tools/Create-Azure-Sentinel-Solution/arm-ttk'
+            $filterDir = Join-Path $dir 'automation/.script/package-automation'
+            $packageDir = Join-Path $dir 'automation/Solutions/Fixture/Package'
+            New-Item -ItemType Directory -Path $runnerDir, $filterDir, $packageDir -Force | Out-Null
+            Copy-Item (Join-Path $repoRoot 'Tools/Create-Azure-Sentinel-Solution/arm-ttk/run-arm-ttk-in-automation.ps1') $runnerDir
+            Copy-Item (Join-Path $repoRoot '.script/package-automation/arm-ttk-sentinel-filters.ps1') $filterDir
+            Copy-Item (Join-Path $dir 'mainTemplate.json') $packageDir
+            $childScript = Join-Path $dir 'automation-test.ps1'
+            Set-Content -Path $childScript -Encoding utf8 -Value @'
+param([string]$ModulePath, [string]$RunnerPath)
+Import-Module $ModulePath -Force
+function Test-AzTemplate {
+    [CmdletBinding()]
+    param([string]$TemplatePath, [hashtable]$TestParameter)
+    if ((Split-Path $TemplatePath -Leaf) -eq 'Templates') { throw 'Simulated warm-up failure' }
+    arm-ttk\Test-AzTemplate -TemplatePath $TemplatePath -File mainTemplate.json `
+        -Test 'IDs Should Be Derived From ResourceIDs', 'Template Should Not Contain Blanks' `
+        -TestParameter $TestParameter
+}
+& $RunnerPath -SolutionName Fixture
+exit $LASTEXITCODE
+'@
+            $automationOutput = & (Join-Path $PSHOME 'pwsh') -NoProfile -File $childScript `
+                -ModulePath (Resolve-Path $ArmTtkModulePath).Path `
+                -RunnerPath (Join-Path $runnerDir 'run-arm-ttk-in-automation.ps1') 2>&1
+            $automationExitCode = $LASTEXITCODE
             return [pscustomobject]@{
                 Resolved     = Resolve-SentinelArmTtkMainTemplateResults -Results $raw
                 BaselineFail = @($baseline | Where-Object { -not $_.Passed }).Count
+                AutomationExitCode = $automationExitCode
+                AutomationOutput = $automationOutput -join "`n"
             }
         }
         finally {
@@ -190,18 +219,23 @@ else {
     $clean = Invoke-Fixture (New-FixtureTemplate)
     Assert-True ($clean.BaselineFail -gt 0) 'baseline ARM-TTK fails the unfiltered Sentinel fixture'
     Assert-True ($clean.Resolved.Fail -eq 0) 'shared filters pass content IDs, customDetails and Defender workbook blanks'
+    Assert-True (@(Get-FailingTests $clean) -notcontains 'Template Should Not Contain Blanks') 'preserves the legacy requiredDataConnectors empty-array allowance'
     Assert-True ($clean.Resolved.ExemptedErrors -ge 5) 'exempted the expected content-identifier errors'
+    Assert-True ($clean.AutomationExitCode -eq 0 -and $clean.AutomationOutput -match 'Fail=0') 'automation runner passes shared exemptions despite warm-up failure'
 
     $badId = Invoke-Fixture (New-FixtureTemplate -PackageExtra ', "storageAccountId": "literal-not-a-resource-id"')
     Assert-True ((Get-FailingTests $badId) -contains $idTest) 'genuine literal *Id still fails alongside exempted IDs'
     $keptIdErrors = @($badId.Resolved.Results | Where-Object Name -eq $idTest | ForEach-Object { @($_.Errors) })
     Assert-True ($keptIdErrors.Count -ge 1 -and @($keptIdErrors | Where-Object { Test-SentinelArmTtkExemptIdError $_ }).Count -eq 0) 'reports only the genuine ID errors'
+    Assert-True ($badId.AutomationExitCode -eq 1) 'automation runner fails genuine ID errors alongside exempted IDs'
 
     $blankOutside = Invoke-Fixture (New-FixtureTemplate -PackageExtra ', "description": ""')
     Assert-True ((Get-FailingTests $blankOutside) -contains 'Template Should Not Contain Blanks') 'blank outside workbook payload still fails'
+    Assert-True ($blankOutside.AutomationExitCode -eq 1) 'automation runner fails blanks outside workbook payload'
 
     $blankInWorkbookProps = Invoke-Fixture (New-FixtureTemplate -WorkbookPropertiesExtra ', "description": ""')
     Assert-True ((Get-FailingTests $blankInWorkbookProps) -contains 'Template Should Not Contain Blanks') 'blank in Defender workbook properties outside content still fails'
+    Assert-True ($blankInWorkbookProps.AutomationExitCode -eq 1) 'automation runner fails workbook blanks outside content'
 }
 
 Write-Host ""
