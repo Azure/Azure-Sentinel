@@ -2,7 +2,7 @@
 
 ## Version 0.7.7
 
-- (2026-10-26) Add the CrowdStrike Falcon Data Replicator Network Session parser.
+- (2026-10-26) Add the CrowdStrike Falcon Data Replicator Network Session parser - [PR #15438](https://github.com/Azure/Azure-Sentinel/pull/15438)
 - Forward the pack parameter and honor the source-specific disabled-parser setting.
 
 ## Version 0.7.6
