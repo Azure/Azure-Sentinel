@@ -6,7 +6,7 @@ RISK_EVENTS_PATH = "/v1/supplychains/default/risk-events"
 SUPPLIERS_PATH = "/v1/supplychains/default/suppliers"
 SUPPLIERS_PAGE_SIZE = 100
 CONNECTOR_VERSION = "1.0.0"
-USER_AGENT = f"MicrosoftSentinel-CensysSRI/{CONNECTOR_VERSION}"
+USER_AGENT = f"MicrosoftSentinel-CensysSR/{CONNECTOR_VERSION}"
 
 # Names in SupplierNames are separated by an asterisk, so a name can contain a comma. At most MAX_SUPPLIER_IDS ids
 # are sent in one request: the supplier_ids parameter is part of the URL, and the API rejected URLs of about
@@ -40,9 +40,9 @@ ALLOWED_CHANGE_TYPES = ("opened", "resolved", "reopened")
 ALLOWED_SEVERITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 CONN_STRING = os.environ.get("AzureWebJobsStorage")
-CHECKPOINT_TABLE_NAME = os.environ.get("CheckpointTableName", "CensysSRIRiskEventsCheckpoint")
-CHECKPOINT_PARTITION_KEY = "CensysSRIRiskEvents"
-SUPPLIERS_TABLE_NAME = os.environ.get("SuppliersTableName", "CensysSRISuppliers")
+CHECKPOINT_TABLE_NAME = os.environ.get("CheckpointTableName", "CensysSRRiskEventsCheckpoint")
+CHECKPOINT_PARTITION_KEY = "CensysSRRiskEvents"
+SUPPLIERS_TABLE_NAME = os.environ.get("SuppliersTableName", "CensysSRSuppliers")
 
 DATA_COLLECTION_ENDPOINT = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
 DATA_COLLECTION_RULE_ID = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID")
@@ -51,4 +51,4 @@ SCOPE = os.environ.get("SCOPE", "https://monitor.azure.com/.default")
 
 # Top-level event fields declared in the data collection rule stream
 EVENT_FIELDS = ("id", "inserted_at", "occurred_at", "change_type", "risk_instance")
-LOG_PREFIX = "CensysSRI"
+LOG_PREFIX = "CensysSR"
