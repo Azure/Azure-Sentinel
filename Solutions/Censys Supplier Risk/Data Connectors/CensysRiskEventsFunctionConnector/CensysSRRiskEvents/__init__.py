@@ -11,7 +11,7 @@ from ..SharedCode.checkpoint import CheckpointManager, checkpoint_key
 from ..SharedCode.exceptions import CensysCursorExpired, CensysException, CensysTimeBudgetReached
 from ..SharedCode.logger import applogger
 from ..SharedCode.sentinel import SentinelIngestor
-from ..SharedCode.suppliers import SupplierStore, resolve
+from ..SharedCode.suppliers import RiskStore, SupplierStore, resolve
 from ..SharedCode.validation import Settings, load_settings
 
 _RFC3339 = "%Y-%m-%dT%H:%M:%SZ"
@@ -36,19 +36,39 @@ def _supplier_ids(settings: Settings) -> Optional[List[str]]:
     return ids
 
 
+def _risk_type_ids(settings: Settings) -> Optional[List[str]]:
+    """Look up the ids of the risk names, once per run. Returns None when no risk names are set.
+
+    Works like _supplier_ids: an unknown name is a warning, and an empty list means that no id was found at all.
+    """
+    if not settings.risk_names:
+        return None
+    store = RiskStore(settings.storage_connection, consts.RISKS_TABLE_NAME, settings.organization_id)
+    ids, missing = resolve(settings.risk_names, store.load())
+    for name in missing:
+        applogger.warning(f"{consts.LOG_PREFIX} ingest: risk name '{name}' was not found "
+                          "in the risks table, it is skipped")
+    if len(ids) > consts.MAX_RISK_TYPE_IDS:
+        raise CensysException(f"The risk names in RiskNames match {len(ids)} risks, at most "
+                              f"{consts.MAX_RISK_TYPE_IDS} are allowed in one request. Enter fewer names.")
+    return ids
+
+
 def ingest(start: float) -> int:
     """Read every new event, upload it page by page and move the checkpoint after each page."""
     settings = load_settings()
     supplier_ids = _supplier_ids(settings)
-    if supplier_ids is not None and not supplier_ids:
-        applogger.warning(f"{consts.LOG_PREFIX} ingest: no supplier id found for the supplier names set in "
-                          "SupplierNames, nothing is collected in this run. The next run tries again.")
-        return 0
-    filters = settings.filters(supplier_ids)
-    # The suppliers are not part of the checkpoint key. When the supplier names are changed, collection continues
-    # from the current checkpoint with the new suppliers, and the earlier events of a newly selected supplier
+    risk_type_ids = _risk_type_ids(settings)
+    for setting, ids in (("SupplierNames", supplier_ids), ("RiskNames", risk_type_ids)):
+        if ids is not None and not ids:
+            applogger.warning(f"{consts.LOG_PREFIX} ingest: no id found for the names set in {setting}, "
+                              "nothing is collected in this run. The next run tries again.")
+            return 0
+    filters = settings.filters(supplier_ids, risk_type_ids)
+    # The suppliers and risks are not part of the checkpoint key. When their names are changed, collection continues
+    # from the current checkpoint with the new ids, and the earlier events of a newly selected supplier or risk
     # are not collected.
-    key_parts = [f"{k}={v}" for k, v in sorted(filters.items()) if k != "supplier_ids"]
+    key_parts = [f"{k}={v}" for k, v in sorted(filters.items()) if k not in ("supplier_ids", "risk_type_ids")]
     key = checkpoint_key(settings.organization_id, *key_parts)
     manager = CheckpointManager(settings.storage_connection, consts.CHECKPOINT_TABLE_NAME)
     client = CensysClient(settings.api_token, settings.organization_id, deadline=start + consts.MAX_RUN_SECONDS,

@@ -89,11 +89,11 @@ class CensysClient:
         except ValueError:
             raise CensysException(f"Censys returned HTTP 200 with a body that is not valid JSON: {resp.text[:200]}")
         result = (body or {}).get("result") or {}
-        is_events = path == consts.RISK_EVENTS_PATH
-        count = len((result.get("risk_events") if is_events else result.get("suppliers")) or [])
+        key = {consts.RISK_EVENTS_PATH: "risk_events", consts.RISKS_PATH: "risks"}.get(path, "suppliers")
+        count = len(result.get(key) or [])
         has_next = "yes" if result.get("next_page_token") else "no"
         applogger.info(f"{consts.LOG_PREFIX} get_page: API call GET {path} -> HTTP 200, "
-                       f"{count} {'events' if is_events else 'suppliers'}, next_page_token={has_next}")
+                       f"{count} {key.replace('_', ' ')}, next_page_token={has_next}")
         shown = {k: ("<set>" if k == "page_token" else v) for k, v in params.items()}
         applogger.debug(f"{consts.LOG_PREFIX} get_page: request parameters {shown}")
         return body
@@ -133,18 +133,27 @@ class CensysClient:
             "page_size": consts.SUPPLIERS_PAGE_SIZE,
             "order_by": "created_at_asc",
         }
+        return self._iter_list(base, consts.SUPPLIERS_PATH, "suppliers")
+
+    def iter_risks(self) -> Iterator[List[dict]]:
+        """Yield each page of risks of the default supply chain until the last page (no next_page_token)."""
+        base = {"organization_id": self.organization_id, "page_size": consts.RISKS_PAGE_SIZE}
+        return self._iter_list(base, consts.RISKS_PATH, "risks")
+
+    def _iter_list(self, base: Dict[str, str], path: str, key: str) -> Iterator[List[dict]]:
+        """Yield the pages of a list endpoint. key is the result field holding the items."""
         page_token, seen = None, set()
         while True:
             params = dict(base)
             if page_token:
                 params["page_token"] = page_token
-            result = (self.get_page(params, consts.SUPPLIERS_PATH) or {}).get("result") or {}
-            suppliers = result.get("suppliers") or []
-            if suppliers:
-                yield suppliers
+            result = (self.get_page(params, path) or {}).get("result") or {}
+            items = result.get(key) or []
+            if items:
+                yield items
             page_token = result.get("next_page_token")
             if not page_token:
                 return
             if page_token in seen:
-                raise CensysException("Censys returned the same suppliers page token twice, stopping to avoid a loop.")
+                raise CensysException(f"Censys returned the same {key} page token twice, stopping to avoid a loop.")
             seen.add(page_token)

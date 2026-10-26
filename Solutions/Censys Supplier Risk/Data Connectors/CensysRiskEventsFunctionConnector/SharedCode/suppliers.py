@@ -1,4 +1,4 @@
-"""Supplier names and ids, kept in an Azure Storage Table so that supplier names can be used as an input."""
+"""Supplier and risk names with their ids, kept in Azure Storage Tables so that names can be used as an input."""
 from typing import Dict, Iterable, List, Tuple
 
 from azure.core.exceptions import ResourceNotFoundError
@@ -16,22 +16,22 @@ def normalize(name: str) -> str:
     return " ".join((name or "").split()).casefold()
 
 
-def parse_names(raw: str) -> List[str]:
-    """Split the SupplierNames setting on the separator, trim, and drop empty entries and duplicates (any case)."""
+def parse_names(raw: str, placeholder: str = "suppliernames") -> List[str]:
+    """Split a names setting (SupplierNames or RiskNames) on the separator, trim, drop empty entries and duplicates."""
     names, seen = [], set()
     for part in (raw or "").replace("\n", consts.SUPPLIER_NAME_SEPARATOR).split(consts.SUPPLIER_NAME_SEPARATOR):
         name = " ".join(part.split())
         key = normalize(name)
-        if key and key != "suppliernames" and key not in seen:
+        if key and key != placeholder and key not in seen:
             seen.add(key)
             names.append(name)
     return names
 
 
 def resolve(names: Iterable[str], suppliers: Iterable[Tuple[str, str]]) -> Tuple[List[str], List[str]]:
-    """Return (supplier ids, names that matched no supplier). suppliers is a list of (supplier id, display name).
+    """Return (ids, names that matched nothing). suppliers is a list of (id, display name), suppliers or risks.
 
-    A name can match several suppliers, and all their ids are returned. The ids keep the order of the names.
+    A name can match several entries, and all their ids are returned. The ids keep the order of the names.
     """
     by_name: Dict[str, List[str]] = {}
     for supplier_id, display_name in suppliers:
@@ -49,7 +49,12 @@ def resolve(names: Iterable[str], suppliers: Iterable[Tuple[str, str]]) -> Tuple
 
 
 class SupplierStore:
-    """Table with one row per supplier: partition = organization id, row = supplier id, DisplayName as returned."""
+    """Table with one row per supplier: partition = organization id, row = supplier id, DisplayName as returned.
+
+    RiskStore uses the same layout for risks, whose name field is called name.
+    """
+
+    name_field = "display_name"
 
     def __init__(self, connection_string: str, table_name: str, organization_id: str):
         """Create the table client, creating the table when needed."""
@@ -83,7 +88,7 @@ class SupplierStore:
         for page in pages:
             for supplier in page:
                 if supplier.get("id"):
-                    latest[supplier["id"]] = supplier.get("display_name") or ""
+                    latest[supplier["id"]] = supplier.get(self.name_field) or ""
         try:
             self._write([("upsert", {"PartitionKey": self.organization_id, "RowKey": sid, "DisplayName": name},
                           {"mode": UpdateMode.REPLACE}) for sid, name in latest.items()])
@@ -100,3 +105,9 @@ class SupplierStore:
         """Send the operations to the table in transactions of at most 100 entities."""
         for start in range(0, len(operations), _BATCH):
             self.table.submit_transaction(operations[start:start + _BATCH])
+
+
+class RiskStore(SupplierStore):
+    """Table with one row per risk: partition = organization id, row = risk id, DisplayName = risk name."""
+
+    name_field = "name"

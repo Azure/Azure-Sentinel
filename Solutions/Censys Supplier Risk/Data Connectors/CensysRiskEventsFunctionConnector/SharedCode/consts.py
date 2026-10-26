@@ -5,17 +5,19 @@ API_BASE_URL = "https://api.platform.censys.io"
 RISK_EVENTS_PATH = "/v1/supplychains/default/risk-events"
 SUPPLIERS_PATH = "/v1/supplychains/default/suppliers"
 SUPPLIERS_PAGE_SIZE = 100
+RISKS_PATH = "/v1/supplychains/default/risks"
+RISKS_PAGE_SIZE = 100
 CONNECTOR_VERSION = "1.0.0"
 USER_AGENT = f"MicrosoftSentinel-CensysSR/{CONNECTOR_VERSION}"
 
-# Names in SupplierNames are separated by an asterisk, so a name can contain a comma. At most MAX_SUPPLIER_IDS ids
-# are sent in one request: the supplier_ids parameter is part of the URL, and the API rejected URLs of about
-# 16000 characters (400 ids) while it accepted about 8000 characters (200 ids).
+# Names in SupplierNames and RiskNames are separated by an asterisk, so a name can contain a comma. At most
+# MAX_SUPPLIER_IDS ids are sent in one request: the supplier_ids parameter is part of the URL, and the API rejected
+# URLs of about 16000 characters (400 ids) while it accepted about 8000 characters (200 ids).
 SUPPLIER_NAME_SEPARATOR = "*"
 MAX_SUPPLIER_IDS = 200
 MAX_SUPPLIER_NAMES_LENGTH = 500
+MAX_RISK_NAMES_LENGTH = 500
 MAX_RISK_TYPE_IDS = 100
-MAX_RISK_TYPE_ID_LENGTH = 512
 
 PAGE_SIZE = 1000
 REQUEST_TIMEOUT = 60
@@ -31,7 +33,7 @@ API_TOKEN = os.environ.get("CensysApiToken")
 ORGANIZATION_ID = os.environ.get("OrganizationId")
 INITIAL_START_TIME = os.environ.get("InitialStartTime", "")
 SUPPLIER_NAMES = os.environ.get("SupplierNames", "")
-RISK_TYPE_IDS = os.environ.get("RiskTypeIds", "")
+RISK_NAMES = os.environ.get("RiskNames", "")
 CHANGE_TYPES = os.environ.get("ChangeTypes", "")
 SEVERITY = os.environ.get("Severity", "")
 RAPID_RESPONSE = os.environ.get("RapidResponse", "")
@@ -43,6 +45,7 @@ CONN_STRING = os.environ.get("AzureWebJobsStorage")
 CHECKPOINT_TABLE_NAME = os.environ.get("CheckpointTableName", "CensysSRRiskEventsCheckpoint")
 CHECKPOINT_PARTITION_KEY = "CensysSRRiskEvents"
 SUPPLIERS_TABLE_NAME = os.environ.get("SuppliersTableName", "CensysSRSuppliers")
+RISKS_TABLE_NAME = os.environ.get("RisksTableName", "CensysSRRisks")
 
 DATA_COLLECTION_ENDPOINT = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
 DATA_COLLECTION_RULE_ID = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID")

@@ -29,15 +29,16 @@ class Settings:
     data_collection_rule_id: str
     start_time: str
     supplier_names: List[str] = field(default_factory=list)
-    risk_type_ids: List[str] = field(default_factory=list)
+    risk_names: List[str] = field(default_factory=list)
     change_types: List[str] = field(default_factory=list)
     severity: List[str] = field(default_factory=list)
     rapid_response: Optional[str] = None
 
-    def filters(self, supplier_ids: Optional[List[str]] = None) -> Dict[str, str]:
+    def filters(self, supplier_ids: Optional[List[str]] = None,
+                risk_type_ids: Optional[List[str]] = None) -> Dict[str, str]:
         """Return the query parameters of the filters. A filter without a value is never included."""
         filters: Dict[str, str] = {}
-        for name, values in (("supplier_ids", supplier_ids), ("risk_type_ids", self.risk_type_ids),
+        for name, values in (("supplier_ids", supplier_ids), ("risk_type_ids", risk_type_ids),
                              ("change_types", self.change_types), ("severity", self.severity)):
             if values:
                 filters[name] = ",".join(values)
@@ -166,13 +167,11 @@ def load_settings() -> Settings:
         problems.add("RapidResponse", f"must be true or false, but is '{rapid}'. Leave it empty for both.")
         rapid = ""
 
-    risk_type_ids = _items(_value(consts.RISK_TYPE_IDS, "RiskTypeIds"))
-    if len(risk_type_ids) > consts.MAX_RISK_TYPE_IDS:
-        problems.add("RiskTypeIds", f"has {len(risk_type_ids)} values, at most {consts.MAX_RISK_TYPE_IDS} are allowed.")
-    too_long = [r[:20] + "..." for r in risk_type_ids if len(r) > consts.MAX_RISK_TYPE_ID_LENGTH]
-    if too_long:
-        problems.add("RiskTypeIds",
-                     f"has values longer than {consts.MAX_RISK_TYPE_ID_LENGTH} characters: {too_long}.")
+    raw_risks = (consts.RISK_NAMES or "").strip()
+    if len(raw_risks) > consts.MAX_RISK_NAMES_LENGTH:
+        problems.add("RiskNames",
+                     f"has {len(raw_risks)} characters, at most {consts.MAX_RISK_NAMES_LENGTH} are allowed.")
+    risk_names = parse_names(raw_risks, "risknames")
 
     raw_names = (consts.SUPPLIER_NAMES or "").strip()
     if len(raw_names) > consts.MAX_SUPPLIER_NAMES_LENGTH:
@@ -183,5 +182,5 @@ def load_settings() -> Settings:
     problems.raise_if_any()
     return Settings(api_token=token, organization_id=org, storage_connection=storage,
                     data_collection_endpoint=endpoint, data_collection_rule_id=rule, start_time=start_time,
-                    supplier_names=supplier_names, risk_type_ids=risk_type_ids, change_types=change_types,
+                    supplier_names=supplier_names, risk_names=risk_names, change_types=change_types,
                     severity=severity, rapid_response=rapid or None)
