@@ -187,11 +187,10 @@ let lookback = 7d;
 let bin_size = 15m;
 let end_utc = bin(now(), bin_size);
 let start_utc = bin(end_utc - lookback, bin_size);
-let last_completed_bucket = end_utc - bin_size;
 ABAPAuditLog
 | where TimeGenerated >= start_utc and TimeGenerated < end_utc
 | make-series Events = count() default = 0 on TimeGenerated
-    from start_utc to last_completed_bucket step bin_size
+    from start_utc to end_utc step bin_size
 | mv-expand TimeGenerated to typeof(datetime), Events to typeof(long)
 | where Events == 0
 | project StartTimeUTC = TimeGenerated, EndTimeUTC = TimeGenerated + bin_size

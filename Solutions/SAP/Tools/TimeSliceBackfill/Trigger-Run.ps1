@@ -36,10 +36,10 @@ param(
 
 # ============================== SETTINGS (edit once) ==============================
 $settings = @{
-    CpiEndpoint        = 'https://azure-private.it-cpi023-rt.cfapps.eu20-001.hana.ondemand.com'
-    TokenUrl           = 'https://azure-private.authentication.eu20.hana.ondemand.com/oauth/token'
-    ClientId           = 'sb-626b08fa-b229-437b-8f5b-c1084582958c!b3750|it-rt-azure-private!b18631'
-    RfcDestinationName = 'PM4-SENTINEL_CPI-RFC2'
+    CpiEndpoint        = 'https://<tenant>.it-cpi023-rt.cfapps.eu20-001.hana.ondemand.com'
+    TokenUrl           = 'https://<subdomain>.authentication.eu20.hana.ondemand.com/oauth/token'
+    ClientId           = '<client id>'
+    RfcDestinationName = '<destination name>'
 }
 
 # Default range used when neither -StartTimeUtc/-EndTimeUtc, -GapCsvPath nor -LastHours is given.
