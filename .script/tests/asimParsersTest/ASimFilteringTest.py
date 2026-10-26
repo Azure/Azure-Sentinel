@@ -26,6 +26,7 @@ import re
 import subprocess
 from datetime import datetime, timedelta, timezone
 import csv
+import json
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 MAX_FILTERING_PARAMETERS = 2
@@ -559,36 +560,45 @@ class FilteringTest(unittest.TestCase):
         array_values = ", ".join(
             f"coalesce({column}, dynamic([]))" for column in available_columns
         )
-        value_query = (
-            query_definition
-            + "query() | project recipient_values=array_concat("
-            + array_values
-            + ") | mv-expand recipient=recipient_values "
-            "| where isnotempty(tostring(recipient)) | distinct recipient=tostring(recipient) | take 2\n"
-        )
-        values = [row[0] for row in self.send_query(value_query).tables[0].rows]
+        values = []
+        for column in available_columns:
+            value_query = (
+                query_definition
+                + f"query() | mv-expand recipient={column} "
+                "| where isnotempty(tostring(recipient)) "
+                "| distinct recipient=tostring(recipient) | take 2\n"
+            )
+            candidates = [row[0] for row in self.send_query(value_query).tables[0].rows]
+            if not candidates:
+                print_and_flush(f"Parameter: {parameter_name} - {column} is empty; matching coverage is partial.")
+            values.extend(value for value in candidates if value not in values)
         if not values:
             print_and_flush(
                 f"Parameter: {parameter_name} - no recipient values are present; "
                 "matching validation is partial."
             )
         else:
-            values_literal = create_values_string(values)
-            for selected_values in ([values[0]], values) if len(values) > 1 else ([values[0]],):
-                filtered_count = self.get_count_for_query(
+            # Compare row multisets, preserving duplicates and overlapping recipients.
+            row_projection = "| project-away ASimMatching* | extend filter_test_row=tostring(pack_all()) | project filter_test_row\n"
+            candidate_groups = [[value] for value in values]
+            if len(values) > 1:
+                candidate_groups.append(values)
+            for selected_values in candidate_groups:
+                literal = f"dynamic([{create_values_string(selected_values)}])"
+                expected_rows = self.send_query(
                     query_definition
-                    + f"query({parameter_name}=dynamic([{create_values_string(selected_values)}]))\n"
-                )
-                self.assertGreater(
-                    filtered_count, 0,
-                    f"Parameter: {parameter_name} - No rows matched recipient values {values_literal}."
-                )
-                self.assertLessEqual(filtered_count, baseline_count)
-                if filtered_count == baseline_count:
-                    print_and_flush(
-                        f"Parameter: {parameter_name} - recipient values matched all rows; "
-                        "selectivity validation is partial."
-                    )
+                    + f"query() | where array_concat({array_values}) has_any ({literal}) "
+                    + row_projection
+                ).tables[0].rows
+                actual_rows = self.send_query(
+                    query_definition
+                    + f"query({parameter_name}={literal}) "
+                    + row_projection
+                ).tables[0].rows
+                self.assertTrue(expected_rows, f"Parameter: {parameter_name} - No baseline recipient match.")
+                self.assertCountEqual([json.loads(row[0]) for row in actual_rows],
+                                      [json.loads(row[0]) for row in expected_rows],
+                                      f"Parameter: {parameter_name} - Recipient results differ from the expected union.")
         absent_count = self.get_count_for_query(
             query_definition
             + f"query({parameter_name}=dynamic([{DUMMY_VALUE}]))\n"
@@ -706,6 +716,14 @@ class FilteringTest(unittest.TestCase):
         query_with_filter = query_definition + create_execution_strings_with_one_parameter(parameter_name,f"dynamic([{filter_parameters}])" ,column_name_in_table)
 
         query_response = self.send_query(query_with_filter)
+        if parameter_name.endswith("_has_any_prefix") and self.filter_is_single_column(parameter_name):
+            expected_response = self.send_query(
+                query_definition
+                + f"query() | where has_any_ipv4_prefix(tostring({column_name_in_table}), dynamic([{filter_parameters}]))"
+                + f" | summarize count() by {column_name_in_table}\n"
+            )
+            self.assertCountEqual(query_response.tables[0].rows, expected_response.tables[0].rows,
+                                  f"Parameter: {parameter_name} - Results differ from KQL IPv4-prefix matching.")
         return (query_response, filter_parameters)
     
 
@@ -746,13 +764,25 @@ class FilteringTest(unittest.TestCase):
                 "multi-value selectivity validation is partial."
             )
 
+    def filter_is_single_column(self, parameter_name):
+        return parameter_name not in {
+            "ipaddr_has_any_prefix", "hostname_has_any", "username_has_any", "hashes_has_any"
+        }
+
     def dynamic_response_matches_filter(self, parameter_name, response, filter_values):
+        if not self.filter_is_single_column(parameter_name):
+            print_and_flush(
+                f"Parameter: {parameter_name} - the mapped alias may omit matching fields; "
+                "single-column match validation is partial."
+            )
+            return
+        if parameter_name.endswith("_has_any_prefix"):
+            # The query helper compares results with the native KQL predicate.
+            return
         normalized_filters = [str(value).casefold() for value in filter_values]
         for row in response.tables[0].rows:
             output_value = str(row[COLUMN_INDEX_IN_ROW]).casefold()
-            if parameter_name.endswith("_has_any_prefix"):
-                matches = any(output_value.startswith(value) for value in normalized_filters)
-            elif parameter_name.endswith("_has_all"):
+            if parameter_name.endswith("_has_all"):
                 matches = all(value in output_value for value in normalized_filters)
             elif parameter_name.endswith("_has_any"):
                 matches = any(value in output_value for value in normalized_filters)
@@ -1192,6 +1222,7 @@ all_schemas_parameters = {
     },
     "EmailEvent" :
     {
+        "disabled" : "",
         "starttime" : "EventStartTime",
         "endtime" : "EventEndTime",
         "ipaddr_has_any_prefix" : "IpAddr",

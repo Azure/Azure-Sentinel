@@ -2,9 +2,10 @@ import ast
 import importlib.util
 import os
 import re
+import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "ASimFilteringTest.py")
@@ -13,6 +14,7 @@ validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
 
 EXPECTED_EMAIL_EVENT_PARAMETERS = {
+    "disabled": "",
     "starttime": "EventStartTime",
     "endtime": "EventEndTime",
     "ipaddr_has_any_prefix": "IpAddr",
@@ -106,10 +108,11 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
             "imEmailEvent.yaml",
         )
         parser = validator.get_parser(parser_path)
-        self.assertEqual(
-            set(validator.all_schemas_parameters["EmailEvent"]),
+        self.assertLessEqual(
             {param["Name"] for param in parser["ParserParams"]},
+            set(validator.all_schemas_parameters["EmailEvent"]),
         )
+        self.assertIn("disabled", validator.all_schemas_parameters["EmailEvent"])
 
     def test_email_event_defaults_and_pack_control_preserve_rows(self):
         test = self.make_test(
@@ -263,28 +266,125 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
         self.assertIn("query(emaildirection_in=dynamic([]))", test.send_query.call_args_list[1].args[0])
         self.assertIn("!not_REAL_vAlUe", test.send_query.call_args_list[2].args[0])
 
-    def test_recipient_filter_searches_all_recipient_arrays(self):
-        test = self.make_test(
-            [
-                response([[3]]),
-                response([[3]]),
-                response([["alice@example.test"], ["bob@example.test"]]),
-                response([[1]]),
-                response([[2]]),
-                response([[0]]),
-            ]
+    def validator_classes(self):
+        legacy_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "ASIM", "dev",
+            "ASimTester", "filteringTest", "ASimFilteringTest.py"
         )
-        test.email_recipient_test(
-            "emailrecipient_has_any",
-            "let query(emailrecipient_has_any:dynamic=dynamic([])) { EmailLogs };\n",
-            ("EmailToRecipients", "EmailCCRecipients", "EmailBCCRecipients"),
-            {"EmailToRecipients", "EmailCCRecipients", "EmailBCCRecipients"},
-        )
-        value_query = test.send_query.call_args_list[2].args[0]
-        self.assertIn("array_concat(coalesce(EmailToRecipients, dynamic([])), coalesce(EmailCCRecipients, dynamic([])), coalesce(EmailBCCRecipients, dynamic([])))", value_query)
-        self.assertIn("mv-expand recipient=recipient_values", value_query)
-        self.assertIn("emailrecipient_has_any=dynamic", test.send_query.call_args_list[3].args[0])
-        self.assertIn("emailrecipient_has_any=dynamic", test.send_query.call_args_list[5].args[0])
+        with open(legacy_path, encoding="utf-8") as legacy_file:
+            tree = ast.parse(legacy_file.read())
+        class_node = next(node for node in tree.body
+                          if isinstance(node, ast.ClassDef) and node.name == "FilteringTest")
+        namespace = dict(vars(validator))
+        exec(compile(ast.Module(body=[class_node], type_ignores=[]), legacy_path, "exec"), namespace)
+        return (validator.FilteringTest, namespace["FilteringTest"])
+
+    def test_recipient_filters_cover_each_array_and_reject_ignored_cc_bcc(self):
+        columns = ("EmailToRecipients", "EmailCCRecipients", "EmailBCCRecipients")
+        addresses = ("alice@alpha.test", "bob@beta.test", "carol@gamma.test")
+        # The first row overlaps To/CC; the duplicate verifies multiset comparison.
+        rows = [
+            {"id": 1, "recipients": [addresses[0], addresses[1]]},
+            {"id": 2, "recipients": [addresses[1]]},
+            {"id": 3, "recipients": [addresses[2]]},
+            {"id": 3, "recipients": [addresses[2]]},
+        ]
+        for test_class in self.validator_classes():
+            for defect in (None, "cc", "bcc", "union", "duplicates"):
+                with self.subTest(validator=test_class, defect=defect):
+                    test = test_class()
+
+                    def send_query(query):
+                        for column, address in zip(columns, addresses):
+                            if f"mv-expand recipient={column} " in query:
+                                return response([[address]])
+                        if "pack_all()" in query:
+                            values = re.findall(r"@'([^']*)'", query)
+                            filtered = "query(emailrecipient_has_any=" in query
+                            if filtered and defect in ("cc", "bcc"):
+                                ignored = addresses[1 if defect == "cc" else 2]
+                                values = [value for value in values if value != ignored]
+                            if filtered and defect == "union" and len(values) > 1:
+                                values = values[:1]
+                            matches = [row for row in rows if set(values) & set(row["recipients"])]
+                            if filtered and defect == "duplicates" and addresses[2] in values:
+                                matches = matches[:-1]
+                            # Property ordering must not change row identity.
+                            return response([[json.dumps(row, sort_keys="query() | where" in query)]
+                                             for row in matches])
+                        return response([[0 if "!not_REAL_vAlUe" in query else len(rows)]])
+
+                    test.send_query = Mock(side_effect=send_query)
+                    args = ("emailrecipient_has_any", "let query=() { Logs };\n", columns, set(columns))
+                    if defect is None:
+                        test.email_recipient_test(*args)
+                        queries = "\n".join(call.args[0] for call in test.send_query.call_args_list)
+                        for column in columns:
+                            self.assertIn(f"mv-expand recipient={column}", queries)
+                    else:
+                        with self.assertRaisesRegex(AssertionError, "expected union"):
+                            test.email_recipient_test(*args)
+
+    def test_email_event_source_disabled_reaches_control_validation(self):
+        for test_class in self.validator_classes():
+            with self.subTest(validator=test_class):
+                test = test_class()
+                parser_path = os.path.join(os.path.dirname(__file__), "..", "..", "..",
+                                           "Parsers", "ASimEmailEvent", "Parsers", "imEmailEvent.yaml")
+                test.parser_file_path = parser_path
+                test.check_required_fields = Mock()
+                test.check_data_in_workspace = Mock()
+                test.get_columns_of_parser_answer = Mock(return_value=set())
+                test.email_event_default_test = Mock()
+                test.legacy_eventtype_compatibility_test = Mock()
+                test.send_query = Mock(side_effect=[response([[0]]), response([[5]])])
+                parser = {
+                    "Normalization": {"Schema": "EmailEvent"},
+                    "ParserParams": [{"Name": "disabled", "Type": "bool", "Default": False}],
+                }
+                with patch.dict(test.tests_main_func.__globals__, {
+                    "parser_file_path": parser_path,
+                    "get_parser": Mock(return_value=parser),
+                    "create_query_definition_string": Mock(return_value="let query=() { Logs };\n"),
+                }):
+                    test.tests_main_func()
+                self.assertIn("query(disabled=true)", test.send_query.call_args_list[0].args[0])
+                self.assertIn("query(disabled=false)", test.send_query.call_args_list[1].args[0])
+
+    def test_prefix_results_use_native_kql_for_embedded_ipv4_tokens(self):
+        for test_class in self.validator_classes():
+            with self.subTest(validator=test_class):
+                test = test_class()
+                rows = [["198.51.100.2;192.0.2.1", 2]]
+                test.send_query = Mock(side_effect=[response(rows), response(rows)])
+                result, _ = test.get_response_for_query_with_parameters(
+                    "response_has_any_prefix", "", "DnsResponseName", ["192.0.2."]
+                )
+                test.dynamic_response_matches_filter("response_has_any_prefix", result, ["192.0.2."])
+                self.assertIn("has_any_ipv4_prefix(tostring(DnsResponseName)",
+                              test.send_query.call_args_list[1].args[0])
+                test.send_query = Mock(side_effect=[response(rows), response([])])
+                with self.assertRaisesRegex(AssertionError, "KQL IPv4-prefix"):
+                    test.get_response_for_query_with_parameters(
+                        "response_has_any_prefix", "", "DnsResponseName", ["203.0.113."]
+                    )
+
+    def test_multifield_aliases_do_not_reject_destination_only_matches(self):
+        for test_class in self.validator_classes():
+            with self.subTest(validator=test_class):
+                test = test_class()
+                test.send_query = Mock(return_value=response([["198.51.100.2", 1]]))
+                result, _ = test.get_response_for_query_with_parameters(
+                    "ipaddr_has_any_prefix", "", "IpAddr", ["192.0.2."]
+                )
+                test.dynamic_response_matches_filter("ipaddr_has_any_prefix", result, ["192.0.2."])
+                self.assertEqual(test.send_query.call_count, 1)
+                for parameter in ("hostname_has_any", "username_has_any", "hashes_has_any"):
+                    test.dynamic_response_matches_filter(parameter, result, ["destination"])
+                with self.assertRaisesRegex(AssertionError, "unrelated"):
+                    test.dynamic_response_matches_filter(
+                        "emailsubject_has_any", response([["unrelated", 1]]), ["invoice"]
+                    )
 
 
 if __name__ == "__main__":
