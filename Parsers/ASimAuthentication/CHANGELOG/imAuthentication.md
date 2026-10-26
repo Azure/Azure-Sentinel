@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.22
+
+- (2026-10-26) Add the Salesforce Real-Time Event Monitoring Authentication filtering parser.
+
 ## Version 0.3.21
 
 - (2026-09-30) Add the Salesforce Login History Authentication filtering parser. [PR #15225](https://github.com/Azure/Azure-Sentinel/pull/15225)
