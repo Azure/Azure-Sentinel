@@ -509,7 +509,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let Days = range Day from startofday({TimeRange:start}) to {TimeRange:end} step 1d | extend k = 1;\nlet Statuses = datatable(Series: string)[\"Opened\", \"Closed\"] | extend k = 1;\nlet Counts = CensysRiskEvents\n    | where OccurredAt {TimeRange}\n    | where ('*' in ({Status}) or Status in ({Status}))\n    | where ('*' in ({Severity}) or Severity in ({Severity}))\n    | where ('*' in ({Supplier}) or SupplierDisplayName in ({Supplier}))\n    | where ('*' in ({RiskCategory}) or RiskCategory in ({RiskCategory}))\n    | extend Series = case(Status == \"open\", \"Opened\", Status == \"closed\", \"Closed\", Status)\n    | summarize Total = count() by Day = startofday(OccurredAt), Series;\nDays\n| join kind=inner Statuses on k\n| join kind=leftouter Counts on Day, Series\n| project Time = format_datetime(Day, 'yyyy-MM-dd'), Series, [\"Risk Count\"] = coalesce(Total, 0)\n| order by Time asc, Series asc",
+        "query": "let TotalHours = (todatetime({TimeRange:end}) - todatetime({TimeRange:start})) / 1h;\n// Time span picked from the Time Range (at most about 100 points): 30 minutes, 1 hour or 1 day\nlet Span = iff(TotalHours <= 50, 30m, iff(TotalHours <= 100, 1h, 1d));\nlet Buckets = range Bucket from bin(todatetime({TimeRange:start}), Span) to todatetime({TimeRange:end}) step Span | extend k = 1;\nlet Statuses = datatable(Series: string)[\"Opened\", \"Closed\"] | extend k = 1;\nlet Counts = CensysRiskEvents\n    | where OccurredAt {TimeRange}\n    | where ('*' in ({Status}) or Status in ({Status}))\n    | where ('*' in ({Severity}) or Severity in ({Severity}))\n    | where ('*' in ({Supplier}) or SupplierDisplayName in ({Supplier}))\n    | where ('*' in ({RiskCategory}) or RiskCategory in ({RiskCategory}))\n    | extend Series = case(Status == \"open\", \"Opened\", Status == \"closed\", \"Closed\", Status)\n    | summarize Total = count() by Bucket = bin(OccurredAt, Span), Series;\nBuckets\n| join kind=inner Statuses on k\n| join kind=leftouter Counts on Bucket, Series\n| project Time = iff(Span >= 1d, format_datetime(Bucket, 'yyyy-MM-dd'), format_datetime(Bucket, 'yyyy-MM-dd HH:mm')), Series, [\"Risk Count\"] = coalesce(Total, 0)\n| order by Time asc, Series asc",
         "size": 0,
         "title": "Opened vs. Closed Risks",
         "queryType": 0,
@@ -525,7 +525,6 @@
         "chartSettings": {
           "xAxis": "Time",
           "group": "Series",
-          "showDataPoints": true,
           "xSettings": {
             "label": "Time"
           },
@@ -563,7 +562,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CensysRiskEvents\n| where OccurredAt {TimeRange}\n| where ('*' in ({Status}) or Status in ({Status}))\n| where ('*' in ({Severity}) or Severity in ({Severity}))\n| where ('*' in ({Supplier}) or SupplierDisplayName in ({Supplier}))\n| where ('*' in ({RiskCategory}) or RiskCategory in ({RiskCategory}))\n| where Status == iff('{P2Status}' == \"Opened\", \"open\", \"closed\") and format_datetime(OccurredAt, 'yyyy-MM-dd') == substring('{P2Date}', 0, 10)\n| order by InsertedAt desc\n| project Time = InsertedAt, id = EventId, [\"Risk Name\"] = RiskName, Severity, Supplier = SupplierDisplayName, [\"Platform URL\"] = PlatformUrl\n| take 10000",
+        "query": "let TotalHours = (todatetime({TimeRange:end}) - todatetime({TimeRange:start})) / 1h;\n// Time span picked from the Time Range (at most about 100 points): 30 minutes, 1 hour or 1 day\nlet Span = iff(TotalHours <= 50, 30m, iff(TotalHours <= 100, 1h, 1d));\nCensysRiskEvents\n| where OccurredAt {TimeRange}\n| where ('*' in ({Status}) or Status in ({Status}))\n| where ('*' in ({Severity}) or Severity in ({Severity}))\n| where ('*' in ({Supplier}) or SupplierDisplayName in ({Supplier}))\n| where ('*' in ({RiskCategory}) or RiskCategory in ({RiskCategory}))\n| where Status == iff('{P2Status}' == \"Opened\", \"open\", \"closed\")\n| where OccurredAt >= todatetime(substring('{P2Date}', 0, 16)) and OccurredAt < todatetime(substring('{P2Date}', 0, 16)) + Span\n| order by InsertedAt desc\n| project Time = InsertedAt, id = EventId, [\"Risk Name\"] = RiskName, Severity, Supplier = SupplierDisplayName, [\"Platform URL\"] = PlatformUrl\n| take 10000",
         "size": 0,
         "title": "Events - {P2Status} on {P2Date}",
         "queryType": 0,
