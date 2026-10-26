@@ -1,5 +1,9 @@
 # Changelog for imUserManagement.yaml
 
+## Version 0.1.6
+
+- (2026-10-26) Add the CrowdStrike Falcon Data Replicator User Management filtering parser with all standard filter parameters, disabled-parser watchlist support, and optional packing.
+
 ## Version 0.1.5
 
 - (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)

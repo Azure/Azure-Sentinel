@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimUserManagementCrowdStrikeFalconDataReplicator')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "User Management ASIM filtering parser for CrowdStrike Falcon Data Replicator",
+        "category": "ASIM",
+        "FunctionAlias": "vimUserManagementCrowdStrikeFalconDataReplicator",
+        "query": "CrowdStrike_User_Events_CL\n| where not(disabled)\n| where isnull(starttime) or TimeGenerated >= starttime\n| where isnull(endtime) or TimeGenerated <= endtime\n// This source has no initiating client IP or actor username.\n| where array_length(srcipaddr_has_any_prefix) == 0\n    and array_length(actorusername_has_any) == 0\n| where event_simpleName in (\"UserAccountCreated\", \"UserAccountDeleted\", \"UserAccountAddedToGroup\")\n| where array_length(eventtype_in) == 0\n    or (event_simpleName == \"UserAccountCreated\" and \"UserCreated\" in (eventtype_in))\n    or (event_simpleName == \"UserAccountDeleted\" and \"UserDeleted\" in (eventtype_in))\n    or (event_simpleName == \"UserAccountAddedToGroup\" and \"UserAddedToGroup\" in (eventtype_in))\n| where array_length(targetusername_has_any) == 0 or UserName has_any (targetusername_has_any)\n| extend\n    EventType = case(\n        event_simpleName == \"UserAccountCreated\", \"UserCreated\",\n        event_simpleName == \"UserAccountDeleted\", \"UserDeleted\",\n        \"UserAddedToGroup\"),\n    EventStartTime = coalesce(unixtime_milliseconds_todatetime(timestamp), TimeGenerated),\n    TargetUsernameType = case(\n        isempty(UserName), \"\",\n        UserName startswith \"CN=\", \"DN\",\n        UserName contains \"@\", \"UPN\",\n        UserName contains \"\\\\\", \"Windows\",\n        \"Simple\"),\n    TargetUserId = iff(DomainSid startswith \"S-1-\" and isnotnull(tolong(UserRid)), strcat(DomainSid, \"-\", UserRid), \"\"),\n    GroupId = iff(event_simpleName == \"UserAccountAddedToGroup\" and DomainSid startswith \"S-1-\" and isnotnull(tolong(GroupRid)), strcat(DomainSid, \"-\", GroupRid), \"\"),\n    DvcOs = case(event_platform == \"Win\", \"Windows\", event_platform == \"Mac\", \"macOS\", event_platform == \"Lin\", \"Linux\", \"\"),\n    AdditionalFields = iff(pack, bag_pack(\n        \"SourceAdditionalFields\", AdditionalFields,\n        \"name\", name,\n        \"ConfigBuild\", ConfigBuild,\n        \"ConfigStateHash\", ConfigStateHash,\n        \"ContextTimeStamp\", ContextTimeStamp,\n        \"ContextProcessId\", ContextProcessId,\n        \"ContextThreadId\", ContextThreadId,\n        \"BoundingLimitCount\", BoundingLimitCount,\n        \"BoundingLimitDuration\", BoundingLimitDuration,\n        \"Entitlements\", Entitlements,\n        \"EffectiveTransmissionClass\", EffectiveTransmissionClass,\n        \"OciContainerId\", OciContainerId,\n        \"TreeId\", TreeId,\n        \"UserRid\", UserRid,\n        \"GroupRid\", GroupRid,\n        \"InterfaceVersion\", InterfaceVersion,\n        \"RpcClientThreadId\", RpcClientThreadId,\n        \"RpcOpNum\", RpcOpNum,\n        \"InterfaceGuid\", InterfaceGuid,\n        \"RpcClientProcessId\", RpcClientProcessId,\n        \"RpcNestingLevel\", RpcNestingLevel,\n        \"event_platform\", event_platform,\n        \"TenantId\", TenantId,\n        \"_ResourceId\", _ResourceId), dynamic({}))\n| project-rename\n    EventOriginalType = event_simpleName,\n    EventOriginalUid = CrowdStrikeId,\n    TargetUsername = UserName,\n    TargetUserScopeId = DomainSid,\n    DvcIpAddr = aip,\n    DvcId = aid,\n    DvcScopeId = cid\n| extend\n    EventEndTime = EventStartTime,\n    EventCount = int(1),\n    EventResult = \"Success\",\n    EventSeverity = \"Informational\",\n    EventVendor = \"CrowdStrike\",\n    EventProduct = \"Falcon Data Replicator\",\n    EventSchema = \"UserManagement\",\n    EventSchemaVersion = \"1.0.0\",\n    EventUid = EventOriginalUid,\n    Dvc = coalesce(DvcId, DvcIpAddr),\n    DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n    TargetUserIdType = iff(isnotempty(TargetUserId), \"SID\", \"\"),\n    TargetUserSid = TargetUserId,\n    GroupIdType = iff(isnotempty(GroupId), \"SID\", \"\"),\n    ActorUsername = \"\",\n    ActorUsernameType = \"\",\n    ActingApplicationEntityKey = \"\",\n    ActorUserEntityKey = \"\",\n    ActorUserAdditionalIds = dynamic([]),\n    TargetUserEntityKey = \"\",\n    TargetUserAdditionalIds = dynamic([]),\n    SrcSystemEntityKey = \"\",\n    DvcEntityKey = \"\",\n    AdditionalEntities = dynamic([])\n| extend User = ActorUsername\n| project\n    TimeGenerated, Type,\n    EventStartTime, EventEndTime, EventCount, EventType, EventResult,\n    EventSeverity, EventVendor, EventProduct, EventSchema, EventSchemaVersion,\n    EventOriginalType, EventOriginalUid, EventUid,\n    Dvc, DvcIpAddr, DvcId, DvcIdType, DvcScopeId, DvcOs,\n    ActorUsername, ActorUsernameType, User,\n    TargetUsername, TargetUsernameType, TargetUserId, TargetUserIdType,\n    TargetUserSid, TargetUserScopeId, GroupId, GroupIdType,\n    ActingApplicationEntityKey, ActorUserEntityKey, ActorUserAdditionalIds,\n    TargetUserEntityKey, TargetUserAdditionalIds, SrcSystemEntityKey,\n    DvcEntityKey, AdditionalEntities, AdditionalFields\n",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),targetusername_has_any:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
