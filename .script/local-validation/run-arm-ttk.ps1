@@ -11,9 +11,13 @@
     The ARM-TTK module is auto-installed on first run by cloning from GitHub into .arm-ttk/
     at the repository root.
 
-    Test skips and error filters match entrypoint.ps1 exactly:
-      - Skipped: "Template Should Not Contain Blanks", "URIs Should Be Properly Constructed"
-      - Filtered: contentProductId and id errors in 'IDs Should Be Derived From ResourceIDs'
+    Tests and exemptions match entrypoint.ps1 exactly because both dot-source
+    .script/package-automation/arm-ttk-sentinel-filters.ps1:
+      - No ARM-TTK tests are skipped.
+      - 'IDs Should Be Derived From ResourceIDs': only exact Sentinel content identifier
+        properties and customDetails *Id column names are exempt.
+      - 'Template Should Not Contain Blanks': blanks are allowed only inside workbook
+        payloads (classic serializedData and Defender workbook properties.content).
 
 .PARAMETER SolutionPath
     Full path to the solution folder (e.g., C:\repo\Solutions\MySolution).
@@ -110,9 +114,15 @@ else {
 }
 
 # --------------------------------------------------------------------------
-# Shared configuration — mirrors entrypoint.ps1 exactly
+# Shared configuration — same file dot-sourced by entrypoint.ps1
 # --------------------------------------------------------------------------
-$skipTests = @("Template Should Not Contain Blanks", "URIs Should Be Properly Constructed")
+$sharedFilters = Join-Path $repoRoot ".script/package-automation/arm-ttk-sentinel-filters.ps1"
+if (-not (Test-Path $sharedFilters -PathType Leaf)) {
+    Write-Host "ARM-TTK: Shared filter script not found: $sharedFilters" -ForegroundColor Red
+    Write-Host "ARM-TTK-SUMMARY: Pass=0 Fail=1 Total=1 Error=true"
+    exit 2
+}
+. $sharedFilters
 
 $totalPass = 0
 $totalFail = 0
@@ -125,53 +135,18 @@ if ($hasMain) {
     Write-Host "Running ARM-TTK on mainTemplate.json..." -ForegroundColor Cyan
 
     try {
-        $rawResults = Test-AzTemplate -TemplatePath $packageDir -File mainTemplate.json -Skip $skipTests
+        $mainTemplateText = Get-Content -Raw $mainTemplate
+        $testParameter = Get-SentinelArmTtkTestParameter -TemplateText $mainTemplateText
+        $rawResults = Test-AzTemplate -TemplatePath $packageDir -File mainTemplate.json -TestParameter $testParameter
+        $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results @($rawResults)
 
-        # Filter out contentProductId/id false positives — same as entrypoint.ps1
-        $filtered = New-Object System.Collections.ArrayList
-        $filteredIdTestCount = 0
+        Write-Output $resolved.Results
+        Write-Host "MainTemplate.json ARM-TTK: Pass=$($resolved.Pass) Fail=$($resolved.Fail) ExemptedIdErrors=$($resolved.ExemptedErrors)"
 
-        foreach ($testInfo in $rawResults) {
-            if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0) {
-                $hasUnfilteredIdError = $false
-                $hasExemptIdError = $false
-                foreach ($errorInfo in $testInfo.Errors) {
-                    if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or
-                        $errorInfo.Exception.Message -like '*"id"*' -or
-                        $errorInfo.Exception.Message -like '*"packageId"*' -or
-                        $errorInfo.Exception.Message -like '*"fromTemplateId"*') {
-                        $hasExemptIdError = $true
-                    }
-                    else {
-                        $hasUnfilteredIdError = $true
-                    }
-                }
-                if ($hasUnfilteredIdError) {
-                    $null = $filtered.Add($testInfo)
-                }
-                elseif ($hasExemptIdError) {
-                    $filteredIdTestCount++
-                }
-            }
-            else {
-                if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0) {
-                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - $filteredIdTestCount
-                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
-                }
-                $null = $filtered.Add($testInfo)
-            }
-        }
+        $totalPass += $resolved.Pass
+        $totalFail += $resolved.Fail
 
-        Write-Output $filtered
-
-        # Extract summary
-        $mainSummary = $filtered | Where-Object { $null -ne $_.Summary } | Select-Object -Last 1
-        if ($mainSummary) {
-            $totalPass += $mainSummary.Summary.Pass
-            $totalFail += $mainSummary.Summary.Fail
-        }
-
-        if ($mainSummary -and $mainSummary.Summary.Fail -gt 0) {
+        if ($resolved.Fail -gt 0) {
             Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!" -ForegroundColor Red
             $exitCode = 1
         }
@@ -195,7 +170,7 @@ if ($hasCreateUi) {
     Write-Host "Running ARM-TTK on createUiDefinition.json..." -ForegroundColor Cyan
 
     try {
-        $uiResults = Test-AzTemplate -TemplatePath $packageDir -File createUiDefinition.json -Skip $skipTests
+        $uiResults = Test-AzTemplate -TemplatePath $packageDir -File createUiDefinition.json
 
         $uiPassed = $uiResults | Where-Object { -not $_.Failed }
         Write-Output $uiPassed
