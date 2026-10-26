@@ -2,7 +2,7 @@
 
 ## Version 0.6.7
 
-- (2026-10-26) Add filtering parser for Salesforce Real-Time Event Monitoring page view events -  [PR #tbd](https://github.com/Azure/Azure-Sentinel/pull/tbd)
+- (2026-10-26) Add filtering parser for Salesforce Real-Time Event Monitoring page view events - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
 
 ## Version 0.6.6
 

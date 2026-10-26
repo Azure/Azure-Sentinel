@@ -2,7 +2,7 @@
 
 ## Version 0.1.0
 
-- (2026-10-26) Initial creation of the parser
+- (2026-10-26) Initial creation of the parser - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
 - Maps LoginEvent, LoginAsEvent, LogoutEvent and IdentityVerificationEvent from SalesForceRealTimeEventMonitoring_CL
 - LoginAsEvent is mapped as EventSubType AssumeRole with the impersonating admin as Actor
 - IdentityVerificationEvent step-up verifications for actions other than login are mapped as EventType Elevate

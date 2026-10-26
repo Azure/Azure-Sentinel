@@ -2,7 +2,7 @@
 
 ## Version 0.2.29
 
-- (2026-10-26) Add the Salesforce Real-Time Event Monitoring Authentication parser. [PR #tbd](https://github.com/Azure/Azure-Sentinel/pull/tbd)
+- (2026-10-26) Add the Salesforce Real-Time Event Monitoring Authentication parser. - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
 
 ## Version 0.2.28
 
