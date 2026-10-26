@@ -1,0 +1,43 @@
+id: 284c73e0-3e14-4698-9202-36fcd458034e
+name: Repeated MFA-required interrupts for one user from one IP (AADSTS50074)
+description: |
+  'Finds users with several AADSTS50074 sign-in results (strong authentication required, MFA not completed) from the same IP address within one hour.
+  One such row is often normal because the interrupt is logged when MFA is first requested. A burst from an IP or country the user does not use can indicate MFA fatigue (an attacker with the password generating prompts), and a later successful sign-in from the same IP suggests the user approved a prompt they did not start.
+  The threshold of 3 is a starting point, not a Microsoft number. Tune it against your own baseline.
+  Time bins use CreatedDateTime (when the sign-in happened), not TimeGenerated (when Log Analytics received the entry).
+  Reference: https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-interactive-sign-ins'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1621
+query: |
+  SigninLogs
+  | where TimeGenerated > ago(1d)
+  | where ResultType == "50074"
+  | summarize Prompts = count(),
+              FirstSeen = min(CreatedDateTime),
+              LastSeen = max(CreatedDateTime),
+              Apps = make_set(AppDisplayName, 5)
+            by UserPrincipalName, IPAddress, bin(CreatedDateTime, 1h)
+  | where Prompts >= 3
+  | sort by Prompts desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled
